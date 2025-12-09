@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { SignJWT } from 'jose';
 
+
 const SECRET_KEY = process.env.ADMIN_PASSWORD || 'default_secret_password';
 const JWT_SECRET = new TextEncoder().encode(SECRET_KEY);
 

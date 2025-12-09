@@ -7,6 +7,7 @@ export default function AdminAbout() {
         ourStoryTitle: '',
         ourStoryBody: '',
         venueDescription: '',
+        venueAddress: '',
     });
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState('');
@@ -94,6 +95,18 @@ export default function AdminAbout() {
                             onChange={(e) => setConfig({ ...config, venueDescription: e.target.value })}
                             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
                             placeholder="Short blurb about the venue..."
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Venue Address (for Maps)</label>
+                        <p className="text-xs text-gray-500 mb-2">Entering an address here will create a "Get Directions" link on the website.</p>
+                        <input
+                            type="text"
+                            value={config.venueAddress || ''}
+                            onChange={(e) => setConfig({ ...config, venueAddress: e.target.value })}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
+                            placeholder="e.g. 123 Wedding Lane, City, State"
                         />
                     </div>
                 </div>

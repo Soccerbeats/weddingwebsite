@@ -12,13 +12,20 @@ export default function Footer({
     weddingLocation = 'Napa Valley, CA'
 }: FooterProps) {
     return (
-        <footer className="bg-gray-50 border-t border-gray-200 mt-20">
-            <div className="max-w-7xl mx-auto py-12 px-4 sm:px-6 md:flex md:items-center md:justify-between lg:px-8">
+        <footer className="bg-white">
+            {/* Floral Decorative Bar */}
+            <div
+                className="w-full h-24 bg-cover bg-center"
+                style={{ backgroundImage: "url('/images/footer-flowers.png')" }}
+            />
+
+            {/* Footer Content */}
+            <div className="max-w-7xl mx-auto py-12 px-4 sm:px-6 md:flex md:items-center md:justify-between lg:px-8 border-t border-gray-100">
                 <div className="flex justify-center space-x-6 md:order-2">
                     {/* Add social links here if needed */}
                 </div>
-                <div className="mt-8 md:mt-0 md:order-1">
-                    <p className="text-center text-base text-gray-500">
+                <div className="mt-8 md:mt-0 md:order-1 w-full">
+                    <p className="text-center text-base text-gray-900 font-serif">
                         &copy; 2026 {brideName} & {groomName}. Can't wait to celebrate with you!
                     </p>
                 </div>

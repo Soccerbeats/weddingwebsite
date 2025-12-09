@@ -50,6 +50,15 @@ export default function RootLayout({
           weddingDate={config.weddingDate}
           weddingLocation={config.weddingLocation}
         />
+        <style dangerouslySetInnerHTML={{
+          __html: `
+            :root {
+              --accent: ${config.accentColor || '#D4AF37'};
+              --accent-light: ${config.accentLightColor || '#F4E5C3'};
+              --accent-dark: ${config.accentDarkColor || '#B8941F'};
+            }
+          `
+        }} />
       </body>
     </html>
   );

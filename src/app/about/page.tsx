@@ -58,6 +58,16 @@ export default function AboutPage() {
                         <p className="mt-4 text-lg text-gray-600 whitespace-pre-line">
                             {config.venueDescription || `We'll be celebrating at the historic ${config.weddingVenue || '[Venue]'} in ${config.weddingLocation}.`}
                         </p>
+                        {config.venueAddress && (
+                            <a
+                                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(config.venueAddress)}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-block mt-4 text-accent hover:text-accent-dark font-medium underline transition-colors"
+                            >
+                                Get Directions &rarr;
+                            </a>
+                        )}
                     </div>
 
                     <div className="mt-12 grid gap-8 grid-cols-1 md:grid-cols-2">
@@ -79,20 +89,25 @@ export default function AboutPage() {
 
             {/* FAQ Section */}
             <div className="py-16">
-                {/* ... FAQ content static for now ... */}
                 <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
                     <h2 className="text-3xl font-serif text-center text-gray-900 mb-12">
                         Details & FAQ
                     </h2>
-                    <dl className="space-y-8">
-                        <div>
-                            <dt className="text-lg leading-6 font-medium text-gray-900">What is the dress code?</dt>
-                            <dd className="mt-2 text-base text-gray-600">
-                                Black Tie Optional.
-                            </dd>
-                        </div>
-                        {/* ... */}
-                    </dl>
+
+                    {config.faqs && config.faqs.length > 0 ? (
+                        <dl className="space-y-8">
+                            {config.faqs.map((faq, index) => (
+                                <div key={index}>
+                                    <dt className="text-lg leading-6 font-medium text-gray-900">{faq.question}</dt>
+                                    <dd className="mt-2 text-base text-gray-600 whitespace-pre-line">
+                                        {faq.answer}
+                                    </dd>
+                                </div>
+                            ))}
+                        </dl>
+                    ) : (
+                        <p className="text-center text-gray-500 italic">FAQ details coming soon.</p>
+                    )}
                 </div>
             </div>
         </div>

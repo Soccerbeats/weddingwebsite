@@ -11,6 +11,9 @@ export default function AdminSettings() {
         weddingLocation: '',
         weddingVenue: '',
         rsvpDeadline: '',
+        accentColor: '',
+        accentLightColor: '',
+        accentDarkColor: '',
     });
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState('');
@@ -119,6 +122,65 @@ export default function AdminSettings() {
                         onChange={(e) => setConfig({ ...config, weddingLocation: e.target.value })}
                         className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border"
                     />
+                </div>
+
+
+
+                <div className="pt-6 border-t border-gray-100">
+                    <h2 className="text-xl font-semibold text-gray-900 mb-4">Color Palette</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700">Primary Accent</label>
+                            <div className="flex items-center mt-1 space-x-2">
+                                <input
+                                    type="color"
+                                    value={config.accentColor || '#D4AF37'}
+                                    onChange={(e) => setConfig({ ...config, accentColor: e.target.value })}
+                                    className="h-10 w-20 p-1 rounded border border-gray-300 cursor-pointer"
+                                />
+                                <input
+                                    type="text"
+                                    value={config.accentColor || '#D4AF37'}
+                                    onChange={(e) => setConfig({ ...config, accentColor: e.target.value })}
+                                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900 uppercase"
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700">Light Accent</label>
+                            <div className="flex items-center mt-1 space-x-2">
+                                <input
+                                    type="color"
+                                    value={config.accentLightColor || '#F4E5C3'}
+                                    onChange={(e) => setConfig({ ...config, accentLightColor: e.target.value })}
+                                    className="h-10 w-20 p-1 rounded border border-gray-300 cursor-pointer"
+                                />
+                                <input
+                                    type="text"
+                                    value={config.accentLightColor || '#F4E5C3'}
+                                    onChange={(e) => setConfig({ ...config, accentLightColor: e.target.value })}
+                                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900 uppercase"
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700">Dark Accent</label>
+                            <div className="flex items-center mt-1 space-x-2">
+                                <input
+                                    type="color"
+                                    value={config.accentDarkColor || '#B8941F'}
+                                    onChange={(e) => setConfig({ ...config, accentDarkColor: e.target.value })}
+                                    className="h-10 w-20 p-1 rounded border border-gray-300 cursor-pointer"
+                                />
+                                <input
+                                    type="text"
+                                    value={config.accentDarkColor || '#B8941F'}
+                                    onChange={(e) => setConfig({ ...config, accentDarkColor: e.target.value })}
+                                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900 uppercase"
+                                />
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
 

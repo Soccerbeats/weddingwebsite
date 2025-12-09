@@ -20,7 +20,7 @@ export default function Navigation({ brideName = 'Sarah', groomName = 'James' }:
     ];
 
     return (
-        <nav className="bg-white/90 backdrop-blur-md fixed w-full z-50 top-0 border-b border-gray-100">
+        <nav className="fixed top-0 w-full z-50 transition-all duration-300 bg-white/90 backdrop-blur-md shadow-sm">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="flex justify-between h-16">
                     <div className="flex-shrink-0 flex items-center">

@@ -23,12 +23,13 @@
   --font-serif: "Playfair Display", Georgia, serif;
 }
 
-@media (prefers-color-scheme: dark) {
+/* Dark mode disabled for wedding theme consistency */
+/* @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #ffffff;
+    --foreground: #171717;
   }
-}
+} */
 
 body {
   background: var(--background);

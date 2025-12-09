@@ -8,6 +8,11 @@ export interface ScheduleEvent {
     location: string;
 }
 
+export interface FAQItem {
+    question: string;
+    answer: string;
+}
+
 export interface SiteConfig {
     homeHero?: string;
     homeHeadline?: string;
@@ -21,10 +26,16 @@ export interface SiteConfig {
     weddingVenue?: string;
     weddingTime: string;
     rsvpDeadline?: string;
+    // Theme Colors
+    accentColor?: string;
+    accentLightColor?: string;
+    accentDarkColor?: string;
     // About Page
     ourStoryTitle?: string;
     ourStoryBody?: string;
     venueDescription?: string;
+    venueAddress?: string;
+    faqs?: FAQItem[];
     // Schedule Page
     scheduleEvents?: ScheduleEvent[];
 }
