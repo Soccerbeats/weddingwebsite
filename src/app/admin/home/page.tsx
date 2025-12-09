@@ -1,0 +1,112 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+
+export default function AdminHome() {
+    const [config, setConfig] = useState({
+        homeHeadline: '',
+        homeIntroTitle: '',
+        homeIntroBody: '',
+    });
+    const [loading, setLoading] = useState(false);
+    const [message, setMessage] = useState('');
+
+    useEffect(() => {
+        fetch('/api/admin/site-config')
+            .then(res => res.json())
+            .then(data => setConfig(prev => ({ ...prev, ...data })));
+    }, []);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoading(true);
+        setMessage('');
+
+        try {
+            const res = await fetch('/api/admin/site-config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(config),
+            });
+
+            if (res.ok) {
+                setMessage('Home Page text updated successfully!');
+            } else {
+                setMessage('Failed to update.');
+            }
+        } catch (err) {
+            console.error(err);
+            setMessage('An error occurred.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="max-w-4xl">
+            <h1 className="text-2xl font-bold text-gray-900 mb-6">Home Page Content</h1>
+
+            {message && (
+                <div className={`p-4 rounded-md mb-6 ${message.includes('success') ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
+                    {message}
+                </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-8 bg-white p-8 rounded-lg border border-gray-200 shadow-sm">
+
+                {/* Hero Section */}
+                <div className="space-y-6">
+                    <h2 className="text-xl font-semibold text-gray-900 border-b pb-2">Hero Section</h2>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Small Headline (above names)</label>
+                        <input
+                            type="text"
+                            value={config.homeHeadline || ''}
+                            onChange={(e) => setConfig({ ...config, homeHeadline: e.target.value })}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
+                            placeholder="e.g. We're getting married!"
+                        />
+                    </div>
+                </div>
+
+                {/* Intro Section */}
+                <div className="space-y-6">
+                    <h2 className="text-xl font-semibold text-gray-900 border-b pb-2">Welcome Message</h2>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Section Title</label>
+                        <input
+                            type="text"
+                            value={config.homeIntroTitle || ''}
+                            onChange={(e) => setConfig({ ...config, homeIntroTitle: e.target.value })}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
+                            placeholder="e.g. Join us to celebrate"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Welcome Text</label>
+                        <textarea
+                            rows={5}
+                            value={config.homeIntroBody || ''}
+                            onChange={(e) => setConfig({ ...config, homeIntroBody: e.target.value })}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
+                            placeholder="Welcome message paragraph..."
+                        />
+                    </div>
+                </div>
+
+                <div className="pt-4">
+                    <button
+                        type="submit"
+                        disabled={loading}
+                        className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-accent hover:bg-accent-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 transition-colors"
+                    >
+                        {loading ? 'Saving...' : 'Save Changes'}
+                    </button>
+                </div>
+            </form>
+        </div>
+    );
+}

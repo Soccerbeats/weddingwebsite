@@ -1,0 +1,31 @@
+{
+  "homeHero": "1765314240897-IMG_0768---trimmed.JPG",
+  "homeHeadline": "We're getting married!",
+  "homeIntroTitle": "Join us for the celebration",
+  "homeIntroBody": "We are so excited to celebrate our special day with our family and friends. This website contains wedding day details, travel information, and much more - check back for updates!",
+  "aboutHero": "1765308285381-IMG_0850.JPG",
+  "brideName": "Heaven",
+  "groomName": "Austin",
+  "weddingDate": "October 16, 2026",
+  "weddingLocation": "Saukville Wisconsin",
+  "weddingVenue": "The Bog",
+  "weddingTime": "4:00 PM",
+  "rsvpDeadline": "September 16, 2026",
+  "ourStoryTitle": "How We Met",
+  "ourStoryBody": "It started with a coffee shop mishap...",
+  "venueDescription": "We'll be celebrating at The Barn at the BOG!\n3121 County Rd I, Saukville, WI 53080",
+  "scheduleEvents": [
+    {
+      "time": "3:30 PM",
+      "title": "Guest Arrival",
+      "description": "Please arrive at the Garden Courtyard...",
+      "location": "Garden Courtyard"
+    },
+    {
+      "time": "4:00 PM",
+      "title": "Ceremony",
+      "description": "We say 'I do'!",
+      "location": "Garden Courtyard"
+    }
+  ]
+}

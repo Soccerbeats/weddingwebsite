@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: .
+      target: dev
+    container_name: wedding-web
+    restart: always
+    ports:
+      - '3000:3000'
+    environment:
+      - DATABASE_URL=postgres://wedding_user:wedding_password@db:5432/wedding_db
+      - ADMIN_PASSWORD=Pineapple0423
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      - db
+    command: npm run dev
+
+  db:
+    image: postgres:15-alpine
+    container_name: wedding-db
+    restart: always
+    environment:
+      - POSTGRES_USER=wedding_user
+      - POSTGRES_PASSWORD=wedding_password
+      - POSTGRES_DB=wedding_db
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+volumes:
+  postgres_data:

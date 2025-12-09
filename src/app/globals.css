@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+:root {
+  /* Core colors */
+  --background: #ffffff;
+  --foreground: #171717;
+
+  /* Gold Accent Palette */
+  --accent: #D4AF37;
+  --accent-light: #F4E5C3;
+  --accent-dark: #B8941F;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-accent: var(--accent);
+  --color-accent-light: var(--accent-light);
+  --color-accent-dark: var(--accent-dark);
+
+  --font-sans: var(--font-geist-sans), Arial, sans-serif;
+  --font-mono: var(--font-geist-mono), monospace;
+  --font-serif: "Playfair Display", Georgia, serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-serif);
+}
+
+input,
+textarea,
+select {
+  color: #171717;
+}
