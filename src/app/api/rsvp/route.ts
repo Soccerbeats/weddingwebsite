@@ -15,11 +15,35 @@ export async function POST(request: Request) {
         // 1. Save to Database
         const client = await pool.connect();
         try {
+            // Insert into rsvps table
             await client.query(
                 `INSERT INTO rsvps (guest_name, email, phone, attending, number_of_guests, dietary_restrictions, message)
          VALUES ($1, $2, $3, $4, $5, $6, $7)`,
                 [guestName, email, phone, attending, attending ? guestCount : 0, dietaryRestrictions, message]
             );
+
+            // Update guest_list table if the guest exists, or insert if they don't
+            const existingGuest = await client.query(
+                'SELECT id FROM guest_list WHERE LOWER(guest_name) = LOWER($1)',
+                [guestName]
+            );
+
+            if (existingGuest.rows.length > 0) {
+                // Update existing guest
+                await client.query(
+                    `UPDATE guest_list
+                     SET email = $1, phone = $2, party_size = $3, rsvp_status = $4, updated_at = NOW()
+                     WHERE LOWER(guest_name) = LOWER($5)`,
+                    [email, phone, attending ? guestCount : 1, attending ? 'attending' : 'declined', guestName]
+                );
+            } else {
+                // Insert new guest
+                await client.query(
+                    `INSERT INTO guest_list (guest_name, email, phone, party_size, rsvp_status, updated_at)
+                     VALUES ($1, $2, $3, $4, $5, NOW())`,
+                    [guestName, email, phone, attending ? guestCount : 1, attending ? 'attending' : 'declined']
+                );
+            }
         } finally {
             client.release();
         }

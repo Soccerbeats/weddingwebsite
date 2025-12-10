@@ -3,6 +3,7 @@ import { Playfair_Display, Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import Navigation from '@/components/Navigation';
 import Footer from '@/components/Footer';
+import WipCheck from '@/components/WipCheck';
 import { getSiteConfig } from '@/lib/config';
 
 const playfair = Playfair_Display({
@@ -40,6 +41,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} antialiased pt-16 min-h-screen flex flex-col`}
       >
+        <WipCheck />
         <Navigation brideName={config.brideName} groomName={config.groomName} />
         <main className="flex-grow">
           {children}
