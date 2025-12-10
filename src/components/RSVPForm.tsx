@@ -131,10 +131,15 @@ export default function RSVPForm() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
                     </svg>
                 </div>
-                <h3 className="text-lg leading-6 font-medium text-gray-900">RSVP Received!</h3>
+                <h3 className="text-lg leading-6 font-medium text-gray-900">RSVP {existingRsvp ? 'Updated' : 'Received'}!</h3>
                 <p className="mt-2 text-base text-gray-500">
                     Thank you for letting us know. We've sent a confirmation email to the happy couple♥
                 </p>
+                <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <p className="text-sm text-blue-800">
+                        Need to make changes? Simply refresh this page and enter your name again to update your RSVP.
+                    </p>
+                </div>
             </div>
         );
     }
