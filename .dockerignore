@@ -1,0 +1,22 @@
+node_modules
+.next
+.git
+.gitignore
+README.md
+.env*
+!.env.example
+
+# Don't include photos and config in the image
+public/photos/*
+!public/photos/.gitkeep
+public/config/site.json
+
+# Docker files
+docker-compose*.yml
+Dockerfile
+
+# Development files
+.vscode
+.idea
+*.log
+npm-debug.log*
