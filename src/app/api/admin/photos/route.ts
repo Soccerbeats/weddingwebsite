@@ -25,7 +25,19 @@ function savePhotos(photos: any[]) {
 
 export async function GET() {
     const photos = getPhotos();
-    return NextResponse.json({ photos });
+
+    // Filter out photos where the actual file doesn't exist
+    const validPhotos = photos.filter((photo: any) => {
+        const filePath = path.join(PHOTOS_DIR, photo.filename);
+        return fs.existsSync(filePath);
+    });
+
+    // If some photos were invalid, update the config
+    if (validPhotos.length !== photos.length) {
+        savePhotos(validPhotos);
+    }
+
+    return NextResponse.json({ photos: validPhotos });
 }
 
 export async function POST(request: Request) {
