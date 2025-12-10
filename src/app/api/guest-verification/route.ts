@@ -13,13 +13,34 @@ export async function POST(request: Request) {
     }
 
     // Check if guest exists in the guest list
-    const result = await pool.query(
+    const guestResult = await pool.query(
       'SELECT * FROM guest_list WHERE LOWER(guest_name) = LOWER($1) AND invited = true',
       [guest_name.trim()]
     );
 
-    if (result.rows.length > 0) {
-      const guest = result.rows[0];
+    if (guestResult.rows.length > 0) {
+      const guest = guestResult.rows[0];
+
+      // Check if guest has already RSVP'd
+      const rsvpResult = await pool.query(
+        'SELECT * FROM rsvps WHERE LOWER(guest_name) = LOWER($1) ORDER BY created_at DESC LIMIT 1',
+        [guest_name.trim()]
+      );
+
+      let existingRsvp = null;
+      if (rsvpResult.rows.length > 0) {
+        const rsvp = rsvpResult.rows[0];
+        existingRsvp = {
+          id: rsvp.id,
+          attending: rsvp.attending,
+          guestCount: rsvp.number_of_guests,
+          email: rsvp.email,
+          phone: rsvp.phone,
+          dietaryRestrictions: rsvp.dietary_restrictions,
+          message: rsvp.message,
+        };
+      }
+
       return NextResponse.json({
         verified: true,
         guest: {
@@ -29,6 +50,7 @@ export async function POST(request: Request) {
           phone: guest.phone,
           plus_one_name: guest.plus_one_name,
         },
+        existingRsvp,
       });
     }
 

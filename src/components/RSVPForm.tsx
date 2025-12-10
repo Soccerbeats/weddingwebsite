@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 export default function RSVPForm() {
     const [step, setStep] = useState<'verification' | 'form'>('verification');
     const [verifiedGuest, setVerifiedGuest] = useState<any>(null);
+    const [existingRsvp, setExistingRsvp] = useState<any>(null);
     const [guestNameInput, setGuestNameInput] = useState('');
     const [verificationError, setVerificationError] = useState('');
     const [verifying, setVerifying] = useState(false);
@@ -47,13 +48,29 @@ export default function RSVPForm() {
 
             if (data.verified) {
                 setVerifiedGuest(data.guest);
-                setFormData(prev => ({
-                    ...prev,
-                    guestName: data.guest.name,
-                    email: data.guest.email || '',
-                    phone: data.guest.phone || '',
-                    guestCount: data.guest.party_size || 1,
-                }));
+                setExistingRsvp(data.existingRsvp);
+
+                // If existing RSVP, populate with that data; otherwise use guest data
+                if (data.existingRsvp) {
+                    setFormData(prev => ({
+                        ...prev,
+                        guestName: data.guest.name,
+                        email: data.existingRsvp.email || '',
+                        phone: data.existingRsvp.phone || '',
+                        attending: data.existingRsvp.attending ? 'yes' : 'no',
+                        guestCount: data.existingRsvp.guestCount || 1,
+                        dietaryRestrictions: data.existingRsvp.dietaryRestrictions || '',
+                        message: data.existingRsvp.message || '',
+                    }));
+                } else {
+                    setFormData(prev => ({
+                        ...prev,
+                        guestName: data.guest.name,
+                        email: data.guest.email || '',
+                        phone: data.guest.phone || '',
+                        guestCount: data.guest.party_size || 1,
+                    }));
+                }
                 setStep('form');
             } else {
                 setVerificationError(data.message || 'Guest not found on the list.');
@@ -80,13 +97,15 @@ export default function RSVPForm() {
         setErrorMessage('');
 
         try {
+            const isUpdate = existingRsvp !== null;
             const response = await fetch('/api/rsvp', {
-                method: 'POST',
+                method: isUpdate ? 'PUT' : 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
                     ...formData,
+                    ...(isUpdate ? { id: existingRsvp.id } : {}),
                     attending: formData.attending === 'yes',
                     guestCount: parseInt(formData.guestCount.toString())
                 }),
@@ -183,19 +202,19 @@ export default function RSVPForm() {
     // Step 2: RSVP Form
     return (
         <form onSubmit={handleSubmit} className="space-y-6 bg-white p-8 rounded-3xl shadow-xl border-t-4 border-accent">
-            <div className="bg-green-50 border border-green-200 rounded-2xl p-4 mb-6">
+            <div className={`border rounded-2xl p-4 mb-6 ${existingRsvp ? 'bg-blue-50 border-blue-200' : 'bg-green-50 border-green-200'}`}>
                 <div className="flex">
                     <div className="flex-shrink-0">
-                        <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                        <svg className={`h-5 w-5 ${existingRsvp ? 'text-blue-400' : 'text-green-400'}`} viewBox="0 0 20 20" fill="currentColor">
                             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                         </svg>
                     </div>
                     <div className="ml-3">
-                        <p className="text-sm font-medium text-green-800">
-                            Welcome, {verifiedGuest?.name}{verifiedGuest?.plus_one_name && ` & ${verifiedGuest.plus_one_name}`}!
+                        <p className={`text-sm font-medium ${existingRsvp ? 'text-blue-800' : 'text-green-800'}`}>
+                            Welcome{existingRsvp ? ' back' : ''}, {verifiedGuest?.name}{verifiedGuest?.plus_one_name && ` & ${verifiedGuest.plus_one_name}`}!
                         </p>
-                        <p className="text-sm text-green-700 mt-1">
-                            Please complete your RSVP below.
+                        <p className={`text-sm mt-1 ${existingRsvp ? 'text-blue-700' : 'text-green-700'}`}>
+                            {existingRsvp ? 'You can update your RSVP below.' : 'Please complete your RSVP below.'}
                         </p>
                     </div>
                 </div>
@@ -342,7 +361,7 @@ export default function RSVPForm() {
                     disabled={status === 'submitting'}
                     className="flex-1 flex justify-center py-3 px-6 border border-transparent rounded-full shadow-md text-base font-medium text-white bg-accent hover:bg-accent-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 transition-all transform hover:-translate-y-0.5"
                 >
-                    {status === 'submitting' ? 'Sending...' : 'Send RSVP'}
+                    {status === 'submitting' ? (existingRsvp ? 'Updating...' : 'Sending...') : (existingRsvp ? 'Update RSVP' : 'Send RSVP')}
                 </button>
             </div>
         </form>

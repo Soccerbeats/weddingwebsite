@@ -91,3 +91,43 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }
+
+export async function PUT(request: Request) {
+    try {
+        const body = await request.json();
+        const { id, guestName, email, phone, attending, guestCount, dietaryRestrictions, message } = body;
+
+        // Validate required fields
+        if (!id || !guestName || !email || attending === undefined) {
+            return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+        }
+
+        // Update the RSVP in database
+        const client = await pool.connect();
+        try {
+            // Update rsvps table
+            await client.query(
+                `UPDATE rsvps
+                 SET email = $1, phone = $2, attending = $3, number_of_guests = $4,
+                     dietary_restrictions = $5, message = $6
+                 WHERE id = $7`,
+                [email, phone, attending, attending ? guestCount : 0, dietaryRestrictions, message, id]
+            );
+
+            // Update guest_list table
+            await client.query(
+                `UPDATE guest_list
+                 SET email = $1, phone = $2, party_size = $3, rsvp_status = $4, updated_at = NOW()
+                 WHERE LOWER(guest_name) = LOWER($5)`,
+                [email, phone, attending ? guestCount : 1, attending ? 'attending' : 'declined', guestName]
+            );
+        } finally {
+            client.release();
+        }
+
+        return NextResponse.json({ success: true });
+    } catch (error) {
+        console.error('RSVP Update API Error:', error);
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    }
+}
