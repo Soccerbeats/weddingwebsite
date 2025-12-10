@@ -4,12 +4,27 @@ import path from 'path';
 
 const CONFIG_PATH = path.join(process.cwd(), 'public/config/site.json');
 
+const DEFAULT_CONFIG = {
+    brideName: 'Sarah',
+    groomName: 'James',
+    weddingDate: 'June 15, 2024',
+    weddingLocation: 'The Garden Estate',
+    weddingTime: '4:00 PM',
+    homeHero: null,
+    aboutHero: null
+};
+
 function getConfig() {
     if (!fs.existsSync(CONFIG_PATH)) {
-        return { homeHero: null, aboutHero: null };
+        return DEFAULT_CONFIG;
     }
-    const data = fs.readFileSync(CONFIG_PATH, 'utf8');
-    return JSON.parse(data);
+    try {
+        const data = fs.readFileSync(CONFIG_PATH, 'utf8');
+        return { ...DEFAULT_CONFIG, ...JSON.parse(data) };
+    } catch (error) {
+        console.error('Error reading config:', error);
+        return DEFAULT_CONFIG;
+    }
 }
 
 function saveConfig(config: any) {
