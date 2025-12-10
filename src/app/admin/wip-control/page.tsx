@@ -35,15 +35,18 @@ export default function WipControlPage() {
 
       const toggleMap = new Map(data.map((t: WipToggle) => [t.page_path, t]));
 
-      const allToggles = publicPages.map(page => {
+      const allToggles: WipToggle[] = publicPages.map((page): WipToggle => {
         const existing = toggleMap.get(page.path);
-        return existing || {
+        if (existing !== undefined) {
+          return existing as WipToggle;
+        }
+        return {
           id: 0,
           page_path: page.path,
           page_label: page.label,
           is_wip: false,
           updated_at: new Date().toISOString(),
-        };
+        } as WipToggle;
       });
 
       setToggles(allToggles);
