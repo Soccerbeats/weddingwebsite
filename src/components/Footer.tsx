@@ -16,7 +16,7 @@ export default function Footer({
             {/* Floral Decorative Bar */}
             <div
                 className="w-full h-24 bg-cover bg-center"
-                style={{ backgroundImage: "url('/images/footer-flowers.png')" }}
+                style={{ backgroundImage: "url('/images/Gemini_Generated_Image_7xzkxd7xzkxd7xzk.png')" }}
             />
 
             {/* Footer Content */}

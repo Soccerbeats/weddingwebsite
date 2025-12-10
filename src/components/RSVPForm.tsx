@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function RSVPForm() {
     const [step, setStep] = useState<'verification' | 'form'>('verification');
@@ -8,6 +8,7 @@ export default function RSVPForm() {
     const [guestNameInput, setGuestNameInput] = useState('');
     const [verificationError, setVerificationError] = useState('');
     const [verifying, setVerifying] = useState(false);
+    const [config, setConfig] = useState<any>(null);
 
     const [formData, setFormData] = useState({
         guestName: '',
@@ -21,6 +22,14 @@ export default function RSVPForm() {
 
     const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
     const [errorMessage, setErrorMessage] = useState('');
+
+    useEffect(() => {
+        // Fetch site config for bride/groom names
+        fetch('/api/admin/site-config')
+            .then(res => res.json())
+            .then(data => setConfig(data))
+            .catch(err => console.error('Error fetching config:', err));
+    }, []);
 
     const handleVerification = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -289,7 +298,7 @@ export default function RSVPForm() {
 
                 <div className="sm:col-span-2">
                     <label htmlFor="message" className="block text-sm font-medium text-gray-700 ml-1">
-                        Message for Heaven & Austin♥
+                        Message for {config?.brideName || 'Bride'} & {config?.groomName || 'Groom'}♥
                     </label>
                     <div className="mt-1">
                         <textarea

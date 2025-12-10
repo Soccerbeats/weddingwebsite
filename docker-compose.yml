@@ -10,11 +10,14 @@ services:
     ports:
       - '3000:3000'
     environment:
-      - DATABASE_URL=postgres://wedding_user:wedding_password@db:5432/wedding_db
-      - ADMIN_PASSWORD=Pineapple0423
+      - DATABASE_URL=${DATABASE_URL}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - NODE_ENV=${NODE_ENV}
     volumes:
       - .:/app
       - /app/node_modules
+      - photos_data:/app/public/photos
+      - config_data:/app/public/config
     depends_on:
       - db
     command: npm run dev
@@ -24,9 +27,9 @@ services:
     container_name: wedding-db
     restart: always
     environment:
-      - POSTGRES_USER=wedding_user
-      - POSTGRES_PASSWORD=wedding_password
-      - POSTGRES_DB=wedding_db
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
     ports:
       - '5432:5432'
     volumes:
@@ -35,3 +38,5 @@ services:
 
 volumes:
   postgres_data:
+  photos_data:
+  config_data:
