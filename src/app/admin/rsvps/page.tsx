@@ -39,6 +39,7 @@ export default function RSVPDashboard() {
     const [editingGuest, setEditingGuest] = useState<Guest | null>(null);
     const [isAddingGuest, setIsAddingGuest] = useState(false);
     const [selectedGuests, setSelectedGuests] = useState<number[]>([]);
+    const [config, setConfig] = useState<any>(null);
     const [guestForm, setGuestForm] = useState({
         guest_name: '',
         email: '',
@@ -52,7 +53,18 @@ export default function RSVPDashboard() {
     useEffect(() => {
         fetchRsvps();
         fetchGuests();
+        fetchConfig();
     }, []);
+
+    const fetchConfig = async () => {
+        try {
+            const response = await fetch('/api/admin/site-config');
+            const data = await response.json();
+            setConfig(data);
+        } catch (error) {
+            console.error('Error fetching config:', error);
+        }
+    };
 
     const fetchRsvps = () => {
         fetch('/api/admin/rsvps')
@@ -592,8 +604,8 @@ export default function RSVPDashboard() {
                                         className="w-full px-3 py-2 border border-gray-300 rounded-md"
                                     >
                                         <option value="">Not Specified</option>
-                                        <option value="bride">Bride's Side</option>
-                                        <option value="groom">Groom's Side</option>
+                                        <option value="bride">{config?.brideName || "Bride"}'s Side</option>
+                                        <option value="groom">{config?.groomName || "Groom"}'s Side</option>
                                     </select>
                                 </div>
                             </div>

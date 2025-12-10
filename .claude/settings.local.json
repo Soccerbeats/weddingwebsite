@@ -14,7 +14,8 @@
       "Bash(docker restart:*)",
       "Bash(docker logs:*)",
       "Bash(cat:*)",
-      "Bash(docker cp:*)"
+      "Bash(docker cp:*)",
+      "Bash(git checkout:*)"
     ],
     "deny": [],
     "ask": []
