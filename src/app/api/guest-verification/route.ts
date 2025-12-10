@@ -27,6 +27,7 @@ export async function POST(request: Request) {
           party_size: guest.party_size,
           email: guest.email,
           phone: guest.phone,
+          plus_one_name: guest.plus_one_name,
         },
       });
     }

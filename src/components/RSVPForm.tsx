@@ -192,7 +192,7 @@ export default function RSVPForm() {
                     </div>
                     <div className="ml-3">
                         <p className="text-sm font-medium text-green-800">
-                            Welcome, {verifiedGuest?.name}!
+                            Welcome, {verifiedGuest?.name}{verifiedGuest?.plus_one_name && ` & ${verifiedGuest.plus_one_name}`}!
                         </p>
                         <p className="text-sm text-green-700 mt-1">
                             Please complete your RSVP below.
