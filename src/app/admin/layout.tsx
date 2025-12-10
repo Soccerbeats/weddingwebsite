@@ -13,12 +13,13 @@ export default function AdminLayout({
     const router = useRouter();
     const [config, setConfig] = useState<any>(null);
 
+    // Fetch config on mount and whenever pathname changes (including when navigating to /admin)
     useEffect(() => {
         fetch('/api/admin/site-config')
             .then(res => res.json())
             .then(data => setConfig(data))
             .catch(err => console.error('Error fetching config:', err));
-    }, []);
+    }, [pathname]);
 
     const handleLogout = async () => {
         await fetch('/api/auth/logout', { method: 'POST' });
@@ -43,16 +44,26 @@ export default function AdminLayout({
     }
 
     return (
-        <div className="min-h-screen bg-gray-100 flex">
-            {/* Sidebar */}
-            <aside className="w-64 bg-white border-r border-gray-200">
-                <div className="h-16 flex items-center justify-center border-b border-gray-200 px-4">
-                    <span className="text-lg font-serif font-bold text-gray-800 text-center">
-                        {config?.brideName && config?.groomName
-                            ? `${config.brideName} & ${config.groomName}`
-                            : 'Admin Panel'}
-                    </span>
-                </div>
+        <>
+            <style dangerouslySetInnerHTML={{
+                __html: `
+                    :root {
+                        --accent: ${config?.accentColor || '#D4AF37'};
+                        --accent-light: ${config?.accentLightColor || '#F4E5C3'};
+                        --accent-dark: ${config?.accentDarkColor || '#B8941F'};
+                    }
+                `
+            }} />
+            <div className="min-h-screen bg-gray-100 flex">
+                {/* Sidebar */}
+                <aside className="w-64 bg-white border-r border-gray-200">
+                    <div className="h-16 flex items-center justify-center border-b border-gray-200 px-4">
+                        <span className="text-lg font-serif font-bold text-gray-800 text-center">
+                            {config?.brideName && config?.groomName
+                                ? `${config.brideName} & ${config.groomName}`
+                                : 'Admin Panel'}
+                        </span>
+                    </div>
                 <nav className="p-4 space-y-2">
                     {navItems.map((item) => (
                         <Link
@@ -75,12 +86,13 @@ export default function AdminLayout({
                 </nav>
             </aside>
 
-            {/* Main Content */}
-            <main className="flex-1 overflow-auto">
-                <div className="p-8">
-                    {children}
-                </div>
-            </main>
-        </div>
+                {/* Main Content */}
+                <main className="flex-1 overflow-auto">
+                    <div className="p-8">
+                        {children}
+                    </div>
+                </main>
+            </div>
+        </>
     );
 }
