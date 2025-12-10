@@ -6,6 +6,9 @@ import Footer from '@/components/Footer';
 import WipCheck from '@/components/WipCheck';
 import { getSiteConfig } from '@/lib/config';
 
+// Force this layout to be dynamic so it re-reads config on every request
+export const dynamic = 'force-dynamic';
+
 const playfair = Playfair_Display({
   variable: '--font-serif',
   subsets: ['latin'],
