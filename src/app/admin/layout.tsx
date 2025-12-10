@@ -22,9 +22,11 @@ export default function AdminLayout({
         { href: '/admin/photos', label: 'Photos' },
         { href: '/admin/home', label: 'Home Page' },
         { href: '/admin/about', label: 'About Page' },
+        { href: '/admin/wedding-party', label: 'Wedding Party' },
         { href: '/admin/faqs', label: 'Q&A' },
         { href: '/admin/schedule', label: 'Schedule' },
         { href: '/admin/settings', label: 'General Settings' },
+        { href: '/admin/wip-control', label: 'Work in Progress' },
     ];
 
     if (pathname === '/admin/login') {

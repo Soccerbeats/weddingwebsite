@@ -3,6 +3,12 @@
 import { useState } from 'react';
 
 export default function RSVPForm() {
+    const [step, setStep] = useState<'verification' | 'form'>('verification');
+    const [verifiedGuest, setVerifiedGuest] = useState<any>(null);
+    const [guestNameInput, setGuestNameInput] = useState('');
+    const [verificationError, setVerificationError] = useState('');
+    const [verifying, setVerifying] = useState(false);
+
     const [formData, setFormData] = useState({
         guestName: '',
         email: '',
@@ -15,6 +21,41 @@ export default function RSVPForm() {
 
     const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
     const [errorMessage, setErrorMessage] = useState('');
+
+    const handleVerification = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setVerifying(true);
+        setVerificationError('');
+
+        try {
+            const response = await fetch('/api/guest-verification', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ guest_name: guestNameInput }),
+            });
+
+            const data = await response.json();
+
+            if (data.verified) {
+                setVerifiedGuest(data.guest);
+                setFormData(prev => ({
+                    ...prev,
+                    guestName: data.guest.name,
+                    email: data.guest.email || '',
+                    phone: data.guest.phone || '',
+                    guestCount: data.guest.party_size || 1,
+                }));
+                setStep('form');
+            } else {
+                setVerificationError(data.message || 'Guest not found on the list.');
+            }
+        } catch (error) {
+            console.error('Verification error:', error);
+            setVerificationError('Error verifying guest. Please try again.');
+        } finally {
+            setVerifying(false);
+        }
+    };
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
@@ -70,26 +111,88 @@ export default function RSVPForm() {
         );
     }
 
-    return (
-        <form onSubmit={handleSubmit} className="space-y-6 bg-white p-8 rounded-3xl shadow-xl border-t-4 border-accent">
-            <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
-                <div className="sm:col-span-2">
-                    <label htmlFor="guestName" className="block text-sm font-medium text-gray-700 ml-1">
-                        Full Name(s) *
-                    </label>
-                    <div className="mt-1">
+    // Step 1: Name Verification
+    if (step === 'verification') {
+        return (
+            <div className="bg-white p-8 rounded-3xl shadow-xl border-t-4 border-accent">
+                <div className="text-center mb-6">
+                    <h2 className="text-2xl font-serif text-gray-900 mb-2">
+                        Welcome!
+                    </h2>
+                    <p className="text-gray-600">
+                        Please enter your name as it appears on your invitation to begin.
+                    </p>
+                </div>
+
+                <form onSubmit={handleVerification} className="space-y-6">
+                    <div>
+                        <label htmlFor="guestNameInput" className="block text-sm font-medium text-gray-700 ml-1 mb-2">
+                            Full Name *
+                        </label>
                         <input
                             type="text"
-                            name="guestName"
-                            id="guestName"
+                            id="guestNameInput"
+                            value={guestNameInput}
+                            onChange={(e) => setGuestNameInput(e.target.value)}
+                            placeholder="Enter your full name"
                             required
-                            value={formData.guestName}
-                            onChange={handleChange}
                             className="appearance-none block w-full px-4 py-3 border border-gray-300 rounded-2xl shadow-sm placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-accent focus:border-accent sm:text-sm transition-shadow"
                         />
                     </div>
-                </div>
 
+                    {verificationError && (
+                        <div className="rounded-2xl bg-red-50 p-4">
+                            <div className="flex">
+                                <div className="flex-shrink-0">
+                                    <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                                    </svg>
+                                </div>
+                                <div className="ml-3">
+                                    <h3 className="text-sm font-medium text-red-800">
+                                        {verificationError}
+                                    </h3>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <div>
+                        <button
+                            type="submit"
+                            disabled={verifying || !guestNameInput.trim()}
+                            className="w-full flex justify-center py-3 px-6 border border-transparent rounded-full shadow-md text-base font-medium text-white bg-accent hover:bg-accent-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 transition-all transform hover:-translate-y-0.5"
+                        >
+                            {verifying ? 'Verifying...' : 'Continue'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        );
+    }
+
+    // Step 2: RSVP Form
+    return (
+        <form onSubmit={handleSubmit} className="space-y-6 bg-white p-8 rounded-3xl shadow-xl border-t-4 border-accent">
+            <div className="bg-green-50 border border-green-200 rounded-2xl p-4 mb-6">
+                <div className="flex">
+                    <div className="flex-shrink-0">
+                        <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                    </div>
+                    <div className="ml-3">
+                        <p className="text-sm font-medium text-green-800">
+                            Welcome, {verifiedGuest?.name}!
+                        </p>
+                        <p className="text-sm text-green-700 mt-1">
+                            Please complete your RSVP below.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
                 <div className="sm:col-span-2">
                     <label htmlFor="email" className="block text-sm font-medium text-gray-700 ml-1">
                         Email *
@@ -153,12 +256,17 @@ export default function RSVPForm() {
                                 name="guestCount"
                                 id="guestCount"
                                 min="1"
-                                max="10"
+                                max={verifiedGuest?.party_size || 10}
                                 required
                                 value={formData.guestCount}
                                 onChange={handleChange}
                                 className="appearance-none block w-full px-4 py-3 border border-gray-300 rounded-2xl shadow-sm placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-accent focus:border-accent sm:text-sm transition-shadow"
                             />
+                            {verifiedGuest?.party_size && (
+                                <p className="mt-1 text-sm text-gray-500">
+                                    Maximum party size: {verifiedGuest.party_size}
+                                </p>
+                            )}
                         </div>
                     </div>
                 )}
@@ -181,7 +289,7 @@ export default function RSVPForm() {
 
                 <div className="sm:col-span-2">
                     <label htmlFor="message" className="block text-sm font-medium text-gray-700 ml-1">
-                        Message for the Couple
+                        Message for Heaven & Austin♥
                     </label>
                     <div className="mt-1">
                         <textarea
@@ -208,11 +316,22 @@ export default function RSVPForm() {
                 </div>
             )}
 
-            <div>
+            <div className="flex gap-4">
+                <button
+                    type="button"
+                    onClick={() => {
+                        setStep('verification');
+                        setGuestNameInput('');
+                        setVerificationError('');
+                    }}
+                    className="flex justify-center py-3 px-6 border border-gray-300 rounded-full shadow-sm text-base font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent transition-all"
+                >
+                    Back
+                </button>
                 <button
                     type="submit"
                     disabled={status === 'submitting'}
-                    className="w-full flex justify-center py-3 px-6 border border-transparent rounded-full shadow-md text-base font-medium text-white bg-accent hover:bg-accent-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 transition-all transform hover:-translate-y-0.5"
+                    className="flex-1 flex justify-center py-3 px-6 border border-transparent rounded-full shadow-md text-base font-medium text-white bg-accent hover:bg-accent-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 transition-all transform hover:-translate-y-0.5"
                 >
                     {status === 'submitting' ? 'Sending...' : 'Send RSVP'}
                 </button>

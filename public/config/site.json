@@ -53,5 +53,51 @@
       "description": "We say 'I do'!",
       "location": "Garden Courtyard"
     }
-  ]
+  ],
+  "weddingParty": {
+    "brideParty": [],
+    "groomParty": [
+      {
+        "name": "Jacob Novak",
+        "role": "Best Man",
+        "relationship": "Friend",
+        "photo": "",
+        "bio": ""
+      },
+      {
+        "name": "Zach Novak",
+        "role": "Groomsman",
+        "relationship": "Friend",
+        "photo": "",
+        "bio": ""
+      },
+      {
+        "name": "Max Kulik",
+        "role": "Groomsman",
+        "relationship": "Friend",
+        "photo": "",
+        "bio": ""
+      },
+      {
+        "name": "Evan Floryance",
+        "role": "Groomsman",
+        "relationship": "Friend",
+        "photo": "",
+        "bio": ""
+      },
+      {
+        "name": "Cade Kiel",
+        "role": "Groomsman",
+        "relationship": "Friend",
+        "photo": "",
+        "bio": ""
+      }
+    ],
+    "officiant": {
+      "name": "David Stanfield",
+      "relationship": "Father",
+      "photo": "",
+      "bio": ""
+    }
+  }
 }
