@@ -55,6 +55,15 @@ RUN chown nextjs:nodejs .next
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
+# Create database initialization script directly
+RUN echo '#!/bin/sh' > /app/init-db.sh && \
+    echo 'echo "Waiting for database..."' >> /app/init-db.sh && \
+    echo 'until node -e "const { Client } = require(\"pg\"); const client = new Client(process.env.DATABASE_URL); client.connect().then(() => { client.end(); process.exit(0); }).catch(() => process.exit(1));" 2>/dev/null; do sleep 1; done' >> /app/init-db.sh && \
+    echo 'echo "Initializing database schema..."' >> /app/init-db.sh && \
+    echo 'node -e "const { Client } = require(\"pg\"); const client = new Client(process.env.DATABASE_URL); const schema = \`CREATE TABLE IF NOT EXISTS rsvps (id SERIAL PRIMARY KEY, guest_name VARCHAR(255) NOT NULL, email VARCHAR(255) NOT NULL, phone VARCHAR(50), attending BOOLEAN NOT NULL, number_of_guests INTEGER DEFAULT 1, dietary_restrictions TEXT, message TEXT, created_at TIMESTAMP DEFAULT NOW()); CREATE TABLE IF NOT EXISTS wip_toggles (id SERIAL PRIMARY KEY, page_path VARCHAR(255) NOT NULL UNIQUE, page_label VARCHAR(255) NOT NULL, is_wip BOOLEAN DEFAULT false, updated_at TIMESTAMP DEFAULT NOW()); CREATE TABLE IF NOT EXISTS guest_list (id SERIAL PRIMARY KEY, guest_name VARCHAR(255) NOT NULL, email VARCHAR(255), phone VARCHAR(50), party_size INTEGER DEFAULT 1, side VARCHAR(50), notes TEXT, invited BOOLEAN DEFAULT true, rsvp_status VARCHAR(50), created_at TIMESTAMP DEFAULT NOW(), updated_at TIMESTAMP DEFAULT NOW());\`; client.connect().then(() => client.query(schema)).then(() => { console.log(\"Database initialized!\"); client.end(); process.exit(0); }).catch(err => { console.error(err); client.end(); process.exit(1); });"' >> /app/init-db.sh && \
+    chmod +x /app/init-db.sh && \
+    chown nextjs:nodejs /app/init-db.sh
+
 USER nextjs
 
 EXPOSE 3000
@@ -63,4 +72,5 @@ ENV PORT 3000
 # set hostname to localhost
 ENV HOSTNAME "0.0.0.0"
 
-CMD ["node", "server.js"]
+# Run init script then start server
+CMD ["sh", "-c", "/app/init-db.sh && node server.js"]
