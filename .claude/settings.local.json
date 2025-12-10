@@ -21,7 +21,10 @@
       "Bash(git push:*)",
       "Bash(docker push:*)",
       "Bash(git pull:*)",
-      "Bash(git stash:*)"
+      "Bash(git stash:*)",
+      "Bash(docker compose exec:*)",
+      "Bash(docker compose:*)",
+      "Bash(docker tag:*)"
     ],
     "deny": [],
     "ask": []

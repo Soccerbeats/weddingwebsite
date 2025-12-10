@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { getSiteConfig } from '@/lib/config';
+import CountdownClock from '@/components/CountdownClock';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,11 +57,14 @@ export default function Home() {
           <h2 className="text-3xl font-serif text-gray-900 mb-6">
             {config.homeIntroTitle || "Join us for the celebration"}
           </h2>
-          <p className="text-lg text-gray-600 leading-relaxed mb-4 whitespace-pre-line">
+          <p className="text-lg text-gray-600 leading-relaxed mb-12 whitespace-pre-line">
             {config.homeIntroBody || `We are so excited to celebrate our special day with our family and friends.
             This website contains wedding day details, travel information, and much more - check back for updates!`}
           </p>
-          <div className="w-24 h-px bg-accent mx-auto mt-8"></div>
+
+          <CountdownClock weddingDate={config.weddingDate} weddingTime={config.weddingTime} />
+
+          <div className="w-24 h-px bg-accent mx-auto mt-12"></div>
         </div>
       </div>
     </div>
