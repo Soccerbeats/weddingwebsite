@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
 
 export default function AdminLayout({
     children,
@@ -10,6 +11,14 @@ export default function AdminLayout({
 }) {
     const pathname = usePathname();
     const router = useRouter();
+    const [config, setConfig] = useState<any>(null);
+
+    useEffect(() => {
+        fetch('/api/admin/site-config')
+            .then(res => res.json())
+            .then(data => setConfig(data))
+            .catch(err => console.error('Error fetching config:', err));
+    }, []);
 
     const handleLogout = async () => {
         await fetch('/api/auth/logout', { method: 'POST' });
@@ -37,8 +46,12 @@ export default function AdminLayout({
         <div className="min-h-screen bg-gray-100 flex">
             {/* Sidebar */}
             <aside className="w-64 bg-white border-r border-gray-200">
-                <div className="h-16 flex items-center justify-center border-b border-gray-200">
-                    <span className="text-xl font-serif font-bold text-gray-800">Admin Panel</span>
+                <div className="h-16 flex items-center justify-center border-b border-gray-200 px-4">
+                    <span className="text-lg font-serif font-bold text-gray-800 text-center">
+                        {config?.brideName && config?.groomName
+                            ? `${config.brideName} & ${config.groomName}`
+                            : 'Admin Panel'}
+                    </span>
                 </div>
                 <nav className="p-4 space-y-2">
                     {navItems.map((item) => (
