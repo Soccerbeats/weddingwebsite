@@ -42,6 +42,10 @@ RUN adduser --system --uid 1001 nextjs
 
 COPY --from=builder /app/public ./public
 
+# Create empty directories for volume mounts (photos and config)
+RUN mkdir -p ./public/photos ./public/config
+RUN chown -R nextjs:nodejs ./public/photos ./public/config
+
 # Set the correct permission for prerender cache
 RUN mkdir .next
 RUN chown nextjs:nodejs .next
