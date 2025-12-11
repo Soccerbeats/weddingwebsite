@@ -232,6 +232,9 @@ npm run dev  # Starts on localhost:3000
 ```
 
 ### Docker Build & Deploy
+
+**CRITICAL**: Always use the image name `ghcr.io/soccerbeats/weddingwebsite:latest` - NEVER use any other name!
+
 ```bash
 # 1. Build production image
 docker build -t ghcr.io/soccerbeats/weddingwebsite:latest --target production .
@@ -243,6 +246,11 @@ docker push ghcr.io/soccerbeats/weddingwebsite:latest
 # User manually pulls and redeploys via Portainer UI
 # OR Portainer webhook auto-deploys on new image push
 ```
+
+**Important Notes**:
+- Image name must always be: `ghcr.io/soccerbeats/weddingwebsite:latest`
+- Do NOT use any other username or repository name
+- This is the configured name in the production Portainer stack
 
 ### Environment Variables (Portainer)
 ```env

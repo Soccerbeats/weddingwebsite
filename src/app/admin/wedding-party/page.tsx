@@ -1,13 +1,89 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface WeddingPartyMember {
+  id: string;
   name: string;
   role: string;
   relationship: string;
   photo?: string;
   bio?: string;
+}
+
+interface SortableRowProps {
+  member: WeddingPartyMember;
+  index: number;
+  party: 'bride' | 'groom';
+  onEdit: (party: 'bride' | 'groom', index: number) => void;
+  onDelete: (party: 'bride' | 'groom', index: number) => void;
+}
+
+function SortableRow({ member, index, party, onEdit, onDelete }: SortableRowProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: member.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <tr ref={setNodeRef} style={style} className={isDragging ? 'bg-gray-50' : ''}>
+      <td className="px-6 py-4 whitespace-nowrap">
+        <button
+          {...attributes}
+          {...listeners}
+          className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 focus:outline-none"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+      </td>
+      <td className="px-6 py-4 whitespace-nowrap">{member.name}</td>
+      <td className="px-6 py-4 whitespace-nowrap">{member.role}</td>
+      <td className="px-6 py-4 whitespace-nowrap">{member.relationship}</td>
+      <td className="px-6 py-4 whitespace-nowrap text-right">
+        <button
+          onClick={() => onEdit(party, index)}
+          className="text-blue-100 bg-blue-500 px-3 py-1 rounded hover:bg-blue-600 mr-2 text-sm"
+        >
+          Edit
+        </button>
+        <button
+          onClick={() => onDelete(party, index)}
+          className="text-red-100 bg-red-500 px-3 py-1 rounded hover:bg-red-600 text-sm"
+        >
+          Delete
+        </button>
+      </td>
+    </tr>
+  );
 }
 
 interface OfficiantInfo {
@@ -30,6 +106,7 @@ export default function AdminWeddingPartyPage() {
   const [editingParty, setEditingParty] = useState<'bride' | 'groom' | 'officiant' | null>(null);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [formData, setFormData] = useState<WeddingPartyMember>({
+    id: '',
     name: '',
     role: '',
     relationship: '',
@@ -37,19 +114,59 @@ export default function AdminWeddingPartyPage() {
     bio: '',
   });
 
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
   useEffect(() => {
     fetchConfig();
   }, []);
+
+  const ensureIds = (members: any[]) => {
+    return members.map((member, index) => ({
+      ...member,
+      id: member.id || `member-${index}-${Date.now()}`,
+    }));
+  };
 
   const fetchConfig = async () => {
     try {
       const response = await fetch('/api/admin/site-config');
       const data = await response.json();
+
+      // Ensure all members have IDs
+      if (data.weddingParty) {
+        if (data.weddingParty.brideParty) {
+          data.weddingParty.brideParty = ensureIds(data.weddingParty.brideParty);
+        }
+        if (data.weddingParty.groomParty) {
+          data.weddingParty.groomParty = ensureIds(data.weddingParty.groomParty);
+        }
+      }
+
       setConfig(data);
     } catch (error) {
       console.error('Error fetching config:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDragEnd = (event: DragEndEvent, party: 'bride' | 'groom') => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      const partyKey = party === 'bride' ? 'brideParty' : 'groomParty';
+      const members = config.weddingParty[partyKey];
+
+      const oldIndex = members.findIndex((m: WeddingPartyMember) => m.id === active.id);
+      const newIndex = members.findIndex((m: WeddingPartyMember) => m.id === over.id);
+
+      config.weddingParty[partyKey] = arrayMove(members, oldIndex, newIndex);
+      setConfig({ ...config });
     }
   };
 
@@ -77,6 +194,7 @@ export default function AdminWeddingPartyPage() {
     setEditingParty(party);
     setEditingIndex(null);
     setFormData({
+      id: `member-new-${Date.now()}`,
       name: '',
       role: '',
       relationship: '',
@@ -100,6 +218,7 @@ export default function AdminWeddingPartyPage() {
     setEditingIndex(null);
     const officiant = config.weddingParty?.officiant;
     setFormData({
+      id: 'officiant',
       name: officiant?.name || '',
       role: 'Officiant',
       relationship: officiant?.relationship || '',
@@ -182,45 +301,46 @@ export default function AdminWeddingPartyPage() {
           </button>
         </div>
 
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          {brideParty.length === 0 ? (
-            <p className="p-6 text-gray-500 text-center">No members added yet</p>
-          ) : (
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Relationship</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {brideParty.map((member: WeddingPartyMember, index: number) => (
-                  <tr key={index}>
-                    <td className="px-6 py-4 whitespace-nowrap">{member.name}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">{member.role}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">{member.relationship}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right">
-                      <button
-                        onClick={() => editMember('bride', index)}
-                        className="text-blue-600 hover:text-blue-900 mr-4"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => deleteMember('bride', index)}
-                        className="text-red-600 hover:text-red-900"
-                      >
-                        Delete
-                      </button>
-                    </td>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={(event) => handleDragEnd(event, 'bride')}
+        >
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            {brideParty.length === 0 ? (
+              <p className="p-6 text-gray-500 text-center">No members added yet</p>
+            ) : (
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase w-12"></th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Relationship</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+                </thead>
+                <SortableContext
+                  items={brideParty.map((m: WeddingPartyMember) => m.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {brideParty.map((member: WeddingPartyMember, index: number) => (
+                      <SortableRow
+                        key={member.id}
+                        member={member}
+                        index={index}
+                        party="bride"
+                        onEdit={editMember}
+                        onDelete={deleteMember}
+                      />
+                    ))}
+                  </tbody>
+                </SortableContext>
+              </table>
+            )}
+          </div>
+        </DndContext>
       </div>
 
       {/* Groom's Party */}
@@ -235,45 +355,46 @@ export default function AdminWeddingPartyPage() {
           </button>
         </div>
 
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          {groomParty.length === 0 ? (
-            <p className="p-6 text-gray-500 text-center">No members added yet</p>
-          ) : (
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Relationship</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {groomParty.map((member: WeddingPartyMember, index: number) => (
-                  <tr key={index}>
-                    <td className="px-6 py-4 whitespace-nowrap">{member.name}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">{member.role}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">{member.relationship}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right">
-                      <button
-                        onClick={() => editMember('groom', index)}
-                        className="text-blue-600 hover:text-blue-900 mr-4"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => deleteMember('groom', index)}
-                        className="text-red-600 hover:text-red-900"
-                      >
-                        Delete
-                      </button>
-                    </td>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={(event) => handleDragEnd(event, 'groom')}
+        >
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            {groomParty.length === 0 ? (
+              <p className="p-6 text-gray-500 text-center">No members added yet</p>
+            ) : (
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase w-12"></th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Relationship</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+                </thead>
+                <SortableContext
+                  items={groomParty.map((m: WeddingPartyMember) => m.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {groomParty.map((member: WeddingPartyMember, index: number) => (
+                      <SortableRow
+                        key={member.id}
+                        member={member}
+                        index={index}
+                        party="groom"
+                        onEdit={editMember}
+                        onDelete={deleteMember}
+                      />
+                    ))}
+                  </tbody>
+                </SortableContext>
+              </table>
+            )}
+          </div>
+        </DndContext>
       </div>
 
       {/* Officiant */}
