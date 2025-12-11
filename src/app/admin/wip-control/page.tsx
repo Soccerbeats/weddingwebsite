@@ -13,6 +13,7 @@ interface WipToggle {
 const publicPages = [
   { path: '/', label: 'Home' },
   { path: '/about', label: 'About' },
+  { path: '/our-story', label: 'Timeline' },
   { path: '/wedding-party', label: 'Wedding Party' },
   { path: '/schedule', label: 'Schedule' },
   { path: '/photos', label: 'Photos' },

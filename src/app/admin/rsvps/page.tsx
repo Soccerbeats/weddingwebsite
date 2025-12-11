@@ -24,6 +24,7 @@ interface Guest {
     notes: string;
     invited: boolean;
     rsvp_status?: string;
+    plus_one_name?: string;
     created_at: string;
 }
 
@@ -48,6 +49,7 @@ export default function RSVPDashboard() {
         side: '',
         notes: '',
         invited: false,
+        plus_one_name: '',
     });
 
     useEffect(() => {
@@ -134,6 +136,7 @@ export default function RSVPDashboard() {
                     side: '',
                     notes: '',
                     invited: false,
+                    plus_one_name: '',
                 });
                 fetchGuests();
             }
@@ -170,6 +173,7 @@ export default function RSVPDashboard() {
             side: guest.side || '',
             notes: guest.notes || '',
             invited: guest.invited,
+            plus_one_name: guest.plus_one_name || '',
         });
     };
 
@@ -398,6 +402,7 @@ export default function RSVPDashboard() {
                                     side: '',
                                     notes: '',
                                     invited: false,
+                                    plus_one_name: '',
                                 });
                             }}
                             className="bg-accent text-white px-4 py-2 rounded-md hover:bg-accent/90"
@@ -442,6 +447,9 @@ export default function RSVPDashboard() {
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="text-sm font-medium text-gray-900">{guest.guest_name}</div>
+                                                {guest.plus_one_name && (
+                                                    <div className="text-sm text-gray-500">+ {guest.plus_one_name}</div>
+                                                )}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="text-sm text-gray-500">{guest.email || '-'}</div>
@@ -551,6 +559,19 @@ export default function RSVPDashboard() {
                                     onChange={(e) => setGuestForm({ ...guestForm, guest_name: e.target.value })}
                                     className="w-full px-3 py-2 border border-gray-300 rounded-md"
                                     required
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Plus One Name
+                                </label>
+                                <input
+                                    type="text"
+                                    value={guestForm.plus_one_name}
+                                    onChange={(e) => setGuestForm({ ...guestForm, plus_one_name: e.target.value })}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                    placeholder="Optional"
                                 />
                             </div>
 

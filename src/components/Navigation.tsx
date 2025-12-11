@@ -14,6 +14,7 @@ export default function Navigation({ brideName = 'Sarah', groomName = 'James' }:
     const links = [
         { href: '/', label: 'Home' },
         { href: '/about', label: 'About' },
+        { href: '/our-story', label: 'Timeline' },
         { href: '/wedding-party', label: 'Wedding Party' },
         { href: '/schedule', label: 'Schedule' },
         { href: '/photos', label: 'Photos' },

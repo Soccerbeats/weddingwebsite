@@ -26,7 +26,7 @@ export default function Footer({
                 </div>
                 <div className="mt-8 md:mt-0 md:order-1 w-full">
                     <p className="text-center text-base text-gray-900 font-serif">
-                        &copy; 2026 {brideName} & {groomName}. Can't wait to celebrate with you!
+                        &copy; 2026 {brideName} & {groomName}. We can't wait to celebrate with you!
                     </p>
                 </div>
             </div>

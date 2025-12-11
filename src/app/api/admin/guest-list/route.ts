@@ -18,13 +18,13 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const { guest_name, email, phone, party_size, notes, invited } = await request.json();
+    const { guest_name, email, phone, party_size, notes, invited, plus_one_name } = await request.json();
 
     const result = await pool.query(
-      `INSERT INTO guest_list (guest_name, email, phone, party_size, notes, invited, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW())
+      `INSERT INTO guest_list (guest_name, email, phone, party_size, notes, invited, plus_one_name, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
        RETURNING *`,
-      [guest_name, email, phone, party_size, notes, invited ?? true]
+      [guest_name, email, phone, party_size, notes, invited ?? true, plus_one_name]
     );
 
     return NextResponse.json(result.rows[0]);
@@ -39,14 +39,14 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   try {
-    const { id, guest_name, email, phone, party_size, notes, invited } = await request.json();
+    const { id, guest_name, email, phone, party_size, notes, invited, plus_one_name } = await request.json();
 
     const result = await pool.query(
       `UPDATE guest_list
-       SET guest_name = $1, email = $2, phone = $3, party_size = $4, notes = $5, invited = $6, updated_at = NOW()
-       WHERE id = $7
+       SET guest_name = $1, email = $2, phone = $3, party_size = $4, notes = $5, invited = $6, plus_one_name = $7, updated_at = NOW()
+       WHERE id = $8
        RETURNING *`,
-      [guest_name, email, phone, party_size, notes, invited, id]
+      [guest_name, email, phone, party_size, notes, invited, plus_one_name, id]
     );
 
     return NextResponse.json(result.rows[0]);
