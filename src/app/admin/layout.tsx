@@ -30,6 +30,7 @@ export default function AdminLayout({
     const navItems = [
         { href: '/admin/rsvps', label: 'RSVPs' },
         { href: '/admin/photos', label: 'Photos' },
+        { href: '/admin/timeline', label: 'Timeline' },
         { href: '/admin/home', label: 'Home Page' },
         { href: '/admin/about', label: 'About Page' },
         { href: '/admin/wedding-party', label: 'Wedding Party' },
