@@ -41,6 +41,10 @@ export default function RSVPDashboard() {
     const [isAddingGuest, setIsAddingGuest] = useState(false);
     const [selectedGuests, setSelectedGuests] = useState<number[]>([]);
     const [config, setConfig] = useState<any>(null);
+    const [showImportModal, setShowImportModal] = useState(false);
+    const [csvFile, setCsvFile] = useState<File | null>(null);
+    const [importing, setImporting] = useState(false);
+    const [importResults, setImportResults] = useState<{ success: number; failed: number; errors: string[] } | null>(null);
     const [guestForm, setGuestForm] = useState({
         guest_name: '',
         email: '',
@@ -236,6 +240,82 @@ export default function RSVPDashboard() {
         }
     };
 
+    const handleImportCSV = async () => {
+        if (!csvFile) return;
+
+        setImporting(true);
+        setImportResults(null);
+
+        try {
+            const text = await csvFile.text();
+            const lines = text.split('\n').filter(line => line.trim());
+
+            if (lines.length === 0) {
+                alert('CSV file is empty');
+                setImporting(false);
+                return;
+            }
+
+            // Parse CSV
+            const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+            const results = { success: 0, failed: 0, errors: [] as string[] };
+
+            for (let i = 1; i < lines.length; i++) {
+                const values = lines[i].split(',').map(v => v.trim());
+
+                if (values.length === 0 || !values[0]) continue;
+
+                const guestData: any = {};
+                headers.forEach((header, index) => {
+                    guestData[header] = values[index] || '';
+                });
+
+                // Map CSV columns to guest fields
+                const guest = {
+                    guest_name: guestData.name || guestData.guest_name || '',
+                    email: guestData.email || '',
+                    phone: guestData.phone || '',
+                    party_size: parseInt(guestData.party_size) || 1,
+                    side: guestData.side || '',
+                    notes: guestData.notes || '',
+                    invited: guestData.invited === 'true' || guestData.invited === '1',
+                    plus_one_name: guestData.plus_one_name || '',
+                };
+
+                if (!guest.guest_name) {
+                    results.errors.push(`Row ${i + 1}: Missing guest name`);
+                    results.failed++;
+                    continue;
+                }
+
+                try {
+                    const response = await fetch('/api/admin/guest-list', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(guest),
+                    });
+
+                    if (response.ok) {
+                        results.success++;
+                    } else {
+                        results.failed++;
+                        results.errors.push(`Row ${i + 1}: ${guest.guest_name} - Failed to add`);
+                    }
+                } catch (error) {
+                    results.failed++;
+                    results.errors.push(`Row ${i + 1}: ${guest.guest_name} - ${error}`);
+                }
+            }
+
+            setImportResults(results);
+            fetchGuests();
+        } catch (error) {
+            alert('Error parsing CSV file: ' + error);
+        } finally {
+            setImporting(false);
+        }
+    };
+
     if (loading) return <div className="p-8">Loading...</div>;
 
     const totalGuests = rsvps.reduce((acc, curr) => acc + (curr.attending ? curr.number_of_guests : 0), 0);
@@ -391,24 +471,35 @@ export default function RSVPDashboard() {
                                 </>
                             )}
                         </div>
-                        <button
-                            onClick={() => {
-                                setIsAddingGuest(true);
-                                setGuestForm({
-                                    guest_name: '',
-                                    email: '',
-                                    phone: '',
-                                    party_size: 1,
-                                    side: '',
-                                    notes: '',
-                                    invited: false,
-                                    plus_one_name: '',
-                                });
-                            }}
-                            className="bg-accent text-white px-4 py-2 rounded-md hover:bg-accent/90"
-                        >
-                            Add Guest
-                        </button>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => setShowImportModal(true)}
+                                className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 flex items-center gap-2"
+                            >
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                </svg>
+                                Import CSV
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setIsAddingGuest(true);
+                                    setGuestForm({
+                                        guest_name: '',
+                                        email: '',
+                                        phone: '',
+                                        party_size: 1,
+                                        side: '',
+                                        notes: '',
+                                        invited: false,
+                                        plus_one_name: '',
+                                    });
+                                }}
+                                className="bg-accent text-white px-4 py-2 rounded-md hover:bg-accent/90"
+                            >
+                                Add Guest
+                            </button>
+                        </div>
                     </div>
 
                     {/* Guest List Table */}
@@ -674,6 +765,105 @@ export default function RSVPDashboard() {
                                 {editingGuest ? 'Update' : 'Add'} Guest
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* CSV Import Modal */}
+            {showImportModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6">
+                        <h3 className="text-2xl font-bold text-gray-900 mb-4">Import Guests from CSV</h3>
+
+                        {!importResults ? (
+                            <>
+                                <div className="mb-6">
+                                    <p className="text-sm text-gray-600 mb-4">
+                                        Upload a CSV file with guest information. The CSV should have a header row with the following columns:
+                                    </p>
+                                    <div className="bg-gray-50 p-4 rounded-md">
+                                        <code className="text-sm text-gray-800">
+                                            name,email,phone,party_size,side,notes,plus_one_name
+                                        </code>
+                                    </div>
+                                    <p className="text-xs text-gray-500 mt-2">
+                                        Example: John Doe,john@email.com,555-1234,2,bride,Vegan meal,Jane Doe
+                                    </p>
+                                </div>
+
+                                <div className="mb-6">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Select CSV File
+                                    </label>
+                                    <input
+                                        type="file"
+                                        accept=".csv"
+                                        onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                    />
+                                </div>
+
+                                <div className="flex justify-end gap-3">
+                                    <button
+                                        onClick={() => {
+                                            setShowImportModal(false);
+                                            setCsvFile(null);
+                                            setImportResults(null);
+                                        }}
+                                        className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleImportCSV}
+                                        disabled={!csvFile || importing}
+                                        className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50"
+                                    >
+                                        {importing ? 'Importing...' : 'Import'}
+                                    </button>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <div className="mb-6">
+                                    <h4 className="text-lg font-semibold text-gray-900 mb-3">Import Results</h4>
+                                    <div className="grid grid-cols-2 gap-4 mb-4">
+                                        <div className="bg-green-50 p-4 rounded-md">
+                                            <p className="text-sm text-gray-600">Successfully Added</p>
+                                            <p className="text-2xl font-bold text-green-600">{importResults.success}</p>
+                                        </div>
+                                        <div className="bg-red-50 p-4 rounded-md">
+                                            <p className="text-sm text-gray-600">Failed</p>
+                                            <p className="text-2xl font-bold text-red-600">{importResults.failed}</p>
+                                        </div>
+                                    </div>
+
+                                    {importResults.errors.length > 0 && (
+                                        <div className="bg-red-50 p-4 rounded-md max-h-48 overflow-y-auto">
+                                            <p className="text-sm font-semibold text-red-800 mb-2">Errors:</p>
+                                            <ul className="text-xs text-red-700 space-y-1">
+                                                {importResults.errors.map((error, idx) => (
+                                                    <li key={idx}>• {error}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="flex justify-end">
+                                    <button
+                                        onClick={() => {
+                                            setShowImportModal(false);
+                                            setCsvFile(null);
+                                            setImportResults(null);
+                                        }}
+                                        className="px-4 py-2 text-sm font-medium text-white bg-accent rounded-md hover:bg-accent/90"
+                                    >
+                                        Close
+                                    </button>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
             )}
