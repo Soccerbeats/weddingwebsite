@@ -26,12 +26,14 @@ export interface SiteConfig {
     weddingVenue?: string;
     weddingTime: string;
     rsvpDeadline?: string;
+    countdownMode?: 'full' | 'simple' | 'days-only';
     // Theme Colors
     accentColor?: string;
     accentLightColor?: string;
     accentDarkColor?: string;
     // About Page
     ourStoryTitle?: string;
+    howWeMetTitle?: string; // Editable "How We Met" title
     ourStoryBody?: string;
     venueDescription?: string;
     venueAddress?: string;

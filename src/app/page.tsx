@@ -62,7 +62,11 @@ export default function Home() {
             This website contains wedding day details, travel information, and much more - check back for updates!`}
           </p>
 
-          <CountdownClock weddingDate={config.weddingDate} weddingTime={config.weddingTime} />
+          <CountdownClock
+            weddingDate={config.weddingDate}
+            weddingTime={config.weddingTime}
+            countdownMode={config.countdownMode as 'full' | 'simple' | 'days-only' | undefined}
+          />
 
           <div className="w-24 h-px bg-accent mx-auto mt-12"></div>
         </div>

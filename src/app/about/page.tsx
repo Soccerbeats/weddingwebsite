@@ -26,7 +26,7 @@ export default function AboutPage() {
                     <div className="relative lg:grid lg:grid-cols-2 lg:gap-8 items-center">
                         <div className="relative">
                             <h3 className="text-2xl font-serif text-gray-900 tracking-tight sm:text-3xl mb-4">
-                                How We Met
+                                {config.howWeMetTitle || "How We Met"}
                             </h3>
                             <div className="mt-3 text-lg text-gray-600 leading-relaxed whitespace-pre-line">
                                 {config.ourStoryBody || `It started with a coffee shop mishap involving two identical orders and one very confused barista. What began as an awkward exchange over oat milk lattes turned into a conversation that lasted for hours.`}

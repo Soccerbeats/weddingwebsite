@@ -27,7 +27,8 @@
       "Bash(docker tag:*)",
       "Bash(docker ps:*)",
       "Bash(docker-compose pull:*)",
-      "Bash(docker rm:*)"
+      "Bash(docker rm:*)",
+      "Bash(timeout:*)"
     ],
     "deny": [],
     "ask": []

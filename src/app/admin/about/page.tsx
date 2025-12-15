@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 export default function AdminAbout() {
     const [config, setConfig] = useState({
         ourStoryTitle: '',
+        howWeMetTitle: '',
         ourStoryBody: '',
         venueDescription: '',
         venueAddress: '',
@@ -71,8 +72,20 @@ export default function AdminAbout() {
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Our Story Body Text</label>
-                        <p className="text-xs text-gray-500 mb-2">You can use multiple lines here.</p>
+                        <label className="block text-sm font-medium text-gray-700">"How We Met" Section Title</label>
+                        <input
+                            type="text"
+                            value={config.howWeMetTitle || ''}
+                            onChange={(e) => setConfig({ ...config, howWeMetTitle: e.target.value })}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
+                            placeholder="e.g. How We Met, Our Beginning, etc."
+                        />
+                        <p className="text-xs text-gray-500 mt-1">This will be the heading above your story. Leave blank to use "How We Met"</p>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">How We Met Story</label>
+                        <p className="text-xs text-gray-500 mb-2">Tell your story in this section. You can use multiple lines here.</p>
                         <textarea
                             rows={8}
                             value={config.ourStoryBody || ''}

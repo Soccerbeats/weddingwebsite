@@ -11,7 +11,8 @@ const DEFAULT_CONFIG = {
     weddingLocation: 'The Garden Estate',
     weddingTime: '4:00 PM',
     homeHero: null,
-    aboutHero: null
+    aboutHero: null,
+    countdownMode: 'full' // 'full' = days/hours/minutes/seconds, 'simple' = days/hours, 'days-only' = days only (larger)
 };
 
 function getConfig() {

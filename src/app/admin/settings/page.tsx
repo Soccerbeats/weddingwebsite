@@ -14,6 +14,7 @@ export default function AdminSettings() {
         accentColor: '',
         accentLightColor: '',
         accentDarkColor: '',
+        countdownMode: 'full',
     });
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState('');
@@ -101,6 +102,22 @@ export default function AdminSettings() {
                         className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border"
                         placeholder="e.g. 4:00 PM"
                     />
+                </div>
+
+                <div>
+                    <label className="block text-sm font-medium text-gray-700">Countdown Display Mode</label>
+                    <select
+                        value={config.countdownMode || 'full'}
+                        onChange={(e) => setConfig({ ...config, countdownMode: e.target.value })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
+                    >
+                        <option value="full">Full (Days, Hours, Minutes, Seconds)</option>
+                        <option value="simple">Simple (Days, Hours only)</option>
+                        <option value="days-only">Days Only (Large Display)</option>
+                    </select>
+                    <p className="mt-1 text-sm text-gray-500">
+                        Choose the countdown display style - Days Only shows a larger, more prominent display
+                    </p>
                 </div>
 
                 <div>
