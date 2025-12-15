@@ -5,6 +5,7 @@ interface WeddingPartyMember {
   role: string;
   relationship: string;
   photo?: string;
+  photoAlign?: 'top' | 'top-center' | 'center' | 'center-bottom' | 'bottom';
   bio?: string;
 }
 
@@ -13,6 +14,22 @@ export default function WeddingPartyPage() {
   const weddingParty = (config as any).weddingParty || {
     brideParty: [],
     groomParty: []
+  };
+
+  const getObjectPositionClass = (align?: 'top' | 'top-center' | 'center' | 'center-bottom' | 'bottom') => {
+    switch (align) {
+      case 'top':
+        return 'object-top';
+      case 'top-center':
+        return 'object-[50%_25%]';
+      case 'center-bottom':
+        return 'object-[50%_75%]';
+      case 'bottom':
+        return 'object-bottom';
+      case 'center':
+      default:
+        return 'object-center';
+    }
   };
 
   return (
@@ -48,9 +65,9 @@ export default function WeddingPartyPage() {
                   {member.photo ? (
                     <div className="relative h-64 bg-gray-200">
                       <img
-                        src={`/photos/${member.photo}`}
+                        src={`/api/photos/${member.photo}`}
                         alt={member.name}
-                        className="w-full h-full object-cover"
+                        className={`w-full h-full object-cover ${getObjectPositionClass(member.photoAlign)}`}
                       />
                     </div>
                   ) : (
@@ -103,9 +120,9 @@ export default function WeddingPartyPage() {
                   {member.photo ? (
                     <div className="relative h-64 bg-gray-200">
                       <img
-                        src={`/photos/${member.photo}`}
+                        src={`/api/photos/${member.photo}`}
                         alt={member.name}
-                        className="w-full h-full object-cover"
+                        className={`w-full h-full object-cover ${getObjectPositionClass(member.photoAlign)}`}
                       />
                     </div>
                   ) : (
@@ -153,9 +170,9 @@ export default function WeddingPartyPage() {
                 {weddingParty.officiant.photo ? (
                   <div className="relative h-64 bg-gray-200">
                     <img
-                      src={`/photos/${weddingParty.officiant.photo}`}
+                      src={`/api/photos/${weddingParty.officiant.photo}`}
                       alt={weddingParty.officiant.name}
-                      className="w-full h-full object-cover"
+                      className={`w-full h-full object-cover ${getObjectPositionClass(weddingParty.officiant.photoAlign)}`}
                     />
                   </div>
                 ) : (

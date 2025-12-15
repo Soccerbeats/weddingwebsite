@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
+import Image from 'next/image';
 import {
   DndContext,
   closestCenter,
@@ -25,6 +26,7 @@ interface WeddingPartyMember {
   role: string;
   relationship: string;
   photo?: string;
+  photoAlign?: 'top' | 'top-center' | 'center' | 'center-bottom' | 'bottom';
   bio?: string;
 }
 
@@ -90,6 +92,7 @@ interface OfficiantInfo {
   name: string;
   relationship: string;
   photo?: string;
+  photoAlign?: 'top' | 'top-center' | 'center' | 'center-bottom' | 'bottom';
   bio?: string;
 }
 
@@ -103,6 +106,7 @@ export default function AdminWeddingPartyPage() {
   const [config, setConfig] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [editingParty, setEditingParty] = useState<'bride' | 'groom' | 'officiant' | null>(null);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [formData, setFormData] = useState<WeddingPartyMember>({
@@ -111,8 +115,12 @@ export default function AdminWeddingPartyPage() {
     role: '',
     relationship: '',
     photo: '',
+    photoAlign: 'center',
     bio: '',
   });
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [oldPhoto, setOldPhoto] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -199,8 +207,14 @@ export default function AdminWeddingPartyPage() {
       role: '',
       relationship: '',
       photo: '',
+      photoAlign: 'center',
       bio: '',
     });
+    setSelectedFile(null);
+    setOldPhoto(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   const editMember = (party: 'bride' | 'groom', index: number) => {
@@ -211,6 +225,11 @@ export default function AdminWeddingPartyPage() {
     setEditingParty(party);
     setEditingIndex(index);
     setFormData(members[index]);
+    setSelectedFile(null);
+    setOldPhoto(members[index].photo || null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   const editOfficiant = () => {
@@ -223,38 +242,88 @@ export default function AdminWeddingPartyPage() {
       role: 'Officiant',
       relationship: officiant?.relationship || '',
       photo: officiant?.photo || '',
+      photoAlign: officiant?.photoAlign || 'center',
       bio: officiant?.bio || '',
     });
+    setSelectedFile(null);
+    setOldPhoto(officiant?.photo || null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
-  const saveMember = () => {
+  const saveMember = async () => {
     if (!config.weddingParty) {
       config.weddingParty = { brideParty: [], groomParty: [] };
     }
 
-    if (editingParty === 'officiant') {
-      // Save officiant
-      config.weddingParty.officiant = {
-        name: formData.name,
-        relationship: formData.relationship,
-        photo: formData.photo,
-        bio: formData.bio,
-      };
-    } else {
-      const partyKey = editingParty === 'bride' ? 'brideParty' : 'groomParty';
+    setUploading(true);
 
-      if (editingIndex === null) {
-        // Add new member
-        config.weddingParty[partyKey].push(formData);
-      } else {
-        // Edit existing member
-        config.weddingParty[partyKey][editingIndex] = formData;
+    try {
+      let photoFilename = formData.photo;
+
+      // Upload new photo if selected
+      if (selectedFile) {
+        const uploadFormData = new FormData();
+        uploadFormData.append('photo', selectedFile);
+        uploadFormData.append('memberType', editingParty || 'member');
+        uploadFormData.append('memberId', formData.id);
+
+        const uploadRes = await fetch('/api/admin/wedding-party', {
+          method: 'POST',
+          body: uploadFormData,
+        });
+
+        if (uploadRes.ok) {
+          const uploadData = await uploadRes.json();
+          photoFilename = uploadData.filename;
+
+          // Delete old photo if it exists and is different
+          if (oldPhoto && oldPhoto !== photoFilename) {
+            await fetch(`/api/admin/wedding-party?filename=${oldPhoto}`, {
+              method: 'DELETE',
+            });
+          }
+        } else {
+          throw new Error('Photo upload failed');
+        }
       }
-    }
 
-    setConfig({ ...config });
-    setEditingParty(null);
-    setEditingIndex(null);
+      // Update member data
+      const updatedFormData = { ...formData, photo: photoFilename };
+
+      if (editingParty === 'officiant') {
+        // Save officiant
+        config.weddingParty.officiant = {
+          name: updatedFormData.name,
+          relationship: updatedFormData.relationship,
+          photo: updatedFormData.photo,
+          photoAlign: updatedFormData.photoAlign,
+          bio: updatedFormData.bio,
+        };
+      } else {
+        const partyKey = editingParty === 'bride' ? 'brideParty' : 'groomParty';
+
+        if (editingIndex === null) {
+          // Add new member
+          config.weddingParty[partyKey].push(updatedFormData);
+        } else {
+          // Edit existing member
+          config.weddingParty[partyKey][editingIndex] = updatedFormData;
+        }
+      }
+
+      setConfig({ ...config });
+      setEditingParty(null);
+      setEditingIndex(null);
+      setSelectedFile(null);
+      setOldPhoto(null);
+    } catch (error) {
+      console.error('Error saving member:', error);
+      alert('Failed to save member. Please try again.');
+    } finally {
+      setUploading(false);
+    }
   };
 
   const deleteOfficiant = () => {
@@ -518,15 +587,110 @@ export default function AdminWeddingPartyPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Photo Filename (optional - upload photo via Photos page first)
+                  Photo (optional)
                 </label>
-                <input
-                  type="text"
-                  value={formData.photo || ''}
-                  onChange={(e) => setFormData({ ...formData, photo: e.target.value })}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2"
-                  placeholder="e.g., member-photo.jpg"
-                />
+
+                {/* Show current photo if exists */}
+                {formData.photo && !selectedFile && (
+                  <div className="mb-3 flex items-center gap-4">
+                    <div className="relative w-24 h-24 rounded-lg overflow-hidden border-2 border-gray-200">
+                      <Image
+                        src={`/api/photos/${formData.photo}`}
+                        alt="Current photo"
+                        fill
+                        unoptimized
+                        className="object-cover"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormData({ ...formData, photo: '' });
+                        setOldPhoto(formData.photo || '');
+                      }}
+                      className="text-sm text-red-600 hover:text-red-800"
+                    >
+                      Remove photo
+                    </button>
+                  </div>
+                )}
+
+                {/* Show selected file preview */}
+                {selectedFile && (
+                  <div className="mb-3 flex items-center gap-4">
+                    <div className="relative w-24 h-24 rounded-lg overflow-hidden border-2 border-green-500">
+                      <Image
+                        src={URL.createObjectURL(selectedFile)}
+                        alt="New photo"
+                        fill
+                        unoptimized
+                        className="object-cover"
+                      />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-sm text-green-600 font-medium">New photo selected</span>
+                      <span className="text-xs text-gray-500">{selectedFile.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedFile(null);
+                          if (fileInputRef.current) {
+                            fileInputRef.current.value = '';
+                          }
+                        }}
+                        className="text-sm text-red-600 hover:text-red-800 text-left"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Upload button */}
+                <div>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        setSelectedFile(file);
+                      }
+                    }}
+                    accept="image/*"
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="px-4 py-2 bg-gray-100 border border-gray-300 rounded-md text-sm hover:bg-gray-200 transition-colors"
+                  >
+                    {formData.photo || selectedFile ? 'Change Photo' : 'Upload Photo'}
+                  </button>
+                </div>
+
+                {/* Photo alignment dropdown */}
+                {(formData.photo || selectedFile) && (
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Photo Vertical Alignment
+                    </label>
+                    <select
+                      value={formData.photoAlign || 'center'}
+                      onChange={(e) => setFormData({ ...formData, photoAlign: e.target.value as 'top' | 'top-center' | 'center' | 'center-bottom' | 'bottom' })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent text-gray-900"
+                    >
+                      <option value="top">Top Align</option>
+                      <option value="top-center">Top-Center Align</option>
+                      <option value="center">Center Align (Default)</option>
+                      <option value="center-bottom">Center-Bottom Align</option>
+                      <option value="bottom">Bottom Align</option>
+                    </select>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Choose how the photo is positioned vertically within the frame
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -545,17 +709,22 @@ export default function AdminWeddingPartyPage() {
 
             <div className="flex justify-end gap-4 mt-6">
               <button
-                onClick={() => setEditingParty(null)}
-                className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+                onClick={() => {
+                  setEditingParty(null);
+                  setSelectedFile(null);
+                  setOldPhoto(null);
+                }}
+                disabled={uploading}
+                className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 onClick={saveMember}
-                disabled={!formData.name || (editingParty !== 'officiant' && !formData.role) || !formData.relationship}
+                disabled={uploading || !formData.name || (editingParty !== 'officiant' && !formData.role) || !formData.relationship}
                 className="px-4 py-2 bg-accent text-white rounded-md hover:bg-accent/90 disabled:opacity-50"
               >
-                {editingParty === 'officiant' ? (config.weddingParty?.officiant ? 'Update' : 'Add') : (editingIndex === null ? 'Add' : 'Update')} {editingParty === 'officiant' ? 'Officiant' : 'Member'}
+                {uploading ? 'Saving...' : (editingParty === 'officiant' ? (config.weddingParty?.officiant ? 'Update' : 'Add') : (editingIndex === null ? 'Add' : 'Update')) + ' ' + (editingParty === 'officiant' ? 'Officiant' : 'Member')}
               </button>
             </div>
           </div>

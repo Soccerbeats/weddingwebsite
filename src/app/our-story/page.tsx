@@ -7,8 +7,10 @@ interface Milestone {
     id: number;
     title: string;
     date: string;
+    dateFormat?: 'exact' | 'month-year';
     description: string;
     photos: string[];
+    photoAligns?: ('top' | 'top-center' | 'center' | 'center-bottom' | 'bottom')[];
 }
 
 export default function OurStoryPage() {
@@ -27,13 +29,39 @@ export default function OurStoryPage() {
             .catch(err => console.error('Error loading timeline:', err));
     }, []);
 
-    const formatDate = (dateString: string) => {
-        const date = new Date(dateString);
+    const formatDate = (dateString: string, dateFormat?: 'exact' | 'month-year') => {
+        // Parse date as local timezone to avoid day-before issue
+        const [year, month, day] = dateString.split('-').map(Number);
+        const date = new Date(year, month - 1, day || 1);
+
+        if (dateFormat === 'month-year') {
+            return date.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long'
+            });
+        }
+
         return date.toLocaleDateString('en-US', {
             year: 'numeric',
             month: 'long',
             day: 'numeric'
         });
+    };
+
+    const getObjectPositionClass = (align?: 'top' | 'top-center' | 'center' | 'center-bottom' | 'bottom') => {
+        switch (align) {
+            case 'top':
+                return 'object-top';
+            case 'top-center':
+                return 'object-[50%_25%]';
+            case 'center-bottom':
+                return 'object-[50%_75%]';
+            case 'bottom':
+                return 'object-bottom';
+            case 'center':
+            default:
+                return 'object-center';
+        }
     };
 
     return (
@@ -69,7 +97,7 @@ export default function OurStoryPage() {
                                             {milestone.title}
                                         </h3>
                                         <p className="text-sm text-accent font-medium mb-3">
-                                            {formatDate(milestone.date)}
+                                            {formatDate(milestone.date, milestone.dateFormat)}
                                         </p>
                                         <p className="text-gray-600 leading-relaxed">
                                             {milestone.description}
@@ -91,7 +119,7 @@ export default function OurStoryPage() {
                                                         alt={milestone.title}
                                                         fill
                                                         unoptimized
-                                                        className="object-cover"
+                                                        className={`object-cover ${getObjectPositionClass(milestone.photoAligns?.[0])}`}
                                                         sizes="(max-width: 768px) 100vw, 50vw"
                                                     />
                                                 </div>
@@ -109,7 +137,7 @@ export default function OurStoryPage() {
                                                                 alt={`${milestone.title} ${photoIdx + 1}`}
                                                                 fill
                                                                 unoptimized
-                                                                className="object-cover"
+                                                                className={`object-cover ${getObjectPositionClass(milestone.photoAligns?.[photoIdx])}`}
                                                                 sizes="(max-width: 768px) 50vw, 25vw"
                                                             />
                                                         </div>

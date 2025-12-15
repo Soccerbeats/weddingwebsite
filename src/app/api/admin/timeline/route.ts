@@ -41,15 +41,19 @@ export async function POST(request: Request) {
         const formData = await request.formData();
         const title = formData.get('title') as string;
         const date = formData.get('date') as string;
+        const dateFormat = formData.get('dateFormat') as string || 'exact';
         const description = formData.get('description') as string;
         const file1 = formData.get('file1') as File | null;
         const file2 = formData.get('file2') as File | null;
+        const photo1Align = formData.get('photo1Align') as string || 'center';
+        const photo2Align = formData.get('photo2Align') as string || 'center';
 
         if (!title || !date || !description) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
         const photos: string[] = [];
+        const photoAligns: string[] = [];
 
         // Ensure directory exists
         if (!fs.existsSync(PHOTOS_DIR)) {
@@ -63,6 +67,7 @@ export async function POST(request: Request) {
             const filePath = path.join(PHOTOS_DIR, filename);
             fs.writeFileSync(filePath, buffer);
             photos.push(filename);
+            photoAligns.push(photo1Align);
         }
 
         // Handle file2 upload if provided
@@ -72,6 +77,7 @@ export async function POST(request: Request) {
             const filePath = path.join(PHOTOS_DIR, filename);
             fs.writeFileSync(filePath, buffer);
             photos.push(filename);
+            photoAligns.push(photo2Align);
         }
 
         const milestones = getTimeline();
@@ -79,8 +85,10 @@ export async function POST(request: Request) {
             id: Date.now(),
             title,
             date,
+            dateFormat,
             description,
-            photos
+            photos,
+            photoAligns
         };
 
         milestones.push(newMilestone);
@@ -99,10 +107,14 @@ export async function PATCH(request: Request) {
         const id = parseInt(formData.get('id') as string);
         const title = formData.get('title') as string;
         const date = formData.get('date') as string;
+        const dateFormat = formData.get('dateFormat') as string;
         const description = formData.get('description') as string;
         const existingPhotosStr = formData.get('existingPhotos') as string;
+        const existingAlignsStr = formData.get('existingAligns') as string;
         const file1 = formData.get('file1') as File | null;
         const file2 = formData.get('file2') as File | null;
+        const photo1Align = formData.get('photo1Align') as string || 'center';
+        const photo2Align = formData.get('photo2Align') as string || 'center';
 
         const milestones = getTimeline();
         const milestoneIndex = milestones.findIndex((m: any) => m.id === id);
@@ -118,16 +130,22 @@ export async function PATCH(request: Request) {
         if (date !== undefined) {
             milestones[milestoneIndex].date = date;
         }
+        if (dateFormat !== undefined) {
+            milestones[milestoneIndex].dateFormat = dateFormat;
+        }
         if (description !== undefined) {
             milestones[milestoneIndex].description = description;
         }
 
-        // Parse existing photos
+        // Parse existing photos and alignments
         let existingPhotos: string[] = [];
+        let existingAligns: string[] = [];
         try {
             existingPhotos = JSON.parse(existingPhotosStr || '[]');
+            existingAligns = JSON.parse(existingAlignsStr || '[]');
         } catch (e) {
             existingPhotos = [];
+            existingAligns = [];
         }
 
         // Delete photos that were removed
@@ -140,8 +158,9 @@ export async function PATCH(request: Request) {
             }
         });
 
-        // Start with existing photos
+        // Start with existing photos and alignments
         const updatedPhotos = [...existingPhotos];
+        const updatedAligns = [...existingAligns];
 
         // Ensure directory exists
         if (!fs.existsSync(PHOTOS_DIR)) {
@@ -155,6 +174,7 @@ export async function PATCH(request: Request) {
             const filePath = path.join(PHOTOS_DIR, filename);
             fs.writeFileSync(filePath, buffer);
             updatedPhotos.push(filename);
+            updatedAligns.push(photo1Align);
         }
 
         if (file2 && updatedPhotos.length < 2) {
@@ -163,9 +183,11 @@ export async function PATCH(request: Request) {
             const filePath = path.join(PHOTOS_DIR, filename);
             fs.writeFileSync(filePath, buffer);
             updatedPhotos.push(filename);
+            updatedAligns.push(photo2Align);
         }
 
         milestones[milestoneIndex].photos = updatedPhotos;
+        milestones[milestoneIndex].photoAligns = updatedAligns;
 
         saveTimeline(milestones);
         return NextResponse.json({ success: true, milestone: milestones[milestoneIndex] });

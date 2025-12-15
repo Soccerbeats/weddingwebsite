@@ -7,8 +7,10 @@ interface Milestone {
     id: number;
     title: string;
     date: string;
+    dateFormat?: 'exact' | 'month-year'; // exact = full date, month-year = month and year only
     description: string;
     photos: string[];
+    photoAligns?: ('top' | 'top-center' | 'center' | 'center-bottom' | 'bottom')[];
 }
 
 export default function AdminTimeline() {
@@ -21,13 +23,17 @@ export default function AdminTimeline() {
     const editFileInputRef1 = useRef<HTMLInputElement>(null);
     const editFileInputRef2 = useRef<HTMLInputElement>(null);
     const [editFiles, setEditFiles] = useState<{ file1: File | null; file2: File | null }>({ file1: null, file2: null });
+    const [editPhotoAligns, setEditPhotoAligns] = useState<{ photo1Align: 'top' | 'top-center' | 'center' | 'center-bottom' | 'bottom'; photo2Align: 'top' | 'top-center' | 'center' | 'center-bottom' | 'bottom' }>({ photo1Align: 'center', photo2Align: 'center' });
 
     const [formData, setFormData] = useState({
         title: '',
         date: '',
+        dateFormat: 'exact' as 'exact' | 'month-year',
         description: '',
         file1: null as File | null,
-        file2: null as File | null
+        file2: null as File | null,
+        photo1Align: 'center' as 'top' | 'top-center' | 'center' | 'center-bottom' | 'bottom',
+        photo2Align: 'center' as 'top' | 'top-center' | 'center' | 'center-bottom' | 'bottom'
     });
 
     useEffect(() => {
@@ -48,12 +54,15 @@ export default function AdminTimeline() {
             const formDataToSend = new FormData();
             formDataToSend.append('title', formData.title);
             formDataToSend.append('date', formData.date);
+            formDataToSend.append('dateFormat', formData.dateFormat);
             formDataToSend.append('description', formData.description);
             if (formData.file1) {
                 formDataToSend.append('file1', formData.file1);
+                formDataToSend.append('photo1Align', formData.photo1Align);
             }
             if (formData.file2) {
                 formDataToSend.append('file2', formData.file2);
+                formDataToSend.append('photo2Align', formData.photo2Align);
             }
 
             const res = await fetch('/api/admin/timeline', {
@@ -64,7 +73,7 @@ export default function AdminTimeline() {
             if (res.ok) {
                 await fetchMilestones();
                 setShowAddModal(false);
-                setFormData({ title: '', date: '', description: '', file1: null, file2: null });
+                setFormData({ title: '', date: '', dateFormat: 'exact', description: '', file1: null, file2: null, photo1Align: 'center', photo2Align: 'center' });
                 if (fileInputRef1.current) fileInputRef1.current.value = '';
                 if (fileInputRef2.current) fileInputRef2.current.value = '';
             }
@@ -88,17 +97,21 @@ export default function AdminTimeline() {
             formDataToSend.append('id', editingMilestone.id.toString());
             formDataToSend.append('title', editingMilestone.title);
             formDataToSend.append('date', editingMilestone.date);
+            formDataToSend.append('dateFormat', editingMilestone.dateFormat || 'exact');
             formDataToSend.append('description', editingMilestone.description);
 
-            // Add existing photos
+            // Add existing photos and alignments
             formDataToSend.append('existingPhotos', JSON.stringify(editingMilestone.photos || []));
+            formDataToSend.append('existingAligns', JSON.stringify(editingMilestone.photoAligns || []));
 
             // Add new photos if provided
             if (editFiles.file1) {
                 formDataToSend.append('file1', editFiles.file1);
+                formDataToSend.append('photo1Align', editPhotoAligns.photo1Align);
             }
             if (editFiles.file2) {
                 formDataToSend.append('file2', editFiles.file2);
+                formDataToSend.append('photo2Align', editPhotoAligns.photo2Align);
             }
 
             const res = await fetch('/api/admin/timeline', {
@@ -110,6 +123,7 @@ export default function AdminTimeline() {
                 await fetchMilestones();
                 setEditingMilestone(null);
                 setEditFiles({ file1: null, file2: null });
+                setEditPhotoAligns({ photo1Align: 'center', photo2Align: 'center' });
                 if (editFileInputRef1.current) editFileInputRef1.current.value = '';
                 if (editFileInputRef2.current) editFileInputRef2.current.value = '';
             }
@@ -144,13 +158,29 @@ export default function AdminTimeline() {
         }
     };
 
-    const formatDate = (dateString: string) => {
-        const date = new Date(dateString);
-        return date.toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-        });
+    const formatDate = (dateString: string, dateFormat?: 'exact' | 'month-year') => {
+        // Parse date as local timezone to avoid day-before issue
+        const [year, month, day] = dateString.split('-').map(Number);
+        const date = new Date(year, month - 1, day || 1);
+
+        if (isNaN(date.getTime())) {
+            return dateString; // Return original if invalid
+        }
+
+        // Format based on dateFormat setting
+        if (dateFormat === 'month-year') {
+            return date.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long'
+            });
+        } else {
+            // Default to exact date
+            return date.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+        }
     };
 
     return (
@@ -196,7 +226,7 @@ export default function AdminTimeline() {
                                     {milestone.title}
                                 </h3>
                                 <p className="text-sm text-accent font-medium mb-2">
-                                    {formatDate(milestone.date)}
+                                    {formatDate(milestone.date, milestone.dateFormat)}
                                 </p>
                                 <p className="text-gray-600 text-sm">
                                     {milestone.description}
@@ -258,15 +288,34 @@ export default function AdminTimeline() {
 
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Date Format *
+                                </label>
+                                <select
+                                    value={formData.dateFormat}
+                                    onChange={(e) => setFormData({ ...formData, dateFormat: e.target.value as 'exact' | 'month-year' })}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent text-gray-900"
+                                >
+                                    <option value="exact">Exact Date (e.g., March 6, 2015)</option>
+                                    <option value="month-year">Month & Year (e.g., March 2015)</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
                                     Date *
                                 </label>
                                 <input
                                     type="date"
                                     value={formData.date}
                                     onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent text-gray-900"
                                     required
                                 />
+                                <p className="mt-1 text-xs text-gray-500">
+                                    {formData.dateFormat === 'month-year'
+                                        ? 'Select any day in the month (only month and year will be displayed)'
+                                        : 'Select the exact date'}
+                                </p>
                             </div>
 
                             <div>
@@ -294,6 +343,24 @@ export default function AdminTimeline() {
                                     onChange={(e) => setFormData({ ...formData, file1: e.target.files?.[0] || null })}
                                     className="w-full px-3 py-2 border border-gray-300 rounded-md"
                                 />
+                                {formData.file1 && (
+                                    <div className="mt-2">
+                                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                                            Photo 1 Vertical Alignment
+                                        </label>
+                                        <select
+                                            value={formData.photo1Align}
+                                            onChange={(e) => setFormData({ ...formData, photo1Align: e.target.value as 'top' | 'top-center' | 'center' | 'center-bottom' | 'bottom' })}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent text-sm"
+                                        >
+                                            <option value="top">Top Align</option>
+                                            <option value="top-center">Top-Center Align</option>
+                                            <option value="center">Center Align (Default)</option>
+                                            <option value="center-bottom">Center-Bottom Align</option>
+                                            <option value="bottom">Bottom Align</option>
+                                        </select>
+                                    </div>
+                                )}
                             </div>
 
                             <div>
@@ -307,6 +374,24 @@ export default function AdminTimeline() {
                                     onChange={(e) => setFormData({ ...formData, file2: e.target.files?.[0] || null })}
                                     className="w-full px-3 py-2 border border-gray-300 rounded-md"
                                 />
+                                {formData.file2 && (
+                                    <div className="mt-2">
+                                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                                            Photo 2 Vertical Alignment
+                                        </label>
+                                        <select
+                                            value={formData.photo2Align}
+                                            onChange={(e) => setFormData({ ...formData, photo2Align: e.target.value as 'top' | 'top-center' | 'center' | 'center-bottom' | 'bottom' })}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent text-sm"
+                                        >
+                                            <option value="top">Top Align</option>
+                                            <option value="top-center">Top-Center Align</option>
+                                            <option value="center">Center Align (Default)</option>
+                                            <option value="center-bottom">Center-Bottom Align</option>
+                                            <option value="bottom">Bottom Align</option>
+                                        </select>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="flex gap-3 mt-6">
@@ -314,7 +399,7 @@ export default function AdminTimeline() {
                                     type="button"
                                     onClick={() => {
                                         setShowAddModal(false);
-                                        setFormData({ title: '', date: '', description: '', file1: null, file2: null });
+                                        setFormData({ title: '', date: '', dateFormat: 'exact', description: '', file1: null, file2: null, photo1Align: 'center', photo2Align: 'center' });
                                         if (fileInputRef1.current) fileInputRef1.current.value = '';
                                         if (fileInputRef2.current) fileInputRef2.current.value = '';
                                     }}
@@ -356,14 +441,33 @@ export default function AdminTimeline() {
 
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Date Format
+                                </label>
+                                <select
+                                    value={editingMilestone.dateFormat || 'exact'}
+                                    onChange={(e) => setEditingMilestone({ ...editingMilestone, dateFormat: e.target.value as 'exact' | 'month-year' })}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent text-gray-900"
+                                >
+                                    <option value="exact">Exact Date (e.g., March 6, 2015)</option>
+                                    <option value="month-year">Month & Year (e.g., March 2015)</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
                                     Date
                                 </label>
                                 <input
                                     type="date"
                                     value={editingMilestone.date}
                                     onChange={(e) => setEditingMilestone({ ...editingMilestone, date: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent text-gray-900"
                                 />
+                                <p className="mt-1 text-xs text-gray-500">
+                                    {(editingMilestone.dateFormat || 'exact') === 'month-year'
+                                        ? 'Select any day in the month (only month and year will be displayed)'
+                                        : 'Select the exact date'}
+                                </p>
                             </div>
 
                             <div>
@@ -384,25 +488,49 @@ export default function AdminTimeline() {
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                         Current Photos
                                     </label>
-                                    <div className="flex gap-2">
+                                    <div className="space-y-3">
                                         {editingMilestone.photos.map((photo, idx) => (
-                                            <div key={idx} className="relative w-24 h-24 rounded-lg overflow-hidden border border-gray-200">
-                                                <Image
-                                                    src={`/api/photos/${photo}`}
-                                                    alt={`Photo ${idx + 1}`}
-                                                    fill
-                                                    unoptimized
-                                                    className="object-cover"
-                                                />
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleDeletePhoto(photo)}
-                                                    className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
-                                                >
-                                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                                                    </svg>
-                                                </button>
+                                            <div key={idx} className="space-y-2">
+                                                <div className="flex gap-2 items-center">
+                                                    <div className="relative w-24 h-24 rounded-lg overflow-hidden border border-gray-200">
+                                                        <Image
+                                                            src={`/api/photos/${photo}`}
+                                                            alt={`Photo ${idx + 1}`}
+                                                            fill
+                                                            unoptimized
+                                                            className="object-cover"
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleDeletePhoto(photo)}
+                                                            className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                                                        >
+                                                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                                            </svg>
+                                                        </button>
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                                                            Photo {idx + 1} Vertical Alignment
+                                                        </label>
+                                                        <select
+                                                            value={editingMilestone.photoAligns?.[idx] || 'center'}
+                                                            onChange={(e) => {
+                                                                const newAligns = [...(editingMilestone.photoAligns || [])];
+                                                                newAligns[idx] = e.target.value as 'top' | 'top-center' | 'center' | 'center-bottom' | 'bottom';
+                                                                setEditingMilestone({ ...editingMilestone, photoAligns: newAligns });
+                                                            }}
+                                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent text-sm"
+                                                        >
+                                                            <option value="top">Top Align</option>
+                                                            <option value="top-center">Top-Center Align</option>
+                                                            <option value="center">Center Align (Default)</option>
+                                                            <option value="center-bottom">Center-Bottom Align</option>
+                                                            <option value="bottom">Bottom Align</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
@@ -417,6 +545,64 @@ export default function AdminTimeline() {
                                     </label>
                                     {(!editingMilestone.photos || editingMilestone.photos.length === 0) && (
                                         <>
+                                            <div>
+                                                <input
+                                                    ref={editFileInputRef1}
+                                                    type="file"
+                                                    accept="image/*"
+                                                    onChange={(e) => setEditFiles({ ...editFiles, file1: e.target.files?.[0] || null })}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                                />
+                                                {editFiles.file1 && (
+                                                    <div className="mt-2">
+                                                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                                                            New Photo 1 Vertical Alignment
+                                                        </label>
+                                                        <select
+                                                            value={editPhotoAligns.photo1Align}
+                                                            onChange={(e) => setEditPhotoAligns({ ...editPhotoAligns, photo1Align: e.target.value as 'top' | 'top-center' | 'center' | 'center-bottom' | 'bottom' })}
+                                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent text-sm"
+                                                        >
+                                                            <option value="top">Top Align</option>
+                                                            <option value="top-center">Top-Center Align</option>
+                                                            <option value="center">Center Align (Default)</option>
+                                                            <option value="center-bottom">Center-Bottom Align</option>
+                                                            <option value="bottom">Bottom Align</option>
+                                                        </select>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div>
+                                                <input
+                                                    ref={editFileInputRef2}
+                                                    type="file"
+                                                    accept="image/*"
+                                                    onChange={(e) => setEditFiles({ ...editFiles, file2: e.target.files?.[0] || null })}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                                />
+                                                {editFiles.file2 && (
+                                                    <div className="mt-2">
+                                                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                                                            New Photo 2 Vertical Alignment
+                                                        </label>
+                                                        <select
+                                                            value={editPhotoAligns.photo2Align}
+                                                            onChange={(e) => setEditPhotoAligns({ ...editPhotoAligns, photo2Align: e.target.value as 'top' | 'top-center' | 'center' | 'center-bottom' | 'bottom' })}
+                                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent text-sm"
+                                                        >
+                                                            <option value="top">Top Align</option>
+                                                            <option value="top-center">Top-Center Align</option>
+                                                            <option value="center">Center Align (Default)</option>
+                                                            <option value="center-bottom">Center-Bottom Align</option>
+                                                            <option value="bottom">Bottom Align</option>
+                                                        </select>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </>
+                                    )}
+                                    {editingMilestone.photos && editingMilestone.photos.length === 1 && (
+                                        <div>
                                             <input
                                                 ref={editFileInputRef1}
                                                 type="file"
@@ -424,23 +610,25 @@ export default function AdminTimeline() {
                                                 onChange={(e) => setEditFiles({ ...editFiles, file1: e.target.files?.[0] || null })}
                                                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                                             />
-                                            <input
-                                                ref={editFileInputRef2}
-                                                type="file"
-                                                accept="image/*"
-                                                onChange={(e) => setEditFiles({ ...editFiles, file2: e.target.files?.[0] || null })}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                                            />
-                                        </>
-                                    )}
-                                    {editingMilestone.photos && editingMilestone.photos.length === 1 && (
-                                        <input
-                                            ref={editFileInputRef1}
-                                            type="file"
-                                            accept="image/*"
-                                            onChange={(e) => setEditFiles({ ...editFiles, file1: e.target.files?.[0] || null })}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                                        />
+                                            {editFiles.file1 && (
+                                                <div className="mt-2">
+                                                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                                                        New Photo Vertical Alignment
+                                                    </label>
+                                                    <select
+                                                        value={editPhotoAligns.photo1Align}
+                                                        onChange={(e) => setEditPhotoAligns({ ...editPhotoAligns, photo1Align: e.target.value as 'top' | 'top-center' | 'center' | 'center-bottom' | 'bottom' })}
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent text-sm"
+                                                    >
+                                                        <option value="top">Top Align</option>
+                                                        <option value="top-center">Top-Center Align</option>
+                                                        <option value="center">Center Align (Default)</option>
+                                                        <option value="center-bottom">Center-Bottom Align</option>
+                                                        <option value="bottom">Bottom Align</option>
+                                                    </select>
+                                                </div>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
                             )}
@@ -448,7 +636,11 @@ export default function AdminTimeline() {
 
                         <div className="flex gap-3 mt-6">
                             <button
-                                onClick={() => setEditingMilestone(null)}
+                                onClick={() => {
+                                    setEditingMilestone(null);
+                                    setEditFiles({ file1: null, file2: null });
+                                    setEditPhotoAligns({ photo1Align: 'center', photo2Align: 'center' });
+                                }}
                                 className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
                             >
                                 Cancel
