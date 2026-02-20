@@ -15,6 +15,7 @@ export default function WeddingPartyPage() {
     brideParty: [],
     groomParty: []
   };
+  const bgColor = config.pageBgColors?.weddingParty || '#ffffff';
 
   const getObjectPositionClass = (align?: 'top' | 'top-center' | 'center' | 'center-bottom' | 'bottom') => {
     switch (align) {
@@ -33,7 +34,7 @@ export default function WeddingPartyPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-primary/5 to-white">
+    <div style={{ backgroundColor: bgColor }} className="min-h-screen">
       {/* Hero Section */}
       <div className="relative bg-accent/10 py-20">
         <div className="max-w-4xl mx-auto px-4 text-center">
@@ -41,7 +42,7 @@ export default function WeddingPartyPage() {
             Our Wedding Party
           </h1>
           <p className="text-lg text-gray-600">
-            Meet the special people standing by our side on our big day
+            {config.weddingPartySubtitle || 'Meet the special people standing by our side on our big day'}
           </p>
         </div>
       </div>
@@ -157,6 +158,57 @@ export default function WeddingPartyPage() {
             </div>
           )}
         </div>
+
+        {/* Something Blue Crew */}
+        {weddingParty.somethingBlueCrew && weddingParty.somethingBlueCrew.length > 0 && (
+          <div className="mb-20">
+            <h2 className="text-3xl font-serif font-bold text-center text-gray-900 mb-12">
+              {config.somethingBlueCrewTitle || 'Something Blue Crew'}
+            </h2>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {weddingParty.somethingBlueCrew.map((member: WeddingPartyMember, index: number) => (
+                <div key={index} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
+                  {member.photo ? (
+                    <div className="relative h-64 bg-gray-200">
+                      <img
+                        src={`/api/photos/${member.photo}`}
+                        alt={member.name}
+                        className={`w-full h-full object-cover ${getObjectPositionClass(member.photoAlign)}`}
+                      />
+                    </div>
+                  ) : (
+                    <div className="h-64 bg-gradient-to-br from-accent-light to-accent flex items-center justify-center">
+                      <svg
+                        className="w-24 h-24 text-white opacity-50"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </div>
+                  )}
+                  <div className="p-6">
+                    <h3 className="text-xl font-serif font-bold text-gray-900 mb-1">
+                      {member.name}
+                    </h3>
+                    <p className="text-accent font-medium mb-2">{member.role}</p>
+                    {member.relationship && (
+                      <p className="text-sm text-gray-600 mb-3">{member.relationship}</p>
+                    )}
+                    {member.bio && (
+                      <p className="text-sm text-gray-700 leading-relaxed">{member.bio}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Officiant */}
         {weddingParty.officiant && (

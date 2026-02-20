@@ -327,26 +327,29 @@ export default function RSVPDashboard() {
     return (
         <div>
             <div className="flex items-center justify-between mb-6">
-                <h1 className="text-2xl font-bold text-gray-900">RSVP & Guest Management</h1>
+                <div>
+                    <h1 className="text-3xl font-bold text-gray-900 mb-2">RSVP & Guest Management</h1>
+                    <p className="text-gray-600">Track RSVPs and manage your guest list</p>
+                </div>
 
                 {/* Tab Buttons */}
                 <div className="flex gap-2">
                     <button
                         onClick={() => setActiveTab('rsvps')}
-                        className={`px-4 py-2 rounded-md font-medium transition-colors ${
+                        className={`px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-md ${
                             activeTab === 'rsvps'
-                                ? 'bg-accent text-white'
-                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                ? 'bg-accent text-white shadow-lg'
+                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300 hover:shadow-lg'
                         }`}
                     >
                         RSVP Management
                     </button>
                     <button
                         onClick={() => setActiveTab('guestlist')}
-                        className={`px-4 py-2 rounded-md font-medium transition-colors ${
+                        className={`px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-md ${
                             activeTab === 'guestlist'
-                                ? 'bg-accent text-white'
-                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                ? 'bg-accent text-white shadow-lg'
+                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300 hover:shadow-lg'
                         }`}
                     >
                         Guest List
@@ -359,22 +362,22 @@ export default function RSVPDashboard() {
                 <>
                     {/* Stats Cards */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-200">
                             <p className="text-sm font-medium text-gray-500">Total Guests</p>
                             <p className="text-3xl font-bold text-gray-900">{totalGuests}</p>
                         </div>
-                        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-200">
                             <p className="text-sm font-medium text-green-600">Parties Attending</p>
                             <p className="text-3xl font-bold text-gray-900">{totalAttending}</p>
                         </div>
-                        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-200">
                             <p className="text-sm font-medium text-red-600">Declined</p>
                             <p className="text-3xl font-bold text-gray-900">{totalDeclined}</p>
                         </div>
                     </div>
 
                     {/* RSVP Table */}
-                    <div className="bg-white shadow-sm border border-gray-200 rounded-lg overflow-hidden">
+                    <div className="bg-white shadow-lg border border-gray-200 rounded-2xl overflow-hidden">
                         <div className="overflow-x-auto">
                             <table className="min-w-full divide-y divide-gray-200">
                                 <thead className="bg-gray-50">
@@ -438,11 +441,11 @@ export default function RSVPDashboard() {
                 <>
                     {/* Guest List Stats */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-200">
                             <p className="text-sm font-medium text-gray-500">Total Invited</p>
                             <p className="text-3xl font-bold text-gray-900">{totalInvited}</p>
                         </div>
-                        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-200">
                             <p className="text-sm font-medium text-gray-500">Expected Guests</p>
                             <p className="text-3xl font-bold text-gray-900">{totalGuestListSize}</p>
                         </div>
@@ -458,13 +461,13 @@ export default function RSVPDashboard() {
                                     </span>
                                     <button
                                         onClick={handleBulkMarkInvited}
-                                        className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 text-sm"
+                                        className="bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 text-sm transition-all duration-300 shadow-md hover:shadow-lg"
                                     >
                                         Mark as Invited
                                     </button>
                                     <button
                                         onClick={handleBulkDelete}
-                                        className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 text-sm"
+                                        className="bg-red-600 text-white px-4 py-2 rounded-xl hover:bg-red-700 text-sm transition-all duration-300 shadow-md hover:shadow-lg"
                                     >
                                         Delete Selected
                                     </button>
@@ -474,7 +477,7 @@ export default function RSVPDashboard() {
                         <div className="flex gap-2">
                             <button
                                 onClick={() => setShowImportModal(true)}
-                                className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 flex items-center gap-2"
+                                className="bg-green-600 text-white px-4 py-2 rounded-xl hover:bg-green-700 flex items-center gap-2 transition-all duration-300 shadow-md hover:shadow-lg"
                             >
                                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
@@ -495,7 +498,7 @@ export default function RSVPDashboard() {
                                         plus_one_name: '',
                                     });
                                 }}
-                                className="bg-accent text-white px-4 py-2 rounded-md hover:bg-accent/90"
+                                className="bg-accent text-white px-4 py-2 rounded-xl hover:bg-accent/90 transition-all duration-300 shadow-md hover:shadow-lg"
                             >
                                 Add Guest
                             </button>
@@ -503,7 +506,7 @@ export default function RSVPDashboard() {
                     </div>
 
                     {/* Guest List Table */}
-                    <div className="bg-white shadow-sm border border-gray-200 rounded-lg overflow-hidden">
+                    <div className="bg-white shadow-lg border border-gray-200 rounded-2xl overflow-hidden">
                         <div className="overflow-x-auto">
                             <table className="min-w-full divide-y divide-gray-200">
                                 <thead className="bg-gray-50">
@@ -596,7 +599,7 @@ export default function RSVPDashboard() {
             {/* Delete RSVP Modal */}
             {deletingRsvp && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-                    <div className="bg-white rounded-lg max-w-md w-full p-6">
+                    <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl">
                         <h3 className="text-lg font-medium text-gray-900 mb-4">Confirm Deletion</h3>
                         <p className="text-sm text-gray-500 mb-4">
                             Are you sure you want to delete the RSVP for <strong>{deletingRsvp.guest_name}</strong>?
@@ -609,20 +612,20 @@ export default function RSVPDashboard() {
                             type="text"
                             value={confirmName}
                             onChange={(e) => setConfirmName(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm mb-6"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm mb-6"
                             placeholder="Type guest name here"
                         />
                         <div className="flex justify-end space-x-3">
                             <button
                                 onClick={() => setDeletingRsvp(null)}
-                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-all duration-300 shadow-md hover:shadow-lg"
                             >
                                 Cancel
                             </button>
                             <button
                                 onClick={handleDeleteRsvp}
                                 disabled={confirmName !== deletingRsvp.guest_name}
-                                className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-xl hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-md hover:shadow-lg"
                             >
                                 Delete RSVP
                             </button>
@@ -634,7 +637,7 @@ export default function RSVPDashboard() {
             {/* Add/Edit Guest Modal */}
             {(isAddingGuest || editingGuest) && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-                    <div className="bg-white rounded-lg max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
+                    <div className="bg-white rounded-2xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto shadow-xl">
                         <h3 className="text-lg font-medium text-gray-900 mb-4">
                             {editingGuest ? 'Edit Guest' : 'Add Guest'}
                         </h3>
@@ -648,7 +651,7 @@ export default function RSVPDashboard() {
                                     type="text"
                                     value={guestForm.guest_name}
                                     onChange={(e) => setGuestForm({ ...guestForm, guest_name: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                                     required
                                 />
                             </div>
@@ -661,7 +664,7 @@ export default function RSVPDashboard() {
                                     type="text"
                                     value={guestForm.plus_one_name}
                                     onChange={(e) => setGuestForm({ ...guestForm, plus_one_name: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                                     placeholder="Optional"
                                 />
                             </div>
@@ -675,7 +678,7 @@ export default function RSVPDashboard() {
                                         type="email"
                                         value={guestForm.email}
                                         onChange={(e) => setGuestForm({ ...guestForm, email: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                                     />
                                 </div>
 
@@ -687,7 +690,7 @@ export default function RSVPDashboard() {
                                         type="tel"
                                         value={guestForm.phone}
                                         onChange={(e) => setGuestForm({ ...guestForm, phone: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                                     />
                                 </div>
                             </div>
@@ -702,7 +705,7 @@ export default function RSVPDashboard() {
                                         min="1"
                                         value={guestForm.party_size}
                                         onChange={(e) => setGuestForm({ ...guestForm, party_size: parseInt(e.target.value) })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                                     />
                                 </div>
 
@@ -713,7 +716,7 @@ export default function RSVPDashboard() {
                                     <select
                                         value={guestForm.side}
                                         onChange={(e) => setGuestForm({ ...guestForm, side: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                                     >
                                         <option value="">Not Specified</option>
                                         <option value="bride">{config?.brideName || "Bride"}'s Side</option>
@@ -729,7 +732,7 @@ export default function RSVPDashboard() {
                                 <textarea
                                     value={guestForm.notes}
                                     onChange={(e) => setGuestForm({ ...guestForm, notes: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                                     rows={3}
                                 />
                             </div>
@@ -753,14 +756,14 @@ export default function RSVPDashboard() {
                                     setIsAddingGuest(false);
                                     setEditingGuest(null);
                                 }}
-                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-all duration-300 shadow-md hover:shadow-lg"
                             >
                                 Cancel
                             </button>
                             <button
                                 onClick={handleSaveGuest}
                                 disabled={!guestForm.guest_name}
-                                className="px-4 py-2 text-sm font-medium text-white bg-accent rounded-md hover:bg-accent/90 disabled:opacity-50"
+                                className="px-4 py-2 text-sm font-medium text-white bg-accent rounded-xl hover:bg-accent/90 disabled:opacity-50 transition-all duration-300 shadow-md hover:shadow-lg"
                             >
                                 {editingGuest ? 'Update' : 'Add'} Guest
                             </button>
@@ -772,7 +775,7 @@ export default function RSVPDashboard() {
             {/* CSV Import Modal */}
             {showImportModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6">
+                    <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full p-6">
                         <h3 className="text-2xl font-bold text-gray-900 mb-4">Import Guests from CSV</h3>
 
                         {!importResults ? (
@@ -799,7 +802,7 @@ export default function RSVPDashboard() {
                                         type="file"
                                         accept=".csv"
                                         onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                                     />
                                 </div>
 
@@ -810,14 +813,14 @@ export default function RSVPDashboard() {
                                             setCsvFile(null);
                                             setImportResults(null);
                                         }}
-                                        className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                                        className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-all duration-300 shadow-md hover:shadow-lg"
                                     >
                                         Cancel
                                     </button>
                                     <button
                                         onClick={handleImportCSV}
                                         disabled={!csvFile || importing}
-                                        className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50"
+                                        className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-xl hover:bg-green-700 disabled:opacity-50 transition-all duration-300 shadow-md hover:shadow-lg"
                                     >
                                         {importing ? 'Importing...' : 'Import'}
                                     </button>
@@ -857,7 +860,7 @@ export default function RSVPDashboard() {
                                             setCsvFile(null);
                                             setImportResults(null);
                                         }}
-                                        className="px-4 py-2 text-sm font-medium text-white bg-accent rounded-md hover:bg-accent/90"
+                                        className="px-4 py-2 text-sm font-medium text-white bg-accent rounded-xl hover:bg-accent/90 transition-all duration-300 shadow-md hover:shadow-lg"
                                     >
                                         Close
                                     </button>

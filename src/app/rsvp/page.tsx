@@ -3,9 +3,10 @@ import RSVPForm from '@/components/RSVPForm';
 
 export default function RSVPPage() {
     const config = getSiteConfig();
+    const bgColor = config.pageBgColors?.rsvp || '#ffffff';
 
     return (
-        <div className="bg-gray-50 min-h-screen py-16">
+        <div style={{ backgroundColor: bgColor }} className="min-h-screen py-16">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="max-w-3xl mx-auto">
                     <div className="text-center mb-12">

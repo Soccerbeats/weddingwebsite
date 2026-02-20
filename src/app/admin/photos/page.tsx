@@ -34,7 +34,7 @@ interface Photo {
 interface SortablePhotoProps {
     photo: Photo;
     siteConfig: any;
-    onSetHero: (type: 'homeHero' | 'aboutHero', filename: string) => void;
+    onSetHero: (type: 'homeHero' | 'aboutHero' | 'footerHeroImage' | 'weddingLogo', filename: string) => void;
     onDelete: (id: number) => void;
     onToggleHeart: (id: number, hearted: boolean) => void;
     onEdit: (photo: Photo) => void;
@@ -60,7 +60,7 @@ function SortablePhoto({ photo, siteConfig, onSetHero, onDelete, onToggleHeart, 
         <div
             ref={setNodeRef}
             style={style}
-            className="relative group bg-gray-100 rounded-lg overflow-hidden border border-gray-200 aspect-square"
+            className="relative group bg-gray-100 rounded-2xl overflow-hidden border border-gray-200 aspect-square shadow-lg hover:shadow-xl transition-all duration-300"
         >
             <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-400 break-all p-2 bg-gray-50">
                 {photo.filename}
@@ -76,10 +76,10 @@ function SortablePhoto({ photo, siteConfig, onSetHero, onDelete, onToggleHeart, 
             {/* Heart button (always visible in top left) - has higher z-index to stay above overlay */}
             <button
                 onClick={() => onToggleHeart(photo.id, !photo.hearted)}
-                className={`absolute top-2 left-2 z-20 rounded p-1.5 ${
+                className={`absolute top-2 left-2 z-20 rounded-full p-1.5 shadow-lg transition-all duration-300 ${
                     photo.hearted
-                        ? 'bg-red-500 hover:bg-red-600'
-                        : 'bg-white/90 hover:bg-white'
+                        ? 'bg-red-500 hover:bg-red-600 hover:shadow-xl'
+                        : 'bg-white/90 hover:bg-white hover:shadow-xl'
                 }`}
                 title={photo.hearted ? 'Unheart photo' : 'Heart photo'}
             >
@@ -92,7 +92,7 @@ function SortablePhoto({ photo, siteConfig, onSetHero, onDelete, onToggleHeart, 
             <button
                 {...listeners}
                 {...attributes}
-                className="absolute top-2 right-2 z-20 bg-white/90 hover:bg-white rounded p-1.5 cursor-grab active:cursor-grabbing"
+                className="absolute top-2 right-2 z-20 bg-white/90 hover:bg-white rounded-full p-1.5 cursor-grab active:cursor-grabbing shadow-lg hover:shadow-xl transition-all duration-300"
                 title="Drag to reorder"
             >
                 <svg className="w-4 h-4 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -104,21 +104,33 @@ function SortablePhoto({ photo, siteConfig, onSetHero, onDelete, onToggleHeart, 
                 <div className="flex flex-col gap-2 items-center justify-center flex-1">
                     <button
                         onClick={() => onEdit(photo)}
-                        className="text-xs bg-blue-500 hover:bg-blue-600 text-white py-1 px-2 rounded border border-blue-400"
+                        className="text-xs bg-blue-500 hover:bg-blue-600 text-white py-1.5 px-3 rounded-lg border border-blue-400 shadow-md hover:shadow-lg transition-all duration-300"
                     >
                         Edit Details
                     </button>
                     <button
                         onClick={() => onSetHero('homeHero', photo.filename)}
-                        className="text-xs bg-white/10 hover:bg-white/20 text-white py-1 px-2 rounded border border-white/30"
+                        className="text-xs bg-white/10 hover:bg-white/20 text-white py-1.5 px-3 rounded-lg border border-white/30 shadow-md hover:shadow-lg transition-all duration-300"
                     >
                         Set Home Hero
                     </button>
                     <button
                         onClick={() => onSetHero('aboutHero', photo.filename)}
-                        className="text-xs bg-white/10 hover:bg-white/20 text-white py-1 px-2 rounded border border-white/30"
+                        className="text-xs bg-white/10 hover:bg-white/20 text-white py-1.5 px-3 rounded-lg border border-white/30 shadow-md hover:shadow-lg transition-all duration-300"
                     >
                         Set About Hero
+                    </button>
+                    <button
+                        onClick={() => onSetHero('footerHeroImage', photo.filename)}
+                        className="text-xs bg-white/10 hover:bg-white/20 text-white py-1.5 px-3 rounded-lg border border-white/30 shadow-md hover:shadow-lg transition-all duration-300"
+                    >
+                        Set Footer Hero
+                    </button>
+                    <button
+                        onClick={() => onSetHero('weddingLogo', photo.filename)}
+                        className="text-xs bg-white/10 hover:bg-white/20 text-white py-1.5 px-3 rounded-lg border border-white/30 shadow-md hover:shadow-lg transition-all duration-300"
+                    >
+                        Set Wedding Logo
                     </button>
                 </div>
 
@@ -146,7 +158,7 @@ function SortablePhoto({ photo, siteConfig, onSetHero, onDelete, onToggleHeart, 
 export default function AdminPhotos() {
     const [photos, setPhotos] = useState<Photo[]>([]);
     const [uploading, setUploading] = useState(false);
-    const [siteConfig, setSiteConfig] = useState({ homeHero: '', aboutHero: '' });
+    const [siteConfig, setSiteConfig] = useState({ homeHero: '', aboutHero: '', footerHeroImage: '', weddingLogo: '' });
     const [editingPhoto, setEditingPhoto] = useState<Photo | null>(null);
     const [editForm, setEditForm] = useState({ title: '', description: '' });
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -166,7 +178,15 @@ export default function AdminPhotos() {
     const fetchPhotos = async () => {
         const res = await fetch('/api/admin/photos');
         const data = await res.json();
-        setPhotos(data.photos || []);
+        // Sort by hearted status first (hearted=true comes first), then by order
+        const sortedPhotos = (data.photos || []).sort((a: Photo, b: Photo) => {
+            // First sort by hearted status (hearted photos first)
+            if (a.hearted && !b.hearted) return -1;
+            if (!a.hearted && b.hearted) return 1;
+            // Then sort by order
+            return (a.order || 0) - (b.order || 0);
+        });
+        setPhotos(sortedPhotos);
     };
 
     const fetchConfig = async () => {
@@ -210,9 +230,15 @@ export default function AdminPhotos() {
             });
 
             if (res.ok) {
-                setPhotos((prev) =>
-                    prev.map((p) => (p.id === id ? { ...p, hearted } : p))
-                );
+                setPhotos((prev) => {
+                    const updated = prev.map((p) => (p.id === id ? { ...p, hearted } : p));
+                    // Re-sort after toggling heart
+                    return updated.sort((a, b) => {
+                        if (a.hearted && !b.hearted) return -1;
+                        if (!a.hearted && b.hearted) return 1;
+                        return (a.order || 0) - (b.order || 0);
+                    });
+                });
             }
         } catch (err) {
             console.error('Failed to toggle heart:', err);
@@ -313,7 +339,7 @@ export default function AdminPhotos() {
         }
     };
 
-    const setHero = async (type: 'homeHero' | 'aboutHero', filename: string) => {
+    const setHero = async (type: 'homeHero' | 'aboutHero' | 'footerHeroImage' | 'weddingLogo', filename: string) => {
         try {
             const res = await fetch('/api/admin/site-config', {
                 method: 'POST',
@@ -322,7 +348,8 @@ export default function AdminPhotos() {
             });
             if (res.ok) {
                 setSiteConfig(prev => ({ ...prev, [type]: filename }));
-                alert(`Updated ${type === 'homeHero' ? 'Home' : 'About'} Hero Image`);
+                const heroName = type === 'homeHero' ? 'Home' : type === 'aboutHero' ? 'About' : type === 'footerHeroImage' ? 'Footer' : 'Wedding Logo';
+                alert(`Updated ${heroName} ${type === 'weddingLogo' ? '' : 'Hero Image'}`);
             }
         } catch (err) {
             console.error(err);
@@ -333,7 +360,10 @@ export default function AdminPhotos() {
     return (
         <div>
             <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold text-gray-900">Photo Management</h1>
+                <div>
+                    <h1 className="text-3xl font-bold text-gray-900 mb-2">Photo Management</h1>
+                    <p className="text-gray-600">Upload, organize, and manage your wedding photos</p>
+                </div>
                 <div>
                     <input
                         type="file"
@@ -346,31 +376,47 @@ export default function AdminPhotos() {
                     <button
                         onClick={() => fileInputRef.current?.click()}
                         disabled={uploading}
-                        className="bg-accent text-white px-4 py-2 rounded-md hover:bg-accent-dark disabled:opacity-50 transition-colors"
+                        className="bg-accent text-white px-6 py-3 rounded-xl hover:bg-accent-dark hover:shadow-xl disabled:opacity-50 transition-all duration-300 shadow-lg font-medium"
                     >
                         {uploading ? 'Uploading...' : 'Upload Photos'}
                     </button>
                 </div>
             </div>
 
-            <div className="mb-8 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                <h2 className="text-lg font-bold text-gray-900 mb-2">Current Hero Images</h2>
-                <div className="flex gap-4">
+            <div className="mb-8 p-6 bg-gradient-to-br from-accent/10 to-accent-light/20 rounded-2xl border border-accent/20 shadow-lg">
+                <h2 className="text-lg font-bold text-gray-900 mb-4">Current Hero Images</h2>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div>
                         <span className="text-xs font-bold text-gray-500 uppercase">Home Page</span>
                         {siteConfig.homeHero ? (
-                            <div className="h-20 w-32 bg-gray-200 mt-1 relative">
+                            <div className="h-20 w-32 bg-gray-200 mt-1 relative rounded-lg overflow-hidden shadow-md">
                                 <img src={`/photos/${siteConfig.homeHero}`} className="h-full w-full object-cover" />
                             </div>
-                        ) : <div className="h-20 w-32 bg-gray-200 mt-1 flex items-center justify-center text-xs">None</div>}
+                        ) : <div className="h-20 w-32 bg-gray-200 mt-1 flex items-center justify-center text-xs rounded-lg">None</div>}
                     </div>
                     <div>
                         <span className="text-xs font-bold text-gray-500 uppercase">About Page</span>
                         {siteConfig.aboutHero ? (
-                            <div className="h-20 w-32 bg-gray-200 mt-1 relative">
+                            <div className="h-20 w-32 bg-gray-200 mt-1 relative rounded-lg overflow-hidden shadow-md">
                                 <img src={`/photos/${siteConfig.aboutHero}`} className="h-full w-full object-cover" />
                             </div>
-                        ) : <div className="h-20 w-32 bg-gray-200 mt-1 flex items-center justify-center text-xs">None</div>}
+                        ) : <div className="h-20 w-32 bg-gray-200 mt-1 flex items-center justify-center text-xs rounded-lg">None</div>}
+                    </div>
+                    <div>
+                        <span className="text-xs font-bold text-gray-500 uppercase">Footer</span>
+                        {siteConfig.footerHeroImage ? (
+                            <div className="h-20 w-32 bg-gray-200 mt-1 relative rounded-lg overflow-hidden shadow-md">
+                                <img src={`/photos/${siteConfig.footerHeroImage}`} className="h-full w-full object-cover" />
+                            </div>
+                        ) : <div className="h-20 w-32 bg-gray-200 mt-1 flex items-center justify-center text-xs rounded-lg">None</div>}
+                    </div>
+                    <div>
+                        <span className="text-xs font-bold text-gray-500 uppercase">Wedding Logo</span>
+                        {siteConfig.weddingLogo ? (
+                            <div className="h-20 w-32 bg-gray-200 mt-1 relative rounded-lg overflow-hidden shadow-md">
+                                <img src={`/photos/${siteConfig.weddingLogo}`} className="h-full w-full object-cover" />
+                            </div>
+                        ) : <div className="h-20 w-32 bg-gray-200 mt-1 flex items-center justify-center text-xs rounded-lg">None</div>}
                     </div>
                 </div>
             </div>
@@ -400,7 +446,7 @@ export default function AdminPhotos() {
             {/* Edit Photo Modal */}
             {editingPhoto && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-                    <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+                    <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
                         <h3 className="text-lg font-bold text-gray-900 mb-4">Edit Photo Details</h3>
 
                         <div className="space-y-4">
@@ -412,7 +458,7 @@ export default function AdminPhotos() {
                                     type="text"
                                     value={editForm.title}
                                     onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent"
                                     placeholder="Photo title"
                                 />
                             </div>
@@ -425,7 +471,7 @@ export default function AdminPhotos() {
                                     value={editForm.description}
                                     onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
                                     rows={3}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent"
                                     placeholder="Photo description"
                                 />
                             </div>
@@ -434,13 +480,13 @@ export default function AdminPhotos() {
                         <div className="flex gap-3 mt-6">
                             <button
                                 onClick={() => setEditingPhoto(null)}
-                                className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                                className="flex-1 px-4 py-2 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-all duration-300 shadow-md hover:shadow-lg"
                             >
                                 Cancel
                             </button>
                             <button
                                 onClick={handleSaveEdit}
-                                className="flex-1 px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-dark"
+                                className="flex-1 px-4 py-2 bg-accent text-white rounded-xl hover:bg-accent-dark transition-all duration-300 shadow-md hover:shadow-lg"
                             >
                                 Save
                             </button>

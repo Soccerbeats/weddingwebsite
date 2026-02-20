@@ -7,9 +7,12 @@ export const dynamic = 'force-dynamic';
 export default function Home() {
   const config = getSiteConfig();
   const heroImage = config.homeHero ? `/photos/${config.homeHero}` : null;
+  const isBasicMode = config.basicMode || false;
+  const showVenue = config.basicModeShowVenue || false;
+  const bgColor = config.pageBgColors?.home || '#ffffff';
 
   return (
-    <div className="bg-white">
+    <div style={{ backgroundColor: bgColor }}>
       {/* Hero Section */}
       <div className="relative h-screen">
         <div className="absolute inset-0 bg-gray-900">
@@ -31,9 +34,13 @@ export default function Home() {
             {config.brideName} & {config.groomName}
           </h1>
           <p className="text-white text-lg md:text-xl font-light tracking-widest uppercase mb-12">
-            {config.weddingDate} • {config.weddingLocation.split(',')[0]}
+            {isBasicMode && !showVenue
+              ? config.weddingDate
+              : `${config.weddingDate} • ${config.weddingLocation}`
+            }
           </p>
 
+          {!isBasicMode && (
           <div className="flex flex-col sm:flex-row gap-4">
             <Link
               href="/rsvp"
@@ -48,6 +55,7 @@ export default function Home() {
               View Schedule
             </Link>
           </div>
+          )}
         </div>
       </div>
 

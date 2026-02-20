@@ -5,9 +5,12 @@ export const dynamic = 'force-dynamic';
 
 export default function AboutPage() {
     const config = getSiteConfig();
+    const isBasicMode = config.basicMode || false;
+    const showVenue = config.basicModeShowVenue || false;
+    const bgColor = config.pageBgColors?.about || '#ffffff';
 
     return (
-        <div className="bg-white">
+        <div style={{ backgroundColor: bgColor }}>
             {/* Hero Section */}
             <div className="relative py-20 bg-gray-50">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
@@ -48,7 +51,8 @@ export default function AboutPage() {
                 </div>
             </div>
 
-            {/* Venue Section */}
+            {/* Venue Section - Hidden in Basic Mode unless "Share Venue Details" is enabled */}
+            {(!isBasicMode || showVenue) && (
             <div className="bg-gray-50 py-16">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="text-center">
@@ -73,22 +77,24 @@ export default function AboutPage() {
                     <div className="mt-12 grid gap-8 grid-cols-1 md:grid-cols-2">
                         <div className="bg-white p-8 rounded-2xl shadow-lg border border-gray-100 transform hover:-translate-y-1 transition-transform duration-300">
                             <h3 className="text-xl font-bold text-gray-900 mb-2">The Ceremony</h3>
-                            <p className="text-gray-600">
-                                The ceremony will take place at {config.weddingTime} at {config.weddingVenue || 'the venue'}.
+                            <p className="text-gray-600 whitespace-pre-line">
+                                {config.ceremonyText || `The ceremony will take place at ${config.weddingTime} at ${config.weddingVenue || 'the venue'}.`}
                             </p>
                         </div>
                         <div className="bg-white p-8 rounded-2xl shadow-lg border border-gray-100 transform hover:-translate-y-1 transition-transform duration-300">
                             <h3 className="text-xl font-bold text-gray-900 mb-2">The Reception</h3>
-                            <p className="text-gray-600">
-                                Dinner and dancing will follow immediately.
+                            <p className="text-gray-600 whitespace-pre-line">
+                                {config.receptionText || 'Dinner and dancing will follow immediately.'}
                             </p>
                         </div>
                     </div>
                 </div>
             </div>
+            )}
 
-            {/* FAQ Section */}
-            <div className="py-16">
+            {/* FAQ Section - Hidden in Basic Mode */}
+            {!isBasicMode && (
+            <div id="faqs" className="py-16">
                 <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
                     <h2 className="text-3xl font-serif text-center text-gray-900 mb-12">
                         Details & FAQ
@@ -110,6 +116,7 @@ export default function AboutPage() {
                     )}
                 </div>
             </div>
+            )}
         </div>
     );
 }

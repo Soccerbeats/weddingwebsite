@@ -186,10 +186,13 @@ export default function AdminTimeline() {
     return (
         <div>
             <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold text-gray-900">Timeline Management</h1>
+                <div>
+                    <h1 className="text-3xl font-bold text-gray-900 mb-2">Timeline Management</h1>
+                    <p className="text-gray-600">Create and manage your love story timeline</p>
+                </div>
                 <button
                     onClick={() => setShowAddModal(true)}
-                    className="bg-accent text-white px-4 py-2 rounded-md hover:bg-accent-dark transition-colors"
+                    className="bg-accent text-white px-6 py-3 rounded-xl hover:bg-accent-dark hover:shadow-xl transition-all duration-300 shadow-lg font-medium"
                 >
                     Add Milestone
                 </button>
@@ -200,7 +203,7 @@ export default function AdminTimeline() {
                 {milestones.map((milestone) => (
                     <div
                         key={milestone.id}
-                        className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm"
+                        className="bg-white p-6 rounded-2xl border border-gray-200 shadow-lg hover:shadow-xl transition-all duration-300"
                     >
                         <div className="flex gap-6">
                             {/* Photos */}
@@ -237,7 +240,7 @@ export default function AdminTimeline() {
                             <div className="flex flex-col gap-2 justify-center">
                                 <button
                                     onClick={() => handleEdit(milestone)}
-                                    className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm font-medium shadow-sm"
+                                    className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-xl hover:bg-blue-200 hover:shadow-lg transition-all duration-300 text-sm font-medium shadow-md"
                                 >
                                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -246,7 +249,7 @@ export default function AdminTimeline() {
                                 </button>
                                 <button
                                     onClick={() => handleDelete(milestone.id)}
-                                    className="flex items-center justify-center gap-2 px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm font-medium shadow-sm"
+                                    className="flex items-center justify-center gap-2 px-4 py-2 bg-red-100 text-red-700 rounded-xl hover:bg-red-200 hover:shadow-lg transition-all duration-300 text-sm font-medium shadow-md"
                                 >
                                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -259,7 +262,7 @@ export default function AdminTimeline() {
                 ))}
 
                 {milestones.length === 0 && (
-                    <div className="text-center py-12 bg-gray-50 rounded-lg">
+                    <div className="text-center py-12 bg-gradient-to-br from-accent/5 to-accent-light/10 rounded-2xl border border-accent/10">
                         <p className="text-gray-500">No milestones added yet. Click "Add Milestone" to get started.</p>
                     </div>
                 )}
@@ -268,7 +271,7 @@ export default function AdminTimeline() {
             {/* Add Milestone Modal */}
             {showAddModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-                    <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+                    <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
                         <h3 className="text-lg font-bold text-gray-900 mb-4">Add New Milestone</h3>
 
                         <form onSubmit={handleAddMilestone} className="space-y-4">
@@ -280,7 +283,7 @@ export default function AdminTimeline() {
                                     type="text"
                                     value={formData.title}
                                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent"
                                     placeholder="e.g., We Met"
                                     required
                                 />
@@ -293,7 +296,7 @@ export default function AdminTimeline() {
                                 <select
                                     value={formData.dateFormat}
                                     onChange={(e) => setFormData({ ...formData, dateFormat: e.target.value as 'exact' | 'month-year' })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent text-gray-900"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent text-gray-900"
                                 >
                                     <option value="exact">Exact Date (e.g., March 6, 2015)</option>
                                     <option value="month-year">Month & Year (e.g., March 2015)</option>
@@ -308,7 +311,7 @@ export default function AdminTimeline() {
                                     type="date"
                                     value={formData.date}
                                     onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent text-gray-900"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent text-gray-900"
                                     required
                                 />
                                 <p className="mt-1 text-xs text-gray-500">
@@ -326,7 +329,7 @@ export default function AdminTimeline() {
                                     value={formData.description}
                                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                                     rows={4}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent"
                                     placeholder="Tell the story of this milestone..."
                                     required
                                 />
@@ -341,7 +344,7 @@ export default function AdminTimeline() {
                                     type="file"
                                     accept="image/*"
                                     onChange={(e) => setFormData({ ...formData, file1: e.target.files?.[0] || null })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                                 />
                                 {formData.file1 && (
                                     <div className="mt-2">
@@ -351,7 +354,7 @@ export default function AdminTimeline() {
                                         <select
                                             value={formData.photo1Align}
                                             onChange={(e) => setFormData({ ...formData, photo1Align: e.target.value as 'top' | 'top-center' | 'center' | 'center-bottom' | 'bottom' })}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent text-sm"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent text-sm"
                                         >
                                             <option value="top">Top Align</option>
                                             <option value="top-center">Top-Center Align</option>
@@ -372,7 +375,7 @@ export default function AdminTimeline() {
                                     type="file"
                                     accept="image/*"
                                     onChange={(e) => setFormData({ ...formData, file2: e.target.files?.[0] || null })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                                 />
                                 {formData.file2 && (
                                     <div className="mt-2">
@@ -382,7 +385,7 @@ export default function AdminTimeline() {
                                         <select
                                             value={formData.photo2Align}
                                             onChange={(e) => setFormData({ ...formData, photo2Align: e.target.value as 'top' | 'top-center' | 'center' | 'center-bottom' | 'bottom' })}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent text-sm"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent text-sm"
                                         >
                                             <option value="top">Top Align</option>
                                             <option value="top-center">Top-Center Align</option>
@@ -403,14 +406,14 @@ export default function AdminTimeline() {
                                         if (fileInputRef1.current) fileInputRef1.current.value = '';
                                         if (fileInputRef2.current) fileInputRef2.current.value = '';
                                     }}
-                                    className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                                    className="flex-1 px-4 py-2 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-all duration-300 shadow-md hover:shadow-lg"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     type="submit"
                                     disabled={uploading}
-                                    className="flex-1 px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-dark disabled:opacity-50"
+                                    className="flex-1 px-4 py-2 bg-accent text-white rounded-xl hover:bg-accent-dark disabled:opacity-50 transition-all duration-300 shadow-md hover:shadow-lg"
                                 >
                                     {uploading ? 'Adding...' : 'Add Milestone'}
                                 </button>
@@ -423,7 +426,7 @@ export default function AdminTimeline() {
             {/* Edit Milestone Modal */}
             {editingMilestone && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-                    <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+                    <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
                         <h3 className="text-lg font-bold text-gray-900 mb-4">Edit Milestone</h3>
 
                         <div className="space-y-4">
@@ -435,7 +438,7 @@ export default function AdminTimeline() {
                                     type="text"
                                     value={editingMilestone.title}
                                     onChange={(e) => setEditingMilestone({ ...editingMilestone, title: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent"
                                 />
                             </div>
 
@@ -446,7 +449,7 @@ export default function AdminTimeline() {
                                 <select
                                     value={editingMilestone.dateFormat || 'exact'}
                                     onChange={(e) => setEditingMilestone({ ...editingMilestone, dateFormat: e.target.value as 'exact' | 'month-year' })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent text-gray-900"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent text-gray-900"
                                 >
                                     <option value="exact">Exact Date (e.g., March 6, 2015)</option>
                                     <option value="month-year">Month & Year (e.g., March 2015)</option>
@@ -461,7 +464,7 @@ export default function AdminTimeline() {
                                     type="date"
                                     value={editingMilestone.date}
                                     onChange={(e) => setEditingMilestone({ ...editingMilestone, date: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent text-gray-900"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent text-gray-900"
                                 />
                                 <p className="mt-1 text-xs text-gray-500">
                                     {(editingMilestone.dateFormat || 'exact') === 'month-year'
@@ -478,7 +481,7 @@ export default function AdminTimeline() {
                                     value={editingMilestone.description}
                                     onChange={(e) => setEditingMilestone({ ...editingMilestone, description: e.target.value })}
                                     rows={4}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent"
                                 />
                             </div>
 
@@ -641,14 +644,14 @@ export default function AdminTimeline() {
                                     setEditFiles({ file1: null, file2: null });
                                     setEditPhotoAligns({ photo1Align: 'center', photo2Align: 'center' });
                                 }}
-                                className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                                className="flex-1 px-4 py-2 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-all duration-300 shadow-md hover:shadow-lg"
                             >
                                 Cancel
                             </button>
                             <button
                                 onClick={handleSaveEdit}
                                 disabled={uploading}
-                                className="flex-1 px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-dark disabled:opacity-50"
+                                className="flex-1 px-4 py-2 bg-accent text-white rounded-xl hover:bg-accent-dark disabled:opacity-50 transition-all duration-300 shadow-md hover:shadow-lg"
                             >
                                 {uploading ? 'Saving...' : 'Save Changes'}
                             </button>

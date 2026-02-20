@@ -1,17 +1,29 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import Image from 'next/image';
+import { useState, useEffect } from 'react';
 
 interface NavigationProps {
     brideName?: string;
     groomName?: string;
+    logoMode?: boolean;
+    weddingLogo?: string;
 }
 
-export default function Navigation({ brideName = 'Sarah', groomName = 'James' }: NavigationProps) {
+export default function Navigation({ brideName = 'Sarah', groomName = 'James', logoMode = false, weddingLogo = '' }: NavigationProps) {
     const [isOpen, setIsOpen] = useState(false);
+    const [basicMode, setBasicMode] = useState(false);
 
-    const links = [
+    useEffect(() => {
+        // Fetch basic mode status
+        fetch('/api/admin/site-config')
+            .then(res => res.json())
+            .then(data => setBasicMode(data.basicMode || false))
+            .catch(err => console.error('Error fetching basic mode:', err));
+    }, []);
+
+    const allLinks = [
         { href: '/', label: 'Home' },
         { href: '/about', label: 'About' },
         { href: '/our-story', label: 'Timeline' },
@@ -21,13 +33,30 @@ export default function Navigation({ brideName = 'Sarah', groomName = 'James' }:
         { href: '/rsvp', label: 'RSVP' },
     ];
 
+    // In Basic Mode, only show: Home, About, Timeline, Photos
+    const basicModePages = ['/', '/about', '/our-story', '/photos'];
+    const links = basicMode
+        ? allLinks.filter(link => basicModePages.includes(link.href))
+        : allLinks;
+
     return (
         <nav className="fixed top-0 w-full z-50 transition-all duration-300 bg-white/90 backdrop-blur-md shadow-sm">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div className="flex justify-between h-16">
+                <div className="flex justify-between h-20">
                     <div className="flex-shrink-0 flex items-center">
-                        <Link href="/" className="font-serif text-2xl font-bold tracking-tighter text-accent hover:text-accent-light transition-colors">
-                            {brideName} & {groomName}
+                        <Link href="/" className={logoMode && weddingLogo ? 'block py-1' : 'font-serif text-2xl font-bold tracking-tighter text-accent hover:text-accent-light transition-colors'}>
+                            {logoMode && weddingLogo ? (
+                                <Image
+                                    src={`/api/photos/${weddingLogo}`}
+                                    alt="Wedding Logo"
+                                    width={400}
+                                    height={72}
+                                    className="h-[72px] w-auto object-contain"
+                                    unoptimized
+                                />
+                            ) : (
+                                <>{brideName} & {groomName}</>
+                            )}
                         </Link>
                     </div>
 

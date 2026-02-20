@@ -42,10 +42,15 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} antialiased pt-16 min-h-screen flex flex-col`}
+        className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} antialiased pt-20 min-h-screen flex flex-col`}
       >
         <WipCheck />
-        <Navigation brideName={config.brideName} groomName={config.groomName} />
+        <Navigation
+          brideName={config.brideName}
+          groomName={config.groomName}
+          logoMode={config.logoMode}
+          weddingLogo={config.weddingLogo}
+        />
         <main className="flex-grow">
           {children}
         </main>
@@ -54,6 +59,7 @@ export default function RootLayout({
           groomName={config.groomName}
           weddingDate={config.weddingDate}
           weddingLocation={config.weddingLocation}
+          footerHeroImage={config.footerHeroImage}
         />
         <style dangerouslySetInnerHTML={{
           __html: `

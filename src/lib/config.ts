@@ -37,9 +37,34 @@ export interface SiteConfig {
     ourStoryBody?: string;
     venueDescription?: string;
     venueAddress?: string;
+    ceremonyText?: string;
+    receptionText?: string;
     faqs?: FAQItem[];
     // Schedule Page
     scheduleEvents?: ScheduleEvent[];
+    // Wedding Party Page
+    weddingPartySubtitle?: string;
+    somethingBlueCrewTitle?: string;
+    // Basic Mode (pre-release mode)
+    basicMode?: boolean;
+    basicModeShowVenue?: boolean;
+    // Footer/Hero Images
+    footerHeroImage?: string;
+    // Logo Mode
+    logoMode?: boolean;
+    weddingLogo?: string;
+    // Wedding Color Palette
+    weddingColorPalette?: string[]; // 5 custom colors
+    // Public Page Background Colors
+    pageBgColors?: {
+        home?: string;
+        about?: string;
+        ourStory?: string;
+        weddingParty?: string;
+        schedule?: string;
+        photos?: string;
+        rsvp?: string;
+    };
 }
 
 const CONFIG_PATH = path.join(process.cwd(), 'public/config/site.json');

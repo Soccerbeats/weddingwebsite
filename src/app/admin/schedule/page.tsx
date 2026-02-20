@@ -70,19 +70,20 @@ export default function AdminSchedule() {
 
     return (
         <div className="max-w-4xl">
-            <h1 className="text-2xl font-bold text-gray-900 mb-6">Schedule Management</h1>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Schedule Management</h1>
+            <p className="text-gray-600 mb-8">Create and organize your wedding day timeline</p>
 
             {message && (
-                <div className={`p-4 rounded-md mb-6 ${message.includes('success') ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
+                <div className={`p-4 rounded-xl mb-6 ${message.includes('success') ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
                     {message}
                 </div>
             )}
 
             <form onSubmit={handleSubmit} className="space-y-8">
-                <div className="bg-white p-8 rounded-lg border border-gray-200 shadow-sm space-y-6">
+                <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-lg space-y-6">
 
                     {events.map((event, index) => (
-                        <div key={index} className="bg-gray-50 p-4 rounded-md border border-gray-200 relative group">
+                        <div key={index} className="bg-gradient-to-br from-accent/5 to-accent-light/10 p-4 rounded-xl border border-accent/10 relative group shadow-md hover:shadow-lg transition-all duration-300">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-xs font-medium text-gray-500 uppercase">Time</label>
@@ -90,7 +91,7 @@ export default function AdminSchedule() {
                                         type="text"
                                         value={event.time}
                                         onChange={(e) => handleEventChange(index, 'time', e.target.value)}
-                                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
+                                        className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
                                         placeholder="e.g. 4:00 PM"
                                     />
                                 </div>
@@ -100,7 +101,7 @@ export default function AdminSchedule() {
                                         type="text"
                                         value={event.title}
                                         onChange={(e) => handleEventChange(index, 'title', e.target.value)}
-                                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
+                                        className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
                                         placeholder="e.g. Ceremony"
                                     />
                                 </div>
@@ -110,7 +111,7 @@ export default function AdminSchedule() {
                                         type="text"
                                         value={event.location}
                                         onChange={(e) => handleEventChange(index, 'location', e.target.value)}
-                                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
+                                        className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
                                         placeholder="e.g. Garden Courtyard"
                                     />
                                 </div>
@@ -120,7 +121,7 @@ export default function AdminSchedule() {
                                         type="text"
                                         value={event.description}
                                         onChange={(e) => handleEventChange(index, 'description', e.target.value)}
-                                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
+                                        className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
                                         placeholder="Brief details..."
                                     />
                                 </div>
@@ -142,7 +143,7 @@ export default function AdminSchedule() {
                     <button
                         type="button"
                         onClick={addEvent}
-                        className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-accent hover:text-accent transition-colors font-medium flex items-center justify-center gap-2"
+                        className="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 hover:border-accent hover:text-accent transition-all duration-300 font-medium flex items-center justify-center gap-2 hover:shadow-lg"
                     >
                         <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
@@ -156,7 +157,7 @@ export default function AdminSchedule() {
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full md:w-auto ml-auto flex justify-center py-3 px-8 border border-transparent rounded-md shadow-lg text-base font-medium text-white bg-accent hover:bg-accent-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 transition-colors"
+                        className="w-full md:w-auto ml-auto flex justify-center py-3 px-8 border border-transparent rounded-xl shadow-lg text-base font-medium text-white bg-accent hover:bg-accent-dark hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 transition-all duration-300"
                     >
                         {loading ? 'Saving Schedule...' : 'Save Schedule Changes'}
                     </button>

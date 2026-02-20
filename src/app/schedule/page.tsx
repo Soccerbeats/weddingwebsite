@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { getSiteConfig } from '@/lib/config';
 
 export default function SchedulePage() {
@@ -10,9 +11,10 @@ export default function SchedulePage() {
             location: 'Main Venue'
         }
     ];
+    const bgColor = config.pageBgColors?.schedule || '#ffffff';
 
     return (
-        <div className="bg-white py-16">
+        <div style={{ backgroundColor: bgColor }} className="py-16">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="text-center mb-16">
                     <h1 className="text-4xl font-serif text-gray-900 tracking-tight sm:text-5xl">
@@ -21,6 +23,21 @@ export default function SchedulePage() {
                     <p className="mt-4 text-xl text-gray-500 italic font-serif">
                         {config.weddingDate}
                     </p>
+
+                    <div className="flex flex-col sm:flex-row gap-4 justify-center mt-8">
+                        <Link
+                            href="/rsvp"
+                            className="px-8 py-3 bg-accent text-white hover:bg-accent-dark transition-colors rounded-full uppercase tracking-widest text-sm font-bold shadow-lg hover:shadow-xl"
+                        >
+                            RSVP Now
+                        </Link>
+                        <Link
+                            href="/about#faqs"
+                            className="px-8 py-3 bg-transparent border-2 border-accent text-accent hover:bg-accent hover:text-white transition-colors rounded-full uppercase tracking-widest text-sm font-bold shadow-lg hover:shadow-xl"
+                        >
+                            View FAQs
+                        </Link>
+                    </div>
                 </div>
 
                 <div className="max-w-3xl mx-auto">

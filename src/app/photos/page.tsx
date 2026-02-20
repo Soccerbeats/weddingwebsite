@@ -1,8 +1,12 @@
 import PhotoGallery from '@/components/PhotoGallery';
+import { getSiteConfig } from '@/lib/config';
 
 export default function PhotosPage() {
+    const config = getSiteConfig();
+    const bgColor = config.pageBgColors?.photos || '#ffffff';
+
     return (
-        <div className="bg-white py-16">
+        <div style={{ backgroundColor: bgColor }} className="py-16">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="text-center mb-12">
                     <h1 className="text-4xl font-serif text-gray-900 tracking-tight sm:text-5xl">

@@ -49,18 +49,16 @@ export default function PhotoGallery() {
                 {photos.map((photo) => (
                     <div
                         key={photo.id}
-                        className="aspect-w-1 aspect-h-1 w-full overflow-hidden rounded-2xl bg-gray-200 xl:aspect-w-7 xl:aspect-h-8 shadow-sm group-hover:shadow-md transition-shadow cursor-pointer group"
+                        className="relative aspect-square w-full overflow-hidden rounded-2xl bg-gray-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer group"
                         onClick={() => setSelectedPhoto(photo)}
                     >
-                        <div className="relative h-64 w-full">
-                            <Image
-                                src={`/photos/${photo.filename}`}
-                                alt={photo.alt}
-                                fill
-                                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                                className="object-cover object-center group-hover:opacity-75"
-                            />
-                        </div>
+                        <Image
+                            src={`/photos/${photo.filename}`}
+                            alt={photo.alt}
+                            fill
+                            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                            className="object-cover object-center group-hover:opacity-75"
+                        />
                     </div>
                 ))}
             </div>

@@ -44,19 +44,20 @@ export default function AdminHome() {
 
     return (
         <div className="max-w-4xl">
-            <h1 className="text-2xl font-bold text-gray-900 mb-6">Home Page Content</h1>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Home Page Content</h1>
+            <p className="text-gray-600 mb-8">Customize the text content for your home page</p>
 
             {message && (
-                <div className={`p-4 rounded-md mb-6 ${message.includes('success') ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
+                <div className={`p-4 rounded-xl mb-6 ${message.includes('success') ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
                     {message}
                 </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-8 bg-white p-8 rounded-lg border border-gray-200 shadow-sm">
+            <form onSubmit={handleSubmit} className="space-y-8 bg-white p-8 rounded-2xl border border-gray-200 shadow-lg">
 
                 {/* Hero Section */}
-                <div className="space-y-6">
-                    <h2 className="text-xl font-semibold text-gray-900 border-b pb-2">Hero Section</h2>
+                <div className="space-y-6 bg-gradient-to-br from-accent/5 to-accent-light/10 rounded-xl p-6 border border-accent/10">
+                    <h2 className="text-xl font-semibold text-gray-900">Hero Section</h2>
 
                     <div>
                         <label className="block text-sm font-medium text-gray-700">Small Headline (above names)</label>
@@ -64,15 +65,15 @@ export default function AdminHome() {
                             type="text"
                             value={config.homeHeadline || ''}
                             onChange={(e) => setConfig({ ...config, homeHeadline: e.target.value })}
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
+                            className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
                             placeholder="e.g. We're getting married!"
                         />
                     </div>
                 </div>
 
                 {/* Intro Section */}
-                <div className="space-y-6">
-                    <h2 className="text-xl font-semibold text-gray-900 border-b pb-2">Welcome Message</h2>
+                <div className="space-y-6 bg-gradient-to-br from-accent/5 to-accent-light/10 rounded-xl p-6 border border-accent/10">
+                    <h2 className="text-xl font-semibold text-gray-900">Welcome Message</h2>
 
                     <div>
                         <label className="block text-sm font-medium text-gray-700">Section Title</label>
@@ -80,7 +81,7 @@ export default function AdminHome() {
                             type="text"
                             value={config.homeIntroTitle || ''}
                             onChange={(e) => setConfig({ ...config, homeIntroTitle: e.target.value })}
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
+                            className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
                             placeholder="e.g. Join us to celebrate"
                         />
                     </div>
@@ -91,7 +92,7 @@ export default function AdminHome() {
                             rows={5}
                             value={config.homeIntroBody || ''}
                             onChange={(e) => setConfig({ ...config, homeIntroBody: e.target.value })}
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
+                            className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
                             placeholder="Welcome message paragraph..."
                         />
                     </div>
@@ -101,7 +102,7 @@ export default function AdminHome() {
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-accent hover:bg-accent-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 transition-colors"
+                        className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-lg text-sm font-medium text-white bg-accent hover:bg-accent-dark hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 transition-all duration-300"
                     >
                         {loading ? 'Saving...' : 'Save Changes'}
                     </button>

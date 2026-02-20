@@ -9,6 +9,8 @@ export default function AdminAbout() {
         ourStoryBody: '',
         venueDescription: '',
         venueAddress: '',
+        ceremonyText: '',
+        receptionText: '',
     });
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState('');
@@ -46,19 +48,20 @@ export default function AdminAbout() {
 
     return (
         <div className="max-w-4xl">
-            <h1 className="text-2xl font-bold text-gray-900 mb-6">About Page Content</h1>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">About Page Content</h1>
+            <p className="text-gray-600 mb-8">Customize your story and venue information</p>
 
             {message && (
-                <div className={`p-4 rounded-md mb-6 ${message.includes('success') ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
+                <div className={`p-4 rounded-xl mb-6 ${message.includes('success') ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
                     {message}
                 </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-8 bg-white p-8 rounded-lg border border-gray-200 shadow-sm">
+            <form onSubmit={handleSubmit} className="space-y-8 bg-white p-8 rounded-2xl border border-gray-200 shadow-lg">
 
                 {/* Story Section */}
-                <div className="space-y-6">
-                    <h2 className="text-xl font-semibold text-gray-900 border-b pb-2">Our Story</h2>
+                <div className="space-y-6 bg-gradient-to-br from-accent/5 to-accent-light/10 rounded-xl p-6 border border-accent/10">
+                    <h2 className="text-xl font-semibold text-gray-900">Our Story</h2>
 
                     <div>
                         <label className="block text-sm font-medium text-gray-700">Page Headline</label>
@@ -66,7 +69,7 @@ export default function AdminAbout() {
                             type="text"
                             value={config.ourStoryTitle || ''}
                             onChange={(e) => setConfig({ ...config, ourStoryTitle: e.target.value })}
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
+                            className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
                             placeholder="e.g. A chance meeting..."
                         />
                     </div>
@@ -77,7 +80,7 @@ export default function AdminAbout() {
                             type="text"
                             value={config.howWeMetTitle || ''}
                             onChange={(e) => setConfig({ ...config, howWeMetTitle: e.target.value })}
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
+                            className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
                             placeholder="e.g. How We Met, Our Beginning, etc."
                         />
                         <p className="text-xs text-gray-500 mt-1">This will be the heading above your story. Leave blank to use "How We Met"</p>
@@ -90,15 +93,15 @@ export default function AdminAbout() {
                             rows={8}
                             value={config.ourStoryBody || ''}
                             onChange={(e) => setConfig({ ...config, ourStoryBody: e.target.value })}
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
+                            className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
                             placeholder="Tell your story..."
                         />
                     </div>
                 </div>
 
                 {/* Venue Section */}
-                <div className="space-y-6">
-                    <h2 className="text-xl font-semibold text-gray-900 border-b pb-2">Venue Info</h2>
+                <div className="space-y-6 bg-gradient-to-br from-accent/5 to-accent-light/10 rounded-xl p-6 border border-accent/10">
+                    <h2 className="text-xl font-semibold text-gray-900">Venue Info</h2>
 
                     <div>
                         <label className="block text-sm font-medium text-gray-700">Venue Description</label>
@@ -106,7 +109,7 @@ export default function AdminAbout() {
                             rows={3}
                             value={config.venueDescription || ''}
                             onChange={(e) => setConfig({ ...config, venueDescription: e.target.value })}
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
+                            className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
                             placeholder="Short blurb about the venue..."
                         />
                     </div>
@@ -118,8 +121,32 @@ export default function AdminAbout() {
                             type="text"
                             value={config.venueAddress || ''}
                             onChange={(e) => setConfig({ ...config, venueAddress: e.target.value })}
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
+                            className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
                             placeholder="e.g. 123 Wedding Lane, City, State"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">The Ceremony Box Text</label>
+                        <p className="text-xs text-gray-500 mb-2">Text displayed in "The Ceremony" box below the venue description.</p>
+                        <textarea
+                            rows={3}
+                            value={config.ceremonyText || ''}
+                            onChange={(e) => setConfig({ ...config, ceremonyText: e.target.value })}
+                            className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
+                            placeholder="e.g. The ceremony will take place at 4:00 PM at the venue."
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">The Reception Box Text</label>
+                        <p className="text-xs text-gray-500 mb-2">Text displayed in "The Reception" box below the venue description.</p>
+                        <textarea
+                            rows={3}
+                            value={config.receptionText || ''}
+                            onChange={(e) => setConfig({ ...config, receptionText: e.target.value })}
+                            className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
+                            placeholder="e.g. Dinner and dancing will follow immediately."
                         />
                     </div>
                 </div>
@@ -128,7 +155,7 @@ export default function AdminAbout() {
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-accent hover:bg-accent-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 transition-colors"
+                        className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-lg text-sm font-medium text-white bg-accent hover:bg-accent-dark hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 transition-all duration-300"
                     >
                         {loading ? 'Saving...' : 'Save Changes'}
                     </button>

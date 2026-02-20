@@ -37,6 +37,7 @@ export default function AdminLayout({
         { href: '/admin/faqs', label: 'Q&A' },
         { href: '/admin/schedule', label: 'Schedule' },
         { href: '/admin/settings', label: 'General Settings' },
+        { href: '/admin/color', label: 'Color' },
         { href: '/admin/wip-control', label: 'Work in Progress' },
     ];
 

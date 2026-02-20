@@ -33,9 +33,9 @@ interface WeddingPartyMember {
 interface SortableRowProps {
   member: WeddingPartyMember;
   index: number;
-  party: 'bride' | 'groom';
-  onEdit: (party: 'bride' | 'groom', index: number) => void;
-  onDelete: (party: 'bride' | 'groom', index: number) => void;
+  party: 'bride' | 'groom' | 'somethingBlueCrew';
+  onEdit: (party: 'bride' | 'groom' | 'somethingBlueCrew', index: number) => void;
+  onDelete: (party: 'bride' | 'groom' | 'somethingBlueCrew', index: number) => void;
 }
 
 function SortableRow({ member, index, party, onEdit, onDelete }: SortableRowProps) {
@@ -99,6 +99,7 @@ interface OfficiantInfo {
 interface WeddingPartyData {
   brideParty: WeddingPartyMember[];
   groomParty: WeddingPartyMember[];
+  somethingBlueCrew?: WeddingPartyMember[];
   officiant?: OfficiantInfo;
 }
 
@@ -107,7 +108,7 @@ export default function AdminWeddingPartyPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [editingParty, setEditingParty] = useState<'bride' | 'groom' | 'officiant' | null>(null);
+  const [editingParty, setEditingParty] = useState<'bride' | 'groom' | 'somethingBlueCrew' | 'officiant' | null>(null);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [formData, setFormData] = useState<WeddingPartyMember>({
     id: '',
@@ -153,6 +154,9 @@ export default function AdminWeddingPartyPage() {
         if (data.weddingParty.groomParty) {
           data.weddingParty.groomParty = ensureIds(data.weddingParty.groomParty);
         }
+        if (data.weddingParty.somethingBlueCrew) {
+          data.weddingParty.somethingBlueCrew = ensureIds(data.weddingParty.somethingBlueCrew);
+        }
       }
 
       setConfig(data);
@@ -163,11 +167,11 @@ export default function AdminWeddingPartyPage() {
     }
   };
 
-  const handleDragEnd = (event: DragEndEvent, party: 'bride' | 'groom') => {
+  const handleDragEnd = (event: DragEndEvent, party: 'bride' | 'groom' | 'somethingBlueCrew') => {
     const { active, over } = event;
 
     if (over && active.id !== over.id) {
-      const partyKey = party === 'bride' ? 'brideParty' : 'groomParty';
+      const partyKey = party === 'bride' ? 'brideParty' : party === 'groom' ? 'groomParty' : 'somethingBlueCrew';
       const members = config.weddingParty[partyKey];
 
       const oldIndex = members.findIndex((m: WeddingPartyMember) => m.id === active.id);
@@ -198,7 +202,7 @@ export default function AdminWeddingPartyPage() {
     }
   };
 
-  const addMember = (party: 'bride' | 'groom' | 'officiant') => {
+  const addMember = (party: 'bride' | 'groom' | 'somethingBlueCrew' | 'officiant') => {
     setEditingParty(party);
     setEditingIndex(null);
     setFormData({
@@ -217,10 +221,12 @@ export default function AdminWeddingPartyPage() {
     }
   };
 
-  const editMember = (party: 'bride' | 'groom', index: number) => {
+  const editMember = (party: 'bride' | 'groom' | 'somethingBlueCrew', index: number) => {
     const members = party === 'bride'
       ? config.weddingParty?.brideParty || []
-      : config.weddingParty?.groomParty || [];
+      : party === 'groom'
+      ? config.weddingParty?.groomParty || []
+      : config.weddingParty?.somethingBlueCrew || [];
 
     setEditingParty(party);
     setEditingIndex(index);
@@ -302,7 +308,12 @@ export default function AdminWeddingPartyPage() {
           bio: updatedFormData.bio,
         };
       } else {
-        const partyKey = editingParty === 'bride' ? 'brideParty' : 'groomParty';
+        const partyKey = editingParty === 'bride' ? 'brideParty' : editingParty === 'groom' ? 'groomParty' : 'somethingBlueCrew';
+
+        // Initialize array if it doesn't exist
+        if (!config.weddingParty[partyKey]) {
+          config.weddingParty[partyKey] = [];
+        }
 
         if (editingIndex === null) {
           // Add new member
@@ -334,10 +345,10 @@ export default function AdminWeddingPartyPage() {
     }
   };
 
-  const deleteMember = (party: 'bride' | 'groom', index: number) => {
+  const deleteMember = (party: 'bride' | 'groom' | 'somethingBlueCrew', index: number) => {
     if (!confirm('Are you sure you want to delete this member?')) return;
 
-    const partyKey = party === 'bride' ? 'brideParty' : 'groomParty';
+    const partyKey = party === 'bride' ? 'brideParty' : party === 'groom' ? 'groomParty' : 'somethingBlueCrew';
     config.weddingParty[partyKey].splice(index, 1);
     setConfig({ ...config });
   };
@@ -348,6 +359,7 @@ export default function AdminWeddingPartyPage() {
 
   const brideParty = config.weddingParty?.brideParty || [];
   const groomParty = config.weddingParty?.groomParty || [];
+  const somethingBlueCrew = config.weddingParty?.somethingBlueCrew || [];
 
   return (
     <div className="max-w-6xl">
@@ -356,6 +368,43 @@ export default function AdminWeddingPartyPage() {
         <p className="text-gray-600">
           Add and manage your wedding party members
         </p>
+      </div>
+
+      {/* Page Subtitle Section */}
+      <div className="mb-8 bg-white rounded-lg shadow p-6">
+        <h2 className="text-xl font-bold mb-4">Page Settings</h2>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Subtitle Text (appears below "Our Wedding Party" header)
+            </label>
+            <input
+              type="text"
+              value={config.weddingPartySubtitle || ''}
+              onChange={(e) => setConfig({ ...config, weddingPartySubtitle: e.target.value })}
+              placeholder="Meet the special people standing by our side on our big day"
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+            />
+            <p className="mt-2 text-sm text-gray-500">
+              This text appears at the top of the Wedding Party page
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Something Blue Crew Section Title
+            </label>
+            <input
+              type="text"
+              value={config.somethingBlueCrewTitle || ''}
+              onChange={(e) => setConfig({ ...config, somethingBlueCrewTitle: e.target.value })}
+              placeholder="Something Blue Crew"
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+            />
+            <p className="mt-2 text-sm text-gray-500">
+              Custom title for the third wedding party section
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Bride's Party */}
@@ -454,6 +503,60 @@ export default function AdminWeddingPartyPage() {
                         member={member}
                         index={index}
                         party="groom"
+                        onEdit={editMember}
+                        onDelete={deleteMember}
+                      />
+                    ))}
+                  </tbody>
+                </SortableContext>
+              </table>
+            )}
+          </div>
+        </DndContext>
+      </div>
+
+      {/* Something Blue Crew */}
+      <div className="mb-12">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-2xl font-bold">{config.somethingBlueCrewTitle || 'Something Blue Crew'}</h2>
+          <button
+            onClick={() => addMember('somethingBlueCrew')}
+            className="bg-accent text-white px-4 py-2 rounded-md hover:bg-accent/90"
+          >
+            Add Member
+          </button>
+        </div>
+
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={(event) => handleDragEnd(event, 'somethingBlueCrew')}
+        >
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            {somethingBlueCrew.length === 0 ? (
+              <p className="p-6 text-gray-500 text-center">No members added yet</p>
+            ) : (
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase w-12"></th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Relationship</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+                  </tr>
+                </thead>
+                <SortableContext
+                  items={somethingBlueCrew.map((m: WeddingPartyMember) => m.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {somethingBlueCrew.map((member: WeddingPartyMember, index: number) => (
+                      <SortableRow
+                        key={member.id}
+                        member={member}
+                        index={index}
+                        party="somethingBlueCrew"
                         onEdit={editMember}
                         onDelete={deleteMember}
                       />

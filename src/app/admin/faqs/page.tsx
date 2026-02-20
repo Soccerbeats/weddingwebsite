@@ -100,25 +100,28 @@ export default function AdminFAQ() {
     return (
         <div className="max-w-4xl">
             <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold text-gray-900">Q&A / FAQ Management</h1>
+                <div>
+                    <h1 className="text-3xl font-bold text-gray-900 mb-2">Q&A / FAQ Management</h1>
+                    <p className="text-gray-600">Manage frequently asked questions for your guests</p>
+                </div>
                 <button
                     onClick={() => saveConfig(faqs)}
                     disabled={loading}
-                    className="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-accent hover:bg-accent-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 transition-colors"
+                    className="py-2 px-6 border border-transparent rounded-xl shadow-lg text-sm font-medium text-white bg-accent hover:bg-accent-dark hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 transition-all duration-300"
                 >
                     {loading ? 'Saving...' : 'Save All Changes'}
                 </button>
             </div>
 
             {message && (
-                <div className={`p-4 rounded-md mb-6 ${message.includes('success') ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
+                <div className={`p-4 rounded-xl mb-6 ${message.includes('success') ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
                     {message}
                 </div>
             )}
 
             <div className="space-y-6">
                 {faqs.map((faq, index) => (
-                    <div key={index} className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 relative group">
+                    <div key={index} className="bg-white p-6 rounded-2xl shadow-lg border border-gray-200 relative group hover:shadow-xl transition-all duration-300">
                         <div className="absolute top-4 right-4 flex space-x-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                             <button
                                 onClick={() => checkMoveUp(index)}
@@ -154,7 +157,7 @@ export default function AdminFAQ() {
                                     type="text"
                                     value={faq.question}
                                     onChange={(e) => handleChange(index, 'question', e.target.value)}
-                                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
+                                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
                                 />
                             </div>
                             <div>
@@ -163,7 +166,7 @@ export default function AdminFAQ() {
                                     rows={3}
                                     value={faq.answer}
                                     onChange={(e) => handleChange(index, 'answer', e.target.value)}
-                                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
+                                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
                                 />
                             </div>
                         </div>
@@ -172,7 +175,7 @@ export default function AdminFAQ() {
 
                 <button
                     onClick={handleAdd}
-                    className="w-full py-4 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-accent hover:text-accent transition-colors flex items-center justify-center font-medium"
+                    className="w-full py-4 border-2 border-dashed border-gray-300 rounded-2xl text-gray-500 hover:border-accent hover:text-accent transition-all duration-300 flex items-center justify-center font-medium hover:shadow-lg"
                 >
                     + Add New Question
                 </button>
