@@ -251,6 +251,7 @@ docker push ghcr.io/soccerbeats/weddingwebsite:latest
 - Image name must always be: `ghcr.io/soccerbeats/weddingwebsite:latest`
 - Do NOT use any other username or repository name
 - This is the configured name in the production Portainer stack
+- READ deploy.md BEFORE YOU DEPLOY.
 
 ### Environment Variables (Portainer)
 ```env

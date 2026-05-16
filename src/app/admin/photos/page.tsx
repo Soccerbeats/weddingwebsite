@@ -161,6 +161,8 @@ export default function AdminPhotos() {
     const [siteConfig, setSiteConfig] = useState({ homeHero: '', aboutHero: '', footerHeroImage: '', weddingLogo: '' });
     const [editingPhoto, setEditingPhoto] = useState<Photo | null>(null);
     const [editForm, setEditForm] = useState({ title: '', description: '' });
+    const [photosSubtitle, setPhotosSubtitle] = useState('Moments from our journey together.');
+    const [subtitleSaving, setSubtitleSaving] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const sensors = useSensors(
@@ -193,6 +195,22 @@ export default function AdminPhotos() {
         const res = await fetch('/api/admin/site-config');
         const data = await res.json();
         setSiteConfig(data);
+        if (data.photosSubtitle) setPhotosSubtitle(data.photosSubtitle);
+    };
+
+    const handleSaveSubtitle = async () => {
+        setSubtitleSaving(true);
+        try {
+            await fetch('/api/admin/site-config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ photosSubtitle }),
+            });
+        } catch (err) {
+            console.error('Failed to save subtitle:', err);
+        } finally {
+            setSubtitleSaving(false);
+        }
     };
 
     const handleDragEnd = async (event: DragEndEvent) => {
@@ -379,6 +397,28 @@ export default function AdminPhotos() {
                         className="bg-accent text-white px-6 py-3 rounded-xl hover:bg-accent-dark hover:shadow-xl disabled:opacity-50 transition-all duration-300 shadow-lg font-medium"
                     >
                         {uploading ? 'Uploading...' : 'Upload Photos'}
+                    </button>
+                </div>
+            </div>
+
+            {/* Page Subtitle Editor */}
+            <div className="mb-6 p-6 bg-white rounded-2xl border border-gray-200 shadow-lg">
+                <h2 className="text-lg font-bold text-gray-900 mb-1">Page Subtitle</h2>
+                <p className="text-sm text-gray-500 mb-3">Displayed under &quot;Photo Gallery&quot; on the public photos page.</p>
+                <div className="flex gap-3">
+                    <input
+                        type="text"
+                        value={photosSubtitle}
+                        onChange={(e) => setPhotosSubtitle(e.target.value)}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent text-gray-900"
+                        placeholder="e.g. Moments from our journey together."
+                    />
+                    <button
+                        onClick={handleSaveSubtitle}
+                        disabled={subtitleSaving}
+                        className="px-5 py-2 bg-accent text-white rounded-xl hover:bg-accent-dark disabled:opacity-50 transition-all duration-300 shadow-md hover:shadow-lg font-medium"
+                    >
+                        {subtitleSaving ? 'Saving...' : 'Save'}
                     </button>
                 </div>
             </div>

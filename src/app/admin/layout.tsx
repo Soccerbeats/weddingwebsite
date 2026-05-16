@@ -36,6 +36,7 @@ export default function AdminLayout({
         { href: '/admin/wedding-party', label: 'Wedding Party' },
         { href: '/admin/faqs', label: 'Q&A' },
         { href: '/admin/schedule', label: 'Schedule' },
+        { href: '/admin/honeymoon-fund', label: 'Honeymoon Fund' },
         { href: '/admin/settings', label: 'General Settings' },
         { href: '/admin/color', label: 'Color' },
         { href: '/admin/wip-control', label: 'Work in Progress' },

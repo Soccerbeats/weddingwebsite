@@ -53,6 +53,9 @@ export interface SiteConfig {
     // Logo Mode
     logoMode?: boolean;
     weddingLogo?: string;
+    // Page Subtitles
+    timelineSubtitle?: string;
+    photosSubtitle?: string;
     // Wedding Color Palette
     weddingColorPalette?: string[]; // 5 custom colors
     // Public Page Background Colors
@@ -64,6 +67,19 @@ export interface SiteConfig {
         schedule?: string;
         photos?: string;
         rsvp?: string;
+        honeymoonFund?: string;
+    };
+    // Honeymoon Fund
+    honeymoonFund?: {
+        enabled: boolean;
+        title: string;
+        subtitle: string;
+        description: string;
+        goal?: number;
+        zelle?: { handle: string; label: string };
+        venmo?: { handle: string; label: string };
+        cashapp?: { handle: string; label: string };
+        paypal?: { handle: string; label: string };
     };
 }
 

@@ -19,9 +19,18 @@ export async function POST(request: Request) {
 
         response.cookies.set('admin_token', token, {
             httpOnly: true,
-            secure: false, // Set to true only if using HTTPS
+            secure: false,
             sameSite: 'lax',
-            maxAge: 7200, // 2 hours
+            maxAge: 7200,
+            path: '/',
+        });
+
+        // Non-httpOnly hint cookie so the nav can read admin state synchronously
+        response.cookies.set('admin_hint', '1', {
+            httpOnly: false,
+            secure: false,
+            sameSite: 'lax',
+            maxAge: 7200,
             path: '/',
         });
 

@@ -28,7 +28,8 @@
       "Bash(docker ps:*)",
       "Bash(docker-compose pull:*)",
       "Bash(docker rm:*)",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Bash(git config:*)"
     ],
     "deny": [],
     "ask": []

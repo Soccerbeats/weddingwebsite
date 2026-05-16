@@ -16,6 +16,7 @@ interface Milestone {
 export default function OurStoryPage() {
     const [milestones, setMilestones] = useState<Milestone[]>([]);
     const [bgColor, setBgColor] = useState('#ffffff');
+    const [timelineSubtitle, setTimelineSubtitle] = useState('The journey of our love');
 
     useEffect(() => {
         // Fetch timeline data
@@ -30,11 +31,12 @@ export default function OurStoryPage() {
             })
             .catch(err => console.error('Error loading timeline:', err));
 
-        // Fetch config for background color
+        // Fetch config for background color and subtitle
         fetch('/api/admin/site-config')
             .then(res => res.json())
             .then(data => {
                 setBgColor(data.pageBgColors?.ourStory || '#ffffff');
+                if (data.timelineSubtitle) setTimelineSubtitle(data.timelineSubtitle);
             })
             .catch(err => console.error('Error loading config:', err));
     }, []);
@@ -82,7 +84,7 @@ export default function OurStoryPage() {
                         Our Story
                     </h1>
                     <p className="text-xl text-gray-500">
-                        The journey of our love
+                        {timelineSubtitle}
                     </p>
                 </div>
 

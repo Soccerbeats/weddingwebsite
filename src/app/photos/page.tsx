@@ -4,6 +4,7 @@ import { getSiteConfig } from '@/lib/config';
 export default function PhotosPage() {
     const config = getSiteConfig();
     const bgColor = config.pageBgColors?.photos || '#ffffff';
+    const photosSubtitle = config.photosSubtitle || 'Moments from our journey together.';
 
     return (
         <div style={{ backgroundColor: bgColor }} className="py-16">
@@ -13,7 +14,7 @@ export default function PhotosPage() {
                         Photo Gallery
                     </h1>
                     <p className="mt-4 text-xl text-gray-500">
-                        Moments from our journey together.
+                        {photosSubtitle}
                     </p>
                 </div>
 

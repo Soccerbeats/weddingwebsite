@@ -18,6 +18,8 @@ export default function AdminTimeline() {
     const [editingMilestone, setEditingMilestone] = useState<Milestone | null>(null);
     const [showAddModal, setShowAddModal] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const [timelineSubtitle, setTimelineSubtitle] = useState('The journey of our love');
+    const [subtitleSaving, setSubtitleSaving] = useState(false);
     const fileInputRef1 = useRef<HTMLInputElement>(null);
     const fileInputRef2 = useRef<HTMLInputElement>(null);
     const editFileInputRef1 = useRef<HTMLInputElement>(null);
@@ -38,12 +40,31 @@ export default function AdminTimeline() {
 
     useEffect(() => {
         fetchMilestones();
+        fetch('/api/admin/site-config')
+            .then(res => res.json())
+            .then(data => { if (data.timelineSubtitle) setTimelineSubtitle(data.timelineSubtitle); })
+            .catch(err => console.error('Error loading config:', err));
     }, []);
 
     const fetchMilestones = async () => {
         const res = await fetch('/api/admin/timeline');
         const data = await res.json();
         setMilestones(data.milestones || []);
+    };
+
+    const handleSaveSubtitle = async () => {
+        setSubtitleSaving(true);
+        try {
+            await fetch('/api/admin/site-config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ timelineSubtitle }),
+            });
+        } catch (err) {
+            console.error('Failed to save subtitle:', err);
+        } finally {
+            setSubtitleSaving(false);
+        }
     };
 
     const handleAddMilestone = async (e: React.FormEvent) => {
@@ -196,6 +217,28 @@ export default function AdminTimeline() {
                 >
                     Add Milestone
                 </button>
+            </div>
+
+            {/* Page Subtitle Editor */}
+            <div className="mb-6 p-6 bg-white rounded-2xl border border-gray-200 shadow-lg">
+                <h2 className="text-lg font-bold text-gray-900 mb-1">Page Subtitle</h2>
+                <p className="text-sm text-gray-500 mb-3">Displayed under &quot;Our Story&quot; on the public timeline page.</p>
+                <div className="flex gap-3">
+                    <input
+                        type="text"
+                        value={timelineSubtitle}
+                        onChange={(e) => setTimelineSubtitle(e.target.value)}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent text-gray-900"
+                        placeholder="e.g. The journey of our love"
+                    />
+                    <button
+                        onClick={handleSaveSubtitle}
+                        disabled={subtitleSaving}
+                        className="px-5 py-2 bg-accent text-white rounded-xl hover:bg-accent-dark disabled:opacity-50 transition-all duration-300 shadow-md hover:shadow-lg font-medium"
+                    >
+                        {subtitleSaving ? 'Saving...' : 'Save'}
+                    </button>
+                </div>
             </div>
 
             {/* Milestones List */}
