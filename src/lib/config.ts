@@ -13,6 +13,15 @@ export interface FAQItem {
     answer: string;
 }
 
+export interface FundItem {
+    id: string;
+    title: string;
+    description: string;
+    emoji: string;
+    price: number;
+    funded: number;
+}
+
 export interface SiteConfig {
     homeHero?: string;
     homeHeadline?: string;
@@ -75,11 +84,11 @@ export interface SiteConfig {
         title: string;
         subtitle: string;
         description: string;
-        goal?: number;
         zelle?: { handle: string; label: string };
         venmo?: { handle: string; label: string };
         cashapp?: { handle: string; label: string };
         paypal?: { handle: string; label: string };
+        items?: FundItem[];
     };
 }
 
