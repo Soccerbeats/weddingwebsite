@@ -52,9 +52,9 @@ function ContributeModal({ item, fund, onClose }: { item: FundItem; fund: FundCo
             name: 'Cash App',
             icon: '💚',
             handle: cashTag,
-            // cash.app universal links open the app natively on mobile already
-            url: `https://cash.app/${cashTag}`,
-            webFallback: null,
+            // cashme:// deep link opens Cash App directly; falls back to web
+            url: `cashme://cash.app/${cashTag}`,
+            webFallback: `https://cash.app/${cashTag}`,
         },
         fund.zelle?.handle && {
             name: 'Zelle',
