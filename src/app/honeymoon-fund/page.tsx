@@ -5,6 +5,7 @@ import type { FundItem } from '@/lib/config';
 
 interface FundConfig {
     enabled: boolean;
+    showFinancials: boolean;
     title: string;
     subtitle: string;
     description: string;
@@ -25,13 +26,16 @@ interface SiteData {
 function ContributeModal({ item, fund, onClose }: { item: FundItem; fund: FundConfig; onClose: () => void }) {
     const remaining = Math.max(0, item.price - item.funded);
     const suggestedAmount = remaining > 0 ? remaining : item.price;
+    const showFinancials = fund.showFinancials !== false;
 
     const methods = [
         fund.venmo?.handle && {
             name: 'Venmo',
             icon: '💙',
             handle: fund.venmo.handle,
-            url: `https://account.venmo.com/pay?recipients=${fund.venmo.handle.replace('@', '')}&amount=${suggestedAmount}&note=${encodeURIComponent('Honeymoon Fund - ' + item.title)}`,
+            url: showFinancials
+                ? `https://account.venmo.com/pay?recipients=${fund.venmo.handle.replace('@', '')}&amount=${suggestedAmount}&note=${encodeURIComponent('Honeymoon Fund - ' + item.title)}`
+                : `https://account.venmo.com/pay?recipients=${fund.venmo.handle.replace('@', '')}&note=${encodeURIComponent('Honeymoon Fund - ' + item.title)}`,
         },
         fund.cashapp?.handle && {
             name: 'Cash App',
@@ -49,7 +53,9 @@ function ContributeModal({ item, fund, onClose }: { item: FundItem; fund: FundCo
             name: 'PayPal',
             icon: '💛',
             handle: fund.paypal.handle,
-            url: `https://www.paypal.com/paypalme/${fund.paypal.handle.replace('@', '')}/${suggestedAmount}`,
+            url: showFinancials
+                ? `https://www.paypal.com/paypalme/${fund.paypal.handle.replace('@', '')}/${suggestedAmount}`
+                : `https://www.paypal.com/paypalme/${fund.paypal.handle.replace('@', '')}`,
         },
     ].filter(Boolean) as { name: string; icon: string; handle: string; url: string }[];
 
@@ -65,8 +71,12 @@ function ContributeModal({ item, fund, onClose }: { item: FundItem; fund: FundCo
                 <div className="text-center mb-6">
                     <div className="text-4xl mb-2">{item.emoji}</div>
                     <h2 className="text-xl font-bold text-gray-900">{item.title}</h2>
-                    <p className="text-accent font-semibold text-lg mt-1">${suggestedAmount.toLocaleString()}</p>
-                    <p className="text-gray-500 text-sm mt-1">suggested contribution</p>
+                    {showFinancials && (
+                        <>
+                            <p className="text-accent font-semibold text-lg mt-1">${suggestedAmount.toLocaleString()}</p>
+                            <p className="text-gray-500 text-sm mt-1">suggested contribution</p>
+                        </>
+                    )}
                 </div>
 
                 <div className="bg-green-50 rounded-xl px-4 py-3 mb-5 text-center">
@@ -95,7 +105,10 @@ function ContributeModal({ item, fund, onClose }: { item: FundItem; fund: FundCo
                 </div>
 
                 <p className="text-center text-xs text-gray-400 mt-4">
-                    Send <strong>${suggestedAmount}</strong> and mention &ldquo;{item.title}&rdquo; in the note
+                    {showFinancials
+                        ? <>Send <strong>${suggestedAmount}</strong> and mention &ldquo;{item.title}&rdquo; in the note</>
+                        : <>Mention &ldquo;{item.title}&rdquo; in the payment note so we know what it&rsquo;s for!</>
+                    }
                 </p>
             </div>
         </div>
@@ -146,6 +159,7 @@ export default function HoneymoonFundPage() {
     const items = fund.items || [];
     const totalGoal = items.reduce((s, i) => s + i.price, 0);
     const totalFunded = items.reduce((s, i) => s + i.funded, 0);
+    const showFinancials = fund.showFinancials !== false;
 
     return (
         <div style={{ backgroundColor: bgColor }} className="min-h-screen py-16">
@@ -171,8 +185,8 @@ export default function HoneymoonFundPage() {
                     </div>
                 )}
 
-                {/* Overall progress */}
-                {items.length > 0 && totalGoal > 0 && (
+                {/* Overall progress — only shown when financials are on */}
+                {showFinancials && items.length > 0 && totalGoal > 0 && (
                     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-8">
                         <div className="flex justify-between items-end mb-2">
                             <span className="font-semibold text-gray-900">Overall Progress</span>
@@ -201,7 +215,7 @@ export default function HoneymoonFundPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-12">
                         {items.map(item => {
                             const pct = Math.min(100, Math.round((item.funded / item.price) * 100));
-                            const fullyFunded = pct >= 100;
+                            const fullyFunded = showFinancials && pct >= 100;
                             return (
                                 <div
                                     key={item.id}
@@ -215,8 +229,12 @@ export default function HoneymoonFundPage() {
                                         )}
                                     </div>
                                     <p className="text-gray-500 text-sm leading-relaxed mb-3 flex-1">{item.description}</p>
-                                    <p className="font-bold text-accent text-xl mb-2">${item.price.toLocaleString()}</p>
-                                    <ProgressBar funded={item.funded} price={item.price} />
+                                    {showFinancials && (
+                                        <>
+                                            <p className="font-bold text-accent text-xl mb-2">${item.price.toLocaleString()}</p>
+                                            <ProgressBar funded={item.funded} price={item.price} />
+                                        </>
+                                    )}
                                     <button
                                         onClick={() => !fullyFunded && setSelectedItem(item)}
                                         disabled={fullyFunded}

@@ -7,6 +7,7 @@ interface PaymentEntry { handle: string; label: string; }
 
 interface FundConfig {
     enabled: boolean;
+    showFinancials: boolean;
     title: string;
     subtitle: string;
     description: string;
@@ -19,6 +20,7 @@ interface FundConfig {
 
 const DEFAULTS: FundConfig = {
     enabled: false,
+    showFinancials: true,
     title: 'Honeymoon Fund',
     subtitle: 'Help us start our adventure together',
     description: "Your presence at our wedding is the greatest gift of all. But if you'd like to give a little something extra, a contribution to our honeymoon fund would mean the world to us!",
@@ -142,7 +144,7 @@ export default function AdminHoneymoonFundPage() {
             </div>
 
             {/* Enable toggle */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-6 flex items-center justify-between">
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-3 flex items-center justify-between">
                 <div>
                     <h2 className="font-semibold text-gray-900">Page Enabled</h2>
                     <p className="text-sm text-gray-500">Show this page to visitors</p>
@@ -152,6 +154,20 @@ export default function AdminHoneymoonFundPage() {
                     className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors ${fund.enabled ? 'bg-accent' : 'bg-gray-300'}`}
                 >
                     <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform shadow-sm ${fund.enabled ? 'translate-x-8' : 'translate-x-1'}`} />
+                </button>
+            </div>
+
+            {/* Show financials toggle */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-6 flex items-center justify-between">
+                <div>
+                    <h2 className="font-semibold text-gray-900">Show Financial Details</h2>
+                    <p className="text-sm text-gray-500">Display prices, progress bars, and funding amounts to guests</p>
+                </div>
+                <button
+                    onClick={() => { const updated = { ...fund, showFinancials: !fund.showFinancials }; setFund(updated); save(updated); }}
+                    className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors ${fund.showFinancials !== false ? 'bg-accent' : 'bg-gray-300'}`}
+                >
+                    <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform shadow-sm ${fund.showFinancials !== false ? 'translate-x-8' : 'translate-x-1'}`} />
                 </button>
             </div>
 
