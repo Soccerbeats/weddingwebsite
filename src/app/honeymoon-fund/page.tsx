@@ -24,40 +24,59 @@ interface SiteData {
 }
 
 function ContributeModal({ item, fund, onClose }: { item: FundItem; fund: FundConfig; onClose: () => void }) {
+    const [zelleCopied, setZelleCopied] = useState(false);
     const remaining = Math.max(0, item.price - item.funded);
     const suggestedAmount = remaining > 0 ? remaining : item.price;
     const showFinancials = fund.showFinancials !== false;
+
+    const venmoHandle = fund.venmo?.handle.replace('@', '') ?? '';
+    const cashHandle = fund.cashapp?.handle ?? '';
+    const cashTag = cashHandle.startsWith('$') ? cashHandle : `$${cashHandle}`;
+    const paypalHandle = fund.paypal?.handle.replace('@', '') ?? '';
+    const note = encodeURIComponent('Honeymoon Fund - ' + item.title);
 
     const methods = [
         fund.venmo?.handle && {
             name: 'Venmo',
             icon: '💙',
             handle: fund.venmo.handle,
+            // Deep link opens Venmo app on mobile; falls back gracefully on desktop
             url: showFinancials
-                ? `https://account.venmo.com/pay?recipients=${fund.venmo.handle.replace('@', '')}&amount=${suggestedAmount}&note=${encodeURIComponent('Honeymoon Fund - ' + item.title)}`
-                : `https://account.venmo.com/pay?recipients=${fund.venmo.handle.replace('@', '')}&note=${encodeURIComponent('Honeymoon Fund - ' + item.title)}`,
+                ? `venmo://paycharge?txn=pay&recipients=${venmoHandle}&amount=${suggestedAmount}&note=${note}`
+                : `venmo://paycharge?txn=pay&recipients=${venmoHandle}&note=${note}`,
+            webFallback: showFinancials
+                ? `https://account.venmo.com/pay?recipients=${venmoHandle}&amount=${suggestedAmount}&note=${note}`
+                : `https://account.venmo.com/pay?recipients=${venmoHandle}&note=${note}`,
         },
         fund.cashapp?.handle && {
             name: 'Cash App',
             icon: '💚',
-            handle: fund.cashapp.handle,
-            url: `https://cash.app/${fund.cashapp.handle.startsWith('$') ? fund.cashapp.handle : '$' + fund.cashapp.handle}`,
+            handle: cashTag,
+            // cash.app universal links open the app natively on mobile already
+            url: `https://cash.app/${cashTag}`,
+            webFallback: null,
         },
         fund.zelle?.handle && {
             name: 'Zelle',
             icon: '🏦',
             handle: fund.zelle.handle,
-            url: 'https://www.zellepay.com',
+            // No public Zelle deep link — show handle to copy
+            url: null,
+            webFallback: null,
         },
         fund.paypal?.handle && {
             name: 'PayPal',
             icon: '💛',
             handle: fund.paypal.handle,
+            // Deep link opens PayPal app on mobile
             url: showFinancials
-                ? `https://www.paypal.com/paypalme/${fund.paypal.handle.replace('@', '')}/${suggestedAmount}`
-                : `https://www.paypal.com/paypalme/${fund.paypal.handle.replace('@', '')}`,
+                ? `paypal://paypalme/${paypalHandle}/${suggestedAmount}`
+                : `paypal://paypalme/${paypalHandle}`,
+            webFallback: showFinancials
+                ? `https://www.paypal.com/paypalme/${paypalHandle}/${suggestedAmount}`
+                : `https://www.paypal.com/paypalme/${paypalHandle}`,
         },
-    ].filter(Boolean) as { name: string; icon: string; handle: string; url: string }[];
+    ].filter(Boolean) as { name: string; icon: string; handle: string; url: string | null; webFallback: string | null }[];
 
     return (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" onClick={onClose}>
@@ -84,24 +103,71 @@ function ContributeModal({ item, fund, onClose }: { item: FundItem; fund: FundCo
                 </div>
 
                 <div className="space-y-3">
-                    {methods.map(m => (
-                        <a
-                            key={m.name}
-                            href={m.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center justify-between w-full bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl px-4 py-3 transition-colors"
-                        >
-                            <div className="flex items-center gap-3">
-                                <span className="text-2xl">{m.icon}</span>
-                                <div className="text-left">
-                                    <p className="font-semibold text-gray-900 text-sm">{m.name}</p>
-                                    <p className="text-gray-500 text-xs font-mono">{m.handle}</p>
+                    {methods.map(m => {
+                        // Zelle: no deep link — just copy the handle
+                        if (!m.url && !m.webFallback) {
+                            return (
+                                <button
+                                    key={m.name}
+                                    onClick={() => {
+                                        navigator.clipboard.writeText(m.handle);
+                                        setZelleCopied(true);
+                                        setTimeout(() => setZelleCopied(false), 2500);
+                                    }}
+                                    className="flex items-center justify-between w-full bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl px-4 py-3 transition-colors text-left"
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-2xl">{m.icon}</span>
+                                        <div>
+                                            <p className="font-semibold text-gray-900 text-sm">{m.name}</p>
+                                            <p className="text-gray-500 text-xs font-mono">{m.handle}</p>
+                                        </div>
+                                    </div>
+                                    <span className="text-gray-400 text-sm shrink-0">
+                                        {zelleCopied ? '✓ Copied!' : 'Tap to copy'}
+                                    </span>
+                                </button>
+                            );
+                        }
+
+                        // Deep link: try app first, fall back to web after short delay
+                        const handleClick = (e: React.MouseEvent) => {
+                            if (!m.webFallback) return; // Cash App uses universal links natively
+                            e.preventDefault();
+                            const appUrl = m.url!;
+                            const webUrl = m.webFallback;
+                            // Try to open the app; if it fails (no app installed), open web after 1.5s
+                            const fallbackTimer = setTimeout(() => {
+                                window.open(webUrl, '_blank');
+                            }, 1500);
+                            window.location.href = appUrl;
+                            // If app opens, the page goes to background and the timer fires harmlessly
+                            // (most browsers won't execute the timeout if the app takes focus)
+                            // Clear on visibility change to avoid double-opening
+                            const clear = () => { clearTimeout(fallbackTimer); document.removeEventListener('visibilitychange', clear); };
+                            document.addEventListener('visibilitychange', clear);
+                        };
+
+                        return (
+                            <a
+                                key={m.name}
+                                href={m.url ?? m.webFallback ?? '#'}
+                                target={m.webFallback ? undefined : '_blank'}
+                                rel="noopener noreferrer"
+                                onClick={m.webFallback ? handleClick : undefined}
+                                className="flex items-center justify-between w-full bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl px-4 py-3 transition-colors"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <span className="text-2xl">{m.icon}</span>
+                                    <div className="text-left">
+                                        <p className="font-semibold text-gray-900 text-sm">{m.name}</p>
+                                        <p className="text-gray-500 text-xs font-mono">{m.handle}</p>
+                                    </div>
                                 </div>
-                            </div>
-                            <span className="text-gray-400 text-sm">Open →</span>
-                        </a>
-                    ))}
+                                <span className="text-gray-400 text-sm">Open →</span>
+                            </a>
+                        );
+                    })}
                 </div>
 
                 <p className="text-center text-xs text-gray-400 mt-4">
