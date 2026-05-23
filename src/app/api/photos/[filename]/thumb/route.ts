@@ -21,7 +21,7 @@ export async function GET(
             .jpeg({ quality: 70 })
             .toBuffer();
 
-        return new NextResponse(thumb, {
+        return new NextResponse(new Uint8Array(thumb), {
             headers: {
                 'Content-Type': 'image/jpeg',
                 'Cache-Control': 'public, max-age=31536000, immutable',
@@ -30,7 +30,7 @@ export async function GET(
     } catch {
         // Fallback: serve original if sharp fails
         const original = fs.readFileSync(filePath);
-        return new NextResponse(original, {
+        return new NextResponse(new Uint8Array(original), {
             headers: { 'Content-Type': 'image/jpeg' },
         });
     }
