@@ -144,7 +144,7 @@ export default function AdminHome() {
                                         <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Order</p>
                                         {(config.heroSlideshowImages as string[]).map((filename: string, i: number) => (
                                             <div key={filename} className="flex items-center gap-3 bg-white rounded-lg p-2 border border-accent/30 shadow-sm">
-                                                <img src={`/photos/${filename}`} alt="" className="h-10 w-16 object-cover rounded" />
+                                                <img src={`/api/photos/${filename}/thumb`} alt="" className="h-10 w-16 object-cover rounded" loading="lazy" />
                                                 <span className="flex-1 text-sm text-gray-700 truncate">{filename}</span>
                                                 <button type="button" onClick={() => moveSlideshowImage(i, -1)} disabled={i === 0} className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-30">↑</button>
                                                 <button type="button" onClick={() => moveSlideshowImage(i, 1)} disabled={i === (config.heroSlideshowImages || []).length - 1} className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-30">↓</button>
@@ -165,7 +165,7 @@ export default function AdminHome() {
                                                 onClick={() => toggleSlideshowImage(photo.filename)}
                                                 className={`relative cursor-pointer rounded-lg overflow-hidden border-2 transition-all ${selected ? 'border-accent shadow-lg' : 'border-transparent hover:border-gray-300'}`}
                                             >
-                                                <img src={`/photos/${photo.filename}`} alt="" className="h-20 w-full object-cover" />
+                                                <img src={`/api/photos/${photo.filename}/thumb`} alt="" className="h-20 w-full object-cover" loading="lazy" />
                                                 {selected && (
                                                     <div className="absolute inset-0 bg-accent/20 flex items-center justify-center">
                                                         <span className="bg-accent text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">
