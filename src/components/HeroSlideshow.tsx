@@ -1,27 +1,55 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 interface HeroSlideshowProps {
-    images: string[];       // filenames from public/photos
-    interval?: number;      // ms between slides, default 5000
-    fallbackImage?: string; // single homeHero filename if slideshow off
+    images: string[];
+    interval?: number;
+    fallbackImage?: string;
 }
 
 export default function HeroSlideshow({ images, interval = 5000, fallbackImage }: HeroSlideshowProps) {
     const [current, setCurrent] = useState(0);
-    const [prev, setPrev] = useState<number | null>(null);
+    const [loaded, setLoaded] = useState<boolean[]>([]);
+    const [allReady, setAllReady] = useState(false);
+    const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const srcs = images.length > 0 ? images : (fallbackImage ? [fallbackImage] : []);
 
+    // Preload all images up front via Image() objects
     useEffect(() => {
-        if (srcs.length <= 1) return;
-        const timer = setInterval(() => {
-            setPrev(current);
+        if (srcs.length === 0) return;
+        setLoaded(new Array(srcs.length).fill(false));
+        setAllReady(false);
+        setCurrent(0);
+
+        const status = new Array(srcs.length).fill(false);
+        let cancelled = false;
+
+        srcs.forEach((src, i) => {
+            const img = new window.Image();
+            img.src = `/photos/${src}`;
+            const done = () => {
+                if (cancelled) return;
+                status[i] = true;
+                setLoaded([...status]);
+                if (status.every(Boolean)) setAllReady(true);
+            };
+            img.onload = done;
+            img.onerror = done; // still advance even if one fails
+        });
+
+        return () => { cancelled = true; };
+    }, [srcs.join(',')]);
+
+    // Start slideshow only after all images are preloaded
+    useEffect(() => {
+        if (!allReady || srcs.length <= 1) return;
+        timerRef.current = setInterval(() => {
             setCurrent(c => (c + 1) % srcs.length);
         }, interval);
-        return () => clearInterval(timer);
-    }, [srcs.length, interval, current]);
+        return () => { if (timerRef.current) clearInterval(timerRef.current); };
+    }, [allReady, srcs.length, interval]);
 
     if (srcs.length === 0) {
         return (
