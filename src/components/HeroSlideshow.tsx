@@ -67,7 +67,7 @@ export default function HeroSlideshow({ images, interval = 5000, fallbackImage }
                     src={`/photos/${src}`}
                     alt="Hero"
                     className="absolute inset-0 h-full w-full object-cover transition-opacity duration-1000"
-                    style={{ opacity: i === current ? 1 : 0, zIndex: i === current ? 1 : 0 }}
+                    style={{ opacity: i === current ? 1 : 0 }}
                 />
             ))}
         </>

@@ -24,10 +24,10 @@ export default function Home() {
             interval={slideshowInterval}
             fallbackImage={config.homeHero}
           />
-          <div className="absolute inset-0 bg-black/40 mix-blend-multiply" style={{ zIndex: 2 }} />
+          <div className="absolute inset-0 bg-black/40" />
         </div>
 
-        <div className="relative h-full flex flex-col items-center justify-center text-center px-4 sm:px-6 lg:px-8">
+        <div className="relative z-10 h-full flex flex-col items-center justify-center text-center px-4 sm:px-6 lg:px-8">
           <p className="text-white text-xl md:text-2xl font-serif italic tracking-wider mb-4">
             {config.homeHeadline || "We're getting married!"}
           </p>
