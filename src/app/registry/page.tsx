@@ -19,8 +19,8 @@ interface FundConfig {
 interface SiteData {
     brideName: string;
     groomName: string;
-    honeymoonFund?: FundConfig;
-    pageBgColors?: { honeymoonFund?: string };
+    registry?: FundConfig;
+    pageBgColors?: { registry?: string };
 }
 
 function ContributeModal({ item, fund, onClose }: { item: FundItem; fund: FundConfig; onClose: () => void }) {
@@ -33,7 +33,7 @@ function ContributeModal({ item, fund, onClose }: { item: FundItem; fund: FundCo
     const cashHandle = fund.cashapp?.handle ?? '';
     const cashTag = cashHandle.startsWith('$') ? cashHandle : `$${cashHandle}`;
     const paypalHandle = fund.paypal?.handle.replace('@', '') ?? '';
-    const note = encodeURIComponent('Honeymoon Fund - ' + item.title);
+    const note = encodeURIComponent('Registry - ' + item.title);
 
     const methods = [
         fund.venmo?.handle && {
@@ -199,7 +199,7 @@ function ProgressBar({ funded, price }: { funded: number; price: number }) {
     );
 }
 
-export default function HoneymoonFundPage() {
+export default function RegistryPage() {
     const [data, setData] = useState<SiteData | null>(null);
     const [selectedItem, setSelectedItem] = useState<FundItem | null>(null);
 
@@ -211,8 +211,8 @@ export default function HoneymoonFundPage() {
 
     if (!data) return null;
 
-    const fund = data.honeymoonFund;
-    const bgColor = data.pageBgColors?.honeymoonFund || '#ffffff';
+    const fund = data.registry;
+    const bgColor = data.pageBgColors?.registry || '#ffffff';
 
     if (!fund?.enabled) {
         return (
@@ -237,7 +237,7 @@ export default function HoneymoonFundPage() {
                         {data.brideName} & {data.groomName}
                     </p>
                     <h1 className="text-4xl font-serif text-gray-900 tracking-tight sm:text-5xl mb-4">
-                        {fund.title || 'Honeymoon Fund'}
+                        {fund.title || 'Registry'}
                     </h1>
                     {fund.subtitle && (
                         <p className="text-xl text-gray-500 italic">{fund.subtitle}</p>

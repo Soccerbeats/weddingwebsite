@@ -24,6 +24,9 @@ export interface FundItem {
 
 export interface SiteConfig {
     homeHero?: string;
+    heroSlideshowEnabled?: boolean;
+    heroSlideshowImages?: string[];  // filenames from public/photos
+    heroSlideshowInterval?: number;  // milliseconds, default 5000
     homeHeadline?: string;
     homeIntroTitle?: string;
     homeIntroBody?: string;
@@ -76,10 +79,10 @@ export interface SiteConfig {
         schedule?: string;
         photos?: string;
         rsvp?: string;
-        honeymoonFund?: string;
+        registry?: string;
     };
-    // Honeymoon Fund
-    honeymoonFund?: {
+    // Registry
+    registry?: {
         enabled: boolean;
         title: string;
         subtitle: string;

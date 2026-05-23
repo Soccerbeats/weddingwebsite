@@ -15,14 +15,14 @@ interface NavigationProps {
 export default function Navigation({ brideName = 'Sarah', groomName = 'James', logoMode = false, weddingLogo = '', isAdmin = false }: NavigationProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [basicMode, setBasicMode] = useState(false);
-    const [honeymoonFundEnabled, setHoneymoonFundEnabled] = useState(false);
+    const [registryEnabled, setRegistryEnabled] = useState(false);
 
     useEffect(() => {
         fetch('/api/admin/site-config')
             .then(res => res.json())
             .then(data => {
                 setBasicMode(data.basicMode || false);
-                setHoneymoonFundEnabled(data.honeymoonFund?.enabled || false);
+                setRegistryEnabled(data.registry?.enabled || false);
             })
             .catch(err => console.error('Error fetching config:', err));
     }, []);
@@ -34,7 +34,7 @@ export default function Navigation({ brideName = 'Sarah', groomName = 'James', l
         { href: '/wedding-party', label: 'Wedding Party' },
         { href: '/schedule', label: 'Schedule' },
         { href: '/photos', label: 'Photos' },
-        { href: '/honeymoon-fund', label: 'Honeymoon Fund' },
+        { href: '/registry', label: 'Registry' },
         { href: '/rsvp', label: 'RSVP' },
     ];
 
@@ -43,7 +43,7 @@ export default function Navigation({ brideName = 'Sarah', groomName = 'James', l
     const links = (basicMode && !isAdmin
         ? allLinks.filter(link => basicModePages.includes(link.href))
         : allLinks
-    ).filter(link => link.href !== '/honeymoon-fund' || honeymoonFundEnabled || isAdmin);
+    ).filter(link => link.href !== '/registry' || registryEnabled || isAdmin);
 
     return (
         <nav className="fixed top-0 w-full z-50 transition-all duration-300 bg-white/90 backdrop-blur-md shadow-sm">

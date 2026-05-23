@@ -21,9 +21,9 @@ interface FundConfig {
 const DEFAULTS: FundConfig = {
     enabled: false,
     showFinancials: true,
-    title: 'Honeymoon Fund',
+    title: 'Registry',
     subtitle: 'Help us start our adventure together',
-    description: "Your presence at our wedding is the greatest gift of all. But if you'd like to give a little something extra, a contribution to our honeymoon fund would mean the world to us!",
+    description: "Your presence at our wedding is the greatest gift of all. But if you'd like to give a little something extra, a contribution to our registry would mean the world to us!",
     zelle: { handle: '', label: 'Send via Zelle' },
     venmo: { handle: '', label: 'Send via Venmo' },
     cashapp: { handle: '', label: 'Send via Cash App' },
@@ -35,7 +35,7 @@ const BLANK_ITEM: Omit<FundItem, 'id'> = { title: '', description: '', emoji: '�
 
 function genId() { return Math.random().toString(36).slice(2, 10); }
 
-export default function AdminHoneymoonFundPage() {
+export default function AdminRegistryPage() {
     const [fund, setFund] = useState<FundConfig>(DEFAULTS);
     const [bgColor, setBgColor] = useState('#ffffff');
     const [loading, setLoading] = useState(true);
@@ -52,8 +52,8 @@ export default function AdminHoneymoonFundPage() {
         fetch('/api/admin/site-config')
             .then(r => r.json())
             .then(data => {
-                if (data.honeymoonFund) setFund({ ...DEFAULTS, ...data.honeymoonFund, items: data.honeymoonFund.items || [] });
-                setBgColor(data.pageBgColors?.honeymoonFund || '#ffffff');
+                if (data.registry) setFund({ ...DEFAULTS, ...data.registry, items: data.registry.items || [] });
+                setBgColor(data.pageBgColors?.registry || '#ffffff');
             })
             .finally(() => setLoading(false));
     }, []);
@@ -64,8 +64,8 @@ export default function AdminHoneymoonFundPage() {
         try {
             const configRes = await fetch('/api/admin/site-config');
             const config = await configRes.json();
-            config.honeymoonFund = updatedFund ?? fund;
-            config.pageBgColors = { ...(config.pageBgColors || {}), honeymoonFund: bgColor };
+            config.registry = updatedFund ?? fund;
+            config.pageBgColors = { ...(config.pageBgColors || {}), registry: bgColor };
             const res = await fetch('/api/admin/site-config', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -134,12 +134,12 @@ export default function AdminHoneymoonFundPage() {
             {/* Header */}
             <div className="mb-6 flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold mb-1">Honeymoon Fund</h1>
+                    <h1 className="text-3xl font-bold mb-1">Registry</h1>
                     <p className="text-gray-500">Build your Honeyfund-style registry.</p>
                 </div>
                 <div className="flex items-center gap-4">
                     {message && <span className={`text-sm font-medium ${message === 'Saved!' ? 'text-green-600' : 'text-red-600'}`}>{message}</span>}
-                    <a href="/honeymoon-fund" target="_blank" rel="noopener noreferrer" className="text-sm text-accent hover:text-accent-dark underline">View page →</a>
+                    <a href="/registry" target="_blank" rel="noopener noreferrer" className="text-sm text-accent hover:text-accent-dark underline">View page →</a>
                 </div>
             </div>
 
@@ -330,7 +330,7 @@ export default function AdminHoneymoonFundPage() {
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Page Title</label>
                             <input type="text" value={fund.title} onChange={e => setFund(p => ({ ...p, title: e.target.value }))}
-                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="Honeymoon Fund" />
+                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="Registry" />
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Subtitle</label>

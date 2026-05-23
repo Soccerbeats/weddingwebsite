@@ -3,6 +3,18 @@ import { getSiteConfig } from '@/lib/config';
 
 export const dynamic = 'force-dynamic';
 
+// Render text that may contain [text](url) markdown links
+function renderWithLinks(text: string) {
+    const parts = text.split(/(\[[^\]]+\]\([^)]+\))/g);
+    return parts.map((part, i) => {
+        const match = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+        if (match) {
+            return <a key={i} href={match[2]} target="_blank" rel="noopener noreferrer" className="text-accent underline hover:text-accent-dark">{match[1]}</a>;
+        }
+        return <span key={i}>{part}</span>;
+    });
+}
+
 export default function AboutPage() {
     const config = getSiteConfig();
     const isBasicMode = config.basicMode || false;
@@ -106,7 +118,7 @@ export default function AboutPage() {
                                 <div key={index}>
                                     <dt className="text-lg leading-6 font-medium text-gray-900">{faq.question}</dt>
                                     <dd className="mt-2 text-base text-gray-600 whitespace-pre-line">
-                                        {faq.answer}
+                                        {renderWithLinks(faq.answer)}
                                     </dd>
                                 </div>
                             ))}

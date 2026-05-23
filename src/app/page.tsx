@@ -1,29 +1,30 @@
 import Link from 'next/link';
 import { getSiteConfig } from '@/lib/config';
 import CountdownClock from '@/components/CountdownClock';
+import HeroSlideshow from '@/components/HeroSlideshow';
 
 export const dynamic = 'force-dynamic';
 
 export default function Home() {
   const config = getSiteConfig();
-  const heroImage = config.homeHero ? `/photos/${config.homeHero}` : null;
   const isBasicMode = config.basicMode || false;
   const showVenue = config.basicModeShowVenue || false;
   const bgColor = config.pageBgColors?.home || '#ffffff';
+  const slideshowEnabled = config.heroSlideshowEnabled || false;
+  const slideshowImages = config.heroSlideshowImages || [];
+  const slideshowInterval = config.heroSlideshowInterval || 5000;
 
   return (
     <div style={{ backgroundColor: bgColor }}>
       {/* Hero Section */}
       <div className="relative h-screen">
-        <div className="absolute inset-0 bg-gray-900">
-          {heroImage ? (
-            <img src={heroImage} alt="Hero" className="h-full w-full object-cover" />
-          ) : (
-            <div className="h-full w-full flex items-center justify-center text-gray-700 bg-gray-200">
-              [Hero Image: Couple B&W Photo]
-            </div>
-          )}
-          <div className="absolute inset-0 bg-black/40 mix-blend-multiply" />
+        <div className="absolute inset-0 bg-gray-900 overflow-hidden">
+          <HeroSlideshow
+            images={slideshowEnabled ? slideshowImages : (config.homeHero ? [config.homeHero] : [])}
+            interval={slideshowInterval}
+            fallbackImage={config.homeHero}
+          />
+          <div className="absolute inset-0 bg-black/40 mix-blend-multiply" style={{ zIndex: 2 }} />
         </div>
 
         <div className="relative h-full flex flex-col items-center justify-center text-center px-4 sm:px-6 lg:px-8">

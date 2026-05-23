@@ -17,7 +17,7 @@ const publicPages = [
   { path: '/wedding-party', label: 'Wedding Party' },
   { path: '/schedule', label: 'Schedule' },
   { path: '/photos', label: 'Photos' },
-  { path: '/honeymoon-fund', label: 'Honeymoon Fund' },
+  { path: '/registry', label: 'Registry' },
   { path: '/rsvp', label: 'RSVP' },
 ];
 

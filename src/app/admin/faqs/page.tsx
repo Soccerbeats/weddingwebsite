@@ -1,10 +1,32 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 interface FAQItem {
     question: string;
     answer: string;
+}
+
+// Insert a hyperlink markdown-style tag at cursor position in a textarea
+function insertLink(
+    textarea: HTMLTextAreaElement,
+    value: string,
+    onChange: (val: string) => void
+) {
+    const text = prompt('Link text:');
+    if (!text) return;
+    const url = prompt('URL (e.g. https://example.com):');
+    if (!url) return;
+    const tag = `[${text}](${url})`;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const newVal = value.slice(0, start) + tag + value.slice(end);
+    onChange(newVal);
+    // Restore focus after state update
+    requestAnimationFrame(() => {
+        textarea.focus();
+        textarea.setSelectionRange(start + tag.length, start + tag.length);
+    });
 }
 
 export default function AdminFAQ() {
@@ -161,13 +183,27 @@ export default function AdminFAQ() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Answer</label>
+                                <div className="flex items-center justify-between mb-1">
+                                    <label className="block text-sm font-medium text-gray-700">Answer</label>
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            const ta = (e.currentTarget.parentElement?.parentElement?.querySelector('textarea')) as HTMLTextAreaElement;
+                                            if (ta) insertLink(ta, faq.answer, (val) => handleChange(index, 'answer', val));
+                                        }}
+                                        className="text-xs px-2 py-1 rounded bg-accent/10 text-accent hover:bg-accent/20 transition-colors font-medium"
+                                        title="Insert a hyperlink"
+                                    >
+                                        🔗 Insert Link
+                                    </button>
+                                </div>
                                 <textarea
                                     rows={3}
                                     value={faq.answer}
                                     onChange={(e) => handleChange(index, 'answer', e.target.value)}
                                     className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
                                 />
+                                <p className="text-xs text-gray-400 mt-1">Use <code>[link text](https://url.com)</code> syntax for hyperlinks</p>
                             </div>
                         </div>
                     </div>
