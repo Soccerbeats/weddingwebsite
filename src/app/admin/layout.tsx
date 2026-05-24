@@ -39,6 +39,7 @@ export default function AdminLayout({
         { href: '/admin/registry', label: 'Registry' },
         { href: '/admin/settings', label: 'General Settings' },
         { href: '/admin/color', label: 'Color' },
+        { href: '/admin/seating', label: 'Seating Chart' },
         { href: '/admin/wip-control', label: 'Work in Progress' },
     ];
 

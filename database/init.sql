@@ -34,3 +34,33 @@ CREATE TABLE IF NOT EXISTS guest_list (
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
+
+-- Seating chart tables
+CREATE TABLE IF NOT EXISTS floor_plans (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL DEFAULT 'Main Floor Plan',
+  room_width INTEGER,
+  room_height INTEGER,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS seating_tables (
+  id SERIAL PRIMARY KEY,
+  floor_plan_id INTEGER REFERENCES floor_plans(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  table_type TEXT NOT NULL DEFAULT 'round',
+  seat_count INTEGER NOT NULL DEFAULT 8,
+  x FLOAT NOT NULL DEFAULT 100,
+  y FLOAT NOT NULL DEFAULT 100,
+  rotation FLOAT DEFAULT 0,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS seat_assignments (
+  id SERIAL PRIMARY KEY,
+  seating_table_id INTEGER REFERENCES seating_tables(id) ON DELETE CASCADE,
+  seat_index INTEGER NOT NULL,
+  guest_list_id INTEGER REFERENCES guest_list(id) ON DELETE SET NULL,
+  UNIQUE(seating_table_id, seat_index)
+);

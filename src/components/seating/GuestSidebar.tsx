@@ -1,0 +1,176 @@
+'use client';
+
+import { useState, useMemo } from 'react';
+import { GuestListEntry } from './types';
+
+interface GuestSidebarProps {
+  guests: GuestListEntry[];
+  onDragGuest: (guest: GuestListEntry) => void;
+  onAssignGuest: (guestId: number, tableId: number, seatIndex: number) => void;
+  splitPartyGuestIds: Set<number>;
+}
+
+export default function GuestSidebar({
+  guests,
+  onDragGuest,
+  splitPartyGuestIds,
+}: GuestSidebarProps) {
+  const [search, setSearch] = useState('');
+  const [tab, setTab] = useState<'unassigned' | 'all'>('unassigned');
+
+  const filtered = useMemo(() => {
+    let list = guests;
+    if (tab === 'unassigned') {
+      list = list.filter(g => !g.assigned_seat);
+    }
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(
+        g =>
+          g.guest_name.toLowerCase().includes(q) ||
+          g.plus_one_name?.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [guests, tab, search]);
+
+  const unassignedCount = guests.filter(g => !g.assigned_seat).length;
+  const totalCount = guests.length;
+
+  return (
+    <div className="w-72 bg-white border-r border-gray-200 flex flex-col h-full shadow-sm">
+      {/* Header */}
+      <div className="p-4 border-b border-gray-200">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-gray-800">Guests</h2>
+          <div className="flex gap-1.5 text-xs">
+            <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
+              {unassignedCount} unassigned
+            </span>
+            <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-medium">
+              {totalCount} total
+            </span>
+          </div>
+        </div>
+
+        {/* Search */}
+        <div className="relative">
+          <svg
+            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400"
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-md outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 transition-colors"
+            placeholder="Search guests..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
+
+        {/* Tab toggle */}
+        <div className="flex mt-3 bg-gray-100 rounded-md p-0.5">
+          <button
+            className={`flex-1 text-xs py-1 rounded transition-colors font-medium ${
+              tab === 'unassigned'
+                ? 'bg-white text-gray-800 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+            onClick={() => setTab('unassigned')}
+          >
+            Unassigned
+          </button>
+          <button
+            className={`flex-1 text-xs py-1 rounded transition-colors font-medium ${
+              tab === 'all'
+                ? 'bg-white text-gray-800 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+            onClick={() => setTab('all')}
+          >
+            All
+          </button>
+        </div>
+      </div>
+
+      {/* Guest list */}
+      <div className="flex-1 overflow-y-auto p-2 space-y-1">
+        {filtered.length === 0 && (
+          <div className="text-center text-gray-400 text-xs py-8">
+            {search ? 'No guests match your search.' : 'No guests to show.'}
+          </div>
+        )}
+
+        {filtered.map(guest => {
+          const isSplit = splitPartyGuestIds.has(guest.id);
+          const isAssigned = !!guest.assigned_seat;
+
+          return (
+            <div
+              key={guest.id}
+              draggable
+              onDragStart={e => {
+                e.dataTransfer.setData('guestId', String(guest.id));
+                onDragGuest(guest);
+              }}
+              className={`group flex flex-col gap-0.5 px-3 py-2 rounded-lg border cursor-grab active:cursor-grabbing transition-all select-none
+                ${isAssigned
+                  ? 'bg-green-50 border-green-200 hover:border-green-300'
+                  : 'bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  {/* Drag handle */}
+                  <svg
+                    className="text-gray-300 group-hover:text-gray-400 shrink-0 transition-colors"
+                    width="10"
+                    height="14"
+                    viewBox="0 0 10 14"
+                    fill="currentColor"
+                  >
+                    <circle cx="3" cy="2" r="1.5" />
+                    <circle cx="3" cy="7" r="1.5" />
+                    <circle cx="3" cy="12" r="1.5" />
+                    <circle cx="7" cy="2" r="1.5" />
+                    <circle cx="7" cy="7" r="1.5" />
+                    <circle cx="7" cy="12" r="1.5" />
+                  </svg>
+                  <span className="text-sm font-medium text-gray-800 truncate">{guest.guest_name}</span>
+                </div>
+
+                <div className="flex items-center gap-1 shrink-0">
+                  {guest.party_size > 1 && (
+                    <span className="text-xs bg-blue-50 text-blue-600 border border-blue-200 rounded-full px-1.5 py-0.5 font-medium">
+                      {guest.party_size}
+                    </span>
+                  )}
+                  {isSplit && (
+                    <span title="Party is split across tables" className="text-yellow-500 text-sm">⚠</span>
+                  )}
+                </div>
+              </div>
+
+              {guest.plus_one_name && (
+                <div className="text-xs text-gray-500 pl-4 truncate">+1 {guest.plus_one_name}</div>
+              )}
+
+              {isAssigned && guest.assigned_seat && (
+                <div className="text-xs text-green-600 pl-4 truncate">
+                  {guest.assigned_seat.table_name}, Seat {guest.assigned_seat.seat_index + 1}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
