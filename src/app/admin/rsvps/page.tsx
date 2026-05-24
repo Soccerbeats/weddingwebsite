@@ -440,7 +440,7 @@ export default function RSVPDashboard() {
             {activeTab === 'guestlist' && (
                 <>
                     {/* Guest List Stats */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                         <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-200">
                             <p className="text-sm font-medium text-gray-500">Total Invited</p>
                             <p className="text-3xl font-bold text-gray-900">{totalInvited}</p>
@@ -448,6 +448,10 @@ export default function RSVPDashboard() {
                         <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-200">
                             <p className="text-sm font-medium text-gray-500">Expected Guests</p>
                             <p className="text-3xl font-bold text-gray-900">{totalGuestListSize}</p>
+                        </div>
+                        <div className="bg-white p-6 rounded-2xl shadow-lg border border-green-200">
+                            <p className="text-sm font-medium text-gray-500">Total Attending</p>
+                            <p className="text-3xl font-bold text-green-600">{totalGuests}</p>
                         </div>
                     </div>
 
