@@ -16,6 +16,7 @@ export default function Navigation({ brideName = 'Sarah', groomName = 'James', l
     const [isOpen, setIsOpen] = useState(false);
     const [basicMode, setBasicMode] = useState(false);
     const [registryEnabled, setRegistryEnabled] = useState(false);
+    const [hiddenPaths, setHiddenPaths] = useState<Set<string>>(new Set());
 
     useEffect(() => {
         fetch('/api/admin/site-config')
@@ -25,7 +26,22 @@ export default function Navigation({ brideName = 'Sarah', groomName = 'James', l
                 setRegistryEnabled(data.registry?.enabled || false);
             })
             .catch(err => console.error('Error fetching config:', err));
-    }, []);
+
+        // Hide pages marked as hidden from nav (non-admins only)
+        if (!isAdmin) {
+            fetch('/api/wip-status')
+                .then(res => res.json())
+                .then((data: Record<string, { is_hidden: boolean }>) => {
+                    const hidden = new Set(
+                        Object.entries(data)
+                            .filter(([, v]) => v.is_hidden)
+                            .map(([k]) => k)
+                    );
+                    setHiddenPaths(hidden);
+                })
+                .catch(() => {});
+        }
+    }, [isAdmin]);
 
     const allLinks = [
         { href: '/', label: 'Home' },
@@ -43,7 +59,8 @@ export default function Navigation({ brideName = 'Sarah', groomName = 'James', l
     const links = (basicMode && !isAdmin
         ? allLinks.filter(link => basicModePages.includes(link.href))
         : allLinks
-    ).filter(link => link.href !== '/registry' || registryEnabled || isAdmin);
+    ).filter(link => link.href !== '/registry' || registryEnabled || isAdmin)
+     .filter(link => isAdmin || !hiddenPaths.has(link.href));
 
     return (
         <nav className="fixed top-0 w-full z-50 transition-all duration-300 bg-white/90 backdrop-blur-md shadow-sm">

@@ -281,7 +281,7 @@ export default function RegistryPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-12">
                         {items.map(item => {
                             const pct = Math.min(100, Math.round((item.funded / item.price) * 100));
-                            const fullyFunded = showFinancials && pct >= 100;
+                            const fullyFunded = pct >= 100; // always check, regardless of showFinancials
                             return (
                                 <div
                                     key={item.id}

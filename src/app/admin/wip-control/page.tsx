@@ -7,6 +7,7 @@ interface WipToggle {
   page_path: string;
   page_label: string;
   is_wip: boolean;
+  is_hidden: boolean;
   updated_at: string;
 }
 
@@ -56,13 +57,14 @@ export default function WipControlPage() {
       const allToggles: WipToggle[] = publicPages.map((page): WipToggle => {
         const existing = toggleMap.get(page.path);
         if (existing !== undefined) {
-          return existing as WipToggle;
+          return { ...(existing as WipToggle), is_hidden: (existing as any).is_hidden ?? false };
         }
         return {
           id: 0,
           page_path: page.path,
           page_label: page.label,
           is_wip: false,
+          is_hidden: false,
           updated_at: new Date().toISOString(),
         } as WipToggle;
       });
@@ -80,18 +82,13 @@ export default function WipControlPage() {
     try {
       const configResponse = await fetch('/api/admin/site-config');
       const config = await configResponse.json();
-
       config.basicMode = !basicMode;
-
       const response = await fetch('/api/admin/site-config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config),
       });
-
-      if (response.ok) {
-        setBasicMode(!basicMode);
-      }
+      if (response.ok) setBasicMode(!basicMode);
     } catch (error) {
       console.error('Error updating basic mode:', error);
     } finally {
@@ -104,18 +101,13 @@ export default function WipControlPage() {
     try {
       const configResponse = await fetch('/api/admin/site-config');
       const config = await configResponse.json();
-
       config.basicModeShowVenue = !basicModeShowVenue;
-
       const response = await fetch('/api/admin/site-config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config),
       });
-
-      if (response.ok) {
-        setBasicModeShowVenue(!basicModeShowVenue);
-      }
+      if (response.ok) setBasicModeShowVenue(!basicModeShowVenue);
     } catch (error) {
       console.error('Error updating basic mode venue:', error);
     } finally {
@@ -123,19 +115,25 @@ export default function WipControlPage() {
     }
   };
 
-  const handleToggle = async (page_path: string, current_status: boolean) => {
-    setSaving(page_path);
+  const handleToggle = async (page_path: string, field: 'is_wip' | 'is_hidden') => {
+    setSaving(`${page_path}-${field}`);
     try {
       const toggle = toggles.find(t => t.page_path === page_path);
       if (!toggle) return;
+
+      const updated = {
+        ...toggle,
+        [field]: !toggle[field],
+      };
 
       const response = await fetch('/api/admin/wip-toggles', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          page_path: toggle.page_path,
-          page_label: toggle.page_label,
-          is_wip: !current_status,
+          page_path: updated.page_path,
+          page_label: updated.page_label,
+          is_wip: updated.is_wip,
+          is_hidden: updated.is_hidden,
         }),
       });
 
@@ -161,8 +159,8 @@ export default function WipControlPage() {
     <div className="p-8 max-w-4xl">
       <h1 className="text-3xl font-bold mb-2">Work in Progress Control</h1>
       <p className="text-gray-600 mb-8">
-        Control which pages show a work-in-progress message to non-admin users.
-        Admin users will always have full access.
+        Control which pages are live, showing a WIP message, or hidden from navigation entirely.
+        Admin users always have full access.
       </p>
 
       {/* Basic Mode Section */}
@@ -172,9 +170,7 @@ export default function WipControlPage() {
             <div className="flex items-center gap-3 mb-2">
               <h2 className="text-2xl font-bold text-gray-900">Basic Mode</h2>
               <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                basicMode
-                  ? 'bg-accent text-white'
-                  : 'bg-gray-200 text-gray-600'
+                basicMode ? 'bg-accent text-white' : 'bg-gray-200 text-gray-600'
               }`}>
                 {basicMode ? 'ACTIVE' : 'INACTIVE'}
               </span>
@@ -195,7 +191,6 @@ export default function WipControlPage() {
               </p>
             </div>
 
-            {/* Venue Details Sub-Toggle - Only visible when Basic Mode is enabled */}
             {basicMode && (
               <div className="mt-4 bg-white/80 rounded-xl p-4 border-2 border-accent/30">
                 <div className="flex items-center justify-between">
@@ -203,9 +198,7 @@ export default function WipControlPage() {
                     <div className="flex items-center gap-2 mb-1">
                       <h3 className="text-sm font-bold text-gray-900">Share Venue Details</h3>
                       <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                        basicModeShowVenue
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-gray-100 text-gray-600'
+                        basicModeShowVenue ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
                       }`}>
                         {basicModeShowVenue ? 'ON' : 'OFF'}
                       </span>
@@ -214,7 +207,6 @@ export default function WipControlPage() {
                       Show venue location on home page and venue section on about page
                     </p>
                   </div>
-
                   <button
                     onClick={handleBasicModeVenueToggle}
                     disabled={savingBasicModeVenue}
@@ -222,11 +214,9 @@ export default function WipControlPage() {
                       basicModeShowVenue ? 'bg-green-500' : 'bg-gray-300'
                     } ${savingBasicModeVenue ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-md'}`}
                   >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 ${
-                        basicModeShowVenue ? 'translate-x-7' : 'translate-x-1'
-                      }`}
-                    />
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 ${
+                      basicModeShowVenue ? 'translate-x-7' : 'translate-x-1'
+                    }`} />
                   </button>
                 </div>
               </div>
@@ -241,11 +231,9 @@ export default function WipControlPage() {
                 basicMode ? 'bg-accent' : 'bg-gray-300'
               } ${savingBasicMode ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-xl'}`}
             >
-              <span
-                className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform duration-300 shadow-md ${
-                  basicMode ? 'translate-x-9' : 'translate-x-1'
-                }`}
-              />
+              <span className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform duration-300 shadow-md ${
+                basicMode ? 'translate-x-9' : 'translate-x-1'
+              }`} />
             </button>
           </div>
         </div>
@@ -255,47 +243,90 @@ export default function WipControlPage() {
       <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100">
         <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b border-gray-200">
           <h2 className="text-xl font-bold text-gray-900">Individual Page Controls</h2>
-          <p className="text-sm text-gray-600 mt-1">Fine-tune each page's availability</p>
+          <p className="text-sm text-gray-600 mt-1">
+            <strong>WIP:</strong> visitors see a "coming soon" message &nbsp;|&nbsp;
+            <strong>Hidden:</strong> page is removed from navigation entirely
+          </p>
+        </div>
+
+        {/* Column headers */}
+        <div className="hidden sm:flex items-center px-6 py-2 bg-gray-50 border-b border-gray-100 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+          <div className="flex-1">Page</div>
+          <div className="flex items-center gap-8 mr-2">
+            <span className="w-24 text-center">WIP Mode</span>
+            <span className="w-24 text-center">Hidden from Nav</span>
+          </div>
         </div>
 
         <div className="divide-y divide-gray-100">
-          {toggles.map((toggle) => (
-            <div
-              key={toggle.page_path}
-              className="p-6 flex items-center justify-between hover:bg-gray-50 transition-colors"
-            >
-              <div className="flex-1">
-                <h3 className="font-semibold text-lg text-gray-900">{toggle.page_label}</h3>
-                <p className="text-gray-500 text-sm font-mono">{toggle.page_path}</p>
-              </div>
+          {toggles.map((toggle) => {
+            const savingWip = saving === `${toggle.page_path}-is_wip`;
+            const savingHidden = saving === `${toggle.page_path}-is_hidden`;
 
-              <div className="flex items-center gap-4">
-                <span
-                  className={`px-3 py-1 rounded-full text-sm font-medium ${
-                    toggle.is_wip
-                      ? 'bg-yellow-100 text-yellow-800'
-                      : 'bg-green-100 text-green-800'
-                  }`}
-                >
-                  {toggle.is_wip ? '🚧 WIP' : '✓ Live'}
-                </span>
+            // Status badge
+            let statusLabel = '✓ Live';
+            let statusClass = 'bg-green-100 text-green-800';
+            if (toggle.is_hidden) {
+              statusLabel = '🙈 Hidden';
+              statusClass = 'bg-gray-100 text-gray-600';
+            } else if (toggle.is_wip) {
+              statusLabel = '🚧 WIP';
+              statusClass = 'bg-yellow-100 text-yellow-800';
+            }
 
-                <button
-                  onClick={() => handleToggle(toggle.page_path, toggle.is_wip)}
-                  disabled={saving === toggle.page_path}
-                  className={`relative inline-flex h-7 w-14 items-center rounded-full transition-all duration-300 ${
-                    toggle.is_wip ? 'bg-yellow-500' : 'bg-green-500'
-                  } ${saving === toggle.page_path ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-md'}`}
-                >
-                  <span
-                    className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform duration-300 shadow-sm ${
-                      toggle.is_wip ? 'translate-x-8' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
+            return (
+              <div
+                key={toggle.page_path}
+                className="p-5 flex flex-col sm:flex-row sm:items-center gap-4 hover:bg-gray-50 transition-colors"
+              >
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-semibold text-lg text-gray-900">{toggle.page_label}</h3>
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusClass}`}>
+                      {statusLabel}
+                    </span>
+                  </div>
+                  <p className="text-gray-400 text-sm font-mono">{toggle.page_path}</p>
+                </div>
+
+                <div className="flex items-center gap-8">
+                  {/* WIP toggle */}
+                  <div className="flex flex-col items-center gap-1 w-24">
+                    <span className="text-xs text-gray-500 font-medium">WIP</span>
+                    <button
+                      onClick={() => handleToggle(toggle.page_path, 'is_wip')}
+                      disabled={savingWip}
+                      title="Show work-in-progress message to visitors"
+                      className={`relative inline-flex h-7 w-14 items-center rounded-full transition-all duration-300 ${
+                        toggle.is_wip ? 'bg-yellow-500' : 'bg-gray-300'
+                      } ${savingWip ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-md'}`}
+                    >
+                      <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform duration-300 shadow-sm ${
+                        toggle.is_wip ? 'translate-x-8' : 'translate-x-1'
+                      }`} />
+                    </button>
+                  </div>
+
+                  {/* Hidden toggle */}
+                  <div className="flex flex-col items-center gap-1 w-24">
+                    <span className="text-xs text-gray-500 font-medium">Hidden</span>
+                    <button
+                      onClick={() => handleToggle(toggle.page_path, 'is_hidden')}
+                      disabled={savingHidden}
+                      title="Remove page from navigation entirely"
+                      className={`relative inline-flex h-7 w-14 items-center rounded-full transition-all duration-300 ${
+                        toggle.is_hidden ? 'bg-gray-500' : 'bg-gray-300'
+                      } ${savingHidden ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-md'}`}
+                    >
+                      <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform duration-300 shadow-sm ${
+                        toggle.is_hidden ? 'translate-x-8' : 'translate-x-1'
+                      }`} />
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
@@ -307,15 +338,19 @@ export default function WipControlPage() {
         <ul className="text-sm text-blue-800 space-y-2">
           <li className="flex items-start gap-2">
             <span className="text-blue-600 mt-0.5">•</span>
-            <span>When a page is marked as "Work in Progress", non-admin visitors will be redirected to a WIP page</span>
+            <span><strong>✓ Live</strong> — Page is fully accessible to all visitors</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-blue-600 mt-0.5">•</span>
-            <span>Admin users (those logged into the admin panel) can always access all pages</span>
+            <span><strong>🚧 WIP</strong> — Visitors who navigate to the page see a "coming soon" message instead</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-blue-600 mt-0.5">•</span>
-            <span><strong>Basic Mode</strong> overrides individual toggles and hides pages from navigation entirely</span>
+            <span><strong>🙈 Hidden</strong> — Page disappears from navigation entirely; visitors who somehow navigate there are redirected to home</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-blue-600 mt-0.5">•</span>
+            <span>Admin users always see all pages regardless of these settings</span>
           </li>
         </ul>
       </div>

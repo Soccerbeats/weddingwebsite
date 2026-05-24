@@ -18,15 +18,20 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const { page_path, page_label, is_wip } = await request.json();
+    const { page_path, page_label, is_wip, is_hidden } = await request.json();
+
+    // Ensure is_hidden column exists (idempotent migration)
+    await pool.query(
+      `ALTER TABLE wip_toggles ADD COLUMN IF NOT EXISTS is_hidden BOOLEAN DEFAULT false`
+    );
 
     const result = await pool.query(
-      `INSERT INTO wip_toggles (page_path, page_label, is_wip, updated_at)
-       VALUES ($1, $2, $3, NOW())
+      `INSERT INTO wip_toggles (page_path, page_label, is_wip, is_hidden, updated_at)
+       VALUES ($1, $2, $3, $4, NOW())
        ON CONFLICT (page_path)
-       DO UPDATE SET is_wip = $3, updated_at = NOW()
+       DO UPDATE SET is_wip = $3, is_hidden = $4, updated_at = NOW()
        RETURNING *`,
-      [page_path, page_label, is_wip]
+      [page_path, page_label, is_wip, is_hidden ?? false]
     );
 
     return NextResponse.json(result.rows[0]);

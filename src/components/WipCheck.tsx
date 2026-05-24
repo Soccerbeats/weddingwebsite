@@ -10,23 +10,23 @@ export default function WipCheck() {
   useEffect(() => {
     const checkWipStatus = async () => {
       try {
-        // Check if user is logged in as admin
         const authResponse = await fetch('/api/auth/check');
         if (authResponse.ok) {
           const { isAdmin } = await authResponse.json();
-
-          // If user is admin, don't check WIP status
-          if (isAdmin) {
-            return;
-          }
+          if (isAdmin) return; // admins always have access
         }
 
-        // Check WIP status for non-admin users
         const wipResponse = await fetch('/api/wip-status');
         if (wipResponse.ok) {
           const wipPages = await wipResponse.json();
+          const entry = wipPages[pathname];
+          if (!entry) return;
 
-          if (wipPages[pathname] === true) {
+          if (entry.is_hidden) {
+            // Hidden pages: redirect to home, not WIP page
+            router.push('/');
+          } else if (entry.is_wip) {
+            // WIP pages: show the work-in-progress message
             router.push('/work-in-progress');
           }
         }
