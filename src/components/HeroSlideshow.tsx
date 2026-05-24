@@ -10,16 +10,14 @@ interface HeroSlideshowProps {
 
 export default function HeroSlideshow({ images, interval = 5000, fallbackImage }: HeroSlideshowProps) {
     const [current, setCurrent] = useState(0);
-    const [loaded, setLoaded] = useState<boolean[]>([]);
     const [allReady, setAllReady] = useState(false);
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const srcs = images.length > 0 ? images : (fallbackImage ? [fallbackImage] : []);
 
-    // Preload all images up front via Image() objects
+    // Preload all images up front
     useEffect(() => {
         if (srcs.length === 0) return;
-        setLoaded(new Array(srcs.length).fill(false));
         setAllReady(false);
         setCurrent(0);
 
@@ -32,11 +30,10 @@ export default function HeroSlideshow({ images, interval = 5000, fallbackImage }
             const done = () => {
                 if (cancelled) return;
                 status[i] = true;
-                setLoaded([...status]);
                 if (status.every(Boolean)) setAllReady(true);
             };
             img.onload = done;
-            img.onerror = done; // still advance even if one fails
+            img.onerror = done;
         });
 
         return () => { cancelled = true; };
@@ -50,6 +47,17 @@ export default function HeroSlideshow({ images, interval = 5000, fallbackImage }
         }, interval);
         return () => { if (timerRef.current) clearInterval(timerRef.current); };
     }, [allReady, srcs.length, interval]);
+
+    const goTo = (i: number) => {
+        setCurrent(i);
+        // Reset the timer so the interval restarts from the clicked slide
+        if (timerRef.current) clearInterval(timerRef.current);
+        if (srcs.length > 1) {
+            timerRef.current = setInterval(() => {
+                setCurrent(c => (c + 1) % srcs.length);
+            }, interval);
+        }
+    };
 
     if (srcs.length === 0) {
         return (
@@ -70,6 +78,25 @@ export default function HeroSlideshow({ images, interval = 5000, fallbackImage }
                     style={{ opacity: i === current ? 1 : 0 }}
                 />
             ))}
+
+            {/* Slide indicator dots */}
+            {srcs.length > 1 && (
+                <div className="absolute bottom-8 left-0 right-0 flex justify-center gap-2 z-20">
+                    {srcs.map((_, i) => (
+                        <button
+                            key={i}
+                            onClick={() => goTo(i)}
+                            aria-label={`Go to slide ${i + 1}`}
+                            className="transition-all duration-300 rounded-full focus:outline-none"
+                            style={{
+                                width: i === current ? '24px' : '10px',
+                                height: '10px',
+                                backgroundColor: i === current ? 'white' : 'rgba(255,255,255,0.5)',
+                            }}
+                        />
+                    ))}
+                </div>
+            )}
         </>
     );
 }
