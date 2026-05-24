@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { getSiteConfig } from '@/lib/config';
 import CountdownClock from '@/components/CountdownClock';
 import HeroSlideshow from '@/components/HeroSlideshow';
+import HeroWrapper from '@/components/HeroWrapper';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,7 +18,7 @@ export default function Home() {
   return (
     <div style={{ backgroundColor: bgColor }}>
       {/* Hero Section */}
-      <div className="relative" style={{ height: '100svh' }}>
+      <HeroWrapper>
         <div className="absolute inset-0 bg-gray-900 overflow-hidden">
           <HeroSlideshow
             images={slideshowEnabled ? slideshowImages : (config.homeHero ? [config.homeHero] : [])}
@@ -58,7 +59,7 @@ export default function Home() {
           </div>
           )}
         </div>
-      </div>
+      </HeroWrapper>
 
       {/* Intro Section */}
       <div className="py-24 bg-white">
