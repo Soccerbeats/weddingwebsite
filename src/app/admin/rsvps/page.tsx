@@ -25,6 +25,7 @@ interface Guest {
     invited: boolean;
     rsvp_status?: string;
     plus_one_name?: string;
+    address?: string;
     created_at: string;
 }
 
@@ -613,6 +614,7 @@ export default function RSVPDashboard() {
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Party Size</th>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">RSVP Status</th>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Notes</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Address</th>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Invited</th>
                                         <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
                                     </tr>
@@ -654,6 +656,9 @@ export default function RSVPDashboard() {
                                             </td>
                                             <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">
                                                 {guest.notes || '-'}
+                                            </td>
+                                            <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">
+                                                {guest.address || '-'}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
@@ -875,11 +880,11 @@ export default function RSVPDashboard() {
                                     </p>
                                     <div className="bg-gray-50 p-4 rounded-md">
                                         <code className="text-sm text-gray-800">
-                                            name,email,phone,party_size,side,notes,plus_one_name
+                                            name,email,phone,party_size,side,notes,plus_one_name,address
                                         </code>
                                     </div>
                                     <p className="text-xs text-gray-500 mt-2">
-                                        Example: John Doe,john@email.com,555-1234,2,bride,Vegan meal,Jane Doe
+                                        Example: John Doe,john@email.com,555-1234,2,bride,Vegan meal,Jane Doe,"123 Main St, Milwaukee, WI 53201"
                                     </p>
                                 </div>
 
