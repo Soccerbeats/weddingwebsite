@@ -18,14 +18,38 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const { guest_name, email, phone, party_size, notes, invited, plus_one_name } = await request.json();
+    const { guest_name, email, phone, party_size, notes, invited, plus_one_name, upsert } = await request.json();
 
-    const result = await pool.query(
-      `INSERT INTO guest_list (guest_name, email, phone, party_size, notes, invited, plus_one_name, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-       RETURNING *`,
-      [guest_name, email, phone, party_size, notes, invited ?? true, plus_one_name]
+    // Ensure unique index exists for upsert support (no-op if already present)
+    await pool.query(
+      `CREATE UNIQUE INDEX IF NOT EXISTS guest_list_name_unique ON guest_list (LOWER(guest_name))`
     );
+
+    let result;
+    if (upsert) {
+      // Upsert: update existing row if guest_name matches (case-insensitive)
+      result = await pool.query(
+        `INSERT INTO guest_list (guest_name, email, phone, party_size, notes, invited, plus_one_name, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+         ON CONFLICT (LOWER(guest_name)) DO UPDATE SET
+           email = CASE WHEN EXCLUDED.email <> '' THEN EXCLUDED.email ELSE guest_list.email END,
+           phone = CASE WHEN EXCLUDED.phone <> '' THEN EXCLUDED.phone ELSE guest_list.phone END,
+           party_size = EXCLUDED.party_size,
+           notes = CASE WHEN EXCLUDED.notes <> '' THEN EXCLUDED.notes ELSE guest_list.notes END,
+           invited = EXCLUDED.invited,
+           plus_one_name = CASE WHEN EXCLUDED.plus_one_name <> '' THEN EXCLUDED.plus_one_name ELSE guest_list.plus_one_name END,
+           updated_at = NOW()
+         RETURNING *, (xmax = 0) AS inserted`,
+        [guest_name, email, phone, party_size, notes, invited ?? true, plus_one_name]
+      );
+    } else {
+      result = await pool.query(
+        `INSERT INTO guest_list (guest_name, email, phone, party_size, notes, invited, plus_one_name, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+         RETURNING *`,
+        [guest_name, email, phone, party_size, notes, invited ?? true, plus_one_name]
+      );
+    }
 
     return NextResponse.json(result.rows[0]);
   } catch (error) {

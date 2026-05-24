@@ -29,9 +29,12 @@ interface Guest {
 }
 
 type Tab = 'rsvps' | 'guestlist';
+type GuestFilter = 'all' | 'no_response' | 'attending' | 'declined' | 'not_invited' | 'bride' | 'groom';
 
 export default function RSVPDashboard() {
     const [activeTab, setActiveTab] = useState<Tab>('rsvps');
+    const [guestFilter, setGuestFilter] = useState<GuestFilter>('all');
+    const [guestSearch, setGuestSearch] = useState('');
     const [rsvps, setRsvps] = useState<RSVP[]>([]);
     const [guests, setGuests] = useState<Guest[]>([]);
     const [loading, setLoading] = useState(true);
@@ -44,7 +47,7 @@ export default function RSVPDashboard() {
     const [showImportModal, setShowImportModal] = useState(false);
     const [csvFile, setCsvFile] = useState<File | null>(null);
     const [importing, setImporting] = useState(false);
-    const [importResults, setImportResults] = useState<{ success: number; failed: number; errors: string[] } | null>(null);
+    const [importResults, setImportResults] = useState<{ added: number; updated: number; failed: number; errors: string[] } | null>(null);
     const [guestForm, setGuestForm] = useState({
         guest_name: '',
         email: '',
@@ -258,7 +261,7 @@ export default function RSVPDashboard() {
 
             // Parse CSV
             const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-            const results = { success: 0, failed: 0, errors: [] as string[] };
+            const results = { added: 0, updated: 0, failed: 0, errors: [] as string[] };
 
             for (let i = 1; i < lines.length; i++) {
                 const values = lines[i].split(',').map(v => v.trim());
@@ -280,6 +283,7 @@ export default function RSVPDashboard() {
                     notes: guestData.notes || '',
                     invited: guestData.invited === 'true' || guestData.invited === '1',
                     plus_one_name: guestData.plus_one_name || '',
+                    upsert: true,
                 };
 
                 if (!guest.guest_name) {
@@ -296,10 +300,15 @@ export default function RSVPDashboard() {
                     });
 
                     if (response.ok) {
-                        results.success++;
+                        const data = await response.json();
+                        if (data.inserted === false) {
+                            results.updated++;
+                        } else {
+                            results.added++;
+                        }
                     } else {
                         results.failed++;
-                        results.errors.push(`Row ${i + 1}: ${guest.guest_name} - Failed to add`);
+                        results.errors.push(`Row ${i + 1}: ${guest.guest_name} - Failed to import`);
                     }
                 } catch (error) {
                     results.failed++;
@@ -319,10 +328,24 @@ export default function RSVPDashboard() {
     if (loading) return <div className="p-8">Loading...</div>;
 
     const totalGuests = rsvps.reduce((acc, curr) => acc + (curr.attending ? curr.number_of_guests : 0), 0);
-    const totalAttending = rsvps.filter(r => r.attending).length;
-    const totalDeclined = rsvps.filter(r => !r.attending).length;
+    const totalDeclinedGuests = rsvps.filter(r => !r.attending).reduce((acc, curr) => acc + (curr.number_of_guests || 1), 0);
     const totalInvited = guests.filter(g => g.invited).length;
     const totalGuestListSize = guests.reduce((acc, curr) => acc + curr.party_size, 0);
+    const missingRsvps = guests.filter(g => g.invited && !g.rsvp_status).length;
+
+    const filteredGuests = guests.filter(g => {
+        const matchesSearch = !guestSearch || g.guest_name.toLowerCase().includes(guestSearch.toLowerCase()) || (g.plus_one_name || '').toLowerCase().includes(guestSearch.toLowerCase());
+        if (!matchesSearch) return false;
+        switch (guestFilter) {
+            case 'no_response': return g.invited && !g.rsvp_status;
+            case 'attending': return g.rsvp_status === 'attending';
+            case 'declined': return g.rsvp_status === 'declined';
+            case 'not_invited': return !g.invited;
+            case 'bride': return g.side === 'bride';
+            case 'groom': return g.side === 'groom';
+            default: return true;
+        }
+    });
 
     return (
         <div>
@@ -361,18 +384,22 @@ export default function RSVPDashboard() {
             {activeTab === 'rsvps' && (
                 <>
                     {/* Stats Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                         <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-200">
-                            <p className="text-sm font-medium text-gray-500">Total Guests</p>
-                            <p className="text-3xl font-bold text-gray-900">{totalGuests}</p>
+                            <p className="text-sm font-medium text-gray-500">Total RSVPs</p>
+                            <p className="text-3xl font-bold text-gray-900">{rsvps.length}</p>
                         </div>
-                        <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-200">
-                            <p className="text-sm font-medium text-green-600">Parties Attending</p>
-                            <p className="text-3xl font-bold text-gray-900">{totalAttending}</p>
+                        <div className="bg-white p-6 rounded-2xl shadow-lg border border-green-200">
+                            <p className="text-sm font-medium text-green-600">Total Attending</p>
+                            <p className="text-3xl font-bold text-green-700">{totalGuests}</p>
                         </div>
-                        <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-200">
+                        <div className="bg-white p-6 rounded-2xl shadow-lg border border-red-200">
                             <p className="text-sm font-medium text-red-600">Declined</p>
-                            <p className="text-3xl font-bold text-gray-900">{totalDeclined}</p>
+                            <p className="text-3xl font-bold text-red-700">{totalDeclinedGuests}</p>
+                        </div>
+                        <div className="bg-white p-6 rounded-2xl shadow-lg border border-yellow-200">
+                            <p className="text-sm font-medium text-yellow-600">Missing RSVPs</p>
+                            <p className="text-3xl font-bold text-yellow-700">{missingRsvps}</p>
                         </div>
                     </div>
 
@@ -509,6 +536,43 @@ export default function RSVPDashboard() {
                         </div>
                     </div>
 
+                    {/* Filters & Search */}
+                    <div className="mb-4 flex flex-col sm:flex-row gap-3">
+                        <input
+                            type="text"
+                            placeholder="Search guests..."
+                            value={guestSearch}
+                            onChange={e => setGuestSearch(e.target.value)}
+                            className="px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 w-full sm:w-56"
+                        />
+                        <div className="flex flex-wrap gap-2">
+                            {([
+                                { key: 'all', label: 'All', color: 'gray' },
+                                { key: 'no_response', label: '⏳ No Response', color: 'yellow' },
+                                { key: 'attending', label: '✓ Attending', color: 'green' },
+                                { key: 'declined', label: '✗ Declined', color: 'red' },
+                                { key: 'not_invited', label: 'Not Invited', color: 'gray' },
+                                { key: 'bride', label: `${config?.brideName || 'Bride'}'s Side`, color: 'pink' },
+                                { key: 'groom', label: `${config?.groomName || 'Groom'}'s Side`, color: 'blue' },
+                            ] as { key: GuestFilter; label: string; color: string }[]).map(f => (
+                                <button
+                                    key={f.key}
+                                    onClick={() => setGuestFilter(f.key)}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                                        guestFilter === f.key
+                                            ? 'bg-accent text-white shadow-md'
+                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                    }`}
+                                >
+                                    {f.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <p className="text-sm text-gray-500 mb-3">
+                        Showing {filteredGuests.length} of {guests.length} guests
+                    </p>
+
                     {/* Guest List Table */}
                     <div className="bg-white shadow-lg border border-gray-200 rounded-2xl overflow-hidden">
                         <div className="overflow-x-auto">
@@ -518,7 +582,7 @@ export default function RSVPDashboard() {
                                         <th className="px-6 py-3 text-left">
                                             <input
                                                 type="checkbox"
-                                                checked={selectedGuests.length === guests.length && guests.length > 0}
+                                                checked={filteredGuests.length > 0 && filteredGuests.every(g => selectedGuests.includes(g.id))}
                                                 onChange={toggleSelectAll}
                                                 className="rounded border-gray-300 text-accent focus:ring-accent"
                                             />
@@ -533,7 +597,7 @@ export default function RSVPDashboard() {
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
-                                    {guests.map((guest) => (
+                                    {filteredGuests.map((guest) => (
                                         <tr key={guest.id} className="hover:bg-gray-50">
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <input
@@ -834,10 +898,14 @@ export default function RSVPDashboard() {
                             <>
                                 <div className="mb-6">
                                     <h4 className="text-lg font-semibold text-gray-900 mb-3">Import Results</h4>
-                                    <div className="grid grid-cols-2 gap-4 mb-4">
+                                    <div className="grid grid-cols-3 gap-4 mb-4">
                                         <div className="bg-green-50 p-4 rounded-md">
-                                            <p className="text-sm text-gray-600">Successfully Added</p>
-                                            <p className="text-2xl font-bold text-green-600">{importResults.success}</p>
+                                            <p className="text-sm text-gray-600">Added</p>
+                                            <p className="text-2xl font-bold text-green-600">{importResults.added}</p>
+                                        </div>
+                                        <div className="bg-blue-50 p-4 rounded-md">
+                                            <p className="text-sm text-gray-600">Updated</p>
+                                            <p className="text-2xl font-bold text-blue-600">{importResults.updated}</p>
                                         </div>
                                         <div className="bg-red-50 p-4 rounded-md">
                                             <p className="text-sm text-gray-600">Failed</p>
