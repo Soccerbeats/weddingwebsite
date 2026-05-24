@@ -677,14 +677,13 @@ export default function AdminWeddingPartyPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Relationship * (e.g., {editingParty === 'officiant' ? 'Friend, Pastor, Rabbi' : 'Sister, Best Friend, Brother'})
+                  Relationship (optional — e.g., {editingParty === 'officiant' ? 'Friend, Pastor, Rabbi' : 'Sister, Best Friend, Brother'})
                 </label>
                 <input
                   type="text"
                   value={formData.relationship}
                   onChange={(e) => setFormData({ ...formData, relationship: e.target.value })}
                   className="w-full border border-gray-300 rounded-md px-3 py-2"
-                  required
                 />
               </div>
 
@@ -824,7 +823,7 @@ export default function AdminWeddingPartyPage() {
               </button>
               <button
                 onClick={saveMember}
-                disabled={uploading || !formData.name || (editingParty !== 'officiant' && !formData.role) || !formData.relationship}
+                disabled={uploading || !formData.name || (editingParty !== 'officiant' && !formData.role)}
                 className="px-4 py-2 bg-accent text-white rounded-md hover:bg-accent/90 disabled:opacity-50"
               >
                 {uploading ? 'Saving...' : (editingParty === 'officiant' ? (config.weddingParty?.officiant ? 'Update' : 'Add') : (editingIndex === null ? 'Add' : 'Update')) + ' ' + (editingParty === 'officiant' ? 'Officiant' : 'Member')}
