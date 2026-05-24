@@ -1,24 +1,40 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 
-export default function HeroWrapper({ children }: { children: React.ReactNode }) {
-    const ref = useRef<HTMLDivElement>(null);
+/**
+ * Renders the hero as position:fixed inset-0 — directly anchored to viewport
+ * edges in CSS, no viewport-unit calculations that can differ across browsers.
+ * A spacer div of the same height keeps document flow correct so content
+ * below the hero starts at the right place.
+ */
+export default function HeroWrapper({ children }: { children: ReactNode }) {
+    const spacerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        const setHeight = () => {
-            if (ref.current) {
-                ref.current.style.height = `${window.innerHeight}px`;
+        // Keep spacer height in sync with the actual visible viewport
+        const update = () => {
+            if (spacerRef.current) {
+                spacerRef.current.style.height = `${window.innerHeight}px`;
             }
         };
-        setHeight();
-        window.addEventListener('resize', setHeight);
-        return () => window.removeEventListener('resize', setHeight);
+        update();
+        window.addEventListener('resize', update);
+        return () => window.removeEventListener('resize', update);
     }, []);
 
     return (
-        <div ref={ref} className="relative" style={{ height: '100svh' }}>
-            {children}
-        </div>
+        <>
+            {/* Fixed to viewport edges — guaranteed exact fullscreen on every browser */}
+            <div className="fixed inset-0" style={{ zIndex: 1 }}>
+                {children}
+            </div>
+            {/* Spacer holds space in document flow; pointer-events:none so hero stays clickable */}
+            <div
+                ref={spacerRef}
+                aria-hidden="true"
+                style={{ height: '100svh', pointerEvents: 'none' }}
+            />
+        </>
     );
 }
