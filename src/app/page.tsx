@@ -17,7 +17,7 @@ export default function Home() {
   return (
     <div style={{ backgroundColor: bgColor }}>
       {/* Hero Section */}
-      <div className="relative" style={{ height: '100dvh', minHeight: '100vh' }}>
+      <div className="relative" style={{ height: '100svh' }}>
         <div className="absolute inset-0 bg-gray-900 overflow-hidden">
           <HeroSlideshow
             images={slideshowEnabled ? slideshowImages : (config.homeHero ? [config.homeHero] : [])}
