@@ -260,11 +260,31 @@ export default function RSVPDashboard() {
             }
 
             // Parse CSV
-            const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+            // Parse a CSV line respecting quoted fields (handles commas inside addresses etc.)
+            const parseCSVLine = (line: string): string[] => {
+                const result: string[] = [];
+                let current = '';
+                let inQuotes = false;
+                for (let ci = 0; ci < line.length; ci++) {
+                    const ch = line[ci];
+                    if (ch === '"') {
+                        inQuotes = !inQuotes;
+                    } else if (ch === ',' && !inQuotes) {
+                        result.push(current.trim());
+                        current = '';
+                    } else {
+                        current += ch;
+                    }
+                }
+                result.push(current.trim());
+                return result;
+            };
+
+            const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase());
             const results = { added: 0, updated: 0, failed: 0, errors: [] as string[] };
 
             for (let i = 1; i < lines.length; i++) {
-                const values = lines[i].split(',').map(v => v.trim());
+                const values = parseCSVLine(lines[i]);
 
                 if (values.length === 0 || !values[0]) continue;
 
@@ -283,6 +303,7 @@ export default function RSVPDashboard() {
                     notes: guestData.notes || '',
                     invited: guestData.invited === 'true' || guestData.invited === '1',
                     plus_one_name: guestData.plus_one_name || '',
+                    address: guestData.address || '',
                     upsert: true,
                 };
 
