@@ -3,20 +3,24 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 
 /**
- * Renders the hero as position:fixed inset-0 — directly anchored to viewport
- * edges in CSS, no viewport-unit calculations that can differ across browsers.
- * A spacer div of the same height keeps document flow correct so content
- * below the hero starts at the right place.
+ * Sets hero height to the exact viewport size by measuring an invisible
+ * position:fixed element — the only CSS that's guaranteed to be exactly
+ * viewport-sized on every browser. The hero itself stays in normal flow
+ * so it scrolls away like a regular section.
  */
 export default function HeroWrapper({ children }: { children: ReactNode }) {
-    const spacerRef = useRef<HTMLDivElement>(null);
+    const heroRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        // Keep spacer height in sync with the actual visible viewport
         const update = () => {
-            if (spacerRef.current) {
-                spacerRef.current.style.height = `${window.innerHeight}px`;
-            }
+            if (!heroRef.current) return;
+            // Create a temporary fixed inset-0 element to read the true viewport height
+            const probe = document.createElement('div');
+            probe.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;visibility:hidden;pointer-events:none;z-index:-9999';
+            document.body.appendChild(probe);
+            const h = probe.offsetHeight;
+            document.body.removeChild(probe);
+            heroRef.current.style.height = `${h}px`;
         };
         update();
         window.addEventListener('resize', update);
@@ -24,17 +28,8 @@ export default function HeroWrapper({ children }: { children: ReactNode }) {
     }, []);
 
     return (
-        <>
-            {/* Fixed to viewport edges — guaranteed exact fullscreen on every browser */}
-            <div className="fixed inset-0" style={{ zIndex: 1 }}>
-                {children}
-            </div>
-            {/* Spacer holds space in document flow; pointer-events:none so hero stays clickable */}
-            <div
-                ref={spacerRef}
-                aria-hidden="true"
-                style={{ height: '100svh', pointerEvents: 'none' }}
-            />
-        </>
+        <div ref={heroRef} className="relative" style={{ height: '100svh' }}>
+            {children}
+        </div>
     );
 }

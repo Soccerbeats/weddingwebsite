@@ -61,8 +61,8 @@ export default function Home() {
         </div>
       </HeroWrapper>
 
-      {/* Intro Section — position:relative + z-index:2 so it scrolls over the fixed hero */}
-      <div className="py-24 bg-white relative" style={{ zIndex: 2 }}>
+      {/* Intro Section */}
+      <div className="py-24 bg-white">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl font-serif text-gray-900 mb-6">
             {config.homeIntroTitle || "Join us for the celebration"}
