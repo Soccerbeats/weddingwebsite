@@ -81,17 +81,29 @@ export default function HeroSlideshow({ images, interval = 5000, fallbackImage }
         );
     }
 
+    // Next slide sits fully visible underneath the current one.
+    // When current fades out it reveals next already behind it — no simultaneous
+    // fade-in needed, which eliminates the black flash on iPhone.
+    const next = srcs.length > 1 ? (current + 1) % srcs.length : -1;
+
     return (
         <>
-            {srcs.map((src, i) => (
-                <img
-                    key={src}
-                    src={photoUrl(src)}
-                    alt="Hero"
-                    className="absolute inset-0 h-full w-full object-cover transition-opacity duration-1000"
-                    style={{ opacity: i === current ? 1 : 0 }}
-                />
-            ))}
+            {srcs.map((src, i) => {
+                const isCurrent = i === current;
+                const isNext = i === next;
+                return (
+                    <img
+                        key={src}
+                        src={photoUrl(src)}
+                        alt="Hero"
+                        className="absolute inset-0 h-full w-full object-cover transition-opacity duration-1000"
+                        style={{
+                            opacity: isCurrent || isNext ? 1 : 0,
+                            zIndex: isCurrent ? 1 : 0,
+                        }}
+                    />
+                );
+            })}
 
             {/* Slide indicator dots */}
             {srcs.length > 1 && (

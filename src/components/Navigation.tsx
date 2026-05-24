@@ -77,10 +77,26 @@ export default function Navigation({ brideName = 'Sarah', groomName = 'James', l
                                 {link.label}
                             </Link>
                         ))}
+                        {isAdmin && (
+                            <Link
+                                href="/admin"
+                                className="ml-2 px-4 py-1.5 rounded-full bg-accent text-white text-xs font-bold uppercase tracking-widest hover:bg-accent-dark transition-colors shadow"
+                            >
+                                Admin
+                            </Link>
+                        )}
                     </div>
 
                     {/* Mobile menu button */}
-                    <div className="flex items-center md:hidden">
+                    <div className="flex items-center gap-3 md:hidden">
+                        {isAdmin && (
+                            <Link
+                                href="/admin"
+                                className="px-3 py-1 rounded-full bg-accent text-white text-xs font-bold uppercase tracking-widest hover:bg-accent-dark transition-colors shadow"
+                            >
+                                Admin
+                            </Link>
+                        )}
                         <button
                             onClick={() => setIsOpen(!isOpen)}
                             type="button"
