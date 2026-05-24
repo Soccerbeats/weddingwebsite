@@ -28,7 +28,7 @@ export default function HeroSlideshow({ images, interval = 5000, fallbackImage }
 
         srcs.forEach((src, i) => {
             const img = new window.Image();
-            img.src = `/photos/${src}`;
+            img.src = `/api/photos/${src}`;
             const done = () => {
                 if (cancelled) return;
                 status[i] = true;
@@ -64,7 +64,7 @@ export default function HeroSlideshow({ images, interval = 5000, fallbackImage }
             {srcs.map((src, i) => (
                 <img
                     key={src}
-                    src={`/photos/${src}`}
+                    src={`/api/photos/${src}`}
                     alt="Hero"
                     className="absolute inset-0 h-full w-full object-cover transition-opacity duration-1000"
                     style={{ opacity: i === current ? 1 : 0 }}
