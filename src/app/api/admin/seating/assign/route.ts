@@ -46,7 +46,13 @@ export async function DELETE(request: Request) {
   try {
     const body = await request.json();
 
-    if (body.party_group_id !== undefined && body.seating_table_id !== undefined) {
+    if (body.delete_all && body.seating_table_id !== undefined) {
+      // Delete all seats at this table (used by reorder: clear then re-insert)
+      await client.query(
+        'DELETE FROM seat_assignments WHERE seating_table_id = $1',
+        [body.seating_table_id]
+      );
+    } else if (body.party_group_id !== undefined && body.seating_table_id !== undefined) {
       await client.query(
         'DELETE FROM seat_assignments WHERE seating_table_id = $1 AND party_group_id = $2',
         [body.seating_table_id, body.party_group_id]

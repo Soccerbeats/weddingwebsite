@@ -17,7 +17,7 @@ import TableNode from '@/components/seating/TableNode';
 import GuestSidebar from '@/components/seating/GuestSidebar';
 import AddTableModal from '@/components/seating/AddTableModal';
 import RoomEditor, { RoomShape, Vertex } from '@/components/seating/RoomEditor';
-import { SeatingTableData, GuestListEntry, FloorPlan } from '@/components/seating/types';
+import { SeatingTableData, GuestListEntry, FloorPlan, SeatTransferPayload, ColorMode } from '@/components/seating/types';
 
 const nodeTypes = { tableNode: TableNode };
 
@@ -42,6 +42,7 @@ function SeatingCanvas({
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showRoomSettings, setShowRoomSettings] = useState(false);
+  const [colorMode, setColorMode] = useState<ColorMode>('party');
   const [roomWidth, setRoomWidth] = useState(floorPlan?.room_width ?? '');
   const [roomHeight, setRoomHeight] = useState(floorPlan?.room_height ?? '');
   const [roomEditMode, setRoomEditMode] = useState(false);
@@ -162,6 +163,70 @@ function SeatingCanvas({
     onRefresh();
   }, [onRefresh]);
 
+  // Reorder seats within a table: re-assigns seat_index values to match the new order
+  const handleReorderSeats = useCallback(async (
+    tableId: number,
+    ordered: { seat_index: number; display_name: string; guest_list_id: number | null; party_group_id: number | null }[]
+  ) => {
+    // Delete all existing seats for this table then re-insert with new indices
+    // We send the ordered list as a bulk re-assign: delete old, insert new
+    await fetch('/api/admin/seating/assign', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ seating_table_id: tableId, delete_all: true }),
+    });
+
+    const payload = ordered.map((seat, newIndex) => ({
+      seating_table_id: tableId,
+      seat_index: newIndex,
+      guest_list_id: seat.guest_list_id,
+      display_name: seat.display_name,
+      party_group_id: seat.party_group_id,
+    }));
+
+    await fetch('/api/admin/seating/assign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    onRefresh();
+  }, [onRefresh]);
+
+  // Move a single seat chip to a different table
+  const handleMoveSeat = useCallback(async (
+    payload: SeatTransferPayload,
+    toTableId: number
+  ) => {
+    const toTable = tables.find(t => t.id === toTableId);
+    if (!toTable) return;
+
+    // Remove from old table (single seat)
+    await fetch('/api/admin/seating/assign', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ seating_table_id: payload.fromTableId, seat_index: payload.seatIndex }),
+    });
+
+    // Find next available index at target table
+    const usedIndices = new Set(toTable.seats.map(s => s.seat_index));
+    let newIndex = 0;
+    while (usedIndices.has(newIndex)) newIndex++;
+
+    // Insert at new table
+    await fetch('/api/admin/seating/assign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        seating_table_id: toTableId,
+        seat_index: newIndex,
+        guest_list_id: payload.guestListId,
+        display_name: payload.displayName,
+        party_group_id: payload.partyGroupId,
+      }),
+    });
+    onRefresh();
+  }, [tables, onRefresh]);
+
   const handleDeleteTable = useCallback(async (tableId: number) => {
     await fetch(`/api/admin/seating/tables/${tableId}`, { method: 'DELETE' });
     onRefresh();
@@ -231,7 +296,10 @@ function SeatingCanvas({
       position: { x: table.x, y: table.y },
       data: {
         table,
+        colorMode,
         onDropGuest: handleDropGuest,
+        onMoveSeat: handleMoveSeat,
+        onReorderSeats: handleReorderSeats,
         onUnassignParty: handleUnassignParty,
         onDeleteTable: handleDeleteTable,
         onRenameTable: handleRenameTable,
@@ -241,7 +309,7 @@ function SeatingCanvas({
     }));
     setNodes(newNodes);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tables, guests]);
+  }, [tables, guests, colorMode]);
 
   return (
     <div className="flex h-full w-full">
@@ -337,19 +405,53 @@ function SeatingCanvas({
             </>
           )}
 
-          <div className="ml-auto flex items-center gap-3 text-xs text-gray-400">
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded-full bg-green-200 border border-green-400 inline-block" />
-              Party together
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded-full bg-yellow-200 border border-yellow-400 inline-block" />
-              Party split
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded-full bg-white border-dashed border border-gray-400 inline-block" />
-              Empty
-            </span>
+          <div className="ml-auto flex items-center gap-4">
+            {/* Color mode toggle */}
+            <div className="flex bg-gray-100 rounded-lg p-0.5 text-xs font-medium">
+              <button
+                onClick={() => setColorMode('party')}
+                className={`px-3 py-1 rounded-md transition-colors ${
+                  colorMode === 'party' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Party view
+              </button>
+              <button
+                onClick={() => setColorMode('rsvp')}
+                className={`px-3 py-1 rounded-md transition-colors ${
+                  colorMode === 'rsvp' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                RSVP view
+              </button>
+            </div>
+
+            {/* Legend */}
+            <div className="flex items-center gap-3 text-xs text-gray-400">
+              {colorMode === 'party' ? (
+                <>
+                  <span className="flex items-center gap-1">
+                    <span className="w-3 h-3 rounded-full bg-green-200 border border-green-400 inline-block" />
+                    Party together
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-3 h-3 rounded-full bg-yellow-200 border border-yellow-400 inline-block" />
+                    Party split
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="flex items-center gap-1">
+                    <span className="w-3 h-3 rounded-full bg-green-200 border border-green-400 inline-block" />
+                    RSVPed
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-3 h-3 rounded-full bg-white border border-gray-300 inline-block" />
+                    No RSVP
+                  </span>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
@@ -360,30 +462,7 @@ function SeatingCanvas({
           onDrop={handleCanvasDrop}
           onDragOver={e => e.preventDefault()}
         >
-          <ReactFlow
-            nodes={nodes}
-            edges={[]}
-            onNodesChange={onNodesChange}
-            onNodeDragStop={handleNodeDragStop}
-            nodeTypes={nodeTypes}
-            nodesDraggable={!roomEditMode}
-            panOnDrag={!roomEditMode}
-            fitView
-            fitViewOptions={{ padding: 0.2 }}
-            minZoom={0.2}
-            maxZoom={2}
-            deleteKeyCode={null}
-          >
-            <Background color="#e5e7eb" gap={24} size={1} />
-            <Controls />
-            <MiniMap
-              nodeColor={() => '#e5e7eb'}
-              maskColor="rgba(255,255,255,0.6)"
-              style={{ bottom: 16, right: 16 }}
-            />
-          </ReactFlow>
-
-          {/* Room shape editor overlay */}
+          {/* Room shape editor — rendered BEFORE ReactFlow so it stays behind nodes */}
           <RoomEditor
             room={localRoom}
             active={roomEditMode}
@@ -406,6 +485,31 @@ function SeatingCanvas({
               setRoomEditMode(false);
             }}
           />
+
+          <ReactFlow
+            nodes={nodes}
+            edges={[]}
+            onNodesChange={onNodesChange}
+            onNodeDragStop={handleNodeDragStop}
+            nodeTypes={nodeTypes}
+            nodesDraggable={!roomEditMode}
+            panOnDrag={!roomEditMode}
+            fitView
+            fitViewOptions={{ padding: 0.2 }}
+            minZoom={0.2}
+            maxZoom={2}
+            snapToGrid
+            snapGrid={[20, 20]}
+            deleteKeyCode={null}
+          >
+            <Background color="#e5e7eb" gap={24} size={1} />
+            <Controls />
+            <MiniMap
+              nodeColor={() => '#e5e7eb'}
+              maskColor="rgba(255,255,255,0.6)"
+              style={{ bottom: 16, right: 16 }}
+            />
+          </ReactFlow>
         </div>
       </div>
 
@@ -500,6 +604,8 @@ export default function SeatingPage() {
         plus_one_name: g.plus_one_name ?? null,
         party_size: g.party_size ?? 1,
         side: g.side ?? null,
+        rsvp_status: g.rsvp_status ?? null,
+        invited: g.invited ?? true,
       }))
     );
     setLoading(false);

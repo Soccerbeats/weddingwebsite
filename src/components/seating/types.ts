@@ -1,5 +1,13 @@
 export type TableType = 'round' | 'rectangular' | 'head';
 
+export interface SeatTransferPayload {
+  fromTableId: number;
+  seatIndex: number;
+  displayName: string;
+  partyGroupId: number | null;
+  guestListId: number | null;
+}
+
 export interface SeatData {
   seat_index: number;
   guest_list_id: number | null;
@@ -9,7 +17,10 @@ export interface SeatData {
   guest_name: string | null;
   plus_one_name: string | null;
   party_size: number | null;
+  rsvp_status: string | null;
 }
+
+export type ColorMode = 'party' | 'rsvp';
 
 export interface SeatingTableData {
   id: number;
@@ -35,5 +46,7 @@ export interface GuestListEntry {
   plus_one_name: string | null;
   party_size: number;
   side: string | null;
+  rsvp_status: string | null;
+  invited: boolean;
   assigned_seat?: { table_name: string; seat_index: number } | null;
 }

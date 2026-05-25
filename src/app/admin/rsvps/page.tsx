@@ -223,6 +223,31 @@ export default function RSVPDashboard() {
         }
     };
 
+    const handleBulkUnmarkInvited = async () => {
+        if (selectedGuests.length === 0) return;
+        if (!confirm(`Mark ${selectedGuests.length} guest(s) as Not Invited?`)) return;
+
+        try {
+            await Promise.all(
+                selectedGuests.map(id =>
+                    fetch('/api/admin/guest-list', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            id,
+                            ...guests.find(g => g.id === id),
+                            invited: false,
+                        }),
+                    })
+                )
+            );
+            setSelectedGuests([]);
+            fetchGuests();
+        } catch (error) {
+            console.error('Error unmarking guests as invited:', error);
+        }
+    };
+
     const handleBulkDelete = async () => {
         if (selectedGuests.length === 0) return;
         if (!confirm(`Are you sure you want to delete ${selectedGuests.length} guest(s)?`)) return;
@@ -517,6 +542,12 @@ export default function RSVPDashboard() {
                                         className="bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 text-sm transition-all duration-300 shadow-md hover:shadow-lg"
                                     >
                                         Mark as Invited
+                                    </button>
+                                    <button
+                                        onClick={handleBulkUnmarkInvited}
+                                        className="bg-gray-500 text-white px-4 py-2 rounded-xl hover:bg-gray-600 text-sm transition-all duration-300 shadow-md hover:shadow-lg"
+                                    >
+                                        Mark as Not Invited
                                     </button>
                                     <button
                                         onClick={handleBulkDelete}

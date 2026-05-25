@@ -1,14 +1,33 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Handle, Position } from '@xyflow/react';
-import { SeatingTableData, SeatData } from './types';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { SeatingTableData, SeatData, SeatTransferPayload, ColorMode } from './types';
 
 interface TableNodeProps {
   data: {
     table: SeatingTableData;
+    colorMode: ColorMode;
     onDropGuest: (tableId: number, guestId: string) => void;
+    onMoveSeat: (payload: SeatTransferPayload, toTableId: number) => void;
     onUnassignParty: (tableId: number, partyGroupId: number) => void;
+    onReorderSeats: (tableId: number, orderedSeatIndices: { seat_index: number; display_name: string; guest_list_id: number | null; party_group_id: number | null }[]) => void;
     onDeleteTable: (tableId: number) => void;
     onRenameTable: (tableId: number, name: string) => void;
     splitPartyGroupIds: Set<number>;
@@ -19,28 +38,57 @@ interface TableNodeProps {
 
 function SeatChip({
   seat,
+  tableId,
   isSplit,
+  colorMode,
   onRemoveParty,
 }: {
   seat: SeatData;
+  tableId: number;
   isSplit: boolean;
+  colorMode: ColorMode;
   onRemoveParty: () => void;
 }) {
   const [hover, setHover] = useState(false);
   const name = seat.display_name || seat.guest_name || '?';
 
+  const transfer: SeatTransferPayload = {
+    fromTableId: tableId,
+    seatIndex: seat.seat_index,
+    displayName: name,
+    partyGroupId: seat.party_group_id,
+    guestListId: seat.guest_list_id,
+  };
+
+  // Determine chip color classes based on mode
+  let chipClass: string;
+  if (colorMode === 'rsvp') {
+    const hasRsvp = !!seat.rsvp_status;
+    chipClass = hasRsvp
+      ? 'bg-green-100 border-green-400 text-green-800'
+      : 'bg-white border-gray-300 text-gray-600';
+  } else {
+    // party mode
+    chipClass = isSplit
+      ? 'bg-yellow-100 border-yellow-400 text-yellow-800'
+      : 'bg-green-50 border-green-300 text-green-800';
+  }
+
   return (
     <div
-      className={`nodrag relative flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border select-none cursor-default
-        ${isSplit
-          ? 'bg-yellow-100 border-yellow-400 text-yellow-800'
-          : 'bg-green-50 border-green-300 text-green-800'
-        }`}
+      draggable
+      onDragStart={e => {
+        e.dataTransfer.setData('seatTransfer', JSON.stringify(transfer));
+        e.stopPropagation();
+      }}
+      className={`nodrag relative flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border select-none cursor-grab active:cursor-grabbing ${chipClass}`}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      title={isSplit ? 'Party is split across tables' : name}
+      title={colorMode === 'rsvp'
+        ? (seat.rsvp_status ? `RSVP: ${seat.rsvp_status}` : 'No RSVP yet')
+        : (isSplit ? 'Party is split — drag to move' : `Drag ${name} to another table`)}
     >
-      {isSplit && <span className="text-yellow-500 mr-0.5">⚠</span>}
+      {colorMode === 'party' && isSplit && <span className="text-yellow-500 mr-0.5">⚠</span>}
       <span className="truncate max-w-[80px]">{name}</span>
       {hover && (
         <button
@@ -55,16 +103,148 @@ function SeatChip({
   );
 }
 
+// ── Sortable row inside the reorder modal ─────────────────────────────────
+
+function SortableSeatRow({ seat }: { seat: SeatData }) {
+  const name = seat.display_name || seat.guest_name || '?';
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: seat.seat_index,
+  });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex items-center gap-3 px-3 py-2 bg-white border border-gray-200 rounded-lg shadow-sm"
+    >
+      {/* drag handle */}
+      <div
+        {...attributes}
+        {...listeners}
+        className="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing shrink-0"
+      >
+        <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor">
+          <circle cx="3.5" cy="3" r="1.5" /><circle cx="3.5" cy="8" r="1.5" /><circle cx="3.5" cy="13" r="1.5" />
+          <circle cx="8.5" cy="3" r="1.5" /><circle cx="8.5" cy="8" r="1.5" /><circle cx="8.5" cy="13" r="1.5" />
+        </svg>
+      </div>
+      <span className="text-sm text-gray-800 font-medium truncate">{name}</span>
+    </div>
+  );
+}
+
+// ── Seat reorder modal ────────────────────────────────────────────────────
+
+function ReorderModal({
+  table,
+  onSave,
+  onClose,
+}: {
+  table: SeatingTableData;
+  onSave: (ordered: SeatData[]) => void;
+  onClose: () => void;
+}) {
+  const [seats, setSeats] = useState<SeatData[]>([...table.seats]);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      setSeats(prev => {
+        const oldIndex = prev.findIndex(s => s.seat_index === active.id);
+        const newIndex = prev.findIndex(s => s.seat_index === over.id);
+        return arrayMove(prev, oldIndex, newIndex);
+      });
+    }
+  };
+
+  const modal = (
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center"
+      style={{ zIndex: 99999 }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="bg-white rounded-xl shadow-2xl w-80 max-h-[80vh] flex flex-col">
+        {/* Header */}
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <h3 className="text-base font-semibold text-gray-800">{table.name}</h3>
+            <p className="text-xs text-gray-400 mt-0.5">Drag to set seating order</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Sortable list */}
+        <div className="flex-1 overflow-y-auto p-4">
+          {seats.length === 0 ? (
+            <p className="text-center text-gray-400 text-sm py-6">No one seated here yet.</p>
+          ) : (
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={seats.map(s => s.seat_index)} strategy={verticalListSortingStrategy}>
+                <div className="space-y-2">
+                  {seats.map(seat => (
+                    <SortableSeatRow key={seat.seat_index} seat={seat} />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-3 border-t border-gray-100 flex gap-2">
+          <button
+            onClick={() => onSave(seats)}
+            className="flex-1 text-sm font-medium text-white py-2 rounded-lg"
+            style={{ backgroundColor: 'var(--accent, #6366f1)' }}
+          >
+            Save Order
+          </button>
+          <button
+            onClick={onClose}
+            className="flex-1 text-sm font-medium text-gray-600 py-2 rounded-lg border border-gray-200 hover:bg-gray-50"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  if (!mounted) return null;
+  return createPortal(modal, document.body);
+}
+
 // ── Table controls (rendered inside table on hover) ────────────────────────
 
 function TableControls({
   table,
   onDelete,
   onRename,
+  onReorder,
 }: {
   table: SeatingTableData;
   onDelete: () => void;
   onRename: (name: string) => void;
+  onReorder: () => void;
 }) {
   const [renaming, setRenaming] = useState(false);
   const [value, setValue] = useState(table.name);
@@ -107,6 +287,23 @@ function TableControls({
         </button>
       )}
 
+      {/* Reorder seats button */}
+      {table.seats.length > 1 && (
+        <button
+          className="nodrag p-1 rounded text-gray-400 hover:text-indigo-500 hover:bg-white/50 transition-colors"
+          title="Reorder seats"
+          onClick={e => { e.stopPropagation(); onReorder(); }}
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+            <polyline points="8 3 5 6 8 9" />
+            <polyline points="16 15 19 18 16 21" />
+          </svg>
+        </button>
+      )}
+
       {confirmDelete ? (
         <div className="flex items-center gap-1">
           <span className="text-xs text-red-500">Delete?</span>
@@ -143,25 +340,40 @@ function TableBody({
   table,
   splitPartyGroupIds,
   onDropGuest,
+  onMoveSeat,
   onUnassignParty,
   onDeleteTable,
   onRenameTable,
+  onReorderSeats,
 }: {
   table: SeatingTableData;
   splitPartyGroupIds: Set<number>;
   onDropGuest: (tableId: number, guestId: string) => void;
+  onMoveSeat: (payload: SeatTransferPayload, toTableId: number) => void;
   onUnassignParty: (tableId: number, partyGroupId: number) => void;
   onDeleteTable: (tableId: number) => void;
   onRenameTable: (tableId: number, name: string) => void;
+  onReorderSeats: (tableId: number, ordered: SeatData[]) => void;
 }) {
   const [hovered, setHovered] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [reorderOpen, setReorderOpen] = useState(false);
   const seatCount = table.seats.length;
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setDragOver(false);
+
+    const seatTransferRaw = e.dataTransfer.getData('seatTransfer');
+    if (seatTransferRaw) {
+      const payload: SeatTransferPayload = JSON.parse(seatTransferRaw);
+      if (payload.fromTableId !== table.id) {
+        onMoveSeat(payload, table.id);
+      }
+      return;
+    }
+
     const guestId = e.dataTransfer.getData('guestId');
     if (guestId) onDropGuest(table.id, guestId);
   };
@@ -169,46 +381,53 @@ function TableBody({
   const isRound = table.table_type === 'round';
   const isHead = table.table_type === 'head';
 
-  // Table surface sizing
   const tableW = isRound ? 160 : isHead ? Math.max(240, seatCount * 48) : 200;
   const tableH = isRound ? 160 : isHead ? 80 : 100;
 
-  // No 'nodrag' here — we want React Flow to be able to drag the node
-  // from the table surface. Only interactive children carry nodrag.
   const baseClasses = `relative flex flex-col items-center justify-center
     border-2 transition-colors cursor-grab select-none
     ${dragOver ? 'border-blue-400 bg-blue-50' : hovered ? 'border-gray-400 bg-gray-50' : 'border-gray-300 bg-white'}
     ${isRound ? 'rounded-full' : 'rounded-xl'}`;
 
   return (
-    <div
-      className={baseClasses}
-      style={{ width: tableW, height: tableH }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={handleDrop}
-    >
-      {/* Table name */}
-      <span className="text-xs font-semibold text-gray-600 px-3 text-center leading-tight">
-        {table.name}
-      </span>
+    <>
+      <div
+        className={baseClasses}
+        style={{ width: tableW, height: tableH }}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={handleDrop}
+      >
+        <span className="text-xs font-semibold text-gray-600 px-3 text-center leading-tight">
+          {table.name}
+        </span>
+        <span className="text-xs text-gray-400 mt-0.5">
+          {seatCount === 0 ? 'Drop guests here' : `${seatCount} ${seatCount === 1 ? 'person' : 'people'}`}
+        </span>
 
-      {/* People count */}
-      <span className="text-xs text-gray-400 mt-0.5">
-        {seatCount === 0 ? 'Drop guests here' : `${seatCount} ${seatCount === 1 ? 'person' : 'people'}`}
-      </span>
+        {hovered && (
+          <TableControls
+            table={table}
+            onDelete={() => onDeleteTable(table.id)}
+            onRename={name => onRenameTable(table.id, name)}
+            onReorder={() => setReorderOpen(true)}
+          />
+        )}
+      </div>
 
-      {/* Controls — inside table, shown on hover */}
-      {hovered && (
-        <TableControls
+      {reorderOpen && (
+        <ReorderModal
           table={table}
-          onDelete={() => onDeleteTable(table.id)}
-          onRename={name => onRenameTable(table.id, name)}
+          onSave={ordered => {
+            onReorderSeats(table.id, ordered);
+            setReorderOpen(false);
+          }}
+          onClose={() => setReorderOpen(false)}
         />
       )}
-    </div>
+    </>
   );
 }
 
@@ -217,10 +436,12 @@ function TableBody({
 function SeatsDisplay({
   table,
   splitPartyGroupIds,
+  colorMode,
   onUnassignParty,
 }: {
   table: SeatingTableData;
   splitPartyGroupIds: Set<number>;
+  colorMode: ColorMode;
   onUnassignParty: (tableId: number, partyGroupId: number) => void;
 }) {
   if (table.seats.length === 0) return null;
@@ -230,13 +451,12 @@ function SeatsDisplay({
   const tableH = isRound ? 160 : table.table_type === 'head' ? 80 : 100;
   const orbitPad = isRound ? 52 : 0;
 
-  // Center of the table circle in node coordinates (accounting for orbitPad offset)
   const cx = orbitPad + tableW / 2;
   const cy = orbitPad + tableH / 2;
 
   if (isRound) {
     const n = table.seats.length;
-    const r = tableW / 2 + 28; // orbit radius outside the circle
+    const r = tableW / 2 + 28;
     return (
       <>
         {table.seats.map((seat, i) => {
@@ -252,7 +472,9 @@ function SeatsDisplay({
             >
               <SeatChip
                 seat={seat}
+                tableId={table.id}
                 isSplit={isSplit}
+                colorMode={colorMode}
                 onRemoveParty={() => seat.party_group_id !== null && onUnassignParty(table.id, seat.party_group_id)}
               />
             </div>
@@ -262,7 +484,6 @@ function SeatsDisplay({
     );
   }
 
-  // Rectangular / head: chips in a flex row below the table (orbitPad is 0 here)
   return (
     <div
       className="absolute flex flex-wrap gap-1 justify-center"
@@ -274,7 +495,9 @@ function SeatsDisplay({
           <SeatChip
             key={seat.seat_index}
             seat={seat}
+            tableId={table.id}
             isSplit={isSplit}
+            colorMode={colorMode}
             onRemoveParty={() => seat.party_group_id !== null && onUnassignParty(table.id, seat.party_group_id)}
           />
         );
@@ -286,12 +509,11 @@ function SeatsDisplay({
 // ── Main node export ───────────────────────────────────────────────────────
 
 export default function TableNode({ data }: TableNodeProps) {
-  const { table, onDropGuest, onUnassignParty, onDeleteTable, onRenameTable, splitPartyGroupIds } = data;
+  const { table, colorMode, onDropGuest, onMoveSeat, onUnassignParty, onReorderSeats, onDeleteTable, onRenameTable, splitPartyGroupIds } = data;
 
   const isRound = table.table_type === 'round';
   const tableW = isRound ? 160 : table.table_type === 'head' ? Math.max(240, table.seats.length * 48) : 200;
   const tableH = isRound ? 160 : table.table_type === 'head' ? 80 : 100;
-  // Extra space for seat chips around/below
   const orbitPad = isRound ? 52 : 0;
   const belowPad = !isRound && table.seats.length > 0 ? 40 : 0;
 
@@ -306,7 +528,6 @@ export default function TableNode({ data }: TableNodeProps) {
       <Handle type="source" position={Position.Top} style={{ opacity: 0, pointerEvents: 'none' }} />
       <Handle type="target" position={Position.Bottom} style={{ opacity: 0, pointerEvents: 'none' }} />
 
-      {/* Table body positioned in the center of the node */}
       <div
         style={{
           position: 'absolute',
@@ -320,16 +541,18 @@ export default function TableNode({ data }: TableNodeProps) {
           table={table}
           splitPartyGroupIds={splitPartyGroupIds}
           onDropGuest={onDropGuest}
+          onMoveSeat={onMoveSeat}
           onUnassignParty={onUnassignParty}
           onDeleteTable={onDeleteTable}
           onRenameTable={onRenameTable}
+          onReorderSeats={onReorderSeats}
         />
       </div>
 
-      {/* Seat chips — positioned relative to node origin */}
       <SeatsDisplay
         table={table}
         splitPartyGroupIds={splitPartyGroupIds}
+        colorMode={colorMode}
         onUnassignParty={onUnassignParty}
       />
     </div>

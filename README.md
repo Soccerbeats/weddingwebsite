@@ -1,47 +1,57 @@
 # Wedding Website
 
-A beautiful, customizable wedding website built with Next.js 16. Features include photo galleries, timeline of your relationship, RSVP management, and a comprehensive admin panel for content management.
+A beautiful, customizable wedding website built with Next.js 16. Features include photo galleries, a relationship timeline, RSVP management, a tabbed registry (honeymoon fund + product registry), seating chart builder, and a comprehensive admin panel for content management.
 
 ## Features
 
 ### Public Site
-- **Home Page**: Welcome message with countdown timer to your wedding day
-- **About**: Your love story with customizable text and photos
+- **Home Page**: Welcome message with countdown timer (days/hours/minutes/seconds, configurable display modes) and optional hero slideshow
+- **About**: Love story with customizable text, photos, details, and FAQ section
 - **Timeline**: Interactive vertical timeline of relationship milestones with photos
-- **Wedding Party**: Display your bridesmaids, groomsmen, and important people
+- **Wedding Party**: Display bridesmaids, groomsmen, and important people
 - **Schedule**: Wedding day timeline and events
-- **Photo Gallery**: Beautiful photo gallery with lightbox view (only shows "hearted" photos)
-- **RSVP**: Guest RSVP form with name verification
+- **Photo Gallery**: Beautiful gallery with lightbox (only shows "hearted" photos)
+- **Registry**: Tabbed page with two sections:
+  - 🌴 **Honeymoon Fund** — Experience items with contribution flow via Venmo, Cash App, Zelle, PayPal (deep links, app-first)
+  - 🛍️ **Registry** — Product grid linked to Target and Amazon; shows thumbnail, title, price, description; clicking opens the product page directly
+- **RSVP**: Guest RSVP form with name verification against guest list
 - **Responsive Design**: Mobile-friendly across all pages
 
 ### Admin Panel
-- **Dashboard**: Centralized admin panel at `/admin`
-- **RSVP Management**: View and manage guest responses
-- **Photo Management**: Upload, edit, reorder (drag-drop), heart photos, add titles/descriptions
-- **Timeline Editor**: Create and manage relationship milestones with up to 2 photos each
-- **Content Editors**: Edit content for Home, About, Wedding Party, Schedule, and Q&A pages
-- **General Settings**: Customize colors, dates, times, venue information
-- **Work-in-Progress Control**: Toggle which pages are visible to public vs. in WIP mode
-- **Guest List Import**: Import pre-populated guest list from CSV
+- **RSVP Management**:
+  - Stats cards: Total RSVPs, Total Attending (individual guest count), Declined, Missing RSVPs (invited but no response)
+  - Filter by: All, No Response, Attending, Declined, Not Invited, Bride's Side, Groom's Side
+  - Name search
+- **Guest List**:
+  - Import from CSV (handles quoted fields, commas in addresses)
+  - Manual add/edit/delete
+  - Fields: name, email, phone, party_size, side, notes, plus_one_name, address
+  - Upsert on reimport — preserves email, phone, invited, notes, side; updates party_size, plus_one_name, address
+  - Import results: Added / Updated / Failed counts
+  - RSVP submission syncs email/phone/rsvp_status back to guest_list
+- **Photo Management**: Upload, drag-reorder, heart to publish, thumbnail API (`/api/photos/[filename]/thumb`), edit titles/descriptions, delete
+- **Timeline Editor**: Create and manage milestones with up to 2 photos each; oldest-first order
+- **Content Editors**: Home, About, Wedding Party, Schedule, Q&A (with Markdown `[text](url)` hyperlink support via "🔗 Insert Link" button)
+- **General Settings**: Wedding date/time/venue, color scheme (accent/light/dark), page background colors, countdown display mode
+- **Hero Slideshow**: Toggle on/off, pick specific photos, set interval; crossfade with no black flash (reveal-behind z-index technique); dot indicators; `img.decode()` for GPU-ready preloading
+- **Registry Admin** (three sub-tabs):
+  - *Honeymoon Fund*: Add/edit/remove experience items; log contributions received; progress bars; "Fully Funded" badge
+  - *Registry Items*: Paste a product URL → auto-fetches OG metadata (title, image, description, price); edit any field before saving; grouped by store (Target / Amazon / Other); edit and delete saved items
+  - *Settings*: Page title, subtitle, description text, background color, payment method handles (Zelle/Venmo/Cash App/PayPal)
+- **Seating Chart**: Visual floor plan builder — add/resize room shape, place tables (round/rectangle/sweetheart), drag-drop guests from sidebar, party cohesion coloring
+- **WIP Control**:
+  - Per-page **WIP** toggle (shows "coming soon" to non-admins)
+  - Per-page **Hidden** toggle (removes page from nav entirely)
+  - **Basic Mode**: Pre-release mode showing only Home/About/Timeline/Photos; optional venue sub-toggle
+- **Admin Navigation**: Admin button visible in nav only when logged in (desktop + mobile)
 
 ## Quick Start
 
-### Using Portainer (Recommended & Easiest)
+### Using Portainer (Recommended)
 
-This is the **preferred method** for production deployment. It's the simplest way to get your wedding website running.
-
-1. **Copy the Docker Compose configuration**
-   - Open `docker-compose.prod.yml` in this repository
-   - Copy the entire contents
-
-2. **Create a new Stack in Portainer**
-   - Log into your Portainer instance
-   - Navigate to "Stacks" → "Add stack"
-   - Give it a name (e.g., "wedding-website")
-   - Paste the `docker-compose.prod.yml` contents into the web editor
-
-3. **Add environment variables**
-   Click on "Advanced mode" or scroll to "Environment variables" section and add:
+1. **Copy** `docker-compose.prod.yml`
+2. **Create a new Stack** in Portainer → paste the contents
+3. **Add environment variables**:
    ```env
    ADMIN_PASSWORD=your_secure_password
    POSTGRES_USER=wedding_user
@@ -50,373 +60,138 @@ This is the **preferred method** for production deployment. It's the simplest wa
    DATABASE_URL=postgresql://wedding_user:secure_db_password@db:5432/wedding_db
    NODE_ENV=production
    ```
+4. **Deploy** — public site at `:3000`, admin at `:3000/admin`
 
-   **Important**: Replace the password values with your own secure passwords!
+### Docker Compose (Local)
 
-4. **Deploy the stack**
-   - Click "Deploy the stack"
-   - Wait for Portainer to pull the image and start containers
-   - This may take a few minutes on first deployment
-
-5. **Access your site**
-   - Public site: `http://your-server-ip:3000`
-   - Admin panel: `http://your-server-ip:3000/admin`
-   - Login with the `ADMIN_PASSWORD` you set
-
-6. **Configure DNS** (Optional)
-   - Point your domain to your server's IP address
-   - Set up reverse proxy (nginx/Caddy) for HTTPS
-   - Update Portainer port mapping if needed
-
-**Why Portainer?**
-- ✅ No need to clone repository or install dependencies
-- ✅ Easy updates via "Pull and redeploy" button
-- ✅ Web-based management and monitoring
-- ✅ Automatic container restarts
-- ✅ Built-in log viewer
-- ✅ Persistent volumes handled automatically
-
-### Using Docker Compose Locally
-
-If you prefer running locally or don't have Portainer:
-
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd weddingwebsite
-   ```
-
-2. **Create environment file**
-   ```bash
-   cp .env.example .env
-   ```
-   Edit `.env` and set your values:
-   ```env
-   ADMIN_PASSWORD=your_secure_password
-   POSTGRES_USER=wedding_user
-   POSTGRES_PASSWORD=secure_db_password
-   POSTGRES_DB=wedding_db
-   DATABASE_URL=postgresql://wedding_user:secure_db_password@db:5432/wedding_db
-   NODE_ENV=production
-   ```
-
-3. **Start the application**
-   ```bash
-   docker-compose up -d --build
-   ```
-
-4. **Access the site**
-   - Public site: `http://localhost:3000`
-   - Admin panel: `http://localhost:3000/admin`
-   - Login with the password you set in `ADMIN_PASSWORD`
+```bash
+git clone <repository-url>
+cd weddingwebsite
+cp .env.example .env   # edit values
+docker-compose up -d --build
+```
 
 ### Local Development
 
-1. **Install dependencies**
-   ```bash
-   npm install
-   ```
+```bash
+npm install
+cp .env.example .env.local
+npm run dev
+# open http://localhost:3000
+```
 
-2. **Set up environment variables**
-   ```bash
-   cp .env.example .env.local
-   ```
+## Deployment (Portainer Production)
 
-3. **Run development server**
-   ```bash
-   npm run dev
-   ```
+```bash
+# Build and push
+docker build -t ghcr.io/soccerbeats/weddingwebsite:latest --target production .
+docker push ghcr.io/soccerbeats/weddingwebsite:latest
 
-4. **Open your browser**
-   Navigate to `http://localhost:3000`
+# Then in Portainer: Pull and redeploy
+```
+
+> ⚠️ Always use image name `ghcr.io/soccerbeats/weddingwebsite:latest` — do not change it.
 
 ## Admin Panel Guide
 
-### First Time Setup
+### Registry — Honeymoon Fund
 
-1. **Login**: Navigate to `/admin` and enter your admin password
-2. **General Settings**: Set your wedding date, time, venue, and color scheme
-3. **Upload Photos**: Go to Photos tab and upload your images
-4. **Create Timeline**: Add milestones to your relationship timeline
-5. **Import Guest List**: Upload a CSV with guest names and contact info
-6. **Customize Content**: Edit About page, Wedding Party, Schedule, etc.
+1. Go to **Admin → Registry → Honeymoon Fund**
+2. Click **+ Add Experience** — enter emoji, title, price, description
+3. Use **+ Log Gift** to record contributions received via Venmo/Zelle/etc.
+4. Items show progress bars and "Fully Funded" badge when complete
 
-### Managing Photos
+### Registry — Product Items (Target & Amazon)
 
-**Upload Photos**:
-1. Go to Admin → Photos
-2. Click the upload area or drag files
-3. Photos appear in the grid
+1. Go to **Admin → Registry → Registry Items**
+2. Paste a product URL (e.g. `https://www.target.com/p/...`) → click **Fetch →**
+3. The site auto-fills title, image, description, and price from the page
+4. Edit any field if the auto-fetch is incomplete (Amazon may block)
+5. Click **Save Item** — it appears on the public Registry tab immediately
+6. Items are grouped by store on both admin and public pages
 
-**Organize Photos**:
-- **Drag to reorder**: Photos display in the order you arrange them
-- **Heart photos**: Click the heart icon - only hearted photos show in public gallery
-- **Edit details**: Click edit icon to add title and description
-- **Delete**: Click delete icon to remove photos
+### Guest List CSV Format
 
-**Best Practices**:
-- Heart only your favorite photos (these appear in public gallery)
-- Add descriptive titles for better organization
-- Recommended image size: 1920x1080px or larger
-
-### Timeline Management
-
-1. Go to Admin → Timeline
-2. Click "Add Milestone"
-3. Fill in:
-   - Title (e.g., "First Date", "The Proposal")
-   - Date
-   - Description of the event
-   - Upload 1-2 photos (optional)
-4. Click "Add Milestone"
-
-**Editing Milestones**:
-- Click "Edit" on any milestone
-- Update text fields
-- Add, change, or delete photos
-- Photos display side-by-side with elegant tilt effect
-
-**Timeline appears oldest to newest** on both admin panel and public site.
-
-### RSVP Management
-
-**View RSVPs**:
-1. Go to Admin → RSVPs
-2. See all guest responses with attendance status
-3. Filter and search through responses
-4. Export to CSV if needed
-
-**Manage Guest List**:
-1. Go to Admin → RSVPs → Guest List tab
-2. Manually add guests OR import from CSV
-3. CSV format:
-   ```csv
-   name,email,phone,party_size,side,notes,plus_one_name
-   John Doe,john@email.com,555-1234,2,Bride,Vegan meal,Jane Doe
-   ```
-
-**Guest RSVP Flow**:
-1. Guest enters their name on RSVP page
-2. System checks against guest list
-3. If found, pre-fills email/phone (editable)
-4. Guest completes RSVP form
-5. Confirmation page shows with edit instructions
-
-### Customizing Colors
-
-1. Go to Admin → General Settings
-2. Choose from preset color schemes OR set custom colors:
-   - **Accent Color**: Primary color for headings, buttons, highlights
-   - **Accent Light**: Lighter shade for backgrounds
-   - **Accent Dark**: Darker shade for hover states
-3. Click "Save Settings"
-4. Colors update across entire site instantly
-
-### Work-in-Progress Mode
-
-**Use Case**: Hide pages from public while you're still working on them
-
-1. Go to Admin → Work in Progress
-2. Toggle any page to "Work in Progress"
-3. Non-admin visitors see a WIP message
-4. Admins (logged in) always see full site
-5. Toggle back to "Live" when ready
-
-## Docker Management
-
-### View Logs
-```bash
-docker-compose logs -f web      # Application logs
-docker-compose logs -f db       # Database logs
+```csv
+name,email,phone,party_size,side,notes,plus_one_name,address
+John Doe,john@email.com,555-1234,2,groom,Vegan meal,Jane Doe,"123 Main St, Milwaukee, WI"
 ```
 
-### Stop Services
-```bash
-docker-compose down
-```
+- Addresses with commas must be quoted
+- `side`: `bride` or `groom`
+- Duplicate names are upserted (not duplicated)
 
-### Restart Services
-```bash
-docker-compose restart
-```
+### Countdown Display Modes
 
-### Update to Latest Version
-```bash
-docker-compose pull
-docker-compose up -d
-```
+In **General Settings → Countdown Mode**:
+- `full` — Days / Hours / Minutes / Seconds
+- `simple` — Days / Hours
+- `days-only` — Days only (large display)
 
-### Database Operations
+### WIP & Hidden Toggles
 
-**View RSVPs**:
-```bash
-docker-compose exec db psql -U wedding_user -d wedding_db -c "SELECT * FROM rsvps;"
-```
-
-**Backup Database**:
-```bash
-docker-compose exec db pg_dump -U wedding_user wedding_db > backup.sql
-```
-
-**Restore Database**:
-```bash
-cat backup.sql | docker-compose exec -T db psql -U wedding_user wedding_db
-```
-
-## Production Deployment (Portainer)
-
-### Initial Setup
-
-1. **Push to GitHub Container Registry**:
-   ```bash
-   docker build -t ghcr.io/yourusername/weddingwebsite:latest --target production .
-   docker push ghcr.io/yourusername/weddingwebsite:latest
-   ```
-
-2. **Create Stack in Portainer**:
-   - Use `docker-compose.yml` as template
-   - Set environment variables in Portainer
-   - Create persistent volumes for photos and config
-   - Deploy stack
-
-3. **Configure DNS**: Point your domain to server IP
-
-### Updating Production
-
-1. **Build and push new image**:
-   ```bash
-   docker build -t ghcr.io/yourusername/weddingwebsite:latest --target production .
-   docker push ghcr.io/yourusername/weddingwebsite:latest
-   ```
-
-2. **Update in Portainer**:
-   - Go to your stack
-   - Click "Pull and redeploy"
-   - Wait for containers to restart
+In **Admin → Work in Progress**:
+- **WIP**: Shows a "coming soon" page to non-admins; admins see full page
+- **Hidden**: Removes the page from the nav entirely for non-admins
+- **Basic Mode**: Hides most pages for a pre-launch look
 
 ## File Storage
 
-### Photos
-- Stored in: `public/photos/` (Docker volume)
-- Accessed via: `/api/photos/[filename]` API route
-- **Important**: Photos are NOT in git - backed up via Docker volumes
+| Data | Location | Persisted via |
+|------|----------|---------------|
+| Uploaded photos | `public/photos/` | Docker volume |
+| Site config | `public/config/site.json` | Docker volume |
+| Photo metadata | `public/config/photos.json` | Docker volume |
+| Timeline | `public/config/timeline.json` | Docker volume |
+| Registry items | inside `site.json` (`registryItems[]`) | Docker volume |
+| RSVPs / guest list | PostgreSQL | Docker volume |
 
-### Configuration
-- Stored in: `public/config/` (Docker volume)
-- Files:
-  - `site.json`: General settings, colors, dates, content
-  - `photos.json`: Photo metadata (order, hearted status, titles)
-  - `timeline.json`: Timeline milestones
-- **Important**: Config files are NOT in git - backed up via Docker volumes
+> Photos are served via `/api/photos/[filename]` — not as static files — because Next.js standalone doesn't serve runtime volume files statically.
 
-### Database
-- PostgreSQL data in Docker volume
-- Tables: `rsvps`, `guest_list`, `wip_toggles`
-- Regular backups recommended
+## Database Tables
 
-## Backup Strategy
+| Table | Purpose |
+|-------|---------|
+| `rsvps` | Guest RSVP submissions |
+| `guest_list` | Pre-populated guest list with contact info |
+| `wip_toggles` | Per-page WIP/Hidden toggle state |
+| `seating_*` | Seating chart room/table/assignment data |
 
-### Essential Data to Backup
+## Backup
 
-1. **Docker Volumes**:
-   ```bash
-   # Backup photos
-   docker cp <container-id>:/app/public/photos ./backup/photos
+```bash
+# Database
+docker-compose exec db pg_dump -U wedding_user wedding_db > backup-$(date +%Y%m%d).sql
 
-   # Backup config
-   docker cp <container-id>:/app/public/config ./backup/config
-   ```
-
-2. **Database**:
-   ```bash
-   docker-compose exec db pg_dump -U wedding_user wedding_db > backup-$(date +%Y%m%d).sql
-   ```
-
-3. **Environment Variables**: Save your `.env` file securely
-
-### Restore from Backup
-
-1. **Restore volumes**:
-   ```bash
-   docker cp ./backup/photos <container-id>:/app/public/photos
-   docker cp ./backup/config <container-id>:/app/public/config
-   ```
-
-2. **Restore database**:
-   ```bash
-   cat backup.sql | docker-compose exec -T db psql -U wedding_user wedding_db
-   ```
+# Photos + config
+docker cp <container>:/app/public/photos ./backup/photos
+docker cp <container>:/app/public/config ./backup/config
+```
 
 ## Troubleshooting
 
-### Photos Not Showing
-- **Check**: Photos must be uploaded through admin panel (not FTP)
-- **Verify**: File exists in Docker volume: `docker exec <container> ls /app/public/photos`
-- **Solution**: Re-upload through admin panel if missing
-
-### Can't Login to Admin
-- **Check**: Verify `ADMIN_PASSWORD` environment variable is set
-- **Reset**: Update password in Portainer environment variables and restart
-- **Clear cookies**: Try in incognito/private browsing mode
-
-### RSVP Form Not Working
-- **Check**: Database connection (verify `DATABASE_URL`)
-- **Logs**: `docker-compose logs web` for errors
-- **Guest List**: Ensure guest names match exactly (case-sensitive)
-
-### Timeline Photos Missing
-- **Check**: Navigate to Admin → Timeline and verify photos are uploaded
-- **Verify**: Each milestone can have 0-2 photos
-- **Solution**: Click Edit on milestone and re-upload photos
-
-### Site Showing as Work-in-Progress
-- **Check**: Go to Admin → Work in Progress
-- **Toggle**: Ensure page is set to "Live" (green)
-- **Note**: Admins always see full site regardless of WIP status
+| Problem | Fix |
+|---------|-----|
+| Photos not showing | Must use `/api/photos/[filename]` path, not `/photos/[filename]` |
+| Can't log in | Verify `ADMIN_PASSWORD` env var; try incognito |
+| RSVP not found | Guest name must match guest_list exactly (case-insensitive) |
+| Registry fetch blank | Amazon blocks scrapes — fill in manually after fetch attempt |
+| WIP page showing | Admin → WIP Control → toggle page to Live |
+| Build fails | Run `rm -rf .next` then rebuild — stale cache causes false errors |
 
 ## Tech Stack
 
-- **Frontend**: Next.js 16, React, TypeScript, Tailwind CSS
-- **Backend**: Next.js API Routes, Node.js
+- **Frontend**: Next.js 16, React 19, TypeScript, Tailwind CSS
+- **Backend**: Next.js API Routes, Node.js 20
 - **Database**: PostgreSQL 15
-- **Authentication**: Cookie-based with bcrypt
-- **File Storage**: Local file system with Docker volumes
-- **Deployment**: Docker, Portainer, GitHub Container Registry
-- **Image Optimization**: Next.js Image component
+- **Auth**: Cookie-based with bcrypt
+- **File Storage**: Docker volumes, served via API route
+- **Deployment**: Docker multi-stage build → GitHub Container Registry → Portainer
 
-## Browser Support
+## Developer Docs
 
-- Chrome (latest)
-- Firefox (latest)
-- Safari (latest)
-- Edge (latest)
-- Mobile browsers (iOS Safari, Chrome Mobile)
-
-## Performance Tips
-
-- Keep photo file sizes under 2MB each
-- Use JPG format for photos (smaller than PNG)
-- Heart only your favorite photos for public gallery
-- Limit timeline to 10-15 key milestones
-
-## Security
-
-- Admin panel password-protected
-- Cookies are HTTP-only and secure
-- SQL injection protection via parameterized queries
-- File upload validation (images only)
-- Environment variables for sensitive data
-
-## Support & Documentation
-
-- **Developer Docs**: See `CLAUDE.md` for technical details
-- **Issues**: Open an issue on GitHub
-- **Updates**: Check GitHub releases for new features
-
-## License
-
-Private project - All rights reserved
+See `CLAUDE.md` for full technical architecture, file structure, data flow, and implementation details.
 
 ---
 
-**Made with ❤️ for your special day**
+**Made with ❤️ for Heaven & Austin's wedding**

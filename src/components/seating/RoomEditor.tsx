@@ -197,7 +197,7 @@ export default function RoomEditor({
   const n = vertices.length;
   if (n < 3) {
     return (
-      <svg className="absolute inset-0 w-full h-full" style={{ zIndex: 4, pointerEvents: 'none' }} />
+      <svg className="absolute inset-0 w-full h-full" style={{ zIndex: 0, pointerEvents: 'none' }} />
     );
   }
 
@@ -207,7 +207,7 @@ export default function RoomEditor({
   return (
     <svg
       className="absolute inset-0 w-full h-full"
-      style={{ zIndex: 4, pointerEvents: 'none' }}
+      style={{ zIndex: 0, pointerEvents: 'none' }}
     >
       {/* Room fill */}
       <path
@@ -215,7 +215,6 @@ export default function RoomEditor({
         fill="rgba(99,102,241,0.06)"
         stroke="#6366f1"
         strokeWidth={2}
-        strokeDasharray={active ? undefined : '6 3'}
       />
 
       {/* Per-edge handles */}

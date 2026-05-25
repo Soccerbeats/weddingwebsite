@@ -11,6 +11,7 @@ interface SeatAssignment {
   guest_name: string | null;
   plus_one_name: string | null;
   party_size: number | null;
+  rsvp_status: string | null;
 }
 
 interface SeatingTable {
@@ -50,7 +51,7 @@ export async function GET() {
     const assignmentsResult = await client.query(
       `SELECT sa.seating_table_id, sa.seat_index, sa.guest_list_id,
               sa.display_name, sa.party_group_id,
-              gl.guest_name, gl.plus_one_name, gl.party_size
+              gl.guest_name, gl.plus_one_name, gl.party_size, gl.rsvp_status
        FROM seat_assignments sa
        LEFT JOIN guest_list gl ON gl.id = sa.guest_list_id
        WHERE sa.seating_table_id IN (
@@ -74,6 +75,7 @@ export async function GET() {
         guest_name: row.guest_name,
         plus_one_name: row.plus_one_name,
         party_size: row.party_size,
+        rsvp_status: row.rsvp_status ?? null,
       });
     }
 

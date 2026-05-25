@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import type { FundItem } from '@/lib/config';
+import type { RegistryItem } from '@/app/api/admin/registry-items/route';
 
 interface FundConfig {
     enabled: boolean;
@@ -21,6 +22,7 @@ interface SiteData {
     groomName: string;
     registry?: FundConfig;
     pageBgColors?: { registry?: string };
+    registryItems?: RegistryItem[];
 }
 
 function ContributeModal({ item, fund, onClose }: { item: FundItem; fund: FundConfig; onClose: () => void }) {
@@ -202,11 +204,16 @@ function ProgressBar({ funded, price }: { funded: number; price: number }) {
 export default function RegistryPage() {
     const [data, setData] = useState<SiteData | null>(null);
     const [selectedItem, setSelectedItem] = useState<FundItem | null>(null);
+    const [activeTab, setActiveTab] = useState<'honeymoon' | 'registry'>('honeymoon');
+    const [registryItems, setRegistryItems] = useState<RegistryItem[]>([]);
 
     useEffect(() => {
         fetch('/api/admin/site-config')
             .then(r => r.json())
             .then(setData);
+        fetch('/api/admin/registry-items')
+            .then(r => r.json())
+            .then(items => setRegistryItems(Array.isArray(items) ? items : []));
     }, []);
 
     if (!data) return null;
@@ -227,12 +234,16 @@ export default function RegistryPage() {
     const totalFunded = items.reduce((s, i) => s + i.funded, 0);
     const showFinancials = fund.showFinancials !== false;
 
+    const targetItems = registryItems.filter(i => i.store === 'target');
+    const amazonItems = registryItems.filter(i => i.store === 'amazon');
+    const otherItems = registryItems.filter(i => i.store === 'other');
+
     return (
         <div style={{ backgroundColor: bgColor }} className="min-h-screen py-16">
             <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
 
                 {/* Header */}
-                <div className="text-center mb-12">
+                <div className="text-center mb-10">
                     <p className="text-accent uppercase tracking-widest text-sm font-medium mb-3">
                         {data.brideName} & {data.groomName}
                     </p>
@@ -248,83 +259,177 @@ export default function RegistryPage() {
                 {fund.description && (
                     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 mb-8 text-center">
                         <p className="text-gray-700 text-lg leading-relaxed whitespace-pre-line">{fund.description}</p>
-                    </div>
-                )}
-
-                {/* Overall progress — only shown when financials are on */}
-                {showFinancials && items.length > 0 && totalGoal > 0 && (
-                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-8">
-                        <div className="flex justify-between items-end mb-2">
-                            <span className="font-semibold text-gray-900">Overall Progress</span>
-                            <span className="text-accent font-bold text-lg">${totalFunded.toLocaleString()} / ${totalGoal.toLocaleString()}</span>
-                        </div>
-                        <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
-                            <div
-                                className="h-full rounded-full transition-all duration-700"
-                                style={{ width: `${Math.min(100, (totalFunded / totalGoal) * 100)}%`, backgroundColor: 'var(--accent)' }}
-                            />
-                        </div>
-                        <p className="text-sm text-gray-500 mt-2 text-right">
-                            {Math.round((totalFunded / totalGoal) * 100)}% funded
+                        <p className="text-gray-500 text-sm mt-4 italic">
+                            If you prefer the old-fashioned way, we will also have a card box at the wedding. 💌
                         </p>
                     </div>
                 )}
 
-                {/* Zero fees banner */}
-                <div className="bg-green-50 border border-green-200 rounded-xl px-5 py-3 mb-8 flex items-center gap-3">
-                    <span className="text-green-600 font-bold text-lg">✓</span>
-                    <p className="text-green-800 text-sm font-medium">100% Goes To Us — Zero Fees. Every dollar goes directly to us with no platform cuts.</p>
+                {/* Tabs */}
+                <div className="flex gap-1 mb-8 bg-white border border-gray-200 rounded-2xl p-1 shadow-sm">
+                    {[
+                        { key: 'honeymoon' as const, label: '🌴 Honeymoon Fund', desc: 'Help fund our experiences' },
+                        { key: 'registry' as const, label: '🛍️ Registry', desc: 'Target & Amazon wish list' },
+                    ].map(t => (
+                        <button
+                            key={t.key}
+                            onClick={() => setActiveTab(t.key)}
+                            className={`flex-1 py-3 px-4 rounded-xl text-sm font-medium transition-all ${
+                                activeTab === t.key
+                                    ? 'bg-accent text-white shadow'
+                                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                            }`}
+                        >
+                            <div>{t.label}</div>
+                            <div className={`text-xs mt-0.5 ${activeTab === t.key ? 'text-white/80' : 'text-gray-400'}`}>{t.desc}</div>
+                        </button>
+                    ))}
                 </div>
 
-                {/* Experience items */}
-                {items.length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-12">
-                        {items.map(item => {
-                            const pct = Math.min(100, Math.round((item.funded / item.price) * 100));
-                            const fullyFunded = pct >= 100; // always check, regardless of showFinancials
-                            return (
-                                <div
-                                    key={item.id}
-                                    className={`bg-white rounded-2xl shadow-sm border p-6 flex flex-col ${fullyFunded ? 'border-green-200 opacity-75' : 'border-gray-100'}`}
-                                >
-                                    <div className="text-4xl mb-3">{item.emoji}</div>
-                                    <div className="flex items-start justify-between gap-2 mb-1">
-                                        <h3 className="font-bold text-gray-900 text-lg leading-tight">{item.title}</h3>
-                                        {fullyFunded && (
-                                            <span className="shrink-0 text-xs bg-green-100 text-green-700 font-semibold px-2 py-0.5 rounded-full">Funded!</span>
-                                        )}
-                                    </div>
-                                    <p className="text-gray-500 text-sm leading-relaxed mb-3 flex-1">{item.description}</p>
-                                    {showFinancials && (
-                                        <>
-                                            <p className="font-bold text-accent text-xl mb-2">${item.price.toLocaleString()}</p>
-                                            <ProgressBar funded={item.funded} price={item.price} />
-                                        </>
-                                    )}
-                                    <button
-                                        onClick={() => !fullyFunded && setSelectedItem(item)}
-                                        disabled={fullyFunded}
-                                        className={`mt-4 w-full py-2.5 rounded-xl font-semibold text-sm transition-colors ${
-                                            fullyFunded
-                                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                                : 'bg-accent hover:bg-accent-dark text-white'
-                                        }`}
-                                    >
-                                        {fullyFunded ? 'Fully Funded' : 'Contribute'}
-                                    </button>
+                {/* ── HONEYMOON FUND TAB ── */}
+                {activeTab === 'honeymoon' && (
+                    <>
+                        {/* Overall progress — only shown when financials are on */}
+                        {showFinancials && items.length > 0 && totalGoal > 0 && (
+                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-8">
+                                <div className="flex justify-between items-end mb-2">
+                                    <span className="font-semibold text-gray-900">Overall Progress</span>
+                                    <span className="text-accent font-bold text-lg">${totalFunded.toLocaleString()} / ${totalGoal.toLocaleString()}</span>
                                 </div>
-                            );
-                        })}
-                    </div>
-                ) : (
-                    <div className="text-center py-16 text-gray-400">
-                        <p className="text-5xl mb-4">✈️</p>
-                        <p className="text-lg">Experiences coming soon!</p>
+                                <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
+                                    <div
+                                        className="h-full rounded-full transition-all duration-700"
+                                        style={{ width: `${Math.min(100, (totalFunded / totalGoal) * 100)}%`, backgroundColor: 'var(--accent)' }}
+                                    />
+                                </div>
+                                <p className="text-sm text-gray-500 mt-2 text-right">
+                                    {Math.round((totalFunded / totalGoal) * 100)}% funded
+                                </p>
+                            </div>
+                        )}
+
+                        {/* Zero fees banner */}
+                        <div className="bg-green-50 border border-green-200 rounded-xl px-5 py-3 mb-8 flex items-center gap-3">
+                            <span className="text-green-600 font-bold text-lg">✓</span>
+                            <p className="text-green-800 text-sm font-medium">100% Goes To Us — Zero Fees. Every dollar goes directly to us with no platform cuts.</p>
+                        </div>
+
+                        {/* Experience items */}
+                        {items.length > 0 ? (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-12">
+                                {items.map(item => {
+                                    const pct = Math.min(100, Math.round((item.funded / item.price) * 100));
+                                    const fullyFunded = pct >= 100;
+                                    return (
+                                        <div
+                                            key={item.id}
+                                            className={`bg-white rounded-2xl shadow-sm border p-6 flex flex-col ${fullyFunded ? 'border-green-200 opacity-75' : 'border-gray-100'}`}
+                                        >
+                                            <div className="text-4xl mb-3">{item.emoji}</div>
+                                            <div className="flex items-start justify-between gap-2 mb-1">
+                                                <h3 className="font-bold text-gray-900 text-lg leading-tight">{item.title}</h3>
+                                                {fullyFunded && (
+                                                    <span className="shrink-0 text-xs bg-green-100 text-green-700 font-semibold px-2 py-0.5 rounded-full">Funded!</span>
+                                                )}
+                                            </div>
+                                            <p className="text-gray-500 text-sm leading-relaxed mb-3 flex-1">{item.description}</p>
+                                            {showFinancials && (
+                                                <>
+                                                    <p className="font-bold text-accent text-xl mb-2">${item.price.toLocaleString()}</p>
+                                                    <ProgressBar funded={item.funded} price={item.price} />
+                                                </>
+                                            )}
+                                            <button
+                                                onClick={() => !fullyFunded && setSelectedItem(item)}
+                                                disabled={fullyFunded}
+                                                className={`mt-4 w-full py-2.5 rounded-xl font-semibold text-sm transition-colors ${
+                                                    fullyFunded
+                                                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                                        : 'bg-accent hover:bg-accent-dark text-white'
+                                                }`}
+                                            >
+                                                {fullyFunded ? 'Fully Funded' : 'Contribute'}
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <div className="text-center py-16 text-gray-400">
+                                <p className="text-5xl mb-4">✈️</p>
+                                <p className="text-lg">Experiences coming soon!</p>
+                            </div>
+                        )}
+                    </>
+                )}
+
+                {/* ── REGISTRY TAB ── */}
+                {activeTab === 'registry' && (
+                    <div>
+                        {registryItems.length === 0 ? (
+                            <div className="text-center py-16 text-gray-400">
+                                <p className="text-5xl mb-4">🛍️</p>
+                                <p className="text-lg">Registry coming soon!</p>
+                            </div>
+                        ) : (
+                            <>
+                                {[
+                                    { store: 'target', label: '🎯 Target', items: targetItems },
+                                    { store: 'amazon', label: '📦 Amazon', items: amazonItems },
+                                    { store: 'other', label: '🛍️ Other', items: otherItems },
+                                ].filter(g => g.items.length > 0).map(group => (
+                                    <div key={group.store} className="mb-10">
+                                        <h2 className="text-xl font-serif text-gray-800 mb-4 flex items-center gap-2">
+                                            {group.label}
+                                            <span className="text-sm font-sans text-gray-400 font-normal">({group.items.length} {group.items.length === 1 ? 'item' : 'items'})</span>
+                                        </h2>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                                            {group.items.map(item => (
+                                                <a
+                                                    key={item.id}
+                                                    href={item.url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col hover:shadow-md hover:border-accent/30 transition-all group"
+                                                >
+                                                    {/* Thumbnail */}
+                                                    <div className="w-full h-48 bg-gray-50 flex items-center justify-center overflow-hidden">
+                                                        {item.image
+                                                            // eslint-disable-next-line @next/next/no-img-element
+                                                            ? <img src={item.image} alt={item.title} className="w-full h-full object-contain p-3" />
+                                                            : <span className="text-5xl">🛍️</span>
+                                                        }
+                                                    </div>
+                                                    {/* Details */}
+                                                    <div className="p-4 flex flex-col flex-1">
+                                                        <h3 className="font-semibold text-gray-900 text-sm leading-snug mb-1 line-clamp-2 group-hover:text-accent transition-colors">
+                                                            {item.title}
+                                                        </h3>
+                                                        {item.price && (
+                                                            <p className="text-accent font-bold text-base mb-2">{item.price}</p>
+                                                        )}
+                                                        {item.description && (
+                                                            <p className="text-gray-400 text-xs leading-relaxed line-clamp-3 flex-1">{item.description}</p>
+                                                        )}
+                                                        <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
+                                                            <span className="text-xs text-gray-400">
+                                                                {item.store === 'target' ? '🎯 Target' : item.store === 'amazon' ? '📦 Amazon' : '🛍️ Other'}
+                                                            </span>
+                                                            <span className="text-xs font-medium text-accent group-hover:underline">View item →</span>
+                                                        </div>
+                                                    </div>
+                                                </a>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                            </>
+                        )}
                     </div>
                 )}
 
                 {/* Thank you */}
-                <div className="text-center">
+                <div className="text-center mt-12">
                     <p className="font-serif text-2xl italic text-gray-700 mb-2">Thank you from the bottom of our hearts.</p>
                     <p className="text-sm text-gray-400">Your love and generosity mean everything to us as we begin this new chapter.</p>
                 </div>

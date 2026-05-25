@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { FundItem } from '@/lib/config';
+import type { RegistryItem } from '@/app/api/admin/registry-items/route';
 
 interface PaymentEntry { handle: string; label: string; }
 
@@ -41,7 +42,14 @@ export default function AdminRegistryPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState('');
-    const [tab, setTab] = useState<'settings' | 'experiences'>('experiences');
+    const [tab, setTab] = useState<'settings' | 'experiences' | 'registry'>('experiences');
+    const [registryItems, setRegistryItems] = useState<RegistryItem[]>([]);
+    const [urlInput, setUrlInput] = useState('');
+    const [fetching, setFetching] = useState(false);
+    const [fetchError, setFetchError] = useState('');
+    const [pendingItem, setPendingItem] = useState<Partial<RegistryItem> | null>(null);
+    const [editingRegItem, setEditingRegItem] = useState<RegistryItem | null>(null);
+    const urlInputRef = useRef<HTMLInputElement>(null);
     const [editingItem, setEditingItem] = useState<FundItem | null>(null);
     const [newItem, setNewItem] = useState<Omit<FundItem, 'id'>>(BLANK_ITEM);
     const [showAddForm, setShowAddForm] = useState(false);
@@ -56,7 +64,75 @@ export default function AdminRegistryPage() {
                 setBgColor(data.pageBgColors?.registry || '#ffffff');
             })
             .finally(() => setLoading(false));
+        fetch('/api/admin/registry-items')
+            .then(r => r.json())
+            .then(items => setRegistryItems(Array.isArray(items) ? items : []));
     }, []);
+
+    const fetchMeta = async () => {
+        if (!urlInput.trim()) return;
+        setFetching(true);
+        setFetchError('');
+        setPendingItem(null);
+        try {
+            const res = await fetch('/api/admin/fetch-meta', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: urlInput.trim() }),
+            });
+            const data = await res.json();
+            setPendingItem({
+                id: Math.random().toString(36).slice(2, 10),
+                store: data.store || 'other',
+                title: data.title || '',
+                description: data.description || '',
+                image: data.image || '',
+                price: data.price || '',
+                url: urlInput.trim(),
+            });
+            if (!data.success) setFetchError(data.error || 'Could not auto-fetch — fill in manually below.');
+        } catch {
+            setFetchError('Network error fetching URL.');
+            setPendingItem({ id: Math.random().toString(36).slice(2, 10), store: 'other', title: '', description: '', image: '', price: '', url: urlInput.trim() });
+        } finally {
+            setFetching(false);
+        }
+    };
+
+    const saveRegistryItem = async (item: RegistryItem) => {
+        const res = await fetch('/api/admin/registry-items', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(item),
+        });
+        if (res.ok) {
+            setRegistryItems(prev => [...prev, item]);
+            setPendingItem(null);
+            setUrlInput('');
+            setFetchError('');
+        }
+    };
+
+    const updateRegistryItem = async (item: RegistryItem) => {
+        const res = await fetch('/api/admin/registry-items', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(item),
+        });
+        if (res.ok) {
+            setRegistryItems(prev => prev.map(i => i.id === item.id ? item : i));
+            setEditingRegItem(null);
+        }
+    };
+
+    const deleteRegistryItem = async (id: string) => {
+        const res = await fetch('/api/admin/registry-items', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id }),
+        });
+        if (res.ok) setRegistryItems(prev => prev.filter(i => i.id !== id));
+    };
 
     const save = async (updatedFund?: FundConfig) => {
         setSaving(true);
@@ -173,13 +249,17 @@ export default function AdminRegistryPage() {
 
             {/* Tabs */}
             <div className="flex gap-1 mb-6 bg-gray-100 rounded-xl p-1 w-fit">
-                {(['experiences', 'settings'] as const).map(t => (
+                {([
+                    { key: 'experiences', label: 'Honeymoon Fund' },
+                    { key: 'registry', label: 'Registry Items' },
+                    { key: 'settings', label: 'Settings' },
+                ] as const).map(t => (
                     <button
-                        key={t}
-                        onClick={() => setTab(t)}
-                        className={`px-5 py-2 rounded-lg text-sm font-medium capitalize transition-colors ${tab === t ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                        key={t.key}
+                        onClick={() => setTab(t.key)}
+                        className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${tab === t.key ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
                     >
-                        {t}
+                        {t.label}
                     </button>
                 ))}
             </div>
@@ -319,6 +399,205 @@ export default function AdminRegistryPage() {
                             + Add Experience
                         </button>
                     )}
+                </div>
+            )}
+
+            {/* ── REGISTRY ITEMS TAB ── */}
+            {tab === 'registry' && (
+                <div>
+                    <p className="text-sm text-gray-500 mb-6">Paste a product URL from Target or Amazon and we&apos;ll pull in the details automatically. You can edit anything before saving.</p>
+
+                    {/* URL fetch bar */}
+                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-6">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Add item from URL</label>
+                        <div className="flex gap-2">
+                            <input
+                                ref={urlInputRef}
+                                type="url"
+                                value={urlInput}
+                                onChange={e => setUrlInput(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && fetchMeta()}
+                                placeholder="https://www.target.com/p/..."
+                                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                                disabled={fetching}
+                            />
+                            <button
+                                onClick={fetchMeta}
+                                disabled={fetching || !urlInput.trim()}
+                                className="bg-accent text-white px-5 py-2 rounded-lg text-sm font-medium disabled:opacity-40 shrink-0"
+                            >
+                                {fetching ? 'Fetching…' : 'Fetch →'}
+                            </button>
+                        </div>
+                        {fetchError && <p className="text-amber-600 text-xs mt-2">⚠️ {fetchError}</p>}
+                    </div>
+
+                    {/* Pending item preview / edit form */}
+                    {pendingItem && (
+                        <div className="bg-white rounded-2xl border-2 border-accent/30 shadow-sm p-5 mb-6">
+                            <h3 className="font-semibold text-gray-900 mb-4">Review &amp; Save</h3>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                {/* Image preview */}
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">Image URL</label>
+                                    <input
+                                        type="text"
+                                        value={pendingItem.image || ''}
+                                        onChange={e => setPendingItem(p => p ? { ...p, image: e.target.value } : p)}
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-xs mb-2"
+                                        placeholder="https://..."
+                                    />
+                                    {pendingItem.image && (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img src={pendingItem.image} alt="" className="w-full h-40 object-contain rounded-lg border border-gray-100 bg-gray-50" />
+                                    )}
+                                </div>
+                                <div className="space-y-3">
+                                    <div>
+                                        <label className="block text-xs font-medium text-gray-600 mb-1">Store</label>
+                                        <select
+                                            value={pendingItem.store || 'other'}
+                                            onChange={e => setPendingItem(p => p ? { ...p, store: e.target.value as RegistryItem['store'] } : p)}
+                                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                                        >
+                                            <option value="target">Target</option>
+                                            <option value="amazon">Amazon</option>
+                                            <option value="other">Other</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-gray-600 mb-1">Title</label>
+                                        <input
+                                            type="text"
+                                            value={pendingItem.title || ''}
+                                            onChange={e => setPendingItem(p => p ? { ...p, title: e.target.value } : p)}
+                                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-gray-600 mb-1">Price (display only)</label>
+                                        <input
+                                            type="text"
+                                            value={pendingItem.price || ''}
+                                            onChange={e => setPendingItem(p => p ? { ...p, price: e.target.value } : p)}
+                                            placeholder="$29.99"
+                                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="mt-3">
+                                <label className="block text-xs font-medium text-gray-600 mb-1">Description</label>
+                                <textarea
+                                    rows={2}
+                                    value={pendingItem.description || ''}
+                                    onChange={e => setPendingItem(p => p ? { ...p, description: e.target.value } : p)}
+                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none"
+                                />
+                            </div>
+                            <div className="flex gap-2 mt-4">
+                                <button
+                                    onClick={() => pendingItem.title && saveRegistryItem(pendingItem as RegistryItem)}
+                                    disabled={!pendingItem.title}
+                                    className="bg-accent text-white px-5 py-2 rounded-lg text-sm font-medium disabled:opacity-40"
+                                >
+                                    Save Item
+                                </button>
+                                <button
+                                    onClick={() => { setPendingItem(null); setUrlInput(''); setFetchError(''); }}
+                                    className="bg-gray-100 text-gray-700 px-5 py-2 rounded-lg text-sm"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Saved items list */}
+                    {registryItems.length === 0 && !pendingItem && (
+                        <div className="text-center py-16 text-gray-400">
+                            <p className="text-4xl mb-3">🛍️</p>
+                            <p className="text-sm">No registry items yet — paste a URL above to add your first item.</p>
+                        </div>
+                    )}
+
+                    {['target', 'amazon', 'other'].map(store => {
+                        const storeItems = registryItems.filter(i => i.store === store);
+                        if (storeItems.length === 0) return null;
+                        const storeLabel = store === 'target' ? '🎯 Target' : store === 'amazon' ? '📦 Amazon' : '🛍️ Other';
+                        return (
+                            <div key={store} className="mb-8">
+                                <h3 className="font-semibold text-gray-700 text-sm uppercase tracking-wider mb-3">{storeLabel}</h3>
+                                <div className="space-y-3">
+                                    {storeItems.map(item => (
+                                        <div key={item.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                                            {editingRegItem?.id === item.id ? (
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label className="block text-xs font-medium text-gray-600 mb-1">Image URL</label>
+                                                        <input type="text" value={editingRegItem.image}
+                                                            onChange={e => setEditingRegItem(p => p ? { ...p, image: e.target.value } : p)}
+                                                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-xs mb-2" />
+                                                        {editingRegItem.image && (
+                                                            // eslint-disable-next-line @next/next/no-img-element
+                                                            <img src={editingRegItem.image} alt="" className="w-full h-32 object-contain rounded-lg border border-gray-100 bg-gray-50" />
+                                                        )}
+                                                    </div>
+                                                    <div className="space-y-3">
+                                                        <div>
+                                                            <label className="block text-xs font-medium text-gray-600 mb-1">Title</label>
+                                                            <input type="text" value={editingRegItem.title}
+                                                                onChange={e => setEditingRegItem(p => p ? { ...p, title: e.target.value } : p)}
+                                                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-xs font-medium text-gray-600 mb-1">Price</label>
+                                                            <input type="text" value={editingRegItem.price}
+                                                                onChange={e => setEditingRegItem(p => p ? { ...p, price: e.target.value } : p)}
+                                                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-xs font-medium text-gray-600 mb-1">Description</label>
+                                                            <textarea rows={2} value={editingRegItem.description}
+                                                                onChange={e => setEditingRegItem(p => p ? { ...p, description: e.target.value } : p)}
+                                                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none" />
+                                                        </div>
+                                                    </div>
+                                                    <div className="sm:col-span-2 flex gap-2">
+                                                        <button onClick={() => updateRegistryItem(editingRegItem)} className="bg-accent text-white px-4 py-2 rounded-lg text-sm font-medium">Save</button>
+                                                        <button onClick={() => setEditingRegItem(null)} className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm">Cancel</button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center gap-4">
+                                                    {item.image
+                                                        // eslint-disable-next-line @next/next/no-img-element
+                                                        ? <img src={item.image} alt={item.title} className="w-16 h-16 object-contain rounded-lg border border-gray-100 bg-gray-50 shrink-0" />
+                                                        : <div className="w-16 h-16 rounded-lg bg-gray-100 flex items-center justify-center text-2xl shrink-0">🛍️</div>
+                                                    }
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-semibold text-gray-900 text-sm truncate">{item.title}</p>
+                                                        {item.price && <p className="text-accent font-medium text-sm">{item.price}</p>}
+                                                        <p className="text-gray-400 text-xs truncate mt-0.5">{item.description}</p>
+                                                    </div>
+                                                    <div className="flex gap-2 shrink-0">
+                                                        <button onClick={() => setEditingRegItem(item)}
+                                                            className="text-xs bg-gray-50 text-gray-700 border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+                                                            Edit
+                                                        </button>
+                                                        <button onClick={() => deleteRegistryItem(item.id)}
+                                                            className="text-xs bg-red-50 text-red-600 border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-100 transition-colors">
+                                                            Delete
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        );
+                    })}
                 </div>
             )}
 
