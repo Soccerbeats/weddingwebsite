@@ -7,162 +7,270 @@ import { SeatingTableData, SeatData } from './types';
 interface TableNodeProps {
   data: {
     table: SeatingTableData;
-    onAssignGuest: (tableId: number, seatIndex: number) => void;
-    onUnassignGuest: (tableId: number, seatIndex: number) => void;
+    onDropGuest: (tableId: number, guestId: string) => void;
+    onUnassignParty: (tableId: number, partyGroupId: number) => void;
     onDeleteTable: (tableId: number) => void;
     onRenameTable: (tableId: number, name: string) => void;
-    splitPartyGuestIds: Set<number>;
+    splitPartyGroupIds: Set<number>;
   };
 }
 
-interface SeatPopoverProps {
-  seat: SeatData;
-  onUnassign: () => void;
-  onClose: () => void;
-  isSplit: boolean;
-}
+// ── Seat chip ──────────────────────────────────────────────────────────────
 
-function SeatPopover({ seat, onUnassign, onClose, isSplit }: SeatPopoverProps) {
+function SeatChip({
+  seat,
+  isSplit,
+  onRemoveParty,
+}: {
+  seat: SeatData;
+  isSplit: boolean;
+  onRemoveParty: () => void;
+}) {
+  const [hover, setHover] = useState(false);
+  const name = seat.display_name || seat.guest_name || '?';
+
   return (
     <div
-      className="absolute z-50 bg-white border border-gray-200 rounded-lg shadow-lg p-3 min-w-[160px]"
-      style={{ top: '100%', left: '50%', transform: 'translateX(-50%)', marginTop: 4 }}
+      className={`nodrag relative flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border select-none cursor-default
+        ${isSplit
+          ? 'bg-yellow-100 border-yellow-400 text-yellow-800'
+          : 'bg-green-50 border-green-300 text-green-800'
+        }`}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      title={isSplit ? 'Party is split across tables' : name}
     >
-      <div className="text-sm font-semibold text-gray-800 mb-1">{seat.guest_name}</div>
-      {seat.plus_one_name && (
-        <div className="text-xs text-gray-500 mb-1">+1: {seat.plus_one_name}</div>
-      )}
-      {isSplit && (
-        <div className="text-xs text-yellow-600 mb-2 flex items-center gap-1">
-          <span>⚠</span> Party split
-        </div>
-      )}
-      <div className="flex gap-2 mt-2">
+      {isSplit && <span className="text-yellow-500 mr-0.5">⚠</span>}
+      <span className="truncate max-w-[80px]">{name}</span>
+      {hover && (
         <button
-          className="nodrag text-xs bg-red-50 text-red-600 border border-red-200 rounded px-2 py-1 hover:bg-red-100 transition-colors"
-          onClick={(e) => { e.stopPropagation(); onUnassign(); onClose(); }}
+          className="nodrag ml-1 text-gray-400 hover:text-red-500 transition-colors leading-none"
+          onClick={e => { e.stopPropagation(); onRemoveParty(); }}
+          title="Remove party from table"
         >
-          Remove
+          ×
         </button>
-        <button
-          className="nodrag text-xs bg-gray-50 text-gray-600 border border-gray-200 rounded px-2 py-1 hover:bg-gray-100 transition-colors"
-          onClick={(e) => { e.stopPropagation(); onClose(); }}
-        >
-          Close
-        </button>
-      </div>
+      )}
     </div>
   );
 }
 
-interface SeatSlotProps {
-  seat: SeatData;
-  tableId: number;
-  onAssign: () => void;
-  onUnassign: () => void;
-  isSplit: boolean;
-  style?: React.CSSProperties;
-}
+// ── Table controls (rendered inside table on hover) ────────────────────────
 
-function SeatSlot({ seat, tableId, onAssign, onUnassign, isSplit, style }: SeatSlotProps) {
-  const [showPopover, setShowPopover] = useState(false);
-  const isOccupied = seat.guest_list_id !== null;
-  const firstName = seat.guest_name?.split(' ')[0] ?? '';
+function TableControls({
+  table,
+  onDelete,
+  onRename,
+}: {
+  table: SeatingTableData;
+  onDelete: () => void;
+  onRename: (name: string) => void;
+}) {
+  const [renaming, setRenaming] = useState(false);
+  const [value, setValue] = useState(table.name);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const handleClick = (e: React.MouseEvent) => {
+  const startRename = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (isOccupied) {
-      setShowPopover(v => !v);
-    } else {
-      onAssign();
-    }
+    setValue(table.name);
+    setRenaming(true);
+    setTimeout(() => inputRef.current?.focus(), 0);
   };
+
+  const commit = () => {
+    if (value.trim()) onRename(value.trim());
+    setRenaming(false);
+  };
+
+  return (
+    <div className="nodrag flex items-center gap-1 mt-1" onClick={e => e.stopPropagation()}>
+      {renaming ? (
+        <input
+          ref={inputRef}
+          className="text-xs border border-gray-300 rounded px-1 py-0.5 w-24 outline-none bg-white"
+          value={value}
+          onChange={e => setValue(e.target.value)}
+          onBlur={commit}
+          onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setRenaming(false); }}
+        />
+      ) : (
+        <button
+          className="nodrag p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-white/50 transition-colors"
+          title="Rename"
+          onClick={startRename}
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+          </svg>
+        </button>
+      )}
+
+      {confirmDelete ? (
+        <div className="flex items-center gap-1">
+          <span className="text-xs text-red-500">Delete?</span>
+          <button
+            className="nodrag text-xs bg-red-100 text-red-700 rounded px-1.5 py-0.5 hover:bg-red-200"
+            onClick={e => { e.stopPropagation(); onDelete(); }}
+          >Yes</button>
+          <button
+            className="nodrag text-xs bg-gray-100 text-gray-600 rounded px-1.5 py-0.5 hover:bg-gray-200"
+            onClick={e => { e.stopPropagation(); setConfirmDelete(false); }}
+          >No</button>
+        </div>
+      ) : (
+        <button
+          className="nodrag p-1 rounded text-red-400 hover:text-red-600 hover:bg-white/50 transition-colors"
+          title="Delete table"
+          onClick={e => { e.stopPropagation(); setConfirmDelete(true); }}
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="3 6 5 6 21 6" />
+            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+            <path d="M10 11v6M14 11v6" />
+            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+          </svg>
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── Table shapes ───────────────────────────────────────────────────────────
+
+function TableBody({
+  table,
+  splitPartyGroupIds,
+  onDropGuest,
+  onUnassignParty,
+  onDeleteTable,
+  onRenameTable,
+}: {
+  table: SeatingTableData;
+  splitPartyGroupIds: Set<number>;
+  onDropGuest: (tableId: number, guestId: string) => void;
+  onUnassignParty: (tableId: number, partyGroupId: number) => void;
+  onDeleteTable: (tableId: number) => void;
+  onRenameTable: (tableId: number, name: string) => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const seatCount = table.seats.length;
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+    const guestId = e.dataTransfer.getData('guestId');
+    if (guestId) onDropGuest(table.id, guestId);
+  };
+
+  const isRound = table.table_type === 'round';
+  const isHead = table.table_type === 'head';
+
+  // Table surface sizing
+  const tableW = isRound ? 160 : isHead ? Math.max(240, seatCount * 48) : 200;
+  const tableH = isRound ? 160 : isHead ? 80 : 100;
+
+  const baseClasses = `nodrag relative flex flex-col items-center justify-center
+    border-2 transition-colors cursor-default select-none
+    ${dragOver ? 'border-blue-400 bg-blue-50' : hovered ? 'border-gray-400 bg-gray-50' : 'border-gray-300 bg-white'}
+    ${isRound ? 'rounded-full' : 'rounded-xl'}`;
 
   return (
     <div
-      className="absolute"
-      style={{ ...style, transform: `${style?.transform ?? ''} translate(-50%, -50%)` }}
+      className={baseClasses}
+      style={{ width: tableW, height: tableH }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={handleDrop}
     >
-      <div className="relative">
-        <button
-          className={`nodrag w-8 h-8 rounded-full text-xs font-medium border-2 flex items-center justify-center transition-all cursor-pointer
-            ${isOccupied
-              ? isSplit
-                ? 'bg-yellow-100 border-yellow-400 text-yellow-800 hover:bg-yellow-200'
-                : 'bg-green-50 border-green-300 text-green-800 hover:bg-green-100'
-              : 'bg-white border-dashed border-gray-300 text-gray-400 hover:border-gray-400 hover:bg-gray-50'
-            }`}
-          onClick={handleClick}
-          title={isOccupied ? seat.guest_name ?? '' : 'Assign guest'}
-        >
-          {isOccupied ? (
-            <span className="truncate px-0.5" style={{ fontSize: 9 }}>{firstName}</span>
-          ) : (
-            <span className="text-lg leading-none">+</span>
-          )}
-        </button>
+      {/* Table name */}
+      <span className="text-xs font-semibold text-gray-600 px-3 text-center leading-tight">
+        {table.name}
+      </span>
 
-        {showPopover && isOccupied && (
-          <SeatPopover
-            seat={seat}
-            onUnassign={onUnassign}
-            onClose={() => setShowPopover(false)}
-            isSplit={isSplit}
-          />
-        )}
-      </div>
+      {/* People count */}
+      <span className="text-xs text-gray-400 mt-0.5">
+        {seatCount === 0 ? 'Drop guests here' : `${seatCount} ${seatCount === 1 ? 'person' : 'people'}`}
+      </span>
+
+      {/* Controls — inside table, shown on hover */}
+      {hovered && (
+        <TableControls
+          table={table}
+          onDelete={() => onDeleteTable(table.id)}
+          onRename={name => onRenameTable(table.id, name)}
+        />
+      )}
     </div>
   );
 }
 
-function RoundTable({ table, onAssignGuest, onUnassignGuest, splitPartyGuestIds }: {
+// ── Seat chips rendered around/below the table ─────────────────────────────
+
+function SeatsDisplay({
+  table,
+  splitPartyGroupIds,
+  onUnassignParty,
+}: {
   table: SeatingTableData;
-  onAssignGuest: (tableId: number, seatIndex: number) => void;
-  onUnassignGuest: (tableId: number, seatIndex: number) => void;
-  splitPartyGuestIds: Set<number>;
+  splitPartyGroupIds: Set<number>;
+  onUnassignParty: (tableId: number, partyGroupId: number) => void;
 }) {
-  const n = table.seat_count;
-  const baseSize = 120;
-  const perSeatAdd = 10;
-  const radius = Math.max(baseSize, baseSize + (n - 8) * perSeatAdd);
-  const outerSize = radius * 2 + 48;
-  const cx = outerSize / 2;
-  const cy = outerSize / 2;
-  const seatRadius = radius;
+  if (table.seats.length === 0) return null;
 
+  const isRound = table.table_type === 'round';
+  const tableW = isRound ? 160 : table.table_type === 'head' ? Math.max(240, table.seats.length * 48) : 200;
+  const tableH = isRound ? 160 : table.table_type === 'head' ? 80 : 100;
+  const cx = tableW / 2;
+  const cy = tableH / 2;
+
+  if (isRound) {
+    const n = table.seats.length;
+    const r = tableW / 2 + 28; // orbit radius outside the circle
+    return (
+      <>
+        {table.seats.map((seat, i) => {
+          const angle = (2 * Math.PI * i) / n - Math.PI / 2;
+          const x = cx + r * Math.cos(angle);
+          const y = cy + r * Math.sin(angle);
+          const isSplit = seat.party_group_id !== null && splitPartyGroupIds.has(seat.party_group_id);
+          return (
+            <div
+              key={seat.seat_index}
+              className="absolute"
+              style={{ left: x, top: y, transform: 'translate(-50%, -50%)' }}
+            >
+              <SeatChip
+                seat={seat}
+                isSplit={isSplit}
+                onRemoveParty={() => seat.party_group_id !== null && onUnassignParty(table.id, seat.party_group_id)}
+              />
+            </div>
+          );
+        })}
+      </>
+    );
+  }
+
+  // Rectangular / head: chips in a flex row below the table
   return (
-    <div className="relative" style={{ width: outerSize, height: outerSize }}>
-      {/* Table circle */}
-      <div
-        className="absolute rounded-full bg-white border-2 border-gray-300"
-        style={{
-          width: radius * 2,
-          height: radius * 2,
-          left: 24,
-          top: 24,
-        }}
-      >
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-xs text-gray-400 text-center px-2 font-medium">{table.name}</span>
-        </div>
-      </div>
-
-      {/* Seats */}
-      {table.seats.map((seat) => {
-        const angle = (2 * Math.PI * seat.seat_index) / n - Math.PI / 2;
-        const x = cx + seatRadius * Math.cos(angle);
-        const y = cy + seatRadius * Math.sin(angle);
-        const isSplit = seat.guest_list_id !== null && splitPartyGuestIds.has(seat.guest_list_id);
-
+    <div
+      className="absolute flex flex-wrap gap-1 justify-center"
+      style={{ top: tableH + 8, left: 0, right: 0 }}
+    >
+      {table.seats.map(seat => {
+        const isSplit = seat.party_group_id !== null && splitPartyGroupIds.has(seat.party_group_id);
         return (
-          <SeatSlot
+          <SeatChip
             key={seat.seat_index}
             seat={seat}
-            tableId={table.id}
-            onAssign={() => onAssignGuest(table.id, seat.seat_index)}
-            onUnassign={() => onUnassignGuest(table.id, seat.seat_index)}
             isSplit={isSplit}
-            style={{ left: x, top: y }}
+            onRemoveParty={() => seat.party_group_id !== null && onUnassignParty(table.id, seat.party_group_id)}
           />
         );
       })}
@@ -170,219 +278,55 @@ function RoundTable({ table, onAssignGuest, onUnassignGuest, splitPartyGuestIds 
   );
 }
 
-function RectangularTable({ table, onAssignGuest, onUnassignGuest, splitPartyGuestIds }: {
-  table: SeatingTableData;
-  onAssignGuest: (tableId: number, seatIndex: number) => void;
-  onUnassignGuest: (tableId: number, seatIndex: number) => void;
-  splitPartyGuestIds: Set<number>;
-}) {
-  const tableW = 240;
-  const tableH = 120;
-  const padding = 40;
-  const outerW = tableW + padding * 2;
-  const outerH = tableH + padding * 2;
-  const n = table.seats.length;
-  const topCount = Math.ceil(n / 2);
-  const bottomCount = Math.floor(n / 2);
-
-  const getSeatPos = (index: number): { x: number; y: number } => {
-    if (index < topCount) {
-      const spacing = tableW / (topCount + 1);
-      return { x: padding + spacing * (index + 1), y: padding };
-    } else {
-      const bi = index - topCount;
-      const spacing = tableW / (bottomCount + 1);
-      return { x: padding + spacing * (bi + 1), y: padding + tableH };
-    }
-  };
-
-  return (
-    <div className="relative" style={{ width: outerW, height: outerH }}>
-      <div
-        className="absolute bg-white border-2 border-gray-300 rounded-lg flex items-center justify-center"
-        style={{ left: padding, top: padding, width: tableW, height: tableH }}
-      >
-        <span className="text-xs text-gray-400 font-medium">{table.name}</span>
-      </div>
-
-      {table.seats.map((seat) => {
-        const pos = getSeatPos(seat.seat_index);
-        const isSplit = seat.guest_list_id !== null && splitPartyGuestIds.has(seat.guest_list_id);
-        return (
-          <SeatSlot
-            key={seat.seat_index}
-            seat={seat}
-            tableId={table.id}
-            onAssign={() => onAssignGuest(table.id, seat.seat_index)}
-            onUnassign={() => onUnassignGuest(table.id, seat.seat_index)}
-            isSplit={isSplit}
-            style={{ left: pos.x, top: pos.y }}
-          />
-        );
-      })}
-    </div>
-  );
-}
-
-function HeadTable({ table, onAssignGuest, onUnassignGuest, splitPartyGuestIds }: {
-  table: SeatingTableData;
-  onAssignGuest: (tableId: number, seatIndex: number) => void;
-  onUnassignGuest: (tableId: number, seatIndex: number) => void;
-  splitPartyGuestIds: Set<number>;
-}) {
-  const n = table.seats.length;
-  const tableW = Math.max(320, n * 44);
-  const tableH = 80;
-  const padding = 40;
-  const outerW = tableW + padding * 2;
-  const outerH = tableH + padding * 2;
-
-  return (
-    <div className="relative" style={{ width: outerW, height: outerH }}>
-      <div
-        className="absolute bg-white border-2 border-gray-300 rounded-lg flex flex-col items-center justify-center"
-        style={{ left: padding, top: padding, width: tableW, height: tableH }}
-      >
-        <span className="text-xs text-gray-400 font-medium">{table.name}</span>
-        <span className="text-xs text-gray-300">Head Table</span>
-      </div>
-
-      {table.seats.map((seat) => {
-        const spacing = tableW / (n + 1);
-        const x = padding + spacing * (seat.seat_index + 1);
-        const y = padding;
-        const isSplit = seat.guest_list_id !== null && splitPartyGuestIds.has(seat.guest_list_id);
-        return (
-          <SeatSlot
-            key={seat.seat_index}
-            seat={seat}
-            tableId={table.id}
-            onAssign={() => onAssignGuest(table.id, seat.seat_index)}
-            onUnassign={() => onUnassignGuest(table.id, seat.seat_index)}
-            isSplit={isSplit}
-            style={{ left: x, top: y }}
-          />
-        );
-      })}
-    </div>
-  );
-}
+// ── Main node export ───────────────────────────────────────────────────────
 
 export default function TableNode({ data }: TableNodeProps) {
-  const { table, onAssignGuest, onUnassignGuest, onDeleteTable, onRenameTable, splitPartyGuestIds } = data;
-  const [hovered, setHovered] = useState(false);
-  const [isRenaming, setIsRenaming] = useState(false);
-  const [renamingValue, setRenamingValue] = useState(table.name);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const renameInputRef = useRef<HTMLInputElement>(null);
+  const { table, onDropGuest, onUnassignParty, onDeleteTable, onRenameTable, splitPartyGroupIds } = data;
 
-  const startRename = () => {
-    setRenamingValue(table.name);
-    setIsRenaming(true);
-    setTimeout(() => renameInputRef.current?.focus(), 0);
-  };
-
-  const commitRename = () => {
-    if (renamingValue.trim()) {
-      onRenameTable(table.id, renamingValue.trim());
-    }
-    setIsRenaming(false);
-  };
+  const isRound = table.table_type === 'round';
+  const tableW = isRound ? 160 : table.table_type === 'head' ? Math.max(240, table.seats.length * 48) : 200;
+  const tableH = isRound ? 160 : table.table_type === 'head' ? 80 : 100;
+  // Extra space for seat chips around/below
+  const orbitPad = isRound ? 52 : 0;
+  const belowPad = !isRound && table.seats.length > 0 ? 40 : 0;
 
   return (
     <div
-      className="relative"
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => { setHovered(false); setShowDeleteConfirm(false); }}
+      style={{
+        width: tableW + orbitPad * 2,
+        height: tableH + orbitPad * 2 + belowPad,
+        position: 'relative',
+      }}
     >
-      {/* React Flow handles (invisible, for connecting) */}
       <Handle type="source" position={Position.Top} style={{ opacity: 0, pointerEvents: 'none' }} />
       <Handle type="target" position={Position.Bottom} style={{ opacity: 0, pointerEvents: 'none' }} />
 
-      {/* Hover controls */}
-      {hovered && (
-        <div className="nodrag absolute -top-8 left-1/2 -translate-x-1/2 flex gap-1 bg-white border border-gray-200 rounded-lg shadow px-2 py-1 z-40">
-          {isRenaming ? (
-            <input
-              ref={renameInputRef}
-              className="text-xs border border-gray-300 rounded px-1 py-0.5 w-28 outline-none"
-              value={renamingValue}
-              onChange={e => setRenamingValue(e.target.value)}
-              onBlur={commitRename}
-              onKeyDown={e => { if (e.key === 'Enter') commitRename(); if (e.key === 'Escape') setIsRenaming(false); }}
-              onClick={e => e.stopPropagation()}
-            />
-          ) : (
-            <button
-              className="nodrag text-gray-500 hover:text-gray-700 p-1 rounded hover:bg-gray-100 transition-colors"
-              title="Rename table"
-              onClick={(e) => { e.stopPropagation(); startRename(); }}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-              </svg>
-            </button>
-          )}
+      {/* Table body positioned in the center of the node */}
+      <div
+        style={{
+          position: 'absolute',
+          left: orbitPad,
+          top: orbitPad,
+          width: tableW,
+          height: tableH,
+        }}
+      >
+        <TableBody
+          table={table}
+          splitPartyGroupIds={splitPartyGroupIds}
+          onDropGuest={onDropGuest}
+          onUnassignParty={onUnassignParty}
+          onDeleteTable={onDeleteTable}
+          onRenameTable={onRenameTable}
+        />
+      </div>
 
-          {showDeleteConfirm ? (
-            <div className="flex items-center gap-1">
-              <span className="text-xs text-red-600">Delete?</span>
-              <button
-                className="nodrag text-xs bg-red-100 text-red-700 rounded px-1.5 py-0.5 hover:bg-red-200"
-                onClick={(e) => { e.stopPropagation(); onDeleteTable(table.id); }}
-              >
-                Yes
-              </button>
-              <button
-                className="nodrag text-xs bg-gray-100 text-gray-700 rounded px-1.5 py-0.5 hover:bg-gray-200"
-                onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(false); }}
-              >
-                No
-              </button>
-            </div>
-          ) : (
-            <button
-              className="nodrag text-red-400 hover:text-red-600 p-1 rounded hover:bg-red-50 transition-colors"
-              title="Delete table"
-              onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(true); }}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points="3 6 5 6 21 6" />
-                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                <path d="M10 11v6M14 11v6" />
-                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-              </svg>
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Table rendering */}
-      {table.table_type === 'round' && (
-        <RoundTable
-          table={table}
-          onAssignGuest={onAssignGuest}
-          onUnassignGuest={onUnassignGuest}
-          splitPartyGuestIds={splitPartyGuestIds}
-        />
-      )}
-      {table.table_type === 'rectangular' && (
-        <RectangularTable
-          table={table}
-          onAssignGuest={onAssignGuest}
-          onUnassignGuest={onUnassignGuest}
-          splitPartyGuestIds={splitPartyGuestIds}
-        />
-      )}
-      {table.table_type === 'head' && (
-        <HeadTable
-          table={table}
-          onAssignGuest={onAssignGuest}
-          onUnassignGuest={onUnassignGuest}
-          splitPartyGuestIds={splitPartyGuestIds}
-        />
-      )}
+      {/* Seat chips — positioned relative to node origin */}
+      <SeatsDisplay
+        table={table}
+        splitPartyGroupIds={splitPartyGroupIds}
+        onUnassignParty={onUnassignParty}
+      />
     </div>
   );
 }

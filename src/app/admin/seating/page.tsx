@@ -44,50 +44,28 @@ function SeatingCanvas({
   const [showRoomSettings, setShowRoomSettings] = useState(false);
   const [roomWidth, setRoomWidth] = useState(floorPlan?.room_width ?? '');
   const [roomHeight, setRoomHeight] = useState(floorPlan?.room_height ?? '');
-  const [pendingAssign, setPendingAssign] = useState<{ tableId: number; seatIndex: number } | null>(null);
-  const [assignSearch, setAssignSearch] = useState('');
   const [drawMode, setDrawMode] = useState(false);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const dragGuestRef = useRef<GuestListEntry | null>(null);
 
-  // Compute split party guest IDs
-  // A guest is "split" if their party has members assigned to different tables
-  const splitPartyGuestIds = useCallback((): Set<number> => {
+  // Compute split party group IDs using party_group_id
+  const splitPartyGroupIds = useCallback((): Set<number> => {
     const split = new Set<number>();
-
-    // Build map: guest_list_id → table_id they're assigned to
-    const guestTableMap = new Map<number, number>();
+    // Map party_group_id → set of table IDs it appears in
+    const partyTableMap = new Map<number, Set<number>>();
     for (const table of tables) {
       for (const seat of table.seats) {
-        if (seat.guest_list_id !== null) {
-          guestTableMap.set(seat.guest_list_id, table.id);
+        if (seat.party_group_id !== null) {
+          if (!partyTableMap.has(seat.party_group_id)) partyTableMap.set(seat.party_group_id, new Set());
+          partyTableMap.get(seat.party_group_id)!.add(table.id);
         }
       }
     }
-
-    // For each guest with a plus_one, find their plus_one in the guest list
-    // Party = primary guest + their plus_one (matched by plus_one_name → guest_name)
-    for (const guest of guests) {
-      if (!guest.plus_one_name) continue;
-
-      const primaryId = guest.id;
-      const plusOneGuest = guests.find(
-        g => g.guest_name.toLowerCase() === guest.plus_one_name!.toLowerCase()
-      );
-      if (!plusOneGuest) continue;
-
-      const primaryTableId = guestTableMap.get(primaryId);
-      const plusOneTableId = guestTableMap.get(plusOneGuest.id);
-
-      // Both assigned but to different tables = split
-      if (primaryTableId !== undefined && plusOneTableId !== undefined && primaryTableId !== plusOneTableId) {
-        split.add(primaryId);
-        split.add(plusOneGuest.id);
-      }
+    for (const [groupId, tableIds] of partyTableMap) {
+      if (tableIds.size > 1) split.add(groupId);
     }
-
     return split;
-  }, [tables, guests]);
+  }, [tables]);
 
   // Build guest sidebar data: compute assigned_seat for each guest
   const guestsWithAssignment = useCallback((): GuestListEntry[] => {
@@ -108,37 +86,74 @@ function SeatingCanvas({
     }));
   }, [tables, guests]);
 
-  // Sync React Flow nodes from tables state
-  useEffect(() => {
-    const split = splitPartyGuestIds();
-    const newNodes: Node[] = tables.map(table => ({
-      id: String(table.id),
-      type: 'tableNode',
-      position: { x: table.x, y: table.y },
-      data: {
-        table,
-        onAssignGuest: handleAssignGuest,
-        onUnassignGuest: handleUnassignGuest,
-        onDeleteTable: handleDeleteTable,
-        onRenameTable: handleRenameTable,
-        splitPartyGuestIds: split,
-      },
-      draggable: true,
-    }));
-    setNodes(newNodes);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tables, guests]);
+  // Drop a guest (and their whole party) onto a table
+  const handleDropGuest = useCallback(async (tableId: number, guestIdStr: string) => {
+    const guestId = parseInt(guestIdStr);
+    const guest = guests.find(g => g.id === guestId);
+    if (!guest) return;
 
-  const handleAssignGuest = useCallback((tableId: number, seatIndex: number) => {
-    setPendingAssign({ tableId, seatIndex });
-    setAssignSearch('');
-  }, []);
+    // Already assigned to this table? No-op.
+    const table = tables.find(t => t.id === tableId);
+    if (!table) return;
+    const alreadyHere = table.seats.some(s => s.party_group_id === guestId);
+    if (alreadyHere) return;
 
-  const handleUnassignGuest = useCallback(async (tableId: number, seatIndex: number) => {
+    // Next available seat index at this table
+    const usedIndices = new Set(table.seats.map(s => s.seat_index));
+    const nextIndex = () => {
+      let i = 0;
+      while (usedIndices.has(i)) i++;
+      usedIndices.add(i);
+      return i;
+    };
+
+    const payload = [];
+
+    // Primary guest
+    payload.push({
+      seating_table_id: tableId,
+      seat_index: nextIndex(),
+      guest_list_id: guest.id,
+      display_name: guest.guest_name,
+      party_group_id: guest.id,
+    });
+
+    // Plus one (by name)
+    if (guest.plus_one_name) {
+      payload.push({
+        seating_table_id: tableId,
+        seat_index: nextIndex(),
+        guest_list_id: null,
+        display_name: guest.plus_one_name,
+        party_group_id: guest.id,
+      });
+    }
+
+    // Additional party members beyond primary + plus_one
+    const extraCount = (guest.party_size ?? 1) - (guest.plus_one_name ? 2 : 1);
+    for (let i = 0; i < extraCount; i++) {
+      payload.push({
+        seating_table_id: tableId,
+        seat_index: nextIndex(),
+        guest_list_id: null,
+        display_name: `${guest.guest_name.split(' ')[0]}'s guest ${i + 1}`,
+        party_group_id: guest.id,
+      });
+    }
+
+    await fetch('/api/admin/seating/assign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    onRefresh();
+  }, [guests, tables, onRefresh]);
+
+  const handleUnassignParty = useCallback(async (tableId: number, partyGroupId: number) => {
     await fetch('/api/admin/seating/assign', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ seating_table_id: tableId, seat_index: seatIndex }),
+      body: JSON.stringify({ seating_table_id: tableId, party_group_id: partyGroupId }),
     });
     onRefresh();
   }, [onRefresh]);
@@ -165,11 +180,7 @@ function SeatingCanvas({
     });
   }, []);
 
-  const handleAddTable = useCallback(async (opts: {
-    name: string;
-    table_type: string;
-    seat_count: number;
-  }) => {
+  const handleAddTable = useCallback(async (opts: { name: string; table_type: string }) => {
     if (!floorPlan) return;
     await fetch('/api/admin/seating/tables', {
       method: 'POST',
@@ -178,7 +189,7 @@ function SeatingCanvas({
         floor_plan_id: floorPlan.id,
         name: opts.name,
         table_type: opts.table_type,
-        seat_count: opts.seat_count,
+        seat_count: 0,
         x: 200 + Math.random() * 400,
         y: 200 + Math.random() * 300,
       }),
@@ -186,58 +197,6 @@ function SeatingCanvas({
     setShowAddModal(false);
     onRefresh();
   }, [floorPlan, onRefresh]);
-
-  // Assign guest from modal picker
-  const handlePickGuest = useCallback(async (guestId: number) => {
-    if (!pendingAssign) return;
-    const { tableId, seatIndex } = pendingAssign;
-
-    // Find adjacent empty seat for plus_one auto-fill
-    const guest = guests.find(g => g.id === guestId);
-    const table = tables.find(t => t.id === tableId);
-
-    await fetch('/api/admin/seating/assign', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        seating_table_id: tableId,
-        seat_index: seatIndex,
-        guest_list_id: guestId,
-      }),
-    });
-
-    // Auto-assign plus_one to next available adjacent seat
-    if (guest?.plus_one_name && table) {
-      const plusOneGuest = guests.find(
-        g => g.guest_name.toLowerCase() === guest.plus_one_name!.toLowerCase()
-      );
-      if (plusOneGuest) {
-        // Find next empty seat (wrapping around)
-        const emptySeat = table.seats.find(
-          s => s.guest_list_id === null && s.seat_index !== seatIndex
-        );
-        // Find the seat with index immediately after
-        const nextIndex = (seatIndex + 1) % table.seat_count;
-        const nextSeat = table.seats.find(s => s.seat_index === nextIndex);
-        const targetSeat = (nextSeat?.guest_list_id === null ? nextSeat : emptySeat);
-
-        if (targetSeat) {
-          await fetch('/api/admin/seating/assign', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              seating_table_id: tableId,
-              seat_index: targetSeat.seat_index,
-              guest_list_id: plusOneGuest.id,
-            }),
-          });
-        }
-      }
-    }
-
-    setPendingAssign(null);
-    onRefresh();
-  }, [pendingAssign, guests, tables, onRefresh]);
 
   // Handle drag from sidebar → drop onto canvas (drop on a seat slot)
   const handleCanvasDrop = useCallback((e: React.DragEvent) => {
@@ -259,16 +218,26 @@ function SeatingCanvas({
     onRefresh();
   }, [roomWidth, roomHeight, onRefresh]);
 
-  const assignableGuests = pendingAssign
-    ? guestsWithAssignment().filter(g => {
-        const q = assignSearch.toLowerCase();
-        return (
-          !g.assigned_seat &&
-          (g.guest_name.toLowerCase().includes(q) ||
-            (g.plus_one_name?.toLowerCase().includes(q) ?? false))
-        );
-      })
-    : [];
+  // Node sync effect
+  useEffect(() => {
+    const split = splitPartyGroupIds();
+    const newNodes: Node[] = tables.map(table => ({
+      id: String(table.id),
+      type: 'tableNode',
+      position: { x: table.x, y: table.y },
+      data: {
+        table,
+        onDropGuest: handleDropGuest,
+        onUnassignParty: handleUnassignParty,
+        onDeleteTable: handleDeleteTable,
+        onRenameTable: handleRenameTable,
+        splitPartyGroupIds: split,
+      },
+      draggable: true,
+    }));
+    setNodes(newNodes);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tables, guests]);
 
   return (
     <div className="flex h-full w-full">
@@ -277,7 +246,7 @@ function SeatingCanvas({
         guests={guestsWithAssignment()}
         onDragGuest={g => { dragGuestRef.current = g; }}
         onAssignGuest={() => {}}
-        splitPartyGuestIds={splitPartyGuestIds()}
+        splitPartyGuestIds={splitPartyGroupIds()}
       />
 
       {/* Canvas area */}
@@ -460,60 +429,6 @@ function SeatingCanvas({
         </div>
       )}
 
-      {/* Guest Picker Modal (for click-to-assign) */}
-      {pendingAssign && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl p-6 w-96 max-h-[70vh] flex flex-col">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-base font-semibold text-gray-800">Assign Guest</h3>
-              <button
-                onClick={() => setPendingAssign(null)}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
-            </div>
-
-            <input
-              className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm outline-none focus:border-blue-400 mb-3"
-              placeholder="Search unassigned guests..."
-              value={assignSearch}
-              onChange={e => setAssignSearch(e.target.value)}
-              autoFocus
-            />
-
-            <div className="flex-1 overflow-y-auto space-y-1">
-              {assignableGuests.length === 0 && (
-                <p className="text-center text-gray-400 text-sm py-6">
-                  {assignSearch ? 'No matches' : 'All guests are assigned!'}
-                </p>
-              )}
-              {assignableGuests.map(guest => (
-                <button
-                  key={guest.id}
-                  onClick={() => handlePickGuest(guest.id)}
-                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-50 border border-transparent hover:border-gray-200 transition-all"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-800">{guest.guest_name}</span>
-                    {guest.party_size > 1 && (
-                      <span className="text-xs bg-blue-50 text-blue-600 border border-blue-200 rounded-full px-1.5 py-0.5">
-                        party of {guest.party_size}
-                      </span>
-                    )}
-                  </div>
-                  {guest.plus_one_name && (
-                    <div className="text-xs text-gray-500 mt-0.5">+1 {guest.plus_one_name} (auto-placed nearby)</div>
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

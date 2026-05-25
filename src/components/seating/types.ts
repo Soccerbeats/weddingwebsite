@@ -3,9 +3,12 @@ export type TableType = 'round' | 'rectangular' | 'head';
 export interface SeatData {
   seat_index: number;
   guest_list_id: number | null;
+  display_name: string;
+  party_group_id: number | null;
+  // from guest_list join (only for primary guest seats)
   guest_name: string | null;
   plus_one_name: string | null;
-  party_size: number;
+  party_size: number | null;
 }
 
 export interface SeatingTableData {

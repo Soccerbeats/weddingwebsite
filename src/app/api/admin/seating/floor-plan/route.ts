@@ -6,6 +6,8 @@ export const dynamic = 'force-dynamic';
 interface SeatAssignment {
   seat_index: number;
   guest_list_id: number | null;
+  display_name: string;
+  party_group_id: number | null;
   guest_name: string | null;
   plus_one_name: string | null;
   party_size: number | null;
@@ -47,12 +49,14 @@ export async function GET() {
     // Get all seat assignments with guest info for this floor plan's tables
     const assignmentsResult = await client.query(
       `SELECT sa.seating_table_id, sa.seat_index, sa.guest_list_id,
+              sa.display_name, sa.party_group_id,
               gl.guest_name, gl.plus_one_name, gl.party_size
        FROM seat_assignments sa
        LEFT JOIN guest_list gl ON gl.id = sa.guest_list_id
        WHERE sa.seating_table_id IN (
          SELECT id FROM seating_tables WHERE floor_plan_id = $1
-       )`,
+       )
+       ORDER BY sa.seating_table_id, sa.seat_index ASC`,
       [floorPlan.id]
     );
 
@@ -65,37 +69,24 @@ export async function GET() {
       assignmentsByTable[row.seating_table_id].push({
         seat_index: row.seat_index,
         guest_list_id: row.guest_list_id,
+        display_name: row.display_name,
+        party_group_id: row.party_group_id,
         guest_name: row.guest_name,
         plus_one_name: row.plus_one_name,
         party_size: row.party_size,
       });
     }
 
-    // Build tables with full seat arrays
+    // Build tables — seats only from actual assignments (no empty slots)
     const tables: SeatingTable[] = tablesResult.rows.map((table) => {
-      const assigned = assignmentsByTable[table.id] || [];
-      const assignedByIndex: Record<number, SeatAssignment> = {};
-      for (const a of assigned) {
-        assignedByIndex[a.seat_index] = a;
-      }
-
-      const seats: SeatAssignment[] = Array.from(
-        { length: table.seat_count },
-        (_, i) =>
-          assignedByIndex[i] ?? {
-            seat_index: i,
-            guest_list_id: null,
-            guest_name: null,
-            plus_one_name: null,
-            party_size: null,
-          }
-      );
+      const seats: SeatAssignment[] = (assignmentsByTable[table.id] || [])
+        .sort((a, b) => a.seat_index - b.seat_index);
 
       return {
         id: table.id,
         name: table.name,
         table_type: table.table_type,
-        seat_count: table.seat_count,
+        seat_count: seats.length,
         x: table.x,
         y: table.y,
         rotation: table.rotation,

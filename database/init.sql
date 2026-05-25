@@ -62,6 +62,8 @@ CREATE TABLE IF NOT EXISTS seat_assignments (
   seating_table_id INTEGER REFERENCES seating_tables(id) ON DELETE CASCADE,
   seat_index INTEGER NOT NULL,
   guest_list_id INTEGER REFERENCES guest_list(id) ON DELETE SET NULL,
+  display_name TEXT NOT NULL DEFAULT '',
+  party_group_id INTEGER,
   UNIQUE(seating_table_id, seat_index)
 );
 

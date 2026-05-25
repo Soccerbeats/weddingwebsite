@@ -5,7 +5,7 @@ import { TableType } from './types';
 
 interface AddTableModalProps {
   defaultName?: string;
-  onAdd: (data: { name: string; table_type: TableType; seat_count: number }) => void;
+  onAdd: (data: { name: string; table_type: TableType }) => void;
   onClose: () => void;
 }
 
@@ -60,12 +60,11 @@ const TABLE_TYPES: { type: TableType; label: string; description: string; icon: 
 export default function AddTableModal({ defaultName = 'Table', onAdd, onClose }: AddTableModalProps) {
   const [name, setName] = useState(defaultName);
   const [tableType, setTableType] = useState<TableType>('round');
-  const [seatCount, setSeatCount] = useState(8);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    onAdd({ name: name.trim(), table_type: tableType, seat_count: seatCount });
+    onAdd({ name: name.trim(), table_type: tableType });
   };
 
   return (
@@ -123,49 +122,6 @@ export default function AddTableModal({ defaultName = 'Table', onAdd, onClose }:
                   <span className="text-xs text-gray-400 text-center leading-tight">{description}</span>
                 </button>
               ))}
-            </div>
-          </div>
-
-          {/* Seat Count */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Seat Count
-              <span className="ml-2 text-gray-400 font-normal text-xs">(2–30)</span>
-            </label>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                className="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 hover:border-gray-300 transition-colors disabled:opacity-40"
-                onClick={() => setSeatCount(v => Math.max(2, v - 1))}
-                disabled={seatCount <= 2}
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <line x1="5" y1="12" x2="19" y2="12" />
-                </svg>
-              </button>
-              <input
-                type="number"
-                className="w-20 text-center px-2 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-colors"
-                value={seatCount}
-                min={2}
-                max={30}
-                onChange={e => {
-                  const v = parseInt(e.target.value);
-                  if (!isNaN(v)) setSeatCount(Math.min(30, Math.max(2, v)));
-                }}
-              />
-              <button
-                type="button"
-                className="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 hover:border-gray-300 transition-colors disabled:opacity-40"
-                onClick={() => setSeatCount(v => Math.min(30, v + 1))}
-                disabled={seatCount >= 30}
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <line x1="12" y1="5" x2="12" y2="19" />
-                  <line x1="5" y1="12" x2="19" y2="12" />
-                </svg>
-              </button>
-              <span className="text-sm text-gray-400">seats</span>
             </div>
           </div>
 
