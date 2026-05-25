@@ -16,6 +16,7 @@ import '@xyflow/react/dist/style.css';
 import TableNode from '@/components/seating/TableNode';
 import GuestSidebar from '@/components/seating/GuestSidebar';
 import AddTableModal from '@/components/seating/AddTableModal';
+import WallOverlay, { Wall } from '@/components/seating/WallOverlay';
 import { SeatingTableData, GuestListEntry, FloorPlan } from '@/components/seating/types';
 
 const nodeTypes = { tableNode: TableNode };
@@ -26,12 +27,16 @@ function SeatingCanvas({
   floorPlan,
   tables,
   guests,
+  walls,
   onRefresh,
+  onWallsChange,
 }: {
   floorPlan: FloorPlan | null;
   tables: SeatingTableData[];
   guests: GuestListEntry[];
+  walls: Wall[];
   onRefresh: () => void;
+  onWallsChange: (walls: Wall[]) => void;
 }) {
   const { screenToFlowPosition } = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
@@ -41,6 +46,8 @@ function SeatingCanvas({
   const [roomHeight, setRoomHeight] = useState(floorPlan?.room_height ?? '');
   const [pendingAssign, setPendingAssign] = useState<{ tableId: number; seatIndex: number } | null>(null);
   const [assignSearch, setAssignSearch] = useState('');
+  const [drawMode, setDrawMode] = useState(false);
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
   const dragGuestRef = useRef<GuestListEntry | null>(null);
 
   // Compute split party guest IDs
@@ -298,6 +305,39 @@ function SeatingCanvas({
             Room Settings
           </button>
 
+          <button
+            onClick={() => setDrawMode(v => !v)}
+            className={`flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-md border transition-colors ${
+              drawMode
+                ? 'bg-blue-500 text-white border-blue-500'
+                : 'text-gray-600 border-gray-200 hover:bg-gray-50'
+            }`}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M3 17L17 3l4 4L7 21H3v-4z" />
+            </svg>
+            {drawMode ? 'Drawing Walls (ESC to cancel)' : 'Draw Walls'}
+          </button>
+
+          {walls.length > 0 && !drawMode && (
+            <button
+              onClick={async () => {
+                if (!confirm('Clear all walls?')) return;
+                await Promise.all(walls.map(w =>
+                  fetch('/api/admin/seating/walls', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: w.id }),
+                  })
+                ));
+                onWallsChange([]);
+              }}
+              className="flex items-center gap-1.5 text-red-500 text-sm font-medium px-3 py-1.5 rounded-md border border-red-200 hover:bg-red-50 transition-colors"
+            >
+              Clear Walls
+            </button>
+          )}
+
           <div className="ml-auto flex items-center gap-3 text-xs text-gray-400">
             <span className="flex items-center gap-1">
               <span className="w-3 h-3 rounded-full bg-green-200 border border-green-400 inline-block" />
@@ -315,13 +355,20 @@ function SeatingCanvas({
         </div>
 
         {/* React Flow canvas */}
-        <div className="flex-1" onDrop={handleCanvasDrop} onDragOver={e => e.preventDefault()}>
+        <div
+          ref={canvasContainerRef}
+          className="flex-1 relative"
+          onDrop={handleCanvasDrop}
+          onDragOver={e => e.preventDefault()}
+        >
           <ReactFlow
             nodes={nodes}
             edges={[]}
             onNodesChange={onNodesChange}
             onNodeDragStop={handleNodeDragStop}
             nodeTypes={nodeTypes}
+            nodesDraggable={!drawMode}
+            panOnDrag={!drawMode}
             fitView
             fitViewOptions={{ padding: 0.2 }}
             minZoom={0.2}
@@ -336,6 +383,22 @@ function SeatingCanvas({
               style={{ bottom: 16, right: 16 }}
             />
           </ReactFlow>
+
+          {/* Wall drawing overlay — always mounted so useViewport works */}
+          <WallOverlay
+            walls={walls}
+            drawMode={drawMode}
+            onWallAdded={wall => onWallsChange([...walls, wall])}
+            onWallDeleted={async id => {
+              await fetch('/api/admin/seating/walls', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id }),
+              });
+              onWallsChange(walls.filter(w => w.id !== id));
+            }}
+            containerRef={canvasContainerRef}
+          />
         </div>
       </div>
 
@@ -461,18 +524,22 @@ export default function SeatingPage() {
   const [floorPlan, setFloorPlan] = useState<FloorPlan | null>(null);
   const [tables, setTables] = useState<SeatingTableData[]>([]);
   const [guests, setGuests] = useState<GuestListEntry[]>([]);
+  const [walls, setWalls] = useState<Wall[]>([]);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
-    const [fpRes, guestRes] = await Promise.all([
+    const [fpRes, guestRes, wallsRes] = await Promise.all([
       fetch('/api/admin/seating/floor-plan'),
       fetch('/api/admin/guest-list'),
+      fetch('/api/admin/seating/walls'),
     ]);
     const fpData = await fpRes.json();
     const guestData = await guestRes.json();
+    const wallsData = await wallsRes.json();
 
     setFloorPlan(fpData.floorPlan ?? null);
     setTables(fpData.tables ?? []);
+    setWalls(wallsData.walls ?? []);
     setGuests(
       (guestData.guests ?? guestData ?? []).map((g: GuestListEntry) => ({
         id: g.id,
@@ -510,7 +577,9 @@ export default function SeatingPage() {
             floorPlan={floorPlan}
             tables={tables}
             guests={guests}
+            walls={walls}
             onRefresh={refresh}
+            onWallsChange={setWalls}
           />
         </ReactFlowProvider>
       </div>

@@ -64,3 +64,13 @@ CREATE TABLE IF NOT EXISTS seat_assignments (
   guest_list_id INTEGER REFERENCES guest_list(id) ON DELETE SET NULL,
   UNIQUE(seating_table_id, seat_index)
 );
+
+CREATE TABLE IF NOT EXISTS floor_plan_walls (
+  id SERIAL PRIMARY KEY,
+  floor_plan_id INTEGER REFERENCES floor_plans(id) ON DELETE CASCADE,
+  x1 FLOAT NOT NULL,
+  y1 FLOAT NOT NULL,
+  x2 FLOAT NOT NULL,
+  y2 FLOAT NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW()
+);
