@@ -598,17 +598,15 @@ export default function SeatingPage() {
     setTables(fpData.tables ?? []);
     setRoom(roomData.room ?? null);
     setGuests(
-      (guestData.guests ?? guestData ?? [])
-        .filter((g: GuestListEntry) => g.rsvp_status !== 'likely_not_coming')
-        .map((g: GuestListEntry) => ({
-          id: g.id,
-          guest_name: g.guest_name,
-          plus_one_name: g.plus_one_name ?? null,
-          party_size: g.party_size ?? 1,
-          side: g.side ?? null,
-          rsvp_status: g.rsvp_status ?? null,
-          invited: g.invited ?? true,
-        }))
+      (guestData.guests ?? guestData ?? []).map((g: GuestListEntry) => ({
+        id: g.id,
+        guest_name: g.guest_name,
+        plus_one_name: g.plus_one_name ?? null,
+        party_size: g.party_size ?? 1,
+        side: g.side ?? null,
+        rsvp_status: g.rsvp_status ?? null,
+        invited: g.invited ?? true,
+      }))
     );
     setLoading(false);
   }, []);

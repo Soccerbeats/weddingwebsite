@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { Playfair_Display, Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import Navigation from '@/components/Navigation';
-import Footer from '@/components/Footer';
+import ConditionalFooter from '@/components/ConditionalFooter';
 import WipCheck from '@/components/WipCheck';
 import { getSiteConfig } from '@/lib/config';
 import { cookies } from 'next/headers';
@@ -71,7 +71,7 @@ export default async function RootLayout({
         <main className="flex-grow">
           {children}
         </main>
-        <Footer
+        <ConditionalFooter
           brideName={config.brideName}
           groomName={config.groomName}
           weddingDate={config.weddingDate}

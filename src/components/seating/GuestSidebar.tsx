@@ -231,6 +231,7 @@ export default function GuestSidebar({
         {filtered.map(guest => {
           const isSplit = splitPartyGuestIds.has(guest.id);
           const isAssigned = !!guest.assigned_seat;
+          const isLikely = guest.rsvp_status === 'likely_not_coming';
 
           return (
             <div
@@ -241,9 +242,11 @@ export default function GuestSidebar({
                 onDragGuest(guest);
               }}
               className={`group flex flex-col gap-0.5 px-3 py-2 rounded-lg border cursor-grab active:cursor-grabbing transition-all select-none
-                ${isAssigned
-                  ? 'bg-green-50 border-green-200 hover:border-green-300'
-                  : 'bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                ${isLikely
+                  ? 'bg-orange-50 border-orange-200 hover:border-orange-300'
+                  : isAssigned
+                    ? 'bg-green-50 border-green-200 hover:border-green-300'
+                    : 'bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                 }`}
             >
               <div className="flex items-center justify-between gap-2">
@@ -252,7 +255,7 @@ export default function GuestSidebar({
                     <circle cx="3" cy="2" r="1.5" /><circle cx="3" cy="7" r="1.5" /><circle cx="3" cy="12" r="1.5" />
                     <circle cx="7" cy="2" r="1.5" /><circle cx="7" cy="7" r="1.5" /><circle cx="7" cy="12" r="1.5" />
                   </svg>
-                  <span className="text-sm font-medium text-gray-800 truncate">{guest.guest_name}</span>
+                  <span className={`text-sm font-medium truncate ${isLikely ? 'text-orange-700' : 'text-gray-800'}`}>{guest.guest_name}</span>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   {guest.side && (
@@ -261,7 +264,9 @@ export default function GuestSidebar({
                     }`}>{guest.side}</span>
                   )}
                   {guest.party_size > 1 && (
-                    <span className="text-xs bg-blue-50 text-blue-600 border border-blue-200 rounded-full px-1.5 py-0.5 font-medium">
+                    <span className={`text-xs border rounded-full px-1.5 py-0.5 font-medium ${
+                      isLikely ? 'bg-orange-100 text-orange-600 border-orange-200' : 'bg-blue-50 text-blue-600 border-blue-200'
+                    }`}>
                       {guest.party_size}
                     </span>
                   )}
@@ -272,15 +277,15 @@ export default function GuestSidebar({
               </div>
 
               {guest.plus_one_name && (
-                <div className="text-xs text-gray-500 pl-4 truncate">+1 {guest.plus_one_name}</div>
+                <div className={`text-xs pl-4 truncate ${isLikely ? 'text-orange-400' : 'text-gray-500'}`}>+1 {guest.plus_one_name}</div>
               )}
 
-              {guest.rsvp_status && (
-                <div className="text-[10px] text-gray-400 pl-4">{guest.rsvp_status}</div>
+              {isLikely && (
+                <div className="text-[10px] text-orange-500 pl-4 font-medium">Likely not coming</div>
               )}
 
               {isAssigned && guest.assigned_seat && (
-                <div className="text-xs text-green-600 pl-4 truncate">
+                <div className={`text-xs pl-4 truncate ${isLikely ? 'text-orange-500' : 'text-green-600'}`}>
                   {guest.assigned_seat.table_name}, Seat {guest.assigned_seat.seat_index + 1}
                 </div>
               )}

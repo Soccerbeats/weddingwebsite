@@ -61,8 +61,11 @@ function SeatChip({
   };
 
   // Determine chip color classes based on mode
+  const isLikelyNotComing = seat.rsvp_status === 'likely_not_coming';
   let chipClass: string;
-  if (colorMode === 'rsvp') {
+  if (isLikelyNotComing) {
+    chipClass = 'bg-orange-100 border-orange-400 text-orange-700';
+  } else if (colorMode === 'rsvp') {
     const hasRsvp = !!seat.rsvp_status;
     chipClass = hasRsvp
       ? 'bg-green-100 border-green-400 text-green-800'
@@ -358,7 +361,8 @@ function TableBody({
   const [hovered, setHovered] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [reorderOpen, setReorderOpen] = useState(false);
-  const seatCount = table.seats.length;
+  const seatCount = table.seats.filter(s => s.rsvp_status !== 'likely_not_coming').length;
+  const totalSeatCount = table.seats.length;
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -381,7 +385,7 @@ function TableBody({
   const isRound = table.table_type === 'round';
   const isHead = table.table_type === 'head';
 
-  const tableW = isRound ? 160 : isHead ? Math.max(240, seatCount * 48) : 200;
+  const tableW = isRound ? 160 : isHead ? Math.max(240, totalSeatCount * 48) : 200;
   const tableH = isRound ? 160 : isHead ? 80 : 100;
 
   const baseClasses = `relative flex flex-col items-center justify-center
@@ -404,7 +408,12 @@ function TableBody({
           {table.name}
         </span>
         <span className="text-xs text-gray-400 mt-0.5">
-          {seatCount === 0 ? 'Drop guests here' : `${seatCount} ${seatCount === 1 ? 'person' : 'people'}`}
+          {totalSeatCount === 0
+            ? 'Drop guests here'
+            : seatCount < totalSeatCount
+              ? `${seatCount} people (+${totalSeatCount - seatCount} likely not coming)`
+              : `${seatCount} ${seatCount === 1 ? 'person' : 'people'}`
+          }
         </span>
 
         {hovered && (

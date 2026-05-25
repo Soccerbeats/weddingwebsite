@@ -58,7 +58,7 @@ export default function AdminLayout({
                     }
                 `
             }} />
-            <div className="min-h-screen bg-gray-100 flex">
+            <div className="h-screen bg-gray-100 flex overflow-hidden">
                 {/* Sidebar */}
                 <aside className="w-64 bg-white border-r border-gray-200">
                     <div className="h-16 flex items-center justify-center border-b border-gray-200 px-4">
@@ -89,8 +89,8 @@ export default function AdminLayout({
             </aside>
 
                 {/* Main Content */}
-                <main className="flex-1 overflow-auto">
-                    <div className="p-8">
+                <main className={`flex-1 flex flex-col ${pathname?.startsWith('/admin/seating') ? 'overflow-hidden' : 'overflow-auto'}`}>
+                    <div className={pathname?.startsWith('/admin/seating') ? 'flex-1 flex flex-col overflow-hidden' : 'p-8'}>
                         {children}
                     </div>
                 </main>
