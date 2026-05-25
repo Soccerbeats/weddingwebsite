@@ -51,9 +51,12 @@ export async function GET() {
     const assignmentsResult = await client.query(
       `SELECT sa.seating_table_id, sa.seat_index, sa.guest_list_id,
               sa.display_name, sa.party_group_id,
-              gl.guest_name, gl.plus_one_name, gl.party_size, gl.rsvp_status
+              gl.guest_name, gl.plus_one_name, gl.party_size,
+              -- rsvp_status: use direct guest match, fall back to party leader for plus-ones/extras
+              COALESCE(gl.rsvp_status, party_leader.rsvp_status) AS rsvp_status
        FROM seat_assignments sa
        LEFT JOIN guest_list gl ON gl.id = sa.guest_list_id
+       LEFT JOIN guest_list party_leader ON party_leader.id = sa.party_group_id AND sa.guest_list_id IS NULL
        WHERE sa.seating_table_id IN (
          SELECT id FROM seating_tables WHERE floor_plan_id = $1
        )

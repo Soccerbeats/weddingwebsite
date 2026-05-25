@@ -84,3 +84,10 @@ All notable changes to this project are documented here.
 - Admin panel: RSVP management, guest list, photo upload/reorder/heart, timeline editor, content editors, settings
 - PostgreSQL database with Docker volumes for persistence
 - Docker multi-stage build → GitHub Container Registry → Portainer deployment
+
+## [2026-05-25]
+
+### Fixed
+- **Seating chart sidebar scroll broken**: Guest list never scrolled — the `div` wrapping `<ReactFlowProvider>` in `SeatingPage` was a flex item but not a flex container, so `SeatingCanvas`'s `flex-1` had no effect and the component grew to full content height (~1611px). The sidebar inherited that height and had `scrollHeight == clientHeight`, making scroll impossible. Fix: added `flex flex-col` to the wrapper div.
+- **Seating chart MiniMap and Controls not visible**: Same root cause — ReactFlow canvas inflated to 1563px, putting Controls and MiniMap (positioned `bottom: 28px`) at y≈1750px, far below the 900px viewport and clipped by `overflow: hidden`. Fixed by the same one-line change above.
+- **Previous attempt (`min-h-0` on list div, removing MiniMap style prop) was a no-op** for both bugs because the height chain was broken two levels up; those changes are kept as correct belt-and-suspenders hygiene but weren't the actual fix.
