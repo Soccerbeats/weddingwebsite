@@ -455,13 +455,16 @@ function SeatingCanvas({
           </div>
         </div>
 
-        {/* React Flow canvas */}
-        <div
-          ref={canvasContainerRef}
-          className="flex-1 min-h-0 w-full relative overflow-hidden"
-          onDrop={handleCanvasDrop}
-          onDragOver={e => e.preventDefault()}
-        >
+        {/* React Flow canvas — outer is relative flex-1, inner is absolute inset-0.
+            This gives ReactFlow explicit pixel dimensions at render time (required
+            for correct MiniMap positioning and fitView calculations). */}
+        <div className="flex-1 relative min-h-0">
+          <div
+            ref={canvasContainerRef}
+            className="absolute inset-0"
+            onDrop={handleCanvasDrop}
+            onDragOver={e => e.preventDefault()}
+          >
           {/* Room shape editor — rendered BEFORE ReactFlow so it stays behind nodes */}
           <RoomEditor
             room={localRoom}
@@ -510,6 +513,7 @@ function SeatingCanvas({
               style={{ bottom: 16, right: 16 }}
             />
           </ReactFlow>
+          </div>
         </div>
       </div>
 
