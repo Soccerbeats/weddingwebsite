@@ -4,6 +4,14 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [2026-05-25] — Target registry bookmarklet import
+
+### Added
+- **Target registry bookmarklet import** — Target locks their API, so a browser bookmarklet scrapes items from the rendered Manage Registry page and downloads a CSV. Admin panel has an expandable instructions card (🎯 red) with a draggable bookmarklet link, step-by-step instructions, and an Upload CSV button
+- **`/api/admin/registry-items/import-target`** — accepts `{ items: [] }` (JSON from bookmarklet) or `{ csv: string }` (CSV fallback); deduplicates by title; tags all items as store: `target`
+- **CLAUDE.md "document everything" convention** — README + CHANGELOG + vault + git push + Docker push
+- **CHANGELOG.md** — this file
+
 ## [2026-05-25] — Seating chart overhaul + registry imports
 
 ### Added

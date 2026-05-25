@@ -58,6 +58,10 @@ export default function AdminRegistryPage() {
     const [importing, setImporting] = useState(false);
     const [importResult, setImportResult] = useState<{ added: number; skipped: number } | null>(null);
     const csvInputRef = useRef<HTMLInputElement>(null);
+    const [targetImporting, setTargetImporting] = useState(false);
+    const [targetImportResult, setTargetImportResult] = useState<{ added: number; skipped: number } | null>(null);
+    const [showTargetBookmarklet, setShowTargetBookmarklet] = useState(false);
+    const targetCsvRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         fetch('/api/admin/site-config')
@@ -100,6 +104,34 @@ export default function AdminRegistryPage() {
             setImporting(false);
             // Reset file input so same file can be re-selected
             if (csvInputRef.current) csvInputRef.current.value = '';
+        }
+    };
+
+    const handleTargetCsvImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setTargetImporting(true);
+        setTargetImportResult(null);
+        try {
+            const text = await file.text();
+            const res = await fetch('/api/admin/registry-items/import-target', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ csv: text }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                setTargetImportResult({ added: data.added, skipped: data.skipped });
+                const items = await fetch('/api/admin/registry-items').then(r => r.json());
+                setRegistryItems(Array.isArray(items) ? items : []);
+            } else {
+                alert(data.error || 'Import failed.');
+            }
+        } catch {
+            alert('Failed to read CSV file.');
+        } finally {
+            setTargetImporting(false);
+            if (targetCsvRef.current) targetCsvRef.current.value = '';
         }
     };
 
@@ -472,6 +504,80 @@ export default function AdminRegistryPage() {
                                     className="bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-50 transition-colors whitespace-nowrap"
                                 >
                                     {importing ? 'Importing…' : 'Upload CSV'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Target import */}
+                    <div className="bg-red-50 border border-red-200 rounded-2xl p-5 mb-6">
+                        <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0 flex-1">
+                                <h3 className="text-sm font-semibold text-red-900 flex items-center gap-2">
+                                    🎯 Import from Target Registry
+                                </h3>
+                                <p className="text-xs text-red-700 mt-1">
+                                    Target doesn&apos;t offer a native export, so use the bookmarklet below.
+                                    Run it on your Target registry page — it downloads a CSV automatically.
+                                </p>
+
+                                {/* Bookmarklet section */}
+                                <div className="mt-3">
+                                    <button
+                                        onClick={() => setShowTargetBookmarklet(v => !v)}
+                                        className="text-xs text-red-700 underline font-medium"
+                                    >
+                                        {showTargetBookmarklet ? 'Hide' : 'Show'} bookmarklet instructions →
+                                    </button>
+
+                                    {showTargetBookmarklet && (
+                                        <div className="mt-3 space-y-3">
+                                            <p className="text-xs text-red-800 font-medium">Step 1 — Add the bookmarklet to your browser:</p>
+                                            <p className="text-xs text-red-700">
+                                                Drag this link to your bookmarks bar, or right-click → Bookmark this link:
+                                            </p>
+                                            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+                                            <a
+                                                href={`javascript:(function(){var items=[];document.querySelectorAll('[data-test="registry-item"]').forEach(function(el){var title=(el.querySelector('[data-test="product-title"]')||el.querySelector('a[href*="/p/"]')||{}).textContent||'';var price=(el.querySelector('[data-test="current-price"]')||el.querySelector('[data-test="reg-price"]')||{}).textContent||'';var img=(el.querySelector('img')||{}).src||'';var link=el.querySelector('a[href*="/p/"]');var url=link?'https://www.target.com'+link.getAttribute('href'):'';if(title.trim())items.push({title:title.trim(),price:price.trim(),image:img,url:url});});if(!items.length){alert('No items found. Make sure you are on your Target registry page with items visible.');return;}var csv='title,price,image,url\\n'+items.map(function(i){return[i.title,i.price,i.image,i.url].map(function(v){return'"'+v.replace(/"/g,'""')+'"';}).join(',');}).join('\\n');var a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);a.download='target-registry.csv';a.click();alert('Downloaded '+items.length+' items. Upload the CSV file in the admin panel.');})();`}
+                                                className="inline-block bg-red-600 text-white text-xs font-bold px-4 py-2 rounded-lg cursor-grab"
+                                                onClick={e => e.preventDefault()}
+                                            >
+                                                🎯 Export Target Registry
+                                            </a>
+                                            <p className="text-xs text-red-800 font-medium">Step 2 — Run it on Target:</p>
+                                            <ol className="text-xs text-red-700 list-decimal list-inside space-y-1">
+                                                <li>Go to <strong>target.com</strong> → your registry → <strong>Manage registry</strong></li>
+                                                <li>Scroll down so all your items are loaded on the page</li>
+                                                <li>Click the <strong>&ldquo;🎯 Export Target Registry&rdquo;</strong> bookmark</li>
+                                                <li>A <code>target-registry.csv</code> file will download automatically</li>
+                                            </ol>
+                                            <p className="text-xs text-red-800 font-medium">Step 3 — Upload it here:</p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {targetImportResult && (
+                                    <p className={`text-xs mt-2 font-medium ${targetImportResult.added > 0 ? 'text-green-700' : 'text-gray-600'}`}>
+                                        ✓ {targetImportResult.added} item{targetImportResult.added !== 1 ? 's' : ''} added
+                                        {targetImportResult.skipped > 0 ? `, ${targetImportResult.skipped} skipped (already exist)` : ''}
+                                    </p>
+                                )}
+                            </div>
+
+                            <div className="shrink-0">
+                                <input
+                                    ref={targetCsvRef}
+                                    type="file"
+                                    accept=".csv,text/csv"
+                                    className="hidden"
+                                    onChange={handleTargetCsvImport}
+                                />
+                                <button
+                                    onClick={() => targetCsvRef.current?.click()}
+                                    disabled={targetImporting}
+                                    className="bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-50 transition-colors whitespace-nowrap"
+                                >
+                                    {targetImporting ? 'Importing…' : 'Upload CSV'}
                                 </button>
                             </div>
                         </div>

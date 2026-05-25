@@ -166,6 +166,17 @@ docker push ghcr.io/soccerbeats/weddingwebsite:latest
 
 ### Registry — Product Items (Target & Amazon)
 
+#### Bulk import from Target registry (bookmarklet method)
+
+Target doesn't offer a native CSV export, so a one-click bookmarklet handles it:
+
+1. In **Admin → Registry → Registry Items**, expand **🎯 Import from Target Registry** → click **Show bookmarklet instructions**
+2. Drag the **"🎯 Export Target Registry"** link to your browser bookmarks bar
+3. Go to **target.com** → your registry → **Manage registry**; scroll until all items are visible
+4. Click the bookmark — a `target-registry.csv` file downloads automatically
+5. Back in the admin panel, click **Upload CSV** — every item imports with title, price, image, and link
+6. Duplicate items (same title) are skipped automatically
+
 #### Bulk import from Amazon registry (recommended for Amazon)
 
 1. Go to your Amazon registry → **Manage** → **Download list as spreadsheet (.csv)**
