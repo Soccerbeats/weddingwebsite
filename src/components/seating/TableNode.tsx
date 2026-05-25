@@ -173,8 +173,10 @@ function TableBody({
   const tableW = isRound ? 160 : isHead ? Math.max(240, seatCount * 48) : 200;
   const tableH = isRound ? 160 : isHead ? 80 : 100;
 
-  const baseClasses = `nodrag relative flex flex-col items-center justify-center
-    border-2 transition-colors cursor-default select-none
+  // No 'nodrag' here — we want React Flow to be able to drag the node
+  // from the table surface. Only interactive children carry nodrag.
+  const baseClasses = `relative flex flex-col items-center justify-center
+    border-2 transition-colors cursor-grab select-none
     ${dragOver ? 'border-blue-400 bg-blue-50' : hovered ? 'border-gray-400 bg-gray-50' : 'border-gray-300 bg-white'}
     ${isRound ? 'rounded-full' : 'rounded-xl'}`;
 
@@ -226,8 +228,11 @@ function SeatsDisplay({
   const isRound = table.table_type === 'round';
   const tableW = isRound ? 160 : table.table_type === 'head' ? Math.max(240, table.seats.length * 48) : 200;
   const tableH = isRound ? 160 : table.table_type === 'head' ? 80 : 100;
-  const cx = tableW / 2;
-  const cy = tableH / 2;
+  const orbitPad = isRound ? 52 : 0;
+
+  // Center of the table circle in node coordinates (accounting for orbitPad offset)
+  const cx = orbitPad + tableW / 2;
+  const cy = orbitPad + tableH / 2;
 
   if (isRound) {
     const n = table.seats.length;
@@ -257,7 +262,7 @@ function SeatsDisplay({
     );
   }
 
-  // Rectangular / head: chips in a flex row below the table
+  // Rectangular / head: chips in a flex row below the table (orbitPad is 0 here)
   return (
     <div
       className="absolute flex flex-wrap gap-1 justify-center"
