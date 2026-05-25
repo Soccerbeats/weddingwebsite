@@ -458,7 +458,7 @@ function SeatingCanvas({
         {/* React Flow canvas */}
         <div
           ref={canvasContainerRef}
-          className="flex-1 min-h-0 relative"
+          className="flex-1 min-h-0 w-full relative overflow-hidden"
           onDrop={handleCanvasDrop}
           onDragOver={e => e.preventDefault()}
         >
