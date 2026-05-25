@@ -67,6 +67,14 @@ CREATE TABLE IF NOT EXISTS seat_assignments (
   UNIQUE(seating_table_id, seat_index)
 );
 
+CREATE TABLE IF NOT EXISTS floor_plan_room (
+  id SERIAL PRIMARY KEY,
+  floor_plan_id INTEGER REFERENCES floor_plans(id) ON DELETE CASCADE,
+  vertices JSONB NOT NULL DEFAULT '[]',
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS floor_plan_walls (
   id SERIAL PRIMARY KEY,
   floor_plan_id INTEGER REFERENCES floor_plans(id) ON DELETE CASCADE,

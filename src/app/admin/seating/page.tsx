@@ -16,7 +16,7 @@ import '@xyflow/react/dist/style.css';
 import TableNode from '@/components/seating/TableNode';
 import GuestSidebar from '@/components/seating/GuestSidebar';
 import AddTableModal from '@/components/seating/AddTableModal';
-import WallOverlay, { Wall } from '@/components/seating/WallOverlay';
+import RoomEditor, { RoomShape, Vertex } from '@/components/seating/RoomEditor';
 import { SeatingTableData, GuestListEntry, FloorPlan } from '@/components/seating/types';
 
 const nodeTypes = { tableNode: TableNode };
@@ -27,16 +27,16 @@ function SeatingCanvas({
   floorPlan,
   tables,
   guests,
-  walls,
+  room,
   onRefresh,
-  onWallsChange,
+  onRoomChange,
 }: {
   floorPlan: FloorPlan | null;
   tables: SeatingTableData[];
   guests: GuestListEntry[];
-  walls: Wall[];
+  room: RoomShape | null;
   onRefresh: () => void;
-  onWallsChange: (walls: Wall[]) => void;
+  onRoomChange: (room: RoomShape | null) => void;
 }) {
   const { screenToFlowPosition } = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
@@ -44,9 +44,13 @@ function SeatingCanvas({
   const [showRoomSettings, setShowRoomSettings] = useState(false);
   const [roomWidth, setRoomWidth] = useState(floorPlan?.room_width ?? '');
   const [roomHeight, setRoomHeight] = useState(floorPlan?.room_height ?? '');
-  const [drawMode, setDrawMode] = useState(false);
+  const [roomEditMode, setRoomEditMode] = useState(false);
+  const [localRoom, setLocalRoom] = useState<RoomShape | null>(room);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const dragGuestRef = useRef<GuestListEntry | null>(null);
+
+  // Sync local room when prop changes
+  React.useEffect(() => { setLocalRoom(room); }, [room]);
 
   // Compute split party group IDs using party_group_id
   const splitPartyGroupIds = useCallback((): Set<number> => {
@@ -274,37 +278,63 @@ function SeatingCanvas({
             Room Settings
           </button>
 
-          <button
-            onClick={() => setDrawMode(v => !v)}
-            className={`flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-md border transition-colors ${
-              drawMode
-                ? 'bg-blue-500 text-white border-blue-500'
-                : 'text-gray-600 border-gray-200 hover:bg-gray-50'
-            }`}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M3 17L17 3l4 4L7 21H3v-4z" />
-            </svg>
-            {drawMode ? 'Drawing Walls (ESC to cancel)' : 'Draw Walls'}
-          </button>
-
-          {walls.length > 0 && !drawMode && (
+          {!localRoom ? (
             <button
               onClick={async () => {
-                if (!confirm('Clear all walls?')) return;
-                await Promise.all(walls.map(w =>
-                  fetch('/api/admin/seating/walls', {
-                    method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id: w.id }),
-                  })
-                ));
-                onWallsChange([]);
+                // Spawn default square centered in view
+                const size = 400;
+                const ox = 100, oy = 100;
+                const verts: Vertex[] = [
+                  { x: ox, y: oy },
+                  { x: ox + size, y: oy },
+                  { x: ox + size, y: oy + size },
+                  { x: ox, y: oy + size },
+                ];
+                const res = await fetch('/api/admin/seating/room', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ vertices: verts }),
+                });
+                const data = await res.json();
+                if (data.room) {
+                  onRoomChange(data.room);
+                  setRoomEditMode(true);
+                }
               }}
-              className="flex items-center gap-1.5 text-red-500 text-sm font-medium px-3 py-1.5 rounded-md border border-red-200 hover:bg-red-50 transition-colors"
+              className="flex items-center gap-1.5 text-gray-600 text-sm font-medium px-3 py-1.5 rounded-md border border-gray-200 hover:bg-gray-50 transition-colors"
             >
-              Clear Walls
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+              </svg>
+              Draw Room
             </button>
+          ) : (
+            <>
+              <button
+                onClick={() => setRoomEditMode(v => !v)}
+                className={`flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-md border transition-colors ${
+                  roomEditMode
+                    ? 'bg-indigo-500 text-white border-indigo-500'
+                    : 'text-gray-600 border-gray-200 hover:bg-gray-50'
+                }`}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                </svg>
+                {roomEditMode ? 'Done Editing Room' : 'Edit Room'}
+              </button>
+              <button
+                onClick={async () => {
+                  if (!confirm('Delete the room outline?')) return;
+                  await fetch('/api/admin/seating/room', { method: 'DELETE' });
+                  onRoomChange(null);
+                  setRoomEditMode(false);
+                }}
+                className="flex items-center gap-1.5 text-red-500 text-sm font-medium px-3 py-1.5 rounded-md border border-red-200 hover:bg-red-50 transition-colors"
+              >
+                Delete Room
+              </button>
+            </>
           )}
 
           <div className="ml-auto flex items-center gap-3 text-xs text-gray-400">
@@ -336,8 +366,8 @@ function SeatingCanvas({
             onNodesChange={onNodesChange}
             onNodeDragStop={handleNodeDragStop}
             nodeTypes={nodeTypes}
-            nodesDraggable={!drawMode}
-            panOnDrag={!drawMode}
+            nodesDraggable={!roomEditMode}
+            panOnDrag={!roomEditMode}
             fitView
             fitViewOptions={{ padding: 0.2 }}
             minZoom={0.2}
@@ -353,20 +383,28 @@ function SeatingCanvas({
             />
           </ReactFlow>
 
-          {/* Wall drawing overlay — always mounted so useViewport works */}
-          <WallOverlay
-            walls={walls}
-            drawMode={drawMode}
-            onWallAdded={wall => onWallsChange([...walls, wall])}
-            onWallDeleted={async id => {
-              await fetch('/api/admin/seating/walls', {
-                method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id }),
-              });
-              onWallsChange(walls.filter(w => w.id !== id));
-            }}
+          {/* Room shape editor overlay */}
+          <RoomEditor
+            room={localRoom}
+            active={roomEditMode}
             containerRef={canvasContainerRef}
+            onRoomChange={verts => {
+              if (localRoom) setLocalRoom({ ...localRoom, vertices: verts });
+            }}
+            onSave={async verts => {
+              const res = await fetch('/api/admin/seating/room', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ vertices: verts }),
+              });
+              const data = await res.json();
+              if (data.room) onRoomChange(data.room);
+            }}
+            onDelete={async () => {
+              await fetch('/api/admin/seating/room', { method: 'DELETE' });
+              onRoomChange(null);
+              setRoomEditMode(false);
+            }}
           />
         </div>
       </div>
@@ -439,22 +477,22 @@ export default function SeatingPage() {
   const [floorPlan, setFloorPlan] = useState<FloorPlan | null>(null);
   const [tables, setTables] = useState<SeatingTableData[]>([]);
   const [guests, setGuests] = useState<GuestListEntry[]>([]);
-  const [walls, setWalls] = useState<Wall[]>([]);
+  const [room, setRoom] = useState<RoomShape | null>(null);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
-    const [fpRes, guestRes, wallsRes] = await Promise.all([
+    const [fpRes, guestRes, roomRes] = await Promise.all([
       fetch('/api/admin/seating/floor-plan'),
       fetch('/api/admin/guest-list'),
-      fetch('/api/admin/seating/walls'),
+      fetch('/api/admin/seating/room'),
     ]);
     const fpData = await fpRes.json();
     const guestData = await guestRes.json();
-    const wallsData = await wallsRes.json();
+    const roomData = await roomRes.json();
 
     setFloorPlan(fpData.floorPlan ?? null);
     setTables(fpData.tables ?? []);
-    setWalls(wallsData.walls ?? []);
+    setRoom(roomData.room ?? null);
     setGuests(
       (guestData.guests ?? guestData ?? []).map((g: GuestListEntry) => ({
         id: g.id,
@@ -492,9 +530,9 @@ export default function SeatingPage() {
             floorPlan={floorPlan}
             tables={tables}
             guests={guests}
-            walls={walls}
+            room={room}
             onRefresh={refresh}
-            onWallsChange={setWalls}
+            onRoomChange={setRoom}
           />
         </ReactFlowProvider>
       </div>
