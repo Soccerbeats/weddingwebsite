@@ -166,12 +166,20 @@ docker push ghcr.io/soccerbeats/weddingwebsite:latest
 
 ### Registry — Product Items (Target & Amazon)
 
-1. Go to **Admin → Registry → Registry Items**
-2. Paste a product URL (e.g. `https://www.target.com/p/...`) → click **Fetch →**
-3. The site auto-fills title, image, description, and price from the page
-4. Edit any field if the auto-fetch is incomplete (Amazon may block)
-5. Click **Save Item** — it appears on the public Registry tab immediately
-6. Items are grouped by store on both admin and public pages
+#### Bulk import from Amazon registry (recommended for Amazon)
+
+1. Go to your Amazon registry → **Manage** → **Download list as spreadsheet (.csv)**
+2. In **Admin → Registry → Registry Items**, click **Upload CSV**
+3. Select the downloaded file — every item imports individually with title, price, image, and link auto-populated
+4. Duplicate items (same title) are skipped automatically
+
+#### Add individual items by URL
+
+1. Paste a product URL (e.g. `https://www.target.com/p/...`) → click **Fetch →**
+2. The site auto-fills title, image, description, and price from the page
+3. Edit any field if the auto-fetch is incomplete (Amazon may block single-URL fetches)
+4. Click **Save Item** — it appears on the public Registry tab immediately
+5. Items are grouped by store on both admin and public pages
 
 ### Guest List CSV Format
 

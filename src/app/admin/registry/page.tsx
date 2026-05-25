@@ -55,6 +55,9 @@ export default function AdminRegistryPage() {
     const [showAddForm, setShowAddForm] = useState(false);
     const [contributingItem, setContributingItem] = useState<FundItem | null>(null);
     const [contributionAmount, setContributionAmount] = useState('');
+    const [importing, setImporting] = useState(false);
+    const [importResult, setImportResult] = useState<{ added: number; skipped: number } | null>(null);
+    const csvInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         fetch('/api/admin/site-config')
@@ -68,6 +71,37 @@ export default function AdminRegistryPage() {
             .then(r => r.json())
             .then(items => setRegistryItems(Array.isArray(items) ? items : []));
     }, []);
+
+    const handleCsvImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setImporting(true);
+        setImportResult(null);
+        try {
+            const text = await file.text();
+            const res = await fetch('/api/admin/registry-items/import', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ csv: text }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                setImportResult({ added: data.added, skipped: data.skipped });
+                // Refresh item list
+                const items = await fetch('/api/admin/registry-items').then(r => r.json());
+                setRegistryItems(Array.isArray(items) ? items : []);
+            } else {
+                setImportResult({ added: 0, skipped: -1 });
+                alert(data.error || 'Import failed.');
+            }
+        } catch {
+            alert('Failed to read CSV file.');
+        } finally {
+            setImporting(false);
+            // Reset file input so same file can be re-selected
+            if (csvInputRef.current) csvInputRef.current.value = '';
+        }
+    };
 
     const fetchMeta = async () => {
         if (!urlInput.trim()) return;
@@ -406,6 +440,42 @@ export default function AdminRegistryPage() {
             {tab === 'registry' && (
                 <div>
                     <p className="text-sm text-gray-500 mb-6">Paste a product URL from Target or Amazon and we&apos;ll pull in the details automatically. You can edit anything before saving.</p>
+
+                    {/* Amazon CSV import */}
+                    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 mb-6">
+                        <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0">
+                                <h3 className="text-sm font-semibold text-amber-900 flex items-center gap-2">
+                                    📦 Import from Amazon Registry CSV
+                                </h3>
+                                <p className="text-xs text-amber-700 mt-1">
+                                    On Amazon, go to your registry → <strong>Manage</strong> → <strong>Download list as spreadsheet (.csv)</strong>. Then upload it here — every item imports individually.
+                                </p>
+                                {importResult && (
+                                    <p className={`text-xs mt-2 font-medium ${importResult.added > 0 ? 'text-green-700' : 'text-gray-600'}`}>
+                                        ✓ {importResult.added} item{importResult.added !== 1 ? 's' : ''} added
+                                        {importResult.skipped > 0 ? `, ${importResult.skipped} skipped (already exist)` : ''}
+                                    </p>
+                                )}
+                            </div>
+                            <div className="shrink-0">
+                                <input
+                                    ref={csvInputRef}
+                                    type="file"
+                                    accept=".csv,text/csv"
+                                    className="hidden"
+                                    onChange={handleCsvImport}
+                                />
+                                <button
+                                    onClick={() => csvInputRef.current?.click()}
+                                    disabled={importing}
+                                    className="bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-50 transition-colors whitespace-nowrap"
+                                >
+                                    {importing ? 'Importing…' : 'Upload CSV'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
 
                     {/* URL fetch bar */}
                     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-6">
