@@ -510,7 +510,6 @@ function SeatingCanvas({
             <MiniMap
               nodeColor={() => '#e5e7eb'}
               maskColor="rgba(255,255,255,0.6)"
-              style={{ bottom: 16, right: 16 }}
             />
           </ReactFlow>
           </div>
