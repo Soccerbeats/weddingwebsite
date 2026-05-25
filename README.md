@@ -45,37 +45,100 @@ A beautiful, customizable wedding website built with Next.js 16. Features includ
   - **Basic Mode**: Pre-release mode showing only Home/About/Timeline/Photos; optional venue sub-toggle
 - **Admin Navigation**: Admin button visible in nav only when logged in (desktop + mobile)
 
-## Quick Start
+## Installation
 
-### Using Portainer (Recommended)
+### Portainer (Recommended)
 
-1. **Copy** `docker-compose.prod.yml`
-2. **Create a new Stack** in Portainer → paste the contents
-3. **Add environment variables**:
-   ```env
-   ADMIN_PASSWORD=your_secure_password
-   POSTGRES_USER=wedding_user
-   POSTGRES_PASSWORD=secure_db_password
-   POSTGRES_DB=wedding_db
-   DATABASE_URL=postgresql://wedding_user:secure_db_password@db:5432/wedding_db
-   NODE_ENV=production
-   ```
-4. **Deploy** — public site at `:3000`, admin at `:3000/admin`
+The easiest way to self-host. No cloning required — Portainer pulls the pre-built image from GitHub Container Registry.
 
-### Docker Compose (Local)
+**1. Open Portainer → Stacks → Add Stack**
+
+Give it a name (e.g. `wedding`) and paste the following into the Web editor:
+
+```yaml
+version: '3.8'
+
+services:
+  web:
+    image: ghcr.io/soccerbeats/weddingwebsite:latest
+    container_name: wedding-web-prod
+    restart: always
+    ports:
+      - '3000:3000'
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - NODE_ENV=production
+    volumes:
+      - photos_data:/app/public/photos
+      - config_data:/app/public/config
+    depends_on:
+      - db
+
+  db:
+    image: postgres:15-alpine
+    container_name: wedding-db-prod
+    restart: always
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
+  photos_data:
+  config_data:
+```
+
+**2. Set environment variables** in the Portainer UI under the compose editor (Environment variables section):
+
+| Variable | Example value | Notes |
+|---|---|---|
+| `ADMIN_PASSWORD` | `yourStrongPassword!` | Password for `/admin` login |
+| `POSTGRES_USER` | `wedding_user` | Database username |
+| `POSTGRES_PASSWORD` | `yourDbPassword!` | Database password |
+| `POSTGRES_DB` | `wedding_db` | Database name |
+| `DATABASE_URL` | `postgresql://wedding_user:yourDbPassword!@db:5432/wedding_db` | Must match the three values above |
+
+**3. Deploy the stack** — Portainer pulls the image and starts both containers. The database schema initialises automatically on first boot.
+
+**4. Access the site:**
+- Public site: `http://your-server-ip:3000`
+- Admin panel: `http://your-server-ip:3000/admin`
+
+> **Tip:** Put a reverse proxy (Nginx Proxy Manager, Traefik, Caddy) in front of port 3000 to serve over HTTPS on a custom domain.
+
+---
+
+### Docker Compose (without Portainer)
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/Soccerbeats/weddingwebsite.git
 cd weddingwebsite
-cp .env.example .env   # edit values
-docker-compose up -d --build
+
+# Set your environment variables
+export ADMIN_PASSWORD=yourStrongPassword!
+export POSTGRES_USER=wedding_user
+export POSTGRES_PASSWORD=yourDbPassword!
+export POSTGRES_DB=wedding_db
+export DATABASE_URL=postgresql://wedding_user:yourDbPassword!@db:5432/wedding_db
+
+docker-compose -f docker-compose.prod.yml up -d
 ```
+
+Site will be available at `http://localhost:3000`.
+
+---
 
 ### Local Development
 
 ```bash
+git clone https://github.com/Soccerbeats/weddingwebsite.git
+cd weddingwebsite
 npm install
-cp .env.example .env.local
+cp .env.example .env.local   # fill in values
 npm run dev
 # open http://localhost:3000
 ```
