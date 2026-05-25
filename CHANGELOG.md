@@ -4,6 +4,19 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [2026-05-25] — "Likely Not Coming" guest status
+
+### Added
+- **"Likely Not Coming" RSVP status** (`rsvp_status = 'likely_not_coming'`) — admin-only status for guests you know probably won't attend but still want to invite
+- **Quick flag button (🙁)** on each guest row — one click to toggle the status without opening the edit modal
+- **RSVP Status dropdown in Edit Guest modal** — full admin control: No Response / Attending / Declined / Likely Not Coming
+- **"Likely Not Coming" stat card** — orange card added to both RSVP tab and Guest List tab stats
+- **"Likely Not Coming" filter tab** — filter button in guest list to view only these guests
+- **Row styling** — guests with this status show a light red/gray tinted row with muted text
+- **Expected headcount exclusion** — "Expected Guests" stat excludes `likely_not_coming` guests from count
+- **Seating chart exclusion** — `likely_not_coming` guests are filtered out of the seating chart sidebar entirely
+- **Public RSVP override** — if a guest submits an RSVP (attending or declined), it overwrites `likely_not_coming` with their actual response
+
 ## [2026-05-25] — Target registry bookmarklet import
 
 ### Added

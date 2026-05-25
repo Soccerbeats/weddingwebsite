@@ -30,7 +30,7 @@ interface Guest {
 }
 
 type Tab = 'rsvps' | 'guestlist';
-type GuestFilter = 'all' | 'no_response' | 'attending' | 'declined' | 'not_invited' | 'bride' | 'groom';
+type GuestFilter = 'all' | 'no_response' | 'attending' | 'declined' | 'likely_not_coming' | 'not_invited' | 'bride' | 'groom';
 
 export default function RSVPDashboard() {
     const [activeTab, setActiveTab] = useState<Tab>('rsvps');
@@ -58,6 +58,7 @@ export default function RSVPDashboard() {
         notes: '',
         invited: false,
         plus_one_name: '',
+        rsvp_status: '',
     });
 
     useEffect(() => {
@@ -145,6 +146,7 @@ export default function RSVPDashboard() {
                     notes: '',
                     invited: false,
                     plus_one_name: '',
+                    rsvp_status: '',
                 });
                 fetchGuests();
             }
@@ -182,7 +184,22 @@ export default function RSVPDashboard() {
             notes: guest.notes || '',
             invited: guest.invited,
             plus_one_name: guest.plus_one_name || '',
+            rsvp_status: guest.rsvp_status || '',
         });
+    };
+
+    const handleMarkLikelyNotComing = async (guest: Guest) => {
+        const newStatus = guest.rsvp_status === 'likely_not_coming' ? '' : 'likely_not_coming';
+        try {
+            await fetch('/api/admin/guest-list', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...guest, rsvp_status: newStatus }),
+            });
+            fetchGuests();
+        } catch (error) {
+            console.error('Error updating guest status:', error);
+        }
     };
 
     const toggleGuestSelection = (id: number) => {
@@ -377,7 +394,8 @@ export default function RSVPDashboard() {
     const totalGuests = rsvps.reduce((acc, curr) => acc + (curr.attending ? curr.number_of_guests : 0), 0);
     const totalDeclinedGuests = rsvps.filter(r => !r.attending).reduce((acc, curr) => acc + (curr.number_of_guests || 1), 0);
     const totalInvited = guests.filter(g => g.invited).length;
-    const totalGuestListSize = guests.reduce((acc, curr) => acc + curr.party_size, 0);
+    const likelyNotComingCount = guests.filter(g => g.rsvp_status === 'likely_not_coming').length;
+    const totalGuestListSize = guests.filter(g => g.rsvp_status !== 'likely_not_coming').reduce((acc, curr) => acc + curr.party_size, 0);
     const missingRsvps = guests.filter(g => g.invited && !g.rsvp_status).length;
 
     const filteredGuests = guests.filter(g => {
@@ -387,6 +405,7 @@ export default function RSVPDashboard() {
             case 'no_response': return g.invited && !g.rsvp_status;
             case 'attending': return g.rsvp_status === 'attending';
             case 'declined': return g.rsvp_status === 'declined';
+            case 'likely_not_coming': return g.rsvp_status === 'likely_not_coming';
             case 'not_invited': return !g.invited;
             case 'bride': return g.side === 'bride';
             case 'groom': return g.side === 'groom';
@@ -431,7 +450,7 @@ export default function RSVPDashboard() {
             {activeTab === 'rsvps' && (
                 <>
                     {/* Stats Cards */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
                         <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-200">
                             <p className="text-sm font-medium text-gray-500">Total RSVPs</p>
                             <p className="text-3xl font-bold text-gray-900">{rsvps.length}</p>
@@ -443,6 +462,10 @@ export default function RSVPDashboard() {
                         <div className="bg-white p-6 rounded-2xl shadow-lg border border-red-200">
                             <p className="text-sm font-medium text-red-600">Declined</p>
                             <p className="text-3xl font-bold text-red-700">{totalDeclinedGuests}</p>
+                        </div>
+                        <div className="bg-white p-6 rounded-2xl shadow-lg border border-orange-200">
+                            <p className="text-sm font-medium text-orange-600">Likely Not Coming</p>
+                            <p className="text-3xl font-bold text-orange-700">{likelyNotComingCount}</p>
                         </div>
                         <div className="bg-white p-6 rounded-2xl shadow-lg border border-yellow-200">
                             <p className="text-sm font-medium text-yellow-600">Missing RSVPs</p>
@@ -514,7 +537,7 @@ export default function RSVPDashboard() {
             {activeTab === 'guestlist' && (
                 <>
                     {/* Guest List Stats */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
                         <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-200">
                             <p className="text-sm font-medium text-gray-500">Total Invited</p>
                             <p className="text-3xl font-bold text-gray-900">{totalInvited}</p>
@@ -522,6 +545,11 @@ export default function RSVPDashboard() {
                         <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-200">
                             <p className="text-sm font-medium text-gray-500">Expected Guests</p>
                             <p className="text-3xl font-bold text-gray-900">{totalGuestListSize}</p>
+                            <p className="text-xs text-gray-400 mt-1">excl. likely not coming</p>
+                        </div>
+                        <div className="bg-white p-6 rounded-2xl shadow-lg border border-orange-200">
+                            <p className="text-sm font-medium text-orange-600">Likely Not Coming</p>
+                            <p className="text-3xl font-bold text-orange-700">{likelyNotComingCount}</p>
                         </div>
                         <div className="bg-white p-6 rounded-2xl shadow-lg border border-green-200">
                             <p className="text-sm font-medium text-gray-500">Total Attending</p>
@@ -580,6 +608,7 @@ export default function RSVPDashboard() {
                                         notes: '',
                                         invited: false,
                                         plus_one_name: '',
+                                        rsvp_status: '',
                                     });
                                 }}
                                 className="bg-accent text-white px-4 py-2 rounded-xl hover:bg-accent/90 transition-all duration-300 shadow-md hover:shadow-lg"
@@ -604,6 +633,7 @@ export default function RSVPDashboard() {
                                 { key: 'no_response', label: '⏳ No Response', color: 'yellow' },
                                 { key: 'attending', label: '✓ Attending', color: 'green' },
                                 { key: 'declined', label: '✗ Declined', color: 'red' },
+                                { key: 'likely_not_coming', label: '🙁 Likely Not Coming', color: 'orange' },
                                 { key: 'not_invited', label: 'Not Invited', color: 'gray' },
                                 { key: 'bride', label: `${config?.brideName || 'Bride'}'s Side`, color: 'pink' },
                                 { key: 'groom', label: `${config?.groomName || 'Groom'}'s Side`, color: 'blue' },
@@ -651,8 +681,10 @@ export default function RSVPDashboard() {
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
-                                    {filteredGuests.map((guest) => (
-                                        <tr key={guest.id} className="hover:bg-gray-50">
+                                    {filteredGuests.map((guest) => {
+                                        const isLikelyNotComing = guest.rsvp_status === 'likely_not_coming';
+                                        return (
+                                        <tr key={guest.id} className={`hover:bg-gray-50 ${isLikelyNotComing ? 'bg-red-50/40' : ''}`}>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <input
                                                     type="checkbox"
@@ -662,33 +694,33 @@ export default function RSVPDashboard() {
                                                 />
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm font-medium text-gray-900">{guest.guest_name}</div>
+                                                <div className={`text-sm font-medium ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-900'}`}>{guest.guest_name}</div>
                                                 {guest.plus_one_name && (
-                                                    <div className="text-sm text-gray-500">+ {guest.plus_one_name}</div>
+                                                    <div className="text-sm text-gray-400">+ {guest.plus_one_name}</div>
                                                 )}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm text-gray-500">{guest.email || '-'}</div>
-                                                <div className="text-sm text-gray-500">{guest.phone || '-'}</div>
+                                                <div className={`text-sm ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-500'}`}>{guest.email || '-'}</div>
+                                                <div className={`text-sm ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-500'}`}>{guest.phone || '-'}</div>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-500'}`}>
                                                 {guest.party_size}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                {guest.rsvp_status ? (
-                                                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                                        guest.rsvp_status === 'attending' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                                                    }`}>
-                                                        {guest.rsvp_status === 'attending' ? 'Attending' : 'Declined'}
-                                                    </span>
+                                                {guest.rsvp_status === 'attending' ? (
+                                                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Attending</span>
+                                                ) : guest.rsvp_status === 'declined' ? (
+                                                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Declined</span>
+                                                ) : guest.rsvp_status === 'likely_not_coming' ? (
+                                                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-orange-100 text-orange-700">Likely Not Coming</span>
                                                 ) : (
                                                     <span className="text-sm text-gray-400">No Response</span>
                                                 )}
                                             </td>
-                                            <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">
+                                            <td className={`px-6 py-4 text-sm max-w-xs truncate ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-500'}`}>
                                                 {guest.notes || '-'}
                                             </td>
-                                            <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">
+                                            <td className={`px-6 py-4 text-sm max-w-xs truncate ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-500'}`}>
                                                 {guest.address || '-'}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
@@ -699,6 +731,13 @@ export default function RSVPDashboard() {
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                <button
+                                                    onClick={() => handleMarkLikelyNotComing(guest)}
+                                                    title={isLikelyNotComing ? 'Clear likely not coming' : 'Mark as likely not coming'}
+                                                    className={`mr-3 text-xs px-2 py-1 rounded ${isLikelyNotComing ? 'bg-orange-100 text-orange-700 hover:bg-orange-200' : 'bg-gray-100 text-gray-500 hover:bg-orange-100 hover:text-orange-700'}`}
+                                                >
+                                                    🙁
+                                                </button>
                                                 <button
                                                     onClick={() => openEditGuest(guest)}
                                                     className="text-blue-600 hover:text-blue-900 mr-4"
@@ -713,7 +752,8 @@ export default function RSVPDashboard() {
                                                 </button>
                                             </td>
                                         </tr>
-                                    ))}
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>
@@ -873,6 +913,25 @@ export default function RSVPDashboard() {
                                     Invited
                                 </label>
                             </div>
+
+                            {editingGuest && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        RSVP Status (Admin)
+                                    </label>
+                                    <select
+                                        value={guestForm.rsvp_status}
+                                        onChange={(e) => setGuestForm({ ...guestForm, rsvp_status: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                                    >
+                                        <option value="">No Response</option>
+                                        <option value="attending">Attending</option>
+                                        <option value="declined">Declined</option>
+                                        <option value="likely_not_coming">Likely Not Coming</option>
+                                    </select>
+                                    <p className="text-xs text-gray-400 mt-1">Admin-only. &quot;Likely Not Coming&quot; excludes this guest from expected headcount and seating chart.</p>
+                                </div>
+                            )}
                         </div>
 
                         <div className="flex justify-end gap-3 mt-6">

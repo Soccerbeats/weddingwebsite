@@ -60,14 +60,15 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   try {
-    const { id, guest_name, email, phone, party_size, notes, invited, plus_one_name } = await request.json();
+    const { id, guest_name, email, phone, party_size, notes, invited, plus_one_name, address, rsvp_status } = await request.json();
 
     const result = await pool.query(
       `UPDATE guest_list
-       SET guest_name = $1, email = $2, phone = $3, party_size = $4, notes = $5, invited = $6, plus_one_name = $7, updated_at = NOW()
-       WHERE id = $8
+       SET guest_name = $1, email = $2, phone = $3, party_size = $4, notes = $5, invited = $6, plus_one_name = $7,
+           address = COALESCE($8, address), rsvp_status = $9, updated_at = NOW()
+       WHERE id = $10
        RETURNING *`,
-      [guest_name, email, phone, party_size, notes, invited, plus_one_name, id]
+      [guest_name, email, phone, party_size, notes, invited, plus_one_name, address, rsvp_status || null, id]
     );
 
     return NextResponse.json(result.rows[0]);
