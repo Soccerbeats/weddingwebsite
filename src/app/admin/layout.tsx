@@ -58,7 +58,7 @@ export default function AdminLayout({
                     }
                 `
             }} />
-            <div className="h-screen bg-gray-100 flex overflow-hidden">
+            <div className="flex-1 bg-gray-100 flex overflow-hidden min-h-0">
                 {/* Sidebar */}
                 <aside className="w-64 bg-white border-r border-gray-200">
                     <div className="h-16 flex items-center justify-center border-b border-gray-200 px-4">

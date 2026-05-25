@@ -1,8 +1,7 @@
 import type { Metadata } from 'next';
 import { Playfair_Display, Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
-import Navigation from '@/components/Navigation';
-import ConditionalFooter from '@/components/ConditionalFooter';
+import AppShell from '@/components/AppShell';
 import WipCheck from '@/components/WipCheck';
 import { getSiteConfig } from '@/lib/config';
 import { cookies } from 'next/headers';
@@ -57,27 +56,7 @@ export default async function RootLayout({
 
   return (
     <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} antialiased pt-20 min-h-screen flex flex-col`}
-      >
-        <WipCheck />
-        <Navigation
-          brideName={config.brideName}
-          groomName={config.groomName}
-          logoMode={config.logoMode}
-          weddingLogo={config.weddingLogo}
-          isAdmin={isAdmin}
-        />
-        <main className="flex-grow">
-          {children}
-        </main>
-        <ConditionalFooter
-          brideName={config.brideName}
-          groomName={config.groomName}
-          weddingDate={config.weddingDate}
-          weddingLocation={config.weddingLocation}
-          footerHeroImage={config.footerHeroImage}
-        />
+      <body className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} antialiased`}>
         <style dangerouslySetInnerHTML={{
           __html: `
             :root {
@@ -87,6 +66,19 @@ export default async function RootLayout({
             }
           `
         }} />
+        <WipCheck />
+        <AppShell
+          brideName={config.brideName}
+          groomName={config.groomName}
+          logoMode={config.logoMode}
+          weddingLogo={config.weddingLogo}
+          isAdmin={isAdmin}
+          weddingDate={config.weddingDate}
+          weddingLocation={config.weddingLocation}
+          footerHeroImage={config.footerHeroImage}
+        >
+          {children}
+        </AppShell>
       </body>
     </html>
   );
