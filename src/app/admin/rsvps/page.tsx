@@ -393,10 +393,10 @@ export default function RSVPDashboard() {
 
     const totalGuests = rsvps.reduce((acc, curr) => acc + (curr.attending ? curr.number_of_guests : 0), 0);
     const totalDeclinedGuests = rsvps.filter(r => !r.attending).reduce((acc, curr) => acc + (curr.number_of_guests || 1), 0);
-    const totalInvited = guests.filter(g => g.invited).length;
-    const likelyNotComingCount = guests.filter(g => g.rsvp_status === 'likely_not_coming').length;
+    const totalInvited = guests.filter(g => g.invited).reduce((acc, curr) => acc + curr.party_size, 0);
+    const likelyNotComingCount = guests.filter(g => g.rsvp_status === 'likely_not_coming').reduce((acc, curr) => acc + curr.party_size, 0);
     const totalGuestListSize = guests.filter(g => g.rsvp_status !== 'likely_not_coming').reduce((acc, curr) => acc + curr.party_size, 0);
-    const missingRsvps = guests.filter(g => g.invited && !g.rsvp_status).length;
+    const missingRsvps = guests.filter(g => g.invited && !g.rsvp_status).reduce((acc, curr) => acc + curr.party_size, 0);
 
     const filteredGuests = guests.filter(g => {
         const matchesSearch = !guestSearch || g.guest_name.toLowerCase().includes(guestSearch.toLowerCase()) || (g.plus_one_name || '').toLowerCase().includes(guestSearch.toLowerCase());
