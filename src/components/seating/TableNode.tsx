@@ -407,14 +407,16 @@ function TableBody({
         <span className="text-xs font-semibold text-gray-600 px-3 text-center leading-tight">
           {table.name}
         </span>
-        <span className="text-xs text-gray-400 mt-0.5">
-          {totalSeatCount === 0
-            ? 'Drop guests here'
-            : seatCount < totalSeatCount
-              ? `${seatCount} people (+${totalSeatCount - seatCount} likely not coming)`
-              : `${seatCount} ${seatCount === 1 ? 'person' : 'people'}`
-          }
-        </span>
+        {totalSeatCount === 0 ? (
+          <span className="text-xs text-gray-400 mt-0.5">Drop guests here</span>
+        ) : seatCount < totalSeatCount ? (
+          <span className="text-center mt-0.5 leading-tight flex flex-col items-center">
+            <span className="text-xs text-gray-400">{seatCount} {seatCount === 1 ? 'person' : 'people'}</span>
+            <span className="text-[9px] text-orange-400 font-medium">+{totalSeatCount - seatCount} likely not coming</span>
+          </span>
+        ) : (
+          <span className="text-xs text-gray-400 mt-0.5">{seatCount} {seatCount === 1 ? 'person' : 'people'}</span>
+        )}
 
         {hovered && (
           <TableControls
