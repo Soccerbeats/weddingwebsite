@@ -31,20 +31,35 @@ export default function AppShell({
   const isAdminRoute = pathname?.startsWith('/admin');
 
   if (isAdminRoute) {
-    // Admin: no public nav, no pt-20, no footer — full viewport flex
     return (
-      <div className="flex flex-col h-screen overflow-hidden">
-        {children}
-      </div>
+      <>
+        {/* Public nav stays at top for admin too */}
+        <Navigation
+          brideName={brideName}
+          groomName={groomName}
+          logoMode={logoMode}
+          weddingLogo={weddingLogo}
+          isAdmin={isAdmin}
+        />
+        {/*
+          Fixed container that starts exactly where the nav ends (top-20 = 80px)
+          and fills to all other edges. This gives the admin layout a container
+          with truly explicit pixel dimensions — no reliance on flex-grow for height.
+        */}
+        <div className="fixed top-20 left-0 right-0 bottom-0 overflow-hidden flex flex-col">
+          {children}
+        </div>
+      </>
     );
   }
 
+  // Public pages: nav is fixed, content starts below it
   return (
     <>
       <Navigation
         brideName={brideName}
         groomName={groomName}
-        logoMode={typeof logoMode === 'boolean' ? logoMode : undefined}
+        logoMode={logoMode}
         weddingLogo={weddingLogo}
         isAdmin={isAdmin}
       />

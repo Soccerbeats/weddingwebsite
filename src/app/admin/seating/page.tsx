@@ -312,7 +312,7 @@ function SeatingCanvas({
   }, [tables, guests, colorMode]);
 
   return (
-    <div className="flex h-full w-full">
+    <div className="flex flex-1 min-h-0 overflow-hidden">
       {/* Guest sidebar */}
       <GuestSidebar
         guests={guestsWithAssignment()}
@@ -322,7 +322,7 @@ function SeatingCanvas({
       />
 
       {/* Canvas area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         {/* Toolbar */}
         <div className="h-12 bg-white border-b border-gray-200 flex items-center gap-2 px-4 shrink-0">
           <button
@@ -458,7 +458,7 @@ function SeatingCanvas({
         {/* React Flow canvas */}
         <div
           ref={canvasContainerRef}
-          className="flex-1 relative"
+          className="flex-1 min-h-0 relative"
           onDrop={handleCanvasDrop}
           onDragOver={e => e.preventDefault()}
         >
@@ -622,7 +622,7 @@ export default function SeatingPage() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] -m-8">
+    <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
       <div className="px-8 py-4 bg-white border-b border-gray-200 shrink-0">
         <h1 className="text-2xl font-serif font-bold text-gray-800">Seating Chart</h1>
         <p className="text-sm text-gray-500 mt-0.5">
@@ -630,7 +630,7 @@ export default function SeatingPage() {
         </p>
       </div>
 
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-hidden">
         <ReactFlowProvider>
           <SeatingCanvas
             floorPlan={floorPlan}
