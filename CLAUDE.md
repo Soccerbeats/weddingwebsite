@@ -1,5 +1,26 @@
 # Claude LLM Documentation - Wedding Website Project
 
+## "Document Everything" Convention
+
+When Austin says **"document everything"** after completing a feature, it means:
+
+1. **Update `README.md`** in the project root — add or update the relevant section under Admin Panel Guide with step-by-step usage instructions for the new feature
+2. **Update `CHANGELOG.md`** in the project root — add an entry under `[Unreleased]` (or today's date) with ### Added / ### Fixed / ### Changed bullets describing exactly what changed
+3. **Update the vault** at `/home/austin/vault/wiki/entities/wedding-website.md`:
+   - Add the feature to the relevant admin features section
+   - Add a dated bullet to the **Decisions & History** section summarising what was built
+   - Add any new API endpoints, config keys, or data formats to the appropriate sub-sections
+4. **Commit and push to GitHub** (`git add -A && git commit && git push`)
+5. **Build and push the Docker image** so it can be pulled from Portainer:
+   ```bash
+   docker build -t ghcr.io/soccerbeats/weddingwebsite:latest --target production .
+   docker push ghcr.io/soccerbeats/weddingwebsite:latest
+   ```
+
+Do all five steps — don't skip any. README, CHANGELOG, and vault updates should all happen before the git commit so they're included.
+
+---
+
 ## Project Overview
 This is a Next.js 16 wedding website with an admin panel for content management. The site uses file-based JSON storage for configuration and PostgreSQL for RSVPs and guest lists. It's deployed via Docker to a Portainer instance.
 
