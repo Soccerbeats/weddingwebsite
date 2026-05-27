@@ -21,6 +21,7 @@
   --font-sans: var(--font-geist-sans), Arial, sans-serif;
   --font-mono: var(--font-geist-mono), monospace;
   --font-serif: "Playfair Display", Georgia, serif;
+  --font-script: var(--font-script), cursive;
 }
 
 /* Dark mode disabled for wedding theme consistency */

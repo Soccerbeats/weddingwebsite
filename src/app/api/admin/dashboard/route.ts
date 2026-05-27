@@ -59,9 +59,12 @@ export async function GET() {
       LIMIT 5
     `);
 
+    // Ensure is_hidden column exists (idempotent)
+    await client.query(`ALTER TABLE wip_toggles ADD COLUMN IF NOT EXISTS is_hidden BOOLEAN DEFAULT false`);
+
     // WIP toggles
     const wipResult = await client.query(`
-      SELECT page_label, is_wip FROM wip_toggles ORDER BY page_label
+      SELECT page_label, is_wip, is_hidden FROM wip_toggles ORDER BY page_label
     `);
 
     const rsvp = rsvpResult.rows[0];
@@ -101,7 +104,7 @@ export async function GET() {
         milestones: milestones.length,
       },
       recentRsvps: recentResult.rows,
-      wipToggles: wipResult.rows,
+      wipToggles: wipResult.rows as { page_label: string; is_wip: boolean; is_hidden: boolean }[],
     });
   } finally {
     client.release();

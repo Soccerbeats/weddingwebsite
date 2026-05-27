@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Playfair_Display, Geist, Geist_Mono } from 'next/font/google';
+import { Playfair_Display, Geist, Geist_Mono, Great_Vibes } from 'next/font/google';
 import './globals.css';
 import AppShell from '@/components/AppShell';
 import WipCheck from '@/components/WipCheck';
@@ -13,6 +13,12 @@ export const dynamic = 'force-dynamic';
 const playfair = Playfair_Display({
   variable: '--font-serif',
   subsets: ['latin'],
+});
+
+const greatVibes = Great_Vibes({
+  variable: '--font-script',
+  subsets: ['latin'],
+  weight: '400',
 });
 
 const geistSans = Geist({
@@ -56,7 +62,7 @@ export default async function RootLayout({
 
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} antialiased`}>
+      <body className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} ${greatVibes.variable} antialiased`}>
         <style dangerouslySetInnerHTML={{
           __html: `
             :root {
