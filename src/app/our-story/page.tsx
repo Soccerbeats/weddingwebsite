@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Image from 'next/image';
+import FadeIn from '@/components/FadeIn';
+import { photoSrc, photoSrcSet } from '@/lib/photoSrc';
 
 interface Milestone {
     id: number;
@@ -79,14 +80,14 @@ export default function OurStoryPage() {
     return (
         <div style={{ backgroundColor: bgColor }} className="py-16">
             <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div className="text-center mb-12">
+                <FadeIn animation="slide-up" className="text-center mb-12">
                     <h1 className="text-4xl font-serif text-gray-900 tracking-tight sm:text-5xl mb-4">
                         Our Story
                     </h1>
                     <p className="text-xl text-gray-500">
                         {timelineSubtitle}
                     </p>
-                </div>
+                </FadeIn>
 
                 {/* Timeline */}
                 <div className="relative">
@@ -96,8 +97,11 @@ export default function OurStoryPage() {
                     {/* Timeline items */}
                     <div className="space-y-12">
                         {milestones.map((milestone, index) => (
-                            <div
+                            <FadeIn
                                 key={milestone.id}
+                                animation={index % 2 === 0 ? 'slide-right' : 'slide-left'}
+                                delay={0}
+                                threshold={0.1}
                                 className={`relative flex flex-col md:flex-row md:items-center ${
                                     index % 2 === 0 ? 'md:flex-row' : 'md:flex-row-reverse'
                                 }`}
@@ -126,13 +130,13 @@ export default function OurStoryPage() {
                                         <>
                                             {milestone.photos.length === 1 ? (
                                                 <div className="relative h-64 w-full rounded-2xl overflow-hidden shadow-lg border-4 border-white transform hover:rotate-0 transition-transform duration-500 md:rotate-2">
-                                                    <Image
-                                                        src={`/api/photos/${milestone.photos[0]}`}
-                                                        alt={milestone.title}
-                                                        fill
-                                                        unoptimized
-                                                        className={`object-cover ${getObjectPositionClass(milestone.photoAligns?.[0])}`}
+                                                    <img
+                                                        src={photoSrc(milestone.photos[0], 'large')}
+                                                        srcSet={photoSrcSet(milestone.photos[0])}
                                                         sizes="(max-width: 768px) 100vw, 50vw"
+                                                        alt={milestone.title}
+                                                        className={`absolute inset-0 w-full h-full object-cover ${getObjectPositionClass(milestone.photoAligns?.[0])}`}
+                                                        loading="lazy"
                                                     />
                                                 </div>
                                             ) : (
@@ -144,13 +148,13 @@ export default function OurStoryPage() {
                                                                 photoIdx === 0 ? '-rotate-3' : 'rotate-3'
                                                             }`}
                                                         >
-                                                            <Image
-                                                                src={`/api/photos/${photo}`}
-                                                                alt={`${milestone.title} ${photoIdx + 1}`}
-                                                                fill
-                                                                unoptimized
-                                                                className={`object-cover ${getObjectPositionClass(milestone.photoAligns?.[photoIdx])}`}
+                                                            <img
+                                                                src={photoSrc(photo, 'medium')}
+                                                                srcSet={photoSrcSet(photo)}
                                                                 sizes="(max-width: 768px) 50vw, 25vw"
+                                                                alt={`${milestone.title} ${photoIdx + 1}`}
+                                                                className={`absolute inset-0 w-full h-full object-cover ${getObjectPositionClass(milestone.photoAligns?.[photoIdx])}`}
+                                                                loading="lazy"
                                                             />
                                                         </div>
                                                     ))}
@@ -159,7 +163,7 @@ export default function OurStoryPage() {
                                         </>
                                     )}
                                 </div>
-                            </div>
+                            </FadeIn>
                         ))}
                     </div>
                 </div>

@@ -1,4 +1,6 @@
 import { getSiteConfig } from '@/lib/config';
+import { photoSrc, photoSrcSet } from '@/lib/photoSrc';
+import FadeIn from '@/components/FadeIn';
 
 interface WeddingPartyMember {
   name: string;
@@ -62,11 +64,11 @@ export default function WeddingPartyPage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {weddingParty.brideParty.map((member: WeddingPartyMember, index: number) => (
-                <div key={index} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
+                <FadeIn key={index} animation="slide-up" delay={(index % 3) * 80} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
                   {member.photo ? (
                     <div className="relative h-64 bg-gray-200">
                       <img
-                        src={`/api/photos/${member.photo}`}
+                        src={photoSrc(member.photo, 'medium')} srcSet={photoSrcSet(member.photo)} sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw" loading="lazy"
                         alt={member.name}
                         className={`w-full h-full object-cover ${getObjectPositionClass(member.photoAlign)}`}
                       />
@@ -98,7 +100,7 @@ export default function WeddingPartyPage() {
                       <p className="text-sm text-gray-700 leading-relaxed">{member.bio}</p>
                     )}
                   </div>
-                </div>
+                </FadeIn>
               ))}
             </div>
           )}
@@ -117,11 +119,11 @@ export default function WeddingPartyPage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {weddingParty.groomParty.map((member: WeddingPartyMember, index: number) => (
-                <div key={index} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
+                <FadeIn key={index} animation="slide-up" delay={(index % 3) * 80} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
                   {member.photo ? (
                     <div className="relative h-64 bg-gray-200">
                       <img
-                        src={`/api/photos/${member.photo}`}
+                        src={photoSrc(member.photo, 'medium')} srcSet={photoSrcSet(member.photo)} sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw" loading="lazy"
                         alt={member.name}
                         className={`w-full h-full object-cover ${getObjectPositionClass(member.photoAlign)}`}
                       />
@@ -153,7 +155,7 @@ export default function WeddingPartyPage() {
                       <p className="text-sm text-gray-700 leading-relaxed">{member.bio}</p>
                     )}
                   </div>
-                </div>
+                </FadeIn>
               ))}
             </div>
           )}
@@ -172,7 +174,7 @@ export default function WeddingPartyPage() {
                   {member.photo ? (
                     <div className="relative h-64 bg-gray-200">
                       <img
-                        src={`/api/photos/${member.photo}`}
+                        src={photoSrc(member.photo, 'medium')} srcSet={photoSrcSet(member.photo)} sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw" loading="lazy"
                         alt={member.name}
                         className={`w-full h-full object-cover ${getObjectPositionClass(member.photoAlign)}`}
                       />
@@ -222,7 +224,10 @@ export default function WeddingPartyPage() {
                 {weddingParty.officiant.photo ? (
                   <div className="relative h-64 bg-gray-200">
                     <img
-                      src={`/api/photos/${weddingParty.officiant.photo}`}
+                      src={photoSrc(weddingParty.officiant.photo, 'medium')}
+                      srcSet={photoSrcSet(weddingParty.officiant.photo)}
+                      sizes="(max-width: 768px) 100vw, 50vw"
+                      loading="lazy"
                       alt={weddingParty.officiant.name}
                       className={`w-full h-full object-cover ${getObjectPositionClass(weddingParty.officiant.photoAlign)}`}
                     />

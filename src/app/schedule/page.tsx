@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { getSiteConfig } from '@/lib/config';
+import FadeIn from '@/components/FadeIn';
 
 export default function SchedulePage() {
     const config = getSiteConfig();
@@ -16,7 +17,7 @@ export default function SchedulePage() {
     return (
         <div style={{ backgroundColor: bgColor }} className="py-16">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div className="text-center mb-16">
+                <FadeIn animation="slide-up" className="text-center mb-16">
                     <h1 className="text-4xl font-serif text-gray-900 tracking-tight sm:text-5xl">
                         Schedule of Events
                     </h1>
@@ -38,12 +39,12 @@ export default function SchedulePage() {
                             View FAQs
                         </Link>
                     </div>
-                </div>
+                </FadeIn>
 
                 <div className="max-w-3xl mx-auto">
                     <div className="space-y-12">
                         {events.map((event, index) => (
-                            <div key={index} className="relative flex items-start group">
+                            <FadeIn key={index} animation="slide-up" delay={index * 80} threshold={0.08} className="relative flex items-start group">
                                 {/* Timeline Line */}
                                 {index !== events.length - 1 && (
                                     <div className="absolute top-0 left-8 sm:left-24 h-full w-px bg-gray-200 group-last:hidden" style={{ top: '2rem' }}></div>
@@ -79,26 +80,26 @@ export default function SchedulePage() {
                                         )}
                                     </div>
                                 </div>
-                            </div>
+                            </FadeIn>
                         ))}
                     </div>
                 </div>
 
                 {/* Transportation & Details */}
                 <div className="mt-20 grid gap-8 grid-cols-1 md:grid-cols-2 max-w-4xl mx-auto">
-                    <div className="bg-gray-900 text-white p-8 rounded-2xl text-center shadow-xl">
+                    <FadeIn animation="slide-right" className="bg-gray-900 text-white p-8 rounded-2xl text-center shadow-xl">
                         <h3 className="text-xl font-serif mb-4">Shuttle Service</h3>
                         <p className="text-gray-300">
                             Shuttles will depart from the [Hotel Name] every 30 minutes starting at 2:30 PM. Return service begins at 9:00 PM.
                         </p>
-                    </div>
-                    <div className="bg-accent/10 p-8 rounded-2xl text-center border-2 border-accent/20 shadow-lg">
+                    </FadeIn>
+                    <FadeIn animation="slide-left" delay={80} className="bg-accent/10 p-8 rounded-2xl text-center border-2 border-accent/20 shadow-lg">
                         <h3 className="text-xl font-serif mb-4 text-gray-900">Dress Code</h3>
                         <p className="text-gray-600">
                             <strong>Black Tie Optional</strong><br />
                             Tuxedos or dark suits; floor-length or cocktail dresses.
                         </p>
-                    </div>
+                    </FadeIn>
                 </div>
             </div>
         </div>
