@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation';
 import Navigation from './Navigation';
 import ConditionalFooter from './ConditionalFooter';
+import HeartBurst from './HeartBurst';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -63,8 +64,11 @@ export default function AppShell({
         weddingLogo={weddingLogo}
         isAdmin={isAdmin}
       />
-      <div className="pt-20 flex flex-col min-h-screen">
-        <main className="flex-grow">
+      <HeartBurst />
+      {/* Home page: hero fills under the floating nav island (pt-0).
+          All other pages: push content below the nav bar (pt-20).       */}
+      <div className={`${pathname === '/' ? 'pt-0' : 'pt-20'} flex flex-col min-h-screen`}>
+        <main key={pathname} className="flex-grow page-enter">
           {children}
         </main>
         <ConditionalFooter
