@@ -30,6 +30,7 @@ export default function Navigation({
     const linksRef = useRef<HTMLDivElement>(null);
     const pathname = usePathname();
     const isHome = pathname === '/';
+    const [aboutInView, setAboutInView] = useState(false);
 
     // All pages: full banner at top, island when scrolled.
     const island = scrolled;
@@ -77,6 +78,19 @@ export default function Navigation({
         setIsOpen(false);
     }, [pathname]);
 
+    // Track whether the #about section is visible so we can highlight the About nav link.
+    useEffect(() => {
+        if (pathname !== '/') { setAboutInView(false); return; }
+        const el = document.getElementById('about');
+        if (!el) return;
+        const observer = new IntersectionObserver(
+            ([entry]) => setAboutInView(entry.isIntersecting),
+            { threshold: 0.2 }
+        );
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, [pathname]);
+
     const allLinks = [
         { href: '/', label: 'Home' },
         { href: '/#about', label: 'About' },
@@ -95,8 +109,9 @@ export default function Navigation({
      .filter(l => isAdmin || !hiddenPaths.has(l.href));
 
     const isActive = (href: string) => {
-        if (href === '/#about') return false; // hash links don't need active state
-        return href === '/' ? pathname === '/' : pathname?.startsWith(href);
+        if (href === '/#about') return aboutInView;
+        if (href === '/') return pathname === '/' && !aboutInView;
+        return pathname?.startsWith(href);
     };
 
     // Measure content width so the island hugs the logo + links tightly.

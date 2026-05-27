@@ -68,6 +68,31 @@ export async function GET() {
       SELECT page_label, is_wip, is_hidden FROM wip_toggles ORDER BY page_label
     `);
 
+    // Seating overview
+    let seating = { tables: 0, totalSeats: 0, assignedSeats: 0, tableList: [] as { name: string; seat_count: number; assigned: number; table_type: string }[] };
+    try {
+      const fpResult = await client.query(`SELECT id FROM floor_plans ORDER BY id ASC LIMIT 1`);
+      if (fpResult.rows.length > 0) {
+        const fpId = fpResult.rows[0].id;
+        const tablesResult = await client.query(
+          `SELECT t.id, t.name, t.seat_count, t.table_type,
+                  COUNT(sa.seat_index)::int AS assigned
+           FROM seating_tables t
+           LEFT JOIN seat_assignments sa ON sa.seating_table_id = t.id
+           WHERE t.floor_plan_id = $1
+           GROUP BY t.id, t.name, t.seat_count, t.table_type
+           ORDER BY t.name`, [fpId]
+        );
+        const rows = tablesResult.rows;
+        seating = {
+          tables: rows.length,
+          totalSeats: rows.reduce((s: number, r: any) => s + r.seat_count, 0),
+          assignedSeats: rows.reduce((s: number, r: any) => s + r.assigned, 0),
+          tableList: rows.map((r: any) => ({ name: r.name, seat_count: r.seat_count, assigned: r.assigned, table_type: r.table_type })),
+        };
+      }
+    } catch { /* seating tables may not exist yet */ }
+
     const rsvp = rsvpResult.rows[0];
     const guests = guestResult.rows[0];
 
@@ -107,6 +132,7 @@ export async function GET() {
       },
       recentRsvps: recentResult.rows,
       wipToggles: wipResult.rows as { page_label: string; is_wip: boolean; is_hidden: boolean }[],
+      seating,
     });
   } finally {
     client.release();
