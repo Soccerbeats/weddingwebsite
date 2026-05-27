@@ -47,7 +47,7 @@ export async function GET() {
         COUNT(*) FILTER (WHERE rsvp_status = 'declined')::int AS declined_guests,
         COUNT(*) FILTER (WHERE side = 'bride')::int AS bride_side,
         COUNT(*) FILTER (WHERE side = 'groom')::int AS groom_side,
-        COUNT(*) FILTER (WHERE rsvp_status IS NULL OR rsvp_status = '')::int AS pending
+        COUNT(*) FILTER (WHERE invited = true AND (rsvp_status IS NULL OR rsvp_status = ''))::int AS pending
       FROM guest_list
     `);
 
