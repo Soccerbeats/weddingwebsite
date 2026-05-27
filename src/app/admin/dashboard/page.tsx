@@ -25,7 +25,7 @@ interface DashboardData {
     tables: number;
     totalSeats: number;
     assignedSeats: number;
-    tableList: { name: string; seat_count: number; assigned: number; table_type: string }[];
+    tableList: { name: string; seat_count: number; assigned: number; table_type: string; x: number; y: number; rotation: number }[];
   };
 }
 
@@ -72,6 +72,140 @@ function Bar({ pct, color }: { pct: number; color: string }) {
     <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
       <div className={`h-2 rounded-full transition-all ${color}`} style={{ width: `${Math.min(pct, 100)}%` }} />
     </div>
+  );
+}
+
+type TableItem = { name: string; seat_count: number; assigned: number; table_type: string; x: number; y: number; rotation: number };
+
+function SeatingOverviewCard({ seating }: {
+  seating: { tables: number; totalSeats: number; assignedSeats: number; tableList: TableItem[] };
+}) {
+  if (seating.tables === 0) {
+    return (
+      <GroupCard title="Seating Overview">
+        <div className="flex flex-col items-center justify-center py-6 gap-3 text-center">
+          <svg className="w-10 h-10 text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+          </svg>
+          <p className="text-sm text-gray-400" style={{ fontFamily: gs }}>No tables set up yet.</p>
+          <Link href="/admin/seating" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white" style={{ background: 'var(--accent)', fontFamily: gs }}>
+            Set Up Seating Chart
+          </Link>
+        </div>
+      </GroupCard>
+    );
+  }
+
+  // Compute bounding box of all tables to scale them into the preview canvas
+  const PAD = 40;
+  const xs = seating.tableList.map(t => t.x);
+  const ys = seating.tableList.map(t => t.y);
+  const minX = Math.min(...xs) - PAD;
+  const minY = Math.min(...ys) - PAD;
+  const maxX = Math.max(...xs) + PAD;
+  const maxY = Math.max(...ys) + PAD;
+  const rangeX = maxX - minX || 1;
+  const rangeY = maxY - minY || 1;
+
+  const CANVAS_W = 320;
+  const CANVAS_H = 180;
+  const scaleX = CANVAS_W / rangeX;
+  const scaleY = CANVAS_H / rangeY;
+  const scale = Math.min(scaleX, scaleY);
+
+  const fillPct = seating.totalSeats > 0 ? Math.round((seating.assignedSeats / seating.totalSeats) * 100) : 0;
+
+  return (
+    <GroupCard title="Seating Overview">
+      {/* Stats row */}
+      <div className="grid grid-cols-3 gap-4">
+        <Stat label="Tables" value={seating.tables} />
+        <Stat label="Total Seats" value={seating.totalSeats} />
+        <Stat
+          label="Filled"
+          value={`${fillPct}%`}
+          sub={`${seating.assignedSeats} of ${seating.totalSeats}`}
+          valueColor={fillPct === 100 ? '#16a34a' : '#111827'}
+        />
+      </div>
+
+      {/* Overall fill bar */}
+      <div>
+        <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+          <div className="h-2 rounded-full transition-all" style={{ width: `${fillPct}%`, background: 'var(--accent)' }} />
+        </div>
+        <div className="flex justify-between text-xs text-gray-400 mt-1" style={{ fontFamily: gs }}>
+          <span>{seating.totalSeats - seating.assignedSeats} seats open</span>
+          <span>{seating.assignedSeats} assigned</span>
+        </div>
+      </div>
+
+      {/* Floor plan graphic */}
+      <div className="rounded-xl overflow-hidden bg-gray-50 border border-gray-100" style={{ height: CANVAS_H + 'px', position: 'relative' }}>
+        <svg width="100%" height="100%" viewBox={`0 0 ${CANVAS_W} ${CANVAS_H}`} preserveAspectRatio="xMidYMid meet">
+          {seating.tableList.map((t, i) => {
+            const cx = (t.x - minX) * scale;
+            const cy = (t.y - minY) * scale;
+            const r = Math.max(10, Math.min(22, scale * 20));
+            const isCircle = t.table_type !== 'rectangular';
+            const filledRatio = t.seat_count > 0 ? t.assigned / t.seat_count : 0;
+            const fillColor = filledRatio === 1 ? '#86efac' : filledRatio > 0.5 ? '#fde68a' : filledRatio > 0 ? '#fed7aa' : '#e5e7eb';
+            const strokeColor = filledRatio === 1 ? '#16a34a' : '#9ca3af';
+            const textSize = Math.max(5, Math.min(8, r * 0.45));
+
+            return (
+              <g key={i} transform={`translate(${cx},${cy})`}>
+                {isCircle ? (
+                  <circle r={r} fill={fillColor} stroke={strokeColor} strokeWidth="1.5" />
+                ) : (
+                  <rect
+                    x={-r * 1.4} y={-r * 0.85}
+                    width={r * 2.8} height={r * 1.7}
+                    rx="4" fill={fillColor} stroke={strokeColor} strokeWidth="1.5"
+                    transform={`rotate(${t.rotation})`}
+                  />
+                )}
+                <text
+                  textAnchor="middle" dominantBaseline="middle"
+                  fontSize={textSize} fill="#374151" fontWeight="600"
+                  style={{ fontFamily: gs, pointerEvents: 'none' }}
+                >
+                  {t.name.length > 8 ? t.name.slice(0, 7) + '…' : t.name}
+                </text>
+                <text
+                  textAnchor="middle" dominantBaseline="middle" y={textSize + 2}
+                  fontSize={textSize * 0.85} fill="#6b7280"
+                  style={{ fontFamily: gs, pointerEvents: 'none' }}
+                >
+                  {t.assigned}/{t.seat_count}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+        {/* Legend */}
+        <div className="absolute bottom-2 right-2 flex items-center gap-2">
+          {[['#86efac','Full'],['#fde68a','>50%'],['#fed7aa','<50%'],['#e5e7eb','Empty']].map(([color, label]) => (
+            <div key={label} className="flex items-center gap-1">
+              <div className="w-2.5 h-2.5 rounded-full border border-gray-300" style={{ background: color }} />
+              <span className="text-xs text-gray-400" style={{ fontFamily: gs }}>{label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* CTA button */}
+      <Link
+        href="/admin/seating"
+        className="inline-flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-opacity hover:opacity-90"
+        style={{ background: 'var(--accent)', fontFamily: gs }}
+      >
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125" />
+        </svg>
+        Edit Seating Chart
+      </Link>
+    </GroupCard>
   );
 }
 
@@ -359,87 +493,7 @@ export default function DashboardPage() {
           </GroupCard>
 
           {/* Seating Overview */}
-          <GroupCard title="Seating Overview">
-            {seating.tables === 0 ? (
-              <div className="flex flex-col items-center justify-center py-6 gap-3 text-center">
-                <svg className="w-10 h-10 text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
-                </svg>
-                <p className="text-sm text-gray-400" style={{ fontFamily: gs }}>No tables set up yet.</p>
-                <Link
-                  href="/admin/seating"
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white transition-colors"
-                  style={{ background: 'var(--accent)', fontFamily: gs }}
-                >
-                  Set Up Seating Chart
-                </Link>
-              </div>
-            ) : (
-              <>
-                {/* Summary stats */}
-                <div className="grid grid-cols-3 gap-4">
-                  <Stat label="Tables" value={seating.tables} />
-                  <Stat label="Total Seats" value={seating.totalSeats} />
-                  <Stat
-                    label="Filled"
-                    value={`${seating.totalSeats > 0 ? Math.round((seating.assignedSeats / seating.totalSeats) * 100) : 0}%`}
-                    sub={`${seating.assignedSeats} of ${seating.totalSeats}`}
-                    valueColor={seating.assignedSeats === seating.totalSeats ? '#16a34a' : '#111827'}
-                  />
-                </div>
-
-                {/* Overall fill bar */}
-                <div>
-                  <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
-                    <div
-                      className="h-2 rounded-full transition-all"
-                      style={{ width: `${seating.totalSeats > 0 ? (seating.assignedSeats / seating.totalSeats) * 100 : 0}%`, background: 'var(--accent)' }}
-                    />
-                  </div>
-                  <div className="flex justify-between text-xs text-gray-400 mt-1" style={{ fontFamily: gs }}>
-                    <span>{seating.totalSeats - seating.assignedSeats} seats open</span>
-                    <span>{seating.assignedSeats} assigned</span>
-                  </div>
-                </div>
-
-                {/* Per-table list */}
-                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                  {seating.tableList.map(t => {
-                    const pct = t.seat_count > 0 ? (t.assigned / t.seat_count) * 100 : 0;
-                    const full = t.assigned === t.seat_count;
-                    return (
-                      <div key={t.name}>
-                        <div className="flex items-center justify-between mb-0.5">
-                          <span className="text-sm text-gray-700 truncate" style={{ fontFamily: gs }}>{t.name}</span>
-                          <span className={`text-xs font-semibold ml-2 shrink-0 ${full ? 'text-green-600' : 'text-gray-400'}`} style={{ fontFamily: gs }}>
-                            {t.assigned}/{t.seat_count}
-                          </span>
-                        </div>
-                        <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
-                          <div
-                            className={`h-1.5 rounded-full transition-all ${full ? 'bg-green-400' : 'bg-accent/60'}`}
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* CTA button */}
-                <Link
-                  href="/admin/seating"
-                  className="inline-flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-opacity hover:opacity-90"
-                  style={{ background: 'var(--accent)', fontFamily: gs }}
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125" />
-                  </svg>
-                  Edit Seating Chart
-                </Link>
-              </>
-            )}
-          </GroupCard>
+          <SeatingOverviewCard seating={seating} />
 
         </div>{/* end left column */}
 
