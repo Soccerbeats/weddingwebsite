@@ -4,6 +4,27 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [2026-05-27] — UI animations, hero collapse, nav island, About merged into Home
+
+### Added
+- **HeroCollapse component** — Desktop: full-screen hero slideshow that animates into a condensed vertical strip on first scroll; scattered polaroid-style photos fly in from off-screen left/right with staggered easing; single wheel event triggers full 900ms RAF animation (not scroll-position-driven); state machine (`full | animating | collapsed`); mobile renders a static non-collapsing hero. Files: `src/components/HeroCollapse.tsx`
+- **FadeIn component** — Scroll-triggered entrance animations powered by IntersectionObserver; supports `fade`, `slide-up`, `slide-left`, `slide-right`, `scale`; configurable delay; used on timeline, schedule, wedding party, and home/about sections. Files: `src/components/FadeIn.tsx`, `src/hooks/useInView.ts`
+- **HeartBurst component** — Double-click or double-tap anywhere on the page bursts 7 floating hearts from the cursor using CSS `@keyframes heart-float` with `--dx`/`--dy` custom properties. Files: `src/components/HeartBurst.tsx`
+- **photoSrc helper** — `photoSrc(filename, size)` and `photoSrcSet(filename)` for responsive image loading; 5 breakpoints (thumb 320, small 640, medium 960, large 1280, xl 1920) via `?w=N` sharp resize; used across timeline, wedding party, hero slideshow. Files: `src/lib/photoSrc.ts`
+- **Page transition animation** — `@keyframes page-enter` (fade + slight rise) applied via `key={pathname}` on `<main>` in AppShell; hero text has staggered 200/400/600/800ms entrance delays. Files: `src/app/globals.css`, `src/components/AppShell.tsx`
+- **About section merged into Home page** — About content (Our Story, How We Met, The Venue, The Ceremony/Reception, FAQ) now lives at the bottom of the home page under `id="about"`. Nav "About" link changed to `/#about` hash link with auto-scroll. `/about` route redirects to `/#about` so old links still work. Files: `src/app/page.tsx`, `src/app/about/page.tsx`
+
+### Changed
+- **Navigation: banner → island animation** — Nav starts as a full-width frosted-glass banner (flush to all screen edges) on every page. On first scroll past 60px it smoothly morphs into a floating pill (rounded corners, centered, inset 16px from edges, content-width). Uses `position: fixed` with CSS-interpolatable `top`/`left`/`right` pixel/calc values — no snap. Pill width is measured from actual DOM logo + link widths. Home page always island (no banner state). `scrolled` state resets on every route change to avoid carry-over.
+- **Nav + hero collapse in sync** — HeroCollapse dispatches `hero-collapsing` custom event at animation start and `hero-expanded` at expand start; Navigation listens and transitions simultaneously instead of waiting for the scroll jump.
+- **Mobile nav island** — On screens ≤767px the island uses `16px` insets on both sides (full-width pill) so hamburger and Admin button are always enclosed.
+- **Responsive images** — Timeline, wedding party, and hero slideshow now use `srcSet` at 5 breakpoints via `photoSrc.ts`; browser picks smallest image that covers the display size.
+- **HeroSlideshow** — First image decoded via `img.decode()` before showing; remaining images preloaded silently in background; `fetchPriority="high"` on first slide.
+
+### Fixed
+- **`whitespace-nowrap` on nav links** — "Wedding Party" no longer word-wraps to two lines in island mode.
+- **About hero image path** — Was using `/photos/` (broken in Docker volume setup); updated to `/api/photos/` to go through the dynamic photo-serving route.
+
 ## [2026-05-25] — "Likely Not Coming" guest status
 
 ### Added

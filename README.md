@@ -5,17 +5,23 @@ A beautiful, customizable wedding website built with Next.js 16. Features includ
 ## Features
 
 ### Public Site
-- **Home Page**: Welcome message with countdown timer (days/hours/minutes/seconds, configurable display modes) and optional hero slideshow
-- **About**: Love story with customizable text, photos, details, and FAQ section
-- **Timeline**: Interactive vertical timeline of relationship milestones with photos
-- **Wedding Party**: Display bridesmaids, groomsmen, and important people
-- **Schedule**: Wedding day timeline and events
+- **Home Page**: Hero slideshow that collapses into a condensed strip on scroll (desktop), countdown timer, intro text, and About section all on one page
+- **About (merged into Home)**: Our Story, How We Met, The Venue, Ceremony/Reception cards, and FAQ — all appear below the home intro; nav "About" link auto-scrolls to `#about` anchor; `/about` redirects there
+- **Timeline**: Interactive vertical timeline of relationship milestones with photos; scroll-triggered entrance animations
+- **Wedding Party**: Member cards with scroll-triggered animations; responsive images at 5 breakpoints
+- **Schedule**: Wedding day timeline and events with scroll-triggered animations
 - **Photo Gallery**: Beautiful gallery with lightbox (only shows "hearted" photos)
 - **Registry**: Tabbed page with two sections:
   - 🌴 **Honeymoon Fund** — Experience items with contribution flow via Venmo, Cash App, Zelle, PayPal (deep links, app-first)
   - 🛍️ **Registry** — Product grid linked to Target and Amazon; shows thumbnail, title, price, description; clicking opens the product page directly
 - **RSVP**: Guest RSVP form with name verification against guest list
-- **Responsive Design**: Mobile-friendly across all pages
+- **Animations**:
+  - Hero collapse: scroll down → hero condenses to strip + scattered polaroid photos fly in; scroll up → reverses
+  - Nav banner → island: full-width frosted glass bar morphs into floating pill on scroll (all pages); both animations run simultaneously
+  - FadeIn: scroll-triggered `fade`, `slide-up`, `slide-left`, `slide-right`, `scale` on page sections
+  - HeartBurst: double-click/double-tap anywhere spawns floating hearts
+  - Page transitions: fade+rise animation on every route change
+- **Responsive Design**: Mobile-friendly across all pages; nav island adapts width per screen size
 
 ### Admin Panel
 - **RSVP Management**:
