@@ -6,7 +6,7 @@ A beautiful, customizable wedding website built with Next.js 16. Features includ
 
 ### Public Site
 - **Home Page**: Hero slideshow that collapses into a condensed strip on scroll (desktop), countdown timer, intro text, and About section all on one page
-- **About (merged into Home)**: Our Story, How We Met, The Venue, Ceremony/Reception cards, and FAQ — all appear below the home intro; nav "About" link auto-scrolls to `#about` anchor; `/about` redirects there
+- **About (merged into Home)**: Our Story, How We Met, The Venue (with optional venue photo), Ceremony/Reception cards, and FAQ — all appear below the home intro; nav "About" link auto-scrolls to `#about` anchor; `/about` redirects there; "Get Directions" renders as a styled pill button with a map-pin icon when a venue address is set
 - **Timeline**: Interactive vertical timeline of relationship milestones with photos; scroll-triggered entrance animations
 - **Wedding Party**: Member cards with scroll-triggered animations; responsive images at 5 breakpoints
 - **Schedule**: Wedding day timeline and events with scroll-triggered animations
@@ -35,7 +35,7 @@ A beautiful, customizable wedding website built with Next.js 16. Features includ
   - Upsert on reimport — preserves email, phone, invited, notes, side; updates party_size, plus_one_name, address
   - Import results: Added / Updated / Failed counts
   - RSVP submission syncs email/phone/rsvp_status back to guest_list
-- **Photo Management**: Upload, drag-reorder, heart to publish, thumbnail API (`/api/photos/[filename]/thumb`), edit titles/descriptions, delete
+- **Photo Management**: Upload, drag-reorder, heart to publish, thumbnail API (`/api/photos/[filename]/thumb`), edit titles/descriptions, delete; **"Set Venue Photo"** button assigns a photo to display in the Venue section on the home page
 - **Timeline Editor**: Create and manage milestones with up to 2 photos each; oldest-first order
 - **Content Editors**: Home, About, Wedding Party, Schedule, Q&A (with Markdown `[text](url)` hyperlink support via "🔗 Insert Link" button)
 - **General Settings**: Wedding date/time/venue, color scheme (accent/light/dark), page background colors, countdown display mode

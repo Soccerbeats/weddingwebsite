@@ -49,6 +49,7 @@ export interface SiteConfig {
     ourStoryBody?: string;
     venueDescription?: string;
     venueAddress?: string;
+    venuePhoto?: string;
     ceremonyText?: string;
     receptionText?: string;
     faqs?: FAQItem[];

@@ -4,6 +4,14 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [2026-05-27] — Venue photo + Get Directions button
+
+### Added
+- **Venue photo** — A photo can now be assigned to the Venue section on the home page. Go to **Admin → Photos**, hover any photo, and click **"Set Venue Photo"**; the image renders below the venue description as a full-width rounded card (`h-72` mobile / `h-96` desktop). The current assignment is previewed in the photo admin assignments strip alongside Home Hero, About Hero, Footer, and Wedding Logo. Config key: `venuePhoto` in `site.json`.
+
+### Changed
+- **"Get Directions" link → pill button** — When a venue address is configured, the plain underline link is now a solid accent-colored rounded pill button (matching the RSVP/FAQ CTA style) with an inline map-pin icon; `uppercase tracking-widest text-sm font-bold shadow-lg hover:shadow-xl`.
+
 ## [2026-05-27] — UI animations, hero collapse, nav island, About merged into Home
 
 ### Added

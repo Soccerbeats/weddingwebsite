@@ -34,7 +34,7 @@ interface Photo {
 interface SortablePhotoProps {
     photo: Photo;
     siteConfig: any;
-    onSetHero: (type: 'homeHero' | 'aboutHero' | 'footerHeroImage' | 'weddingLogo', filename: string) => void;
+    onSetHero: (type: 'homeHero' | 'aboutHero' | 'footerHeroImage' | 'weddingLogo' | 'venuePhoto', filename: string) => void;
     onDelete: (id: number) => void;
     onToggleHeart: (id: number, hearted: boolean) => void;
     onEdit: (photo: Photo) => void;
@@ -132,6 +132,12 @@ function SortablePhoto({ photo, siteConfig, onSetHero, onDelete, onToggleHeart, 
                     >
                         Set Wedding Logo
                     </button>
+                    <button
+                        onClick={() => onSetHero('venuePhoto', photo.filename)}
+                        className="text-xs bg-white/10 hover:bg-white/20 text-white py-1.5 px-3 rounded-lg border border-white/30 shadow-md hover:shadow-lg transition-all duration-300"
+                    >
+                        Set Venue Photo
+                    </button>
                 </div>
 
                 <div className="flex justify-between items-end">
@@ -158,7 +164,7 @@ function SortablePhoto({ photo, siteConfig, onSetHero, onDelete, onToggleHeart, 
 export default function AdminPhotos() {
     const [photos, setPhotos] = useState<Photo[]>([]);
     const [uploading, setUploading] = useState(false);
-    const [siteConfig, setSiteConfig] = useState({ homeHero: '', aboutHero: '', footerHeroImage: '', weddingLogo: '' });
+    const [siteConfig, setSiteConfig] = useState({ homeHero: '', aboutHero: '', footerHeroImage: '', weddingLogo: '', venuePhoto: '' });
     const [editingPhoto, setEditingPhoto] = useState<Photo | null>(null);
     const [editForm, setEditForm] = useState({ title: '', description: '' });
     const [photosSubtitle, setPhotosSubtitle] = useState('Moments from our journey together.');
@@ -357,7 +363,7 @@ export default function AdminPhotos() {
         }
     };
 
-    const setHero = async (type: 'homeHero' | 'aboutHero' | 'footerHeroImage' | 'weddingLogo', filename: string) => {
+    const setHero = async (type: 'homeHero' | 'aboutHero' | 'footerHeroImage' | 'weddingLogo' | 'venuePhoto', filename: string) => {
         try {
             const res = await fetch('/api/admin/site-config', {
                 method: 'POST',
@@ -366,8 +372,8 @@ export default function AdminPhotos() {
             });
             if (res.ok) {
                 setSiteConfig(prev => ({ ...prev, [type]: filename }));
-                const heroName = type === 'homeHero' ? 'Home' : type === 'aboutHero' ? 'About' : type === 'footerHeroImage' ? 'Footer' : 'Wedding Logo';
-                alert(`Updated ${heroName} ${type === 'weddingLogo' ? '' : 'Hero Image'}`);
+                const heroName = type === 'homeHero' ? 'Home' : type === 'aboutHero' ? 'About' : type === 'footerHeroImage' ? 'Footer' : type === 'weddingLogo' ? 'Wedding Logo' : 'Venue Photo';
+                alert(`Updated ${heroName}${type === 'homeHero' || type === 'aboutHero' || type === 'footerHeroImage' ? ' Hero Image' : ''}`);
             }
         } catch (err) {
             console.error(err);
@@ -455,6 +461,14 @@ export default function AdminPhotos() {
                         {siteConfig.weddingLogo ? (
                             <div className="h-20 w-32 bg-gray-200 mt-1 relative rounded-lg overflow-hidden shadow-md">
                                 <img src={`/photos/${siteConfig.weddingLogo}`} className="h-full w-full object-cover" />
+                            </div>
+                        ) : <div className="h-20 w-32 bg-gray-200 mt-1 flex items-center justify-center text-xs rounded-lg">None</div>}
+                    </div>
+                    <div>
+                        <span className="text-xs font-bold text-gray-500 uppercase">Venue Photo</span>
+                        {siteConfig.venuePhoto ? (
+                            <div className="h-20 w-32 bg-gray-200 mt-1 relative rounded-lg overflow-hidden shadow-md">
+                                <img src={`/photos/${siteConfig.venuePhoto}`} className="h-full w-full object-cover" />
                             </div>
                         ) : <div className="h-20 w-32 bg-gray-200 mt-1 flex items-center justify-center text-xs rounded-lg">None</div>}
                     </div>
