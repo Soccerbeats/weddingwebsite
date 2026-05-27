@@ -47,7 +47,8 @@ export async function GET() {
         COUNT(*) FILTER (WHERE rsvp_status = 'declined')::int AS declined_guests,
         COUNT(*) FILTER (WHERE side = 'bride')::int AS bride_side,
         COUNT(*) FILTER (WHERE side = 'groom')::int AS groom_side,
-        COUNT(*) FILTER (WHERE invited = true AND (rsvp_status IS NULL OR rsvp_status = ''))::int AS pending
+        COUNT(*) FILTER (WHERE invited = true AND (rsvp_status IS NULL OR rsvp_status = ''))::int AS pending,
+        COALESCE(SUM(party_size) FILTER (WHERE rsvp_status = 'likely_not_coming'), 0)::int AS likely_not_coming
       FROM guest_list
     `);
 
@@ -95,6 +96,7 @@ export async function GET() {
         brideSide: guests.bride_side,
         groomSide: guests.groom_side,
         pending: guests.pending,
+        likelyNotComing: guests.likely_not_coming,
       },
       photos: {
         total: photos.length,
