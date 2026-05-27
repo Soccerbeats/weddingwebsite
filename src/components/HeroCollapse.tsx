@@ -144,6 +144,30 @@ export default function HeroCollapse({
     rafRef.current = requestAnimationFrame(tick);
   };
 
+  // ── Snap to collapsed if page scrolls past hero without wheel animation ──
+  // This handles hash-link navigation (e.g. clicking "About" in the nav),
+  // which jumps scrollY past the section without triggering the wheel handler.
+  useEffect(() => {
+    if (isMobile) return;
+
+    const snapIfNeeded = () => {
+      if (stateRef.current !== 'full' || progressRef.current > 0) return;
+      if (window.scrollY < 10) return;
+      // Programmatic scroll bypassed the wheel animation — snap instantly to collapsed
+      cancelAnimationFrame(rafRef.current);
+      stateRef.current = 'collapsed';
+      progressRef.current = 1;
+      applyProgress(1);
+      window.dispatchEvent(new CustomEvent('hero-collapsing'));
+    };
+
+    window.addEventListener('scroll', snapIfNeeded, { passive: true });
+    // Also check immediately in case the page loaded with a hash already scrolled
+    snapIfNeeded();
+    return () => window.removeEventListener('scroll', snapIfNeeded);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMobile]);
+
   // ── Wheel / touch event hijacking (desktop only) ─────────────────────────
   useEffect(() => {
     if (isMobile) return;
