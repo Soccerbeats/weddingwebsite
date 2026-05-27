@@ -28,6 +28,7 @@ export default function AdminLayout({
     };
 
     const navItems = [
+        { href: '/admin/dashboard', label: '⌂ Dashboard' },
         { href: '/admin/rsvps', label: 'RSVPs' },
         { href: '/admin/photos', label: 'Photos' },
         { href: '/admin/timeline', label: 'Timeline' },

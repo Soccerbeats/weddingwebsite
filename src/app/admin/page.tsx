@@ -7,7 +7,7 @@ export default function AdminPage() {
     const router = useRouter();
 
     useEffect(() => {
-        router.push('/admin/rsvps');
+        router.push('/admin/dashboard');
     }, [router]);
 
     return (
