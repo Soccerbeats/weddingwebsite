@@ -162,13 +162,24 @@ export default function Home() {
         {(!isBasicMode || showVenue) && (
           <div className="bg-gray-50 py-16">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-              <div className="text-center">
+              {config.venuePhoto && (
                 <FadeIn animation="slide-up">
+                  <div className="mb-10 max-w-3xl mx-auto rounded-2xl overflow-hidden shadow-xl border border-gray-100">
+                    <img
+                      src={`/api/photos/${config.venuePhoto}`}
+                      alt={config.weddingVenue || 'The Venue'}
+                      className="w-full h-72 sm:h-96 object-cover"
+                    />
+                  </div>
+                </FadeIn>
+              )}
+              <div className="text-center">
+                <FadeIn animation="slide-up" delay={100}>
                   <h2 className="text-3xl font-serif text-gray-900 tracking-tight sm:text-4xl">
                     The Venue
                   </h2>
                 </FadeIn>
-                <FadeIn animation="slide-up" delay={100}>
+                <FadeIn animation="slide-up" delay={200}>
                   <p className="mt-4 text-lg text-gray-600 whitespace-pre-line">
                     {config.venueDescription || `We'll be celebrating at the historic ${config.weddingVenue || '[Venue]'} in ${config.weddingLocation}.`}
                   </p>
@@ -188,17 +199,6 @@ export default function Home() {
                   )}
                 </FadeIn>
               </div>
-              {config.venuePhoto && (
-                <FadeIn animation="slide-up" delay={150}>
-                  <div className="mt-10 max-w-3xl mx-auto rounded-2xl overflow-hidden shadow-xl border border-gray-100">
-                    <img
-                      src={`/api/photos/${config.venuePhoto}`}
-                      alt={config.weddingVenue || 'The Venue'}
-                      className="w-full h-72 sm:h-96 object-cover"
-                    />
-                  </div>
-                </FadeIn>
-              )}
               <div className="mt-12 grid gap-8 grid-cols-1 md:grid-cols-2">
                 <FadeIn animation="slide-right">
                   <div className="bg-white p-8 rounded-2xl shadow-lg border border-gray-100 transform hover:-translate-y-1 transition-transform duration-300">
