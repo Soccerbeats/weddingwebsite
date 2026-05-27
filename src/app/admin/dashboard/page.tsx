@@ -22,22 +22,44 @@ interface DashboardData {
   wipToggles: { page_label: string; is_wip: boolean }[];
 }
 
-function StatCard({
-  label,
-  value,
-  sub,
-  color = 'accent',
+function GroupCard({
+  title,
+  action,
+  children,
 }: {
-  label: string;
-  value: string | number;
-  sub?: string;
-  color?: string;
+  title: string;
+  action?: { label: string; href: string };
+  children: React.ReactNode;
 }) {
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex flex-col gap-1">
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col h-full">
+      <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100">
+        <h2 className="text-sm font-bold uppercase tracking-widest text-gray-500">{title}</h2>
+        {action && (
+          <Link href={action.href} className="text-xs text-accent hover:underline font-semibold">
+            {action.label} →
+          </Link>
+        )}
+      </div>
+      <div className="p-6 flex-1 flex flex-col gap-5">{children}</div>
+    </div>
+  );
+}
+
+function Stat({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
+  return (
+    <div className="flex flex-col gap-0.5">
       <span className="text-xs font-semibold uppercase tracking-widest text-gray-400">{label}</span>
-      <span className="text-4xl font-bold text-gray-900">{value}</span>
-      {sub && <span className="text-sm text-gray-500">{sub}</span>}
+      <span className="text-3xl font-bold text-gray-900 leading-none">{value}</span>
+      {sub && <span className="text-xs text-gray-400 mt-0.5">{sub}</span>}
+    </div>
+  );
+}
+
+function Bar({ pct, color }: { pct: number; color: string }) {
+  return (
+    <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+      <div className={`h-2 rounded-full transition-all ${color}`} style={{ width: `${Math.min(pct, 100)}%` }} />
     </div>
   );
 }
@@ -79,38 +101,40 @@ export default function DashboardPage() {
   const wipOff = wipToggles.filter(t => !t.is_wip);
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8">
+    // Full bleed — no max-width, no horizontal margin
+    <div className="space-y-6">
 
-      {/* ── Hero card ──────────────────────────────────── */}
+      {/* ── Row 1: Hero ───────────────────────────────────────────── */}
       <div
-        className="rounded-3xl overflow-hidden shadow-lg relative text-white"
-        style={{ background: 'linear-gradient(135deg, var(--accent-dark) 0%, var(--accent) 100%)' }}
+        className="rounded-2xl overflow-hidden shadow-md text-white"
+        style={{ background: 'linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%)' }}
       >
-        <div className="p-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
+        <div className="px-8 py-7 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-widest opacity-70 mb-1">Wedding Dashboard</p>
+            <p className="text-xs font-semibold uppercase tracking-widest opacity-60 mb-1">Wedding Dashboard</p>
             <h1 className="text-4xl font-serif font-bold">
               {siteConfig.brideName || 'Bride'} &amp; {siteConfig.groomName || 'Groom'}
             </h1>
-            <p className="mt-2 opacity-80 text-sm">
-              {siteConfig.weddingDate || 'Date TBD'} &nbsp;·&nbsp; {siteConfig.weddingVenue || 'Venue TBD'}
+            <p className="mt-2 opacity-75 text-sm">
+              {siteConfig.weddingDate || 'Date TBD'}
+              {siteConfig.weddingVenue ? ` · ${siteConfig.weddingVenue}` : ''}
             </p>
             {siteConfig.weddingLocation && (
-              <p className="opacity-70 text-sm">{siteConfig.weddingLocation}</p>
+              <p className="opacity-60 text-sm">{siteConfig.weddingLocation}</p>
             )}
           </div>
-          <div className="text-center bg-white/15 rounded-2xl px-8 py-5 shrink-0">
+          <div className="text-center bg-white/15 rounded-2xl px-10 py-5 shrink-0">
             {countdown.daysUntil !== null && countdown.daysUntil >= 0 ? (
               <>
                 <div className="text-6xl font-bold leading-none">{countdown.daysUntil}</div>
-                <div className="text-sm font-semibold uppercase tracking-widest opacity-80 mt-1">
+                <div className="text-xs font-semibold uppercase tracking-widest opacity-75 mt-1">
                   {countdown.daysUntil === 1 ? 'Day' : 'Days'} to Go
                 </div>
               </>
-            ) : countdown.daysUntil !== null && countdown.daysUntil < 0 ? (
+            ) : countdown.daysUntil !== null ? (
               <>
-                <div className="text-4xl font-bold leading-none">🎉</div>
-                <div className="text-sm font-semibold uppercase tracking-widest opacity-80 mt-1">Married!</div>
+                <div className="text-4xl leading-none">🎉</div>
+                <div className="text-xs font-semibold uppercase tracking-widest opacity-75 mt-1">Married!</div>
               </>
             ) : (
               <div className="text-sm opacity-60">No date set</div>
@@ -119,36 +143,51 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── RSVP & Guest stats ─────────────────────────── */}
-      <section>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-gray-800">RSVPs &amp; Guests</h2>
-          <Link href="/admin/rsvps" className="text-sm text-accent hover:underline font-medium">Manage →</Link>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <StatCard label="Total RSVPs" value={rsvp.total} sub="responses received" />
-          <StatCard label="Attending" value={rsvp.attending} sub={`${attendingPct}% of responses`} />
-          <StatCard label="Declined" value={rsvp.declined} sub="can't make it" />
-          <StatCard label="Total Guests" value={rsvp.totalGuests} sub="headcount confirmed" />
-        </div>
-      </section>
+      {/* ── Row 2: three group cards ──────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
 
-      {/* ── Guest List breakdown + RSVP rate ──────────── */}
-      <section>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-gray-800">Guest List</h2>
-          <Link href="/admin/rsvps" className="text-sm text-accent hover:underline font-medium">View list →</Link>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {/* Card 1 — RSVPs & Guests */}
+        <GroupCard title="RSVPs & Guests" action={{ label: 'Manage', href: '/admin/rsvps' }}>
+          {/* 4 stats in a 2×2 grid */}
+          <div className="grid grid-cols-2 gap-x-6 gap-y-5">
+            <Stat label="Total RSVPs" value={rsvp.total} sub="responses received" />
+            <Stat label="Attending" value={rsvp.attending} sub={`${attendingPct}% of responses`} />
+            <Stat label="Declined" value={rsvp.declined} sub="can't make it" />
+            <Stat label="Headcount" value={rsvp.totalGuests} sub="guests confirmed" />
+          </div>
 
-          {/* RSVP progress bar card */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 col-span-1 sm:col-span-2 lg:col-span-1">
-            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">Response Rate</p>
-            <div className="flex items-end gap-2 mb-3">
-              <span className="text-4xl font-bold text-gray-900">{rsvpRate}%</span>
-              <span className="text-sm text-gray-500 mb-1">
-                {guestList.confirmed + guestList.declined} of {guestList.totalInvited} responded
-              </span>
+          {/* Divider */}
+          <div className="border-t border-gray-100" />
+
+          {/* Recent RSVPs mini-list */}
+          {recentRsvps.length > 0 ? (
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">Recent</p>
+              <div className="space-y-2">
+                {recentRsvps.map((r, i) => (
+                  <div key={i} className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-medium text-gray-800 truncate">{r.guest_name}</span>
+                    <span className={`shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full ${
+                      r.attending ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
+                    }`}>
+                      {r.attending ? '✓ Going' : '✗ No'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400">No RSVPs yet.</p>
+          )}
+        </GroupCard>
+
+        {/* Card 2 — Guest List */}
+        <GroupCard title="Guest List" action={{ label: 'View list', href: '/admin/rsvps' }}>
+          {/* Response rate */}
+          <div>
+            <div className="flex items-end gap-2 mb-2">
+              <span className="text-3xl font-bold text-gray-900 leading-none">{rsvpRate}%</span>
+              <span className="text-xs text-gray-400 mb-0.5">response rate</span>
             </div>
             <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
               <div
@@ -162,41 +201,11 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Bride / Groom sides */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">By Side</p>
-            <div className="space-y-3">
-              <div>
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="text-gray-600">Bride's side</span>
-                  <span className="font-bold text-gray-900">{guestList.brideSide}</span>
-                </div>
-                <div className="w-full bg-gray-100 rounded-full h-2">
-                  <div
-                    className="h-2 rounded-full bg-pink-400"
-                    style={{ width: guestList.totalInvited ? `${(guestList.brideSide / guestList.totalInvited) * 100}%` : '0%' }}
-                  />
-                </div>
-              </div>
-              <div>
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="text-gray-600">Groom's side</span>
-                  <span className="font-bold text-gray-900">{guestList.groomSide}</span>
-                </div>
-                <div className="w-full bg-gray-100 rounded-full h-2">
-                  <div
-                    className="h-2 rounded-full bg-blue-400"
-                    style={{ width: guestList.totalInvited ? `${(guestList.groomSide / guestList.totalInvited) * 100}%` : '0%' }}
-                  />
-                </div>
-              </div>
-            </div>
-            <p className="text-xs text-gray-400 mt-3">{guestList.totalPartySize} total incl. party sizes</p>
-          </div>
+          <div className="border-t border-gray-100" />
 
-          {/* Confirmed / Declined / Pending breakdown */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">Status Breakdown</p>
+          {/* Status breakdown */}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">Status</p>
             <div className="space-y-2">
               {[
                 { label: 'Confirmed', value: guestList.confirmed, color: 'bg-green-400' },
@@ -204,108 +213,82 @@ export default function DashboardPage() {
                 { label: 'Pending', value: guestList.pending, color: 'bg-yellow-400' },
               ].map(item => (
                 <div key={item.label} className="flex items-center gap-3">
-                  <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${item.color}`} />
+                  <div className={`w-2 h-2 rounded-full shrink-0 ${item.color}`} />
                   <span className="text-sm text-gray-600 flex-1">{item.label}</span>
                   <span className="text-sm font-bold text-gray-900">{item.value}</span>
                 </div>
               ))}
             </div>
           </div>
-        </div>
-      </section>
 
-      {/* ── Recent RSVPs ────────────────────────────────── */}
-      {recentRsvps.length > 0 && (
-        <section>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-gray-800">Recent RSVPs</h2>
-            <Link href="/admin/rsvps" className="text-sm text-accent hover:underline font-medium">View all →</Link>
-          </div>
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider text-gray-400">Guest</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider text-gray-400">Status</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider text-gray-400">Guests</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider text-gray-400">Submitted</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {recentRsvps.map((r, i) => (
-                  <tr key={i} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-5 py-3 font-medium text-gray-900">{r.guest_name}</td>
-                    <td className="px-5 py-3">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                        r.attending
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-red-100 text-red-600'
-                      }`}>
-                        {r.attending ? '✓ Attending' : '✗ Declined'}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3 text-gray-600">{r.number_of_guests}</td>
-                    <td className="px-5 py-3 text-gray-400">
-                      {new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
+          <div className="border-t border-gray-100" />
 
-      {/* ── Content & Site row ──────────────────────────── */}
-      <section>
-        <h2 className="text-lg font-bold text-gray-800 mb-4">Content &amp; Site</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <Link href="/admin/photos">
-            <StatCard label="Photos Uploaded" value={photos.total} sub={`${photos.hearted} featured ♥`} />
-          </Link>
-          <Link href="/admin/timeline">
-            <StatCard label="Timeline Events" value={timeline.milestones} sub="story milestones" />
-          </Link>
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex flex-col gap-1">
-            <span className="text-xs font-semibold uppercase tracking-widest text-gray-400">Pages Live</span>
-            <span className="text-4xl font-bold text-gray-900">{wipOff.length}</span>
-            <span className="text-sm text-gray-500">
-              {wipOn.length > 0 ? `${wipOn.length} still WIP` : 'All pages live!'}
-            </span>
-          </div>
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex flex-col gap-1">
-            <span className="text-xs font-semibold uppercase tracking-widest text-gray-400">Venue</span>
-            <span className="text-xl font-bold text-gray-900 leading-tight mt-1">
-              {siteConfig.weddingVenue || '—'}
-            </span>
-            {siteConfig.weddingTime && (
-              <span className="text-sm text-gray-500">{siteConfig.weddingTime}</span>
-            )}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Page status ─────────────────────────────────── */}
-      {wipToggles.length > 0 && (
-        <section>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-gray-800">Page Status</h2>
-            <Link href="/admin/wip-control" className="text-sm text-accent hover:underline font-medium">Manage →</Link>
-          </div>
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-              {wipToggles.map(t => (
-                <div key={t.page_label} className="flex items-center gap-2.5">
-                  <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${t.is_wip ? 'bg-yellow-400' : 'bg-green-400'}`} />
-                  <span className="text-sm text-gray-700">{t.page_label}</span>
-                  <span className={`ml-auto text-xs font-semibold ${t.is_wip ? 'text-yellow-600' : 'text-green-600'}`}>
-                    {t.is_wip ? 'WIP' : 'Live'}
-                  </span>
+          {/* By side */}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">By Side</p>
+            <div className="space-y-3">
+              <div>
+                <div className="flex justify-between text-sm mb-1">
+                  <span className="text-gray-600">Bride's side</span>
+                  <span className="font-bold text-gray-900">{guestList.brideSide}</span>
                 </div>
-              ))}
+                <Bar pct={guestList.totalInvited ? (guestList.brideSide / guestList.totalInvited) * 100 : 0} color="bg-pink-400" />
+              </div>
+              <div>
+                <div className="flex justify-between text-sm mb-1">
+                  <span className="text-gray-600">Groom's side</span>
+                  <span className="font-bold text-gray-900">{guestList.groomSide}</span>
+                </div>
+                <Bar pct={guestList.totalInvited ? (guestList.groomSide / guestList.totalInvited) * 100 : 0} color="bg-blue-400" />
+              </div>
+            </div>
+            <p className="text-xs text-gray-400 mt-2">{guestList.totalPartySize} total incl. party sizes</p>
+          </div>
+        </GroupCard>
+
+        {/* Card 3 — Content & Insights */}
+        <GroupCard title="Content & Insights">
+          <div className="grid grid-cols-2 gap-x-6 gap-y-5">
+            <Link href="/admin/photos" className="hover:opacity-75 transition-opacity">
+              <Stat label="Photos" value={photos.total} sub={`${photos.hearted} featured ♥`} />
+            </Link>
+            <Link href="/admin/timeline" className="hover:opacity-75 transition-opacity">
+              <Stat label="Timeline" value={timeline.milestones} sub="milestones" />
+            </Link>
+            <Stat
+              label="Pages Live"
+              value={wipOff.length}
+              sub={wipOn.length > 0 ? `${wipOn.length} still WIP` : 'All live!'}
+            />
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs font-semibold uppercase tracking-widest text-gray-400">Venue</span>
+              <span className="text-sm font-bold text-gray-900 leading-snug mt-0.5">
+                {siteConfig.weddingVenue || '—'}
+              </span>
+              {siteConfig.weddingTime && (
+                <span className="text-xs text-gray-400">{siteConfig.weddingTime}</span>
+              )}
             </div>
           </div>
-        </section>
+        </GroupCard>
+
+      </div>
+
+      {/* ── Row 3: Page Status ────────────────────────────────────── */}
+      {wipToggles.length > 0 && (
+        <GroupCard title="Page Status" action={{ label: 'Manage', href: '/admin/wip-control' }}>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            {wipToggles.map(t => (
+              <div key={t.page_label} className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full shrink-0 ${t.is_wip ? 'bg-yellow-400' : 'bg-green-400'}`} />
+                <span className="text-sm text-gray-700 flex-1 truncate">{t.page_label}</span>
+                <span className={`text-xs font-semibold ${t.is_wip ? 'text-yellow-600' : 'text-green-600'}`}>
+                  {t.is_wip ? 'WIP' : 'Live'}
+                </span>
+              </div>
+            ))}
+          </div>
+        </GroupCard>
       )}
 
     </div>
