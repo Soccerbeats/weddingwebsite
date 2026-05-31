@@ -24,6 +24,10 @@ interface RSVP {
     created_at: string;
 }
 
+interface PartyMember {
+    name: string | null;
+}
+
 interface Guest {
     id: number;
     guest_name: string;
@@ -34,7 +38,7 @@ interface Guest {
     notes: string;
     invited: boolean;
     rsvp_status?: string;
-    plus_one_name?: string;
+    party_members?: PartyMember[];
     address?: string;
     created_at: string;
 }
@@ -69,7 +73,7 @@ export default function RSVPDashboard() {
         side: '',
         notes: '',
         invited: false,
-        plus_one_name: '',
+        party_members: [] as PartyMember[],
         rsvp_status: '',
     });
 
@@ -168,7 +172,7 @@ export default function RSVPDashboard() {
                     side: '',
                     notes: '',
                     invited: false,
-                    plus_one_name: '',
+                    party_members: [],
                     rsvp_status: '',
                 });
                 fetchGuests();
@@ -198,6 +202,11 @@ export default function RSVPDashboard() {
 
     const openEditGuest = (guest: Guest) => {
         setEditingGuest(guest);
+        // Build party_members slots to match party_size - 1
+        const existing = guest.party_members || [];
+        const slots: PartyMember[] = Array.from({ length: Math.max(0, guest.party_size - 1) }, (_, i) => ({
+            name: existing[i]?.name ?? null,
+        }));
         setGuestForm({
             guest_name: guest.guest_name,
             email: guest.email || '',
@@ -206,7 +215,7 @@ export default function RSVPDashboard() {
             side: guest.side || '',
             notes: guest.notes || '',
             invited: guest.invited,
-            plus_one_name: guest.plus_one_name || '',
+            party_members: slots,
             rsvp_status: guest.rsvp_status || '',
         });
     };
@@ -422,7 +431,8 @@ export default function RSVPDashboard() {
     const missingRsvps = guests.filter(g => g.invited && !g.rsvp_status).reduce((acc, curr) => acc + curr.party_size, 0);
 
     const filteredGuests = guests.filter(g => {
-        const matchesSearch = !guestSearch || g.guest_name.toLowerCase().includes(guestSearch.toLowerCase()) || (g.plus_one_name || '').toLowerCase().includes(guestSearch.toLowerCase());
+        const memberNames = (g.party_members || []).map(m => m.name || '').join(' ');
+        const matchesSearch = !guestSearch || g.guest_name.toLowerCase().includes(guestSearch.toLowerCase()) || memberNames.toLowerCase().includes(guestSearch.toLowerCase());
         if (!matchesSearch) return false;
         switch (guestFilter) {
             case 'no_response': return g.invited && !g.rsvp_status;
@@ -672,7 +682,7 @@ export default function RSVPDashboard() {
                                         side: '',
                                         notes: '',
                                         invited: false,
-                                        plus_one_name: '',
+                                        party_members: [],
                                         rsvp_status: '',
                                     });
                                 }}
@@ -760,9 +770,11 @@ export default function RSVPDashboard() {
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className={`text-sm font-medium ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-900'}`}>{guest.guest_name}</div>
-                                                {guest.plus_one_name && (
-                                                    <div className="text-sm text-gray-400">+ {guest.plus_one_name}</div>
-                                                )}
+                                                {(guest.party_members || []).map((m, i) => (
+                                                    <div key={i} className="text-sm text-gray-400">
+                                                        + {m.name || <span className="italic">Unknown Guest {i + 2}</span>}
+                                                    </div>
+                                                ))}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className={`text-sm ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-500'}`}>{guest.email || '-'}</div>
@@ -886,18 +898,26 @@ export default function RSVPDashboard() {
                                 />
                             </div>
 
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Plus One Name
-                                </label>
-                                <input
-                                    type="text"
-                                    value={guestForm.plus_one_name}
-                                    onChange={(e) => setGuestForm({ ...guestForm, plus_one_name: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                                    placeholder="Optional"
-                                />
-                            </div>
+                            {/* Party member name slots — party_size - 1 inputs */}
+                            {Array.from({ length: Math.max(0, guestForm.party_size - 1) }, (_, i) => (
+                                <div key={i}>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Guest {i + 2} Name <span className="text-gray-400 font-normal">(leave blank if unknown)</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={guestForm.party_members[i]?.name ?? ''}
+                                        onChange={(e) => {
+                                            const updated = [...guestForm.party_members];
+                                            while (updated.length <= i) updated.push({ name: null });
+                                            updated[i] = { name: e.target.value || null };
+                                            setGuestForm({ ...guestForm, party_members: updated });
+                                        }}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                                        placeholder="Optional"
+                                    />
+                                </div>
+                            ))}
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
@@ -934,7 +954,13 @@ export default function RSVPDashboard() {
                                         type="number"
                                         min="1"
                                         value={guestForm.party_size}
-                                        onChange={(e) => setGuestForm({ ...guestForm, party_size: parseInt(e.target.value) })}
+                                        onChange={(e) => {
+                                            const size = parseInt(e.target.value) || 1;
+                                            const slots = Array.from({ length: Math.max(0, size - 1) }, (_, i) => ({
+                                                name: guestForm.party_members[i]?.name ?? null,
+                                            }));
+                                            setGuestForm({ ...guestForm, party_size: size, party_members: slots });
+                                        }}
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                                     />
                                 </div>

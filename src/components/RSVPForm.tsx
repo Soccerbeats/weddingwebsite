@@ -2,21 +2,37 @@
 
 import { useState, useEffect } from 'react';
 
-interface DietaryEntry {
-    name: string;
+interface PartyMember {
+    name: string | null;
+}
+
+interface MemberCard {
+    name: string;           // resolved display name (may be empty string for unknowns the guest must fill in)
+    nameEditable: boolean;  // true when admin left this slot unnamed
+    attending: boolean;
     vegetarian: boolean;
     vegan: boolean;
     gluten_free: boolean;
     nut_allergy: boolean;
 }
 
-function buildDietaryEntries(guestCount: number, mainName: string, plusOneName?: string): DietaryEntry[] {
-    const entries: DietaryEntry[] = [];
-    for (let i = 0; i < guestCount; i++) {
-        let name = i === 0 ? mainName : (i === 1 && plusOneName ? plusOneName : `Guest ${i + 1}`);
-        entries.push({ name, vegetarian: false, vegan: false, gluten_free: false, nut_allergy: false });
-    }
-    return entries;
+function buildCards(primaryName: string, partyMembers: PartyMember[], existingDietary: any[]): MemberCard[] {
+    const totalSlots = 1 + partyMembers.length;
+    return Array.from({ length: totalSlots }, (_, i) => {
+        const isFirst = i === 0;
+        const slot = isFirst ? null : partyMembers[i - 1];
+        const knownName = isFirst ? primaryName : (slot?.name ?? null);
+        const existing = existingDietary.find(d => d.name === knownName) || null;
+        return {
+            name: knownName ?? '',
+            nameEditable: !isFirst && !knownName,
+            attending: isFirst ? true : (existing ? true : false),
+            vegetarian: existing?.vegetarian ?? false,
+            vegan: existing?.vegan ?? false,
+            gluten_free: existing?.gluten_free ?? false,
+            nut_allergy: existing?.nut_allergy ?? false,
+        };
+    });
 }
 
 export default function RSVPForm() {
@@ -33,11 +49,10 @@ export default function RSVPForm() {
         email: '',
         phone: '',
         attending: 'yes',
-        guestCount: 1,
-        message: ''
+        message: '',
     });
 
-    const [dietaryEntries, setDietaryEntries] = useState<DietaryEntry[]>([]);
+    const [cards, setCards] = useState<MemberCard[]>([]);
     const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
     const [errorMessage, setErrorMessage] = useState('');
 
@@ -47,17 +62,6 @@ export default function RSVPForm() {
             .then(data => setConfig(data))
             .catch(err => console.error('Error fetching config:', err));
     }, []);
-
-    // Rebuild dietary entries when guest count or attending changes
-    useEffect(() => {
-        if (step !== 'form' || formData.attending !== 'yes') return;
-        const count = formData.guestCount;
-        setDietaryEntries(prev => {
-            const newEntries = buildDietaryEntries(count, formData.guestName, verifiedGuest?.plus_one_name);
-            // Preserve existing checkbox state for entries that already exist
-            return newEntries.map((entry, i) => prev[i] ? { ...entry, ...prev[i], name: entry.name } : entry);
-        });
-    }, [formData.guestCount, formData.attending, step]);
 
     const handleVerification = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -77,41 +81,20 @@ export default function RSVPForm() {
                 setVerifiedGuest(data.guest);
                 setExistingRsvp(data.existingRsvp);
 
-                let count = 1;
-                let attending = 'yes';
-                let email = '';
-                let phone = '';
-                let message = '';
+                const existingDietary = Array.isArray(data.existingRsvp?.dietaryRestrictions)
+                    ? data.existingRsvp.dietaryRestrictions
+                    : [];
 
-                if (data.existingRsvp) {
-                    email = data.existingRsvp.email || '';
-                    phone = data.existingRsvp.phone || '';
-                    attending = data.existingRsvp.attending ? 'yes' : 'no';
-                    count = data.existingRsvp.guestCount || 1;
-                    message = data.existingRsvp.message || '';
-
-                    // Restore dietary entries from existing RSVP
-                    const existing = data.existingRsvp.dietaryRestrictions;
-                    if (Array.isArray(existing) && existing.length > 0) {
-                        setDietaryEntries(existing);
-                    } else {
-                        setDietaryEntries(buildDietaryEntries(count, data.guest.name, data.guest.plus_one_name));
-                    }
-                } else {
-                    email = data.guest.email || '';
-                    phone = data.guest.phone || '';
-                    count = data.guest.party_size || 1;
-                    setDietaryEntries(buildDietaryEntries(count, data.guest.name, data.guest.plus_one_name));
-                }
+                setCards(buildCards(data.guest.name, data.guest.party_members || [], existingDietary));
 
                 setFormData({
                     guestName: data.guest.name,
-                    email,
-                    phone,
-                    attending,
-                    guestCount: count,
-                    message,
+                    email: data.existingRsvp?.email || data.guest.email || '',
+                    phone: data.existingRsvp?.phone || data.guest.phone || '',
+                    attending: data.existingRsvp ? (data.existingRsvp.attending ? 'yes' : 'no') : 'yes',
+                    message: data.existingRsvp?.message || '',
                 });
+
                 setStep('form');
             } else {
                 setVerificationError(data.message || 'Guest not found on the list.');
@@ -129,21 +112,36 @@ export default function RSVPForm() {
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
-    const handleGuestCountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const count = parseInt(e.target.value) || 1;
-        setFormData(prev => ({ ...prev, guestCount: count }));
-    };
-
-    const handleDietaryChange = (index: number, field: keyof Omit<DietaryEntry, 'name'>, checked: boolean) => {
-        setDietaryEntries(prev => prev.map((entry, i) => i === index ? { ...entry, [field]: checked } : entry));
+    const updateCard = (index: number, patch: Partial<MemberCard>) => {
+        setCards(prev => prev.map((c, i) => i === index ? { ...c, ...patch } : c));
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        // Validate: unnamed attending guests must have a name filled in
+        if (formData.attending === 'yes') {
+            for (let i = 0; i < cards.length; i++) {
+                if (cards[i].attending && cards[i].nameEditable && !cards[i].name.trim()) {
+                    setErrorMessage(`Please enter a name for Guest ${i + 1} before submitting.`);
+                    setStatus('error');
+                    return;
+                }
+            }
+        }
+
         setStatus('submitting');
         setErrorMessage('');
 
-        const dietary = formData.attending === 'yes' ? dietaryEntries : [];
+        const attendingCards = formData.attending === 'yes' ? cards.filter(c => c.attending) : [];
+        const guestCount = attendingCards.length;
+        const dietaryRestrictions = attendingCards.map(c => ({
+            name: c.name,
+            vegetarian: c.vegetarian,
+            vegan: c.vegan,
+            gluten_free: c.gluten_free,
+            nut_allergy: c.nut_allergy,
+        }));
 
         try {
             const isUpdate = existingRsvp !== null;
@@ -154,8 +152,8 @@ export default function RSVPForm() {
                     ...formData,
                     ...(isUpdate ? { id: existingRsvp.id } : {}),
                     attending: formData.attending === 'yes',
-                    guestCount: parseInt(formData.guestCount.toString()),
-                    dietaryRestrictions: dietary,
+                    guestCount,
+                    dietaryRestrictions,
                 }),
             });
 
@@ -182,7 +180,7 @@ export default function RSVPForm() {
                 </div>
                 <h3 className="text-lg leading-6 font-medium text-gray-900">RSVP {existingRsvp ? 'Updated' : 'Received'}!</h3>
                 <p className="mt-2 text-base text-gray-500">
-                    Thank you for letting us know. We&apos;ve sent a confirmation email to the happy couple♥
+                    Thank you for letting us know. We&apos;ve sent a confirmation to the happy couple♥
                 </p>
                 <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
                     <p className="text-sm text-blue-800">
@@ -218,46 +216,39 @@ export default function RSVPForm() {
                     </div>
 
                     {verificationError && (
-                        <div className="rounded-2xl bg-red-50 p-4">
-                            <div className="flex">
-                                <div className="flex-shrink-0">
-                                    <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                                    </svg>
-                                </div>
-                                <div className="ml-3">
-                                    <h3 className="text-sm font-medium text-red-800">{verificationError}</h3>
-                                </div>
-                            </div>
+                        <div className="rounded-2xl bg-red-50 p-4 flex gap-3">
+                            <svg className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                            </svg>
+                            <p className="text-sm font-medium text-red-800">{verificationError}</p>
                         </div>
                     )}
 
-                    <div>
-                        <button
-                            type="submit"
-                            disabled={verifying || !guestNameInput.trim()}
-                            className="w-full flex justify-center py-3 px-6 border border-transparent rounded-full shadow-md text-base font-medium text-white bg-accent hover:bg-accent-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 transition-all transform hover:-translate-y-0.5"
-                        >
-                            {verifying ? 'Verifying...' : 'Continue'}
-                        </button>
-                    </div>
+                    <button
+                        type="submit"
+                        disabled={verifying || !guestNameInput.trim()}
+                        className="w-full flex justify-center py-3 px-6 border border-transparent rounded-full shadow-md text-base font-medium text-white bg-accent hover:bg-accent-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 transition-all transform hover:-translate-y-0.5"
+                    >
+                        {verifying ? 'Verifying...' : 'Continue'}
+                    </button>
                 </form>
             </div>
         );
     }
 
+    const partyNames = verifiedGuest?.party_members?.map((m: PartyMember, i: number) => m.name || `Guest ${i + 2}`).join(', ');
+
     return (
         <form onSubmit={handleSubmit} className="space-y-6 bg-white p-8 rounded-3xl shadow-xl border-t-4 border-accent">
-            <div className={`border rounded-2xl p-4 mb-6 ${existingRsvp ? 'bg-blue-50 border-blue-200' : 'bg-green-50 border-green-200'}`}>
-                <div className="flex">
-                    <div className="flex-shrink-0">
-                        <svg className={`h-5 w-5 ${existingRsvp ? 'text-blue-400' : 'text-green-400'}`} viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                        </svg>
-                    </div>
-                    <div className="ml-3">
+            {/* Welcome banner */}
+            <div className={`border rounded-2xl p-4 ${existingRsvp ? 'bg-blue-50 border-blue-200' : 'bg-green-50 border-green-200'}`}>
+                <div className="flex gap-3">
+                    <svg className={`h-5 w-5 flex-shrink-0 mt-0.5 ${existingRsvp ? 'text-blue-400' : 'text-green-400'}`} viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    <div>
                         <p className={`text-sm font-medium ${existingRsvp ? 'text-blue-800' : 'text-green-800'}`}>
-                            Welcome{existingRsvp ? ' back' : ''}, {verifiedGuest?.name}{verifiedGuest?.plus_one_name && ` & ${verifiedGuest.plus_one_name}`}!
+                            Welcome{existingRsvp ? ' back' : ''}, {verifiedGuest?.name}{partyNames ? ` & party` : ''}!
                         </p>
                         <p className={`text-sm mt-1 ${existingRsvp ? 'text-blue-700' : 'text-green-700'}`}>
                             {existingRsvp ? 'You can update your RSVP below.' : 'Please complete your RSVP below.'}
@@ -266,142 +257,142 @@ export default function RSVPForm() {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
+            {/* Contact info */}
+            <div className="grid grid-cols-1 gap-y-4 gap-x-4 sm:grid-cols-2">
                 <div className="sm:col-span-2">
                     <label htmlFor="email" className="block text-sm font-medium text-gray-700 ml-1">Email *</label>
-                    <div className="mt-1">
-                        <input
-                            type="email"
-                            name="email"
-                            id="email"
-                            required
-                            value={formData.email}
-                            onChange={handleChange}
-                            className="appearance-none block w-full px-4 py-3 border border-gray-300 rounded-2xl shadow-sm placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-accent focus:border-accent sm:text-sm transition-shadow"
-                        />
-                    </div>
+                    <input
+                        type="email" name="email" id="email" required
+                        value={formData.email} onChange={handleChange}
+                        className="mt-1 appearance-none block w-full px-4 py-3 border border-gray-300 rounded-2xl shadow-sm placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-accent focus:border-accent sm:text-sm transition-shadow"
+                    />
                 </div>
-
                 <div>
                     <label htmlFor="phone" className="block text-sm font-medium text-gray-700 ml-1">Phone</label>
-                    <div className="mt-1">
-                        <input
-                            type="tel"
-                            name="phone"
-                            id="phone"
-                            value={formData.phone}
-                            onChange={handleChange}
-                            className="appearance-none block w-full px-4 py-3 border border-gray-300 rounded-2xl shadow-sm placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-accent focus:border-accent sm:text-sm transition-shadow"
-                        />
-                    </div>
+                    <input
+                        type="tel" name="phone" id="phone"
+                        value={formData.phone} onChange={handleChange}
+                        className="mt-1 appearance-none block w-full px-4 py-3 border border-gray-300 rounded-2xl shadow-sm placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-accent focus:border-accent sm:text-sm transition-shadow"
+                    />
                 </div>
-
                 <div>
                     <label htmlFor="attending" className="block text-sm font-medium text-gray-700 ml-1">Will you be attending? *</label>
-                    <div className="mt-1">
-                        <select
-                            id="attending"
-                            name="attending"
-                            required
-                            value={formData.attending}
-                            onChange={handleChange}
-                            className="block w-full pl-4 pr-10 py-3 text-base border-gray-300 text-gray-900 focus:outline-none focus:ring-accent focus:border-accent sm:text-sm rounded-2xl transition-shadow"
-                        >
-                            <option value="yes">Joyfully Accepts</option>
-                            <option value="no">Regretfully Declines</option>
-                        </select>
-                    </div>
+                    <select
+                        id="attending" name="attending" required
+                        value={formData.attending} onChange={handleChange}
+                        className="mt-1 block w-full pl-4 pr-10 py-3 text-base border-gray-300 text-gray-900 focus:outline-none focus:ring-accent focus:border-accent sm:text-sm rounded-2xl transition-shadow"
+                    >
+                        <option value="yes">Joyfully Accepts</option>
+                        <option value="no">Regretfully Declines</option>
+                    </select>
                 </div>
-
-                {formData.attending === 'yes' && (
-                    <div className="sm:col-span-2">
-                        <label htmlFor="guestCount" className="block text-sm font-medium text-gray-700 ml-1">Number of Guests *</label>
-                        <div className="mt-1">
-                            <input
-                                type="number"
-                                name="guestCount"
-                                id="guestCount"
-                                min="1"
-                                max={verifiedGuest?.party_size || 10}
-                                required
-                                value={formData.guestCount}
-                                onChange={handleGuestCountChange}
-                                className="appearance-none block w-full px-4 py-3 border border-gray-300 rounded-2xl shadow-sm placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-accent focus:border-accent sm:text-sm transition-shadow"
-                            />
-                            {verifiedGuest?.party_size && (
-                                <p className="mt-1 text-sm text-gray-500">Maximum party size: {verifiedGuest.party_size}</p>
-                            )}
-                        </div>
-                    </div>
-                )}
             </div>
 
-            {/* Per-guest dietary restrictions */}
-            {formData.attending === 'yes' && dietaryEntries.length > 0 && (
+            {/* Per-member cards */}
+            {formData.attending === 'yes' && cards.length > 0 && (
                 <div>
-                    <h3 className="text-sm font-medium text-gray-700 ml-1 mb-3">Dietary Restrictions</h3>
+                    <h3 className="text-sm font-medium text-gray-700 mb-3">Your Party</h3>
                     <div className="space-y-3">
-                        {dietaryEntries.map((entry, i) => (
-                            <div key={i} className="border border-gray-200 rounded-2xl p-4 bg-gray-50">
-                                <p className="text-sm font-semibold text-gray-800 mb-3">{entry.name}</p>
-                                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                                    {([
-                                        { field: 'vegetarian', label: 'Vegetarian' },
-                                        { field: 'vegan', label: 'Vegan' },
-                                        { field: 'gluten_free', label: 'Gluten Free' },
-                                        { field: 'nut_allergy', label: 'Nut Allergy' },
-                                    ] as { field: keyof Omit<DietaryEntry, 'name'>; label: string }[]).map(({ field, label }) => (
-                                        <label key={field} className="flex items-center gap-2 cursor-pointer">
-                                            <input
-                                                type="checkbox"
-                                                checked={entry[field]}
-                                                onChange={(e) => handleDietaryChange(i, field, e.target.checked)}
-                                                className="h-4 w-4 rounded border-gray-300 text-accent focus:ring-accent"
-                                            />
-                                            <span className="text-sm text-gray-700">{label}</span>
-                                        </label>
-                                    ))}
+                        {cards.map((card, i) => {
+                            const isFirst = i === 0;
+                            return (
+                                <div
+                                    key={i}
+                                    className={`border rounded-2xl p-4 transition-colors ${
+                                        card.attending
+                                            ? 'bg-white border-gray-200'
+                                            : 'bg-gray-50 border-gray-100 opacity-60'
+                                    }`}
+                                >
+                                    {/* Card header: name + attending toggle */}
+                                    <div className="flex items-start justify-between gap-4 mb-3">
+                                        <div className="flex-1">
+                                            {card.nameEditable ? (
+                                                <div>
+                                                    <label className="block text-xs text-gray-500 mb-1">
+                                                        Guest {i + 1} name <span className="text-red-500">*</span>
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={card.name}
+                                                        onChange={(e) => updateCard(i, { name: e.target.value })}
+                                                        placeholder="Enter guest name"
+                                                        className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-accent focus:border-accent"
+                                                    />
+                                                </div>
+                                            ) : (
+                                                <p className="text-sm font-semibold text-gray-800">{card.name}</p>
+                                            )}
+                                        </div>
+                                        {/* Attending toggle — primary guest is locked on */}
+                                        {isFirst ? (
+                                            <span className="text-xs font-medium text-green-700 bg-green-100 px-2 py-1 rounded-full whitespace-nowrap">Attending</span>
+                                        ) : (
+                                            <label className="flex items-center gap-2 cursor-pointer whitespace-nowrap">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={card.attending}
+                                                    onChange={(e) => updateCard(i, { attending: e.target.checked })}
+                                                    className="h-4 w-4 rounded border-gray-300 text-accent focus:ring-accent"
+                                                />
+                                                <span className="text-sm text-gray-600">Attending</span>
+                                            </label>
+                                        )}
+                                    </div>
+
+                                    {/* Dietary checkboxes — only when attending */}
+                                    {card.attending && (
+                                        <div>
+                                            <p className="text-xs text-gray-500 mb-2">Dietary restrictions</p>
+                                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                                                {([
+                                                    { field: 'vegetarian', label: 'Vegetarian' },
+                                                    { field: 'vegan', label: 'Vegan' },
+                                                    { field: 'gluten_free', label: 'Gluten Free' },
+                                                    { field: 'nut_allergy', label: 'Nut Allergy' },
+                                                ] as { field: keyof Pick<MemberCard, 'vegetarian' | 'vegan' | 'gluten_free' | 'nut_allergy'>; label: string }[]).map(({ field, label }) => (
+                                                    <label key={field} className="flex items-center gap-2 cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={card[field]}
+                                                            onChange={(e) => updateCard(i, { [field]: e.target.checked })}
+                                                            className="h-4 w-4 rounded border-gray-300 text-accent focus:ring-accent"
+                                                        />
+                                                        <span className="text-sm text-gray-700">{label}</span>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
             )}
 
-            <div className="sm:col-span-2">
+            {/* Message */}
+            <div>
                 <label htmlFor="message" className="block text-sm font-medium text-gray-700 ml-1">
                     Message for {config?.brideName || 'Bride'} & {config?.groomName || 'Groom'}♥
                 </label>
-                <div className="mt-1">
-                    <textarea
-                        id="message"
-                        name="message"
-                        rows={3}
-                        value={formData.message}
-                        onChange={handleChange}
-                        className="appearance-none block w-full px-4 py-3 border border-gray-300 rounded-2xl shadow-sm placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-accent focus:border-accent sm:text-sm transition-shadow"
-                    />
-                </div>
+                <textarea
+                    id="message" name="message" rows={3}
+                    value={formData.message} onChange={handleChange}
+                    className="mt-1 appearance-none block w-full px-4 py-3 border border-gray-300 rounded-2xl shadow-sm placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-accent focus:border-accent sm:text-sm transition-shadow"
+                />
             </div>
 
             {status === 'error' && (
                 <div className="rounded-2xl bg-red-50 p-4">
-                    <div className="flex">
-                        <div className="ml-3">
-                            <h3 className="text-sm font-medium text-red-800">{errorMessage}</h3>
-                        </div>
-                    </div>
+                    <p className="text-sm font-medium text-red-800">{errorMessage}</p>
                 </div>
             )}
 
             <div className="flex gap-4">
                 <button
                     type="button"
-                    onClick={() => {
-                        setStep('verification');
-                        setGuestNameInput('');
-                        setVerificationError('');
-                    }}
+                    onClick={() => { setStep('verification'); setGuestNameInput(''); setVerificationError(''); }}
                     className="flex justify-center py-3 px-6 border border-gray-300 rounded-full shadow-sm text-base font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent transition-all"
                 >
                     Back
@@ -411,7 +402,9 @@ export default function RSVPForm() {
                     disabled={status === 'submitting'}
                     className="flex-1 flex justify-center py-3 px-6 border border-transparent rounded-full shadow-md text-base font-medium text-white bg-accent hover:bg-accent-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 transition-all transform hover:-translate-y-0.5"
                 >
-                    {status === 'submitting' ? (existingRsvp ? 'Updating...' : 'Sending...') : (existingRsvp ? 'Update RSVP' : 'Send RSVP')}
+                    {status === 'submitting'
+                        ? (existingRsvp ? 'Updating...' : 'Sending...')
+                        : (existingRsvp ? 'Update RSVP' : 'Send RSVP')}
                 </button>
             </div>
         </form>

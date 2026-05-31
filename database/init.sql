@@ -40,7 +40,43 @@ CREATE TABLE IF NOT EXISTS guest_list (
 -- Idempotent migrations for columns added after initial deploy
 ALTER TABLE guest_list ADD COLUMN IF NOT EXISTS plus_one_name VARCHAR(255);
 ALTER TABLE guest_list ADD COLUMN IF NOT EXISTS address TEXT;
+ALTER TABLE guest_list ADD COLUMN IF NOT EXISTS party_members JSONB;
 ALTER TABLE rsvps ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
+
+-- Migrate plus_one_name into party_members and backfill remaining slots as null
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'guest_list' AND column_name = 'party_members'
+  ) THEN
+    -- For rows that have plus_one_name set but no party_members yet
+    UPDATE guest_list
+    SET party_members = (
+      SELECT jsonb_agg(
+        CASE
+          WHEN idx = 0 THEN jsonb_build_object('name', plus_one_name)
+          ELSE jsonb_build_object('name', NULL)
+        END
+      )
+      FROM generate_series(0, party_size - 2) AS idx
+    )
+    WHERE plus_one_name IS NOT NULL
+      AND plus_one_name <> ''
+      AND party_members IS NULL
+      AND party_size > 1;
+
+    -- For rows with party_size > 1 but no plus_one_name and no party_members yet
+    UPDATE guest_list
+    SET party_members = (
+      SELECT jsonb_agg(jsonb_build_object('name', NULL))
+      FROM generate_series(1, party_size - 1)
+    )
+    WHERE (plus_one_name IS NULL OR plus_one_name = '')
+      AND party_members IS NULL
+      AND party_size > 1;
+  END IF;
+END $$;
 
 -- Migrate dietary_restrictions from TEXT to JSONB
 DO $$

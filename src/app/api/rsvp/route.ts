@@ -43,15 +43,15 @@ export async function POST(request: Request) {
             if (existingGuest.rows.length > 0) {
                 await client.query(
                     `UPDATE guest_list
-                     SET email = $1, phone = $2, party_size = $3, rsvp_status = $4, updated_at = NOW()
-                     WHERE LOWER(guest_name) = LOWER($5)`,
-                    [email, phone, attending ? guestCount : 1, attending ? 'attending' : 'declined', guestName]
+                     SET email = $1, phone = $2, rsvp_status = $3, updated_at = NOW()
+                     WHERE LOWER(guest_name) = LOWER($4)`,
+                    [email, phone, attending ? 'attending' : 'declined', guestName]
                 );
             } else {
                 await client.query(
-                    `INSERT INTO guest_list (guest_name, email, phone, party_size, rsvp_status, updated_at)
-                     VALUES ($1, $2, $3, $4, $5, NOW())`,
-                    [guestName, email, phone, attending ? guestCount : 1, attending ? 'attending' : 'declined']
+                    `INSERT INTO guest_list (guest_name, email, phone, rsvp_status, updated_at)
+                     VALUES ($1, $2, $3, $4, NOW())`,
+                    [guestName, email, phone, attending ? 'attending' : 'declined']
                 );
             }
         } finally {
@@ -135,9 +135,9 @@ export async function PUT(request: Request) {
 
             await client.query(
                 `UPDATE guest_list
-                 SET email = $1, phone = $2, party_size = $3, rsvp_status = $4, updated_at = NOW()
-                 WHERE LOWER(guest_name) = LOWER($5)`,
-                [email, phone, attending ? guestCount : 1, attending ? 'attending' : 'declined', guestName]
+                 SET email = $1, phone = $2, rsvp_status = $3, updated_at = NOW()
+                 WHERE LOWER(guest_name) = LOWER($4)`,
+                [email, phone, attending ? 'attending' : 'declined', guestName]
             );
         } finally {
             client.release();
