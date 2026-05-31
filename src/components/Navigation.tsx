@@ -94,7 +94,7 @@ export default function Navigation({
     const allLinks = [
         { href: '/', label: 'Home' },
         { href: '/#about', label: 'About' },
-        { href: '/our-story', label: 'Timeline' },
+        { href: '/our-story', label: 'Our Story' },
         { href: '/wedding-party', label: 'Wedding Party' },
         { href: '/schedule', label: 'Schedule' },
         { href: '/photos', label: 'Photos' },

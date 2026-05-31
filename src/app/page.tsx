@@ -121,7 +121,7 @@ export default function Home() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
             <FadeIn animation="slide-up">
               <h2 className="text-4xl font-serif text-gray-900 tracking-tight sm:text-5xl md:text-6xl">
-                Our Story
+                About
               </h2>
             </FadeIn>
             <FadeIn animation="slide-up" delay={100}>

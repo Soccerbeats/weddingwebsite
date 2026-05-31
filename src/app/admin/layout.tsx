@@ -37,7 +37,7 @@ export default function AdminLayout({
         { href: '/admin/dashboard', label: '⌂ Dashboard' },
         { href: '/admin/rsvps', label: 'RSVPs' },
         { href: '/admin/photos', label: 'Photos' },
-        { href: '/admin/timeline', label: 'Timeline' },
+        { href: '/admin/timeline', label: 'Our Story' },
         { href: '/admin/home', label: 'Home Page' },
         { href: '/admin/nav-cards', label: 'Nav Cards' },
         { href: '/admin/about', label: 'About Page' },
