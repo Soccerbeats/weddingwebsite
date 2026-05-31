@@ -3,6 +3,7 @@ import { getSiteConfig } from '@/lib/config';
 import CountdownClock from '@/components/CountdownClock';
 import FadeIn from '@/components/FadeIn';
 import HeroCollapse from '@/components/HeroCollapse';
+import NavCards from '@/components/NavCards';
 
 export const dynamic = 'force-dynamic';
 
@@ -249,6 +250,9 @@ export default function Home() {
             </div>
           </div>
         )}
+        {/* Nav Cards */}
+        <NavCards />
+
       </div>
     </div>
   );
