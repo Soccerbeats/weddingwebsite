@@ -24,10 +24,13 @@ function buildCards(primaryName: string, partyMembers: PartyMember[], existingDi
         const isFirst = i === 0;
         const slot = isFirst ? null : partyMembers[i - 1];
         const knownName = isFirst ? primaryName : (slot?.name ?? null);
-        const existing = existingDietary.find(d => d.name === knownName) || null;
+        // For unnamed slots, fall back to the dietary entry at the same index to recover a previously entered name
+        const existing = existingDietary.find(d => d.name === knownName)
+            || (!knownName && existingDietary[i] ? existingDietary[i] : null);
+        const resolvedName = knownName ?? existing?.name ?? '';
         return {
-            name: knownName ?? '',
-            nameEditable: !isFirst && !knownName,
+            name: resolvedName,
+            nameEditable: !isFirst && !knownName && !existing?.name,
             attending: isFirst ? true : (existing ? true : false),
             vegetarian: existing?.vegetarian ?? false,
             vegan: existing?.vegan ?? false,
@@ -38,6 +41,7 @@ function buildCards(primaryName: string, partyMembers: PartyMember[], existingDi
         };
     });
 }
+
 
 export default function RSVPForm() {
     const [step, setStep] = useState<'verification' | 'form'>('verification');
@@ -139,6 +143,8 @@ export default function RSVPForm() {
 
         const attendingCards = formData.attending === 'yes' ? cards.filter(c => c.attending) : [];
         const guestCount = attendingCards.length;
+        // Send resolved names for all additional members back so guest_list.party_members stays up to date
+        const resolvedMembers = cards.slice(1).map(c => ({ name: c.name || null }));
         const dietaryRestrictions = attendingCards.map(c => ({
             name: c.name,
             vegetarian: c.vegetarian,
@@ -160,6 +166,7 @@ export default function RSVPForm() {
                     attending: formData.attending === 'yes',
                     guestCount,
                     dietaryRestrictions,
+                    resolvedMembers,
                 }),
             });
 

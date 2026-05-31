@@ -5,7 +5,7 @@ import nodemailer from 'nodemailer';
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const { guestName, email, phone, attending, guestCount, dietaryRestrictions, message } = body;
+        const { guestName, email, phone, attending, guestCount, dietaryRestrictions, message, resolvedMembers } = body;
 
         if (!guestName || !email || !phone || attending === undefined) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -43,15 +43,20 @@ export async function POST(request: Request) {
             if (existingGuest.rows.length > 0) {
                 await client.query(
                     `UPDATE guest_list
-                     SET email = $1, phone = $2, rsvp_status = $3, updated_at = NOW()
-                     WHERE LOWER(guest_name) = LOWER($4)`,
-                    [email, phone, attending ? 'attending' : 'declined', guestName]
+                     SET email = $1, phone = $2, rsvp_status = $3,
+                         party_members = COALESCE($4::jsonb, party_members),
+                         updated_at = NOW()
+                     WHERE LOWER(guest_name) = LOWER($5)`,
+                    [email, phone, attending ? 'attending' : 'declined',
+                     resolvedMembers?.length ? JSON.stringify(resolvedMembers) : null,
+                     guestName]
                 );
             } else {
                 await client.query(
-                    `INSERT INTO guest_list (guest_name, email, phone, rsvp_status, updated_at)
-                     VALUES ($1, $2, $3, $4, NOW())`,
-                    [guestName, email, phone, attending ? 'attending' : 'declined']
+                    `INSERT INTO guest_list (guest_name, email, phone, rsvp_status, party_members, updated_at)
+                     VALUES ($1, $2, $3, $4, $5, NOW())`,
+                    [guestName, email, phone, attending ? 'attending' : 'declined',
+                     resolvedMembers?.length ? JSON.stringify(resolvedMembers) : null]
                 );
             }
         } finally {
@@ -101,7 +106,7 @@ export async function POST(request: Request) {
 export async function PUT(request: Request) {
     try {
         const body = await request.json();
-        const { id, guestName, email, phone, attending, guestCount, dietaryRestrictions, message } = body;
+        const { id, guestName, email, phone, attending, guestCount, dietaryRestrictions, message, resolvedMembers } = body;
 
         if (!id || !guestName || !email || !phone || attending === undefined) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -135,9 +140,13 @@ export async function PUT(request: Request) {
 
             await client.query(
                 `UPDATE guest_list
-                 SET email = $1, phone = $2, rsvp_status = $3, updated_at = NOW()
-                 WHERE LOWER(guest_name) = LOWER($4)`,
-                [email, phone, attending ? 'attending' : 'declined', guestName]
+                 SET email = $1, phone = $2, rsvp_status = $3,
+                     party_members = COALESCE($4::jsonb, party_members),
+                     updated_at = NOW()
+                 WHERE LOWER(guest_name) = LOWER($5)`,
+                [email, phone, attending ? 'attending' : 'declined',
+                 resolvedMembers?.length ? JSON.stringify(resolvedMembers) : null,
+                 guestName]
             );
         } finally {
             client.release();
