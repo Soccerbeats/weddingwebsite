@@ -188,11 +188,16 @@ export default function RSVPForm() {
                 <p className="mt-2 text-base text-gray-500">
                     Thank you for letting us know. We&apos;ve sent a confirmation to the happy couple♥
                 </p>
-                <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                    <p className="text-sm text-blue-800">
-                        Need to make changes? Simply refresh this page and enter your name again to update your RSVP.
-                    </p>
-                </div>
+                <button
+                    onClick={() => {
+                        setStatus('idle');
+                        setStep('form');
+                        setExistingRsvp({ ...existingRsvp, id: existingRsvp?.id });
+                    }}
+                    className="mt-6 inline-flex justify-center py-2 px-6 border border-gray-300 rounded-full text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent transition-all"
+                >
+                    Make changes
+                </button>
             </div>
         );
     }
