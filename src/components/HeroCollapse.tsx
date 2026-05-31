@@ -45,6 +45,17 @@ export default function HeroCollapse({
   const [firstReady,   setFirstReady]   = useState(false);
   const [isMobile,     setIsMobile]     = useState(false);
 
+  // Mobile strip image indices — each strip holds its assigned image and only
+  // swaps when the slideshow would land on the same image (takes the vacated slide).
+  const [topImageIdx,  setTopImageIdx]  = useState(() => 1 % Math.max(srcs.length, 1));
+  const [botImageIdx,  setBotImageIdx]  = useState(() => 2 % Math.max(srcs.length, 1));
+  // Desktop scatter frame indices — same rule, one per scatter position
+  const [scatterIdxs,  setScatterIdxs]  = useState<number[]>(() =>
+    SCATTER.map((_, i) => (i + 1) % Math.max(srcs.length, 1))
+  );
+  // Ref so interval/handlers always read the live current slide
+  const currentSlideRef = useRef(0);
+
   const sectionRef   = useRef<HTMLDivElement>(null);
   const mainImgRef   = useRef<HTMLDivElement>(null);
   const textRef      = useRef<HTMLDivElement>(null);
@@ -106,7 +117,16 @@ export default function HeroCollapse({
   // ── Slideshow timer ───────────────────────────────────────────────────────
   useEffect(() => {
     if (!firstReady || srcs.length <= 1) return;
-    timerRef.current = setInterval(() => setCurrentSlide(c => (c + 1) % srcs.length), interval);
+    timerRef.current = setInterval(() => {
+      const prev = currentSlideRef.current;
+      const next = (prev + 1) % srcs.length;
+      currentSlideRef.current = next;
+      setCurrentSlide(next);
+      // Swap any strip that would duplicate the incoming slide — give it the vacated slide
+      setTopImageIdx(t => t === next ? prev : t);
+      setBotImageIdx(b => b === next ? prev : b);
+      setScatterIdxs(idxs => idxs.map(idx => idx === next ? prev : idx));
+    }, interval);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [firstReady, srcs.length, interval]);
 
@@ -576,12 +596,11 @@ export default function HeroCollapse({
         }}>
           <div className="absolute inset-0 bg-gray-800 transition-opacity duration-700"
                style={{ opacity: firstReady ? 0 : 1, zIndex: 2 }} />
-          {srcs.map((src, i) => {
-            const active = i === (currentSlide + 1) % srcs.length;
-            return <img key={src} src={photoSrc(src, 'medium')} alt=""
+          {srcs.map((src, i) => (
+            <img key={src} src={photoSrc(src, 'medium')} alt=""
               className="absolute inset-0 w-full h-full object-cover"
-              style={{ opacity: active ? 1 : 0, transition: 'opacity 1200ms cubic-bezier(0.4,0,0.2,1)', zIndex: active ? 1 : 0 }} />;
-          })}
+              style={{ opacity: i === topImageIdx ? 1 : 0, transition: 'opacity 1200ms cubic-bezier(0.4,0,0.2,1)', zIndex: i === topImageIdx ? 1 : 0 }} />
+          ))}
           <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 3 }} />
         </div>
 
@@ -617,7 +636,14 @@ export default function HeroCollapse({
               display: 'flex', justifyContent: 'center', gap: '8px', zIndex: 25,
             }}>
               {srcs.map((_, i) => (
-                <button key={i} onClick={() => setCurrentSlide(i)}
+                <button key={i} onClick={() => {
+                          const prev = currentSlideRef.current;
+                          if (i === prev) return;
+                          currentSlideRef.current = i;
+                          setCurrentSlide(i);
+                          setTopImageIdx(t => t === i ? prev : t);
+                          setBotImageIdx(b => b === i ? prev : b);
+                        }}
                         aria-label={`Slide ${i + 1}`}
                         style={{
                           width: i === currentSlide ? '24px' : '10px', height: '10px',
@@ -640,12 +666,11 @@ export default function HeroCollapse({
         }}>
           <div className="absolute inset-0 bg-gray-800 transition-opacity duration-700"
                style={{ opacity: firstReady ? 0 : 1, zIndex: 2 }} />
-          {srcs.map((src, i) => {
-            const active = i === (currentSlide + 2) % srcs.length;
-            return <img key={src} src={photoSrc(src, 'medium')} alt=""
+          {srcs.map((src, i) => (
+            <img key={src} src={photoSrc(src, 'medium')} alt=""
               className="absolute inset-0 w-full h-full object-cover"
-              style={{ opacity: active ? 1 : 0, transition: 'opacity 1200ms cubic-bezier(0.4,0,0.2,1)', zIndex: active ? 1 : 0 }} />;
-          })}
+              style={{ opacity: i === botImageIdx ? 1 : 0, transition: 'opacity 1200ms cubic-bezier(0.4,0,0.2,1)', zIndex: i === botImageIdx ? 1 : 0 }} />
+          ))}
           <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 3 }} />
         </div>
 
@@ -731,13 +756,12 @@ export default function HeroCollapse({
               zIndex: 15,
             }}
           >
-            {srcs.map((src, j) => {
-              const active = j === (currentSlide + 1 + i) % srcs.length;
-              return <img key={src} src={photoSrc(src, 'medium')} alt=""
+            {srcs.map((src, j) => (
+              <img key={src} src={photoSrc(src, 'medium')} alt=""
                 style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover',
-                         opacity: active ? 1 : 0,
-                         transition: 'opacity 1200ms cubic-bezier(0.4,0,0.2,1)' }} />;
-            })}
+                         opacity: j === (scatterIdxs[i] ?? 0) % srcs.length ? 1 : 0,
+                         transition: 'opacity 1200ms cubic-bezier(0.4,0,0.2,1)' }} />
+            ))}
           </div>
         ))}
 
@@ -791,7 +815,13 @@ export default function HeroCollapse({
             display: 'flex', justifyContent: 'center', gap: '8px', zIndex: 25,
           }}>
             {srcs.map((_, i) => (
-              <button key={i} onClick={() => setCurrentSlide(i)}
+              <button key={i} onClick={() => {
+                        const prev = currentSlideRef.current;
+                        if (i === prev) return;
+                        currentSlideRef.current = i;
+                        setCurrentSlide(i);
+                        setScatterIdxs(idxs => idxs.map(idx => idx === i ? prev : idx));
+                      }}
                       aria-label={`Slide ${i + 1}`}
                       style={{
                         width: i === currentSlide ? '24px' : '10px', height: '10px',
