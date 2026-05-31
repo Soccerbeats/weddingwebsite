@@ -235,7 +235,7 @@ export default function AdminNavCards() {
                       className="group relative aspect-video rounded-xl overflow-hidden border-2 border-transparent hover:border-accent transition-all"
                     >
                       <Image
-                        src={`/api/photos/${photo.filename}`}
+                        src={`/api/photos/${photo.filename}/thumb`}
                         alt={photo.alt || photo.filename}
                         fill
                         unoptimized
