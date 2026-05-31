@@ -277,9 +277,9 @@ export default function HeroCollapse({
       if (!mid || !top || !bot || !hint) return;
       const e = p < 0.5 ? 4*p*p*p : 1 - Math.pow(-2*p+2,3)/2;
 
-      // Collage padding — 100px top, 30px bottom when fully collapsed, 0 when full-hero
+      // Collage padding — 90px top, 30px bottom when fully collapsed, 0 when full-hero
       const H    = window.innerHeight;
-      const PTOP = 100;
+      const PTOP = 90;
       const PBOT = 30;
       const padTop = PTOP * e;
       const padBot = PBOT * e;
@@ -307,17 +307,17 @@ export default function HeroCollapse({
       top.style.transform = `translateY(${-100 * (1 - topE)}%)`;
       bot.style.transform = `translateY(${100 * (1 - topE)}%)`;
 
-      // Text: scale down to fit mid strip instead of fading out
+      // Text: scale down and follow mid strip center (which shifts down by (PTOP-PBOT)/2 as padding grows)
       if (text) {
-        // Scale from 1.0 → 0.65 so text squeezes to fit the shrinking strip
         const scale = 1 - 0.35 * e;
-        text.style.transform    = `scale(${scale.toFixed(3)})`;
+        // Mid strip center vs viewport center offset: (padTop - padBot) / 2
+        const textDY = ((PTOP - PBOT) / 2) * e;   // ~0 → 30px downward
+        text.style.transform    = `translateY(${textDY.toFixed(1)}px) scale(${scale.toFixed(3)})`;
         text.style.opacity      = '1';
         text.style.pointerEvents = p > 0.05 ? 'none' : 'auto';
         // Fade out buttons (can't use in collage mode anyway)
         const btns = text.querySelector('[data-hero-role="buttons"]') as HTMLElement | null;
         if (btns) btns.style.opacity = String(Math.max(0, 1 - e * 4));
-        // Restore on full expand
         if (p === 0) {
           text.style.transform     = '';
           text.style.opacity       = '1';
@@ -333,9 +333,13 @@ export default function HeroCollapse({
       // Pre-collapse scroll hint fades out
       hint.style.opacity = String(Math.max(0, 1 - p * 5));
 
-      // Post-collapse scroll hint fades in on bottom strip
+      // Post-collapse scroll hint: fade in and keep inside the bottom strip
       const postHint = mobilePostHintRef.current;
-      if (postHint) postHint.style.opacity = String(Math.max(0, (p - 0.85) / 0.15));
+      if (postHint) {
+        postHint.style.opacity = String(Math.max(0, (p - 0.85) / 0.15));
+        // Position inside bottom strip — strip bottom edge is padBot from screen bottom
+        postHint.style.bottom = `${padBot + 14}px`;
+      }
     }
 
     function fireParticles(direction: 'collapse' | 'expand') {
