@@ -399,8 +399,11 @@ export default function HeroCollapse({
       mobileStateRef.current = 'animating';
       window.dispatchEvent(new CustomEvent('hero-expanded'));
       runMobileAnimation(0, () => {
-        mobileStateRef.current = 'full';
+        // scrollTo first while state is still 'animating' — this way the
+        // scroll event fires with state='animating' (ignored by both jobs)
+        // and can't accidentally trigger the job-1 snap-to-collapsed race.
         window.scrollTo({ top: 0, behavior: 'instant' });
+        setTimeout(() => { mobileStateRef.current = 'full'; }, 50);
       });
     }
 
