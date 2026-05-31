@@ -567,11 +567,11 @@ export default function RSVPDashboard() {
                                         return (
                                             <React.Fragment key={rsvp.id}>
                                                 {/* Primary guest row */}
-                                                <tr className={`group hover:bg-amber-50/30 relative ${hasParty ? 'border-l-4 border-accent' : ''}`}>
+                                                <tr className="group hover:bg-gray-50 relative">
                                                     <td className="px-6 py-4 whitespace-nowrap">
-                                                        <div className="text-sm font-semibold text-gray-900">{rsvp.guest_name}</div>
-                                                        <div className="text-sm text-gray-500">{rsvp.email}</div>
-                                                        {rsvp.phone && <div className="text-sm text-gray-500">{rsvp.phone}</div>}
+                                                        <div className="text-sm font-medium text-gray-900">{rsvp.guest_name}</div>
+                                                        <div className="text-xs text-gray-400">{rsvp.email}</div>
+                                                        {rsvp.phone && <div className="text-xs text-gray-400">{rsvp.phone}</div>}
                                                     </td>
                                                     <td className="px-6 py-4 whitespace-nowrap">
                                                         <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${rsvp.attending ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
@@ -589,7 +589,7 @@ export default function RSVPDashboard() {
                                                     </td>
                                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 relative">
                                                         {new Date(rsvp.created_at).toLocaleDateString()}
-                                                        <div className="absolute right-0 inset-y-0 flex items-center pr-4 opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-l from-amber-50/30 via-amber-50/30 to-transparent pl-8">
+                                                        <div className="absolute right-0 inset-y-0 flex items-center pr-4 opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-l from-gray-50 via-gray-50 to-transparent pl-8">
                                                             <button
                                                                 onClick={() => { setDeletingRsvp(rsvp); setConfirmName(''); }}
                                                                 className="text-red-600 hover:text-red-900 bg-white border border-gray-200 shadow-sm px-3 py-1 rounded-md text-xs font-medium"
@@ -601,18 +601,18 @@ export default function RSVPDashboard() {
                                                 </tr>
                                                 {/* Party member sub-rows */}
                                                 {members.map((member, mi) => (
-                                                    <tr key={`${rsvp.id}-m${mi}`} className="bg-accent/5 border-l-4 border-accent">
-                                                        <td className="pl-10 pr-6 py-2 whitespace-nowrap">
-                                                            <span className="text-xs text-gray-400 mr-1">└</span>
-                                                            <span className="text-sm text-gray-700">{member.name || <span className="italic text-gray-400">Unknown</span>}</span>
+                                                    <tr key={`${rsvp.id}-m${mi}`} className="bg-gray-50/60">
+                                                        <td className="pl-10 pr-6 py-1.5 whitespace-nowrap border-l-2 border-gray-200">
+                                                            <span className="text-gray-300 mr-1.5 text-xs">└</span>
+                                                            <span className="text-sm text-gray-500 italic">{member.name || 'Unknown'}</span>
                                                         </td>
-                                                        <td className="px-6 py-2 whitespace-nowrap">
-                                                            <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Attending</span>
+                                                        <td className="px-6 py-1.5 whitespace-nowrap">
+                                                            <span className="px-2 inline-flex text-xs leading-5 font-medium rounded-full bg-gray-100 text-gray-500">Attending</span>
                                                         </td>
-                                                        <td className="px-6 py-2 text-sm text-gray-400">—</td>
-                                                        <td className="px-6 py-2 text-sm text-gray-500">{dietaryFlags(member)}</td>
-                                                        <td className="px-6 py-2 text-sm text-gray-400">—</td>
-                                                        <td className="px-6 py-2 text-sm text-gray-400">—</td>
+                                                        <td className="px-6 py-1.5 text-xs text-gray-300">—</td>
+                                                        <td className="px-6 py-1.5 text-xs text-gray-400">{dietaryFlags(member)}</td>
+                                                        <td className="px-6 py-1.5 text-xs text-gray-300">—</td>
+                                                        <td className="px-6 py-1.5 text-xs text-gray-300">—</td>
                                                     </tr>
                                                 ))}
                                             </React.Fragment>
@@ -795,7 +795,7 @@ export default function RSVPDashboard() {
                                         };
                                         return (
                                         <React.Fragment key={guest.id}>
-                                        <tr className={`hover:bg-amber-50/20 ${isLikelyNotComing ? 'bg-red-50/40' : ''} ${hasParty ? 'border-l-4 border-accent' : ''}`}>
+                                        <tr className={`hover:bg-gray-50 ${isLikelyNotComing ? 'bg-red-50/40' : ''}`}>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <input
                                                     type="checkbox"
@@ -866,28 +866,28 @@ export default function RSVPDashboard() {
                                             const mAttending = !!mDietary;
                                             const flags = dietaryFlags(mDietary);
                                             return (
-                                                <tr key={`${guest.id}-m${mi}`} className="bg-accent/5 border-l-4 border-accent">
-                                                    <td className="px-6 py-2" />
-                                                    <td className="pl-10 pr-6 py-2 whitespace-nowrap" colSpan={1}>
-                                                        <span className="text-xs text-gray-400 mr-1">└</span>
-                                                        <span className={`text-sm ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-700'}`}>
-                                                            {member.name || <span className="italic text-gray-400">Unknown Guest {mi + 2}</span>}
+                                                <tr key={`${guest.id}-m${mi}`} className="bg-gray-50/60">
+                                                    <td className="px-6 py-1.5" />
+                                                    <td className="pl-10 pr-6 py-1.5 whitespace-nowrap border-l-2 border-gray-200">
+                                                        <span className="text-gray-300 mr-1.5 text-xs">└</span>
+                                                        <span className="text-sm text-gray-500 italic">
+                                                            {member.name || `Unknown Guest ${mi + 2}`}
                                                         </span>
                                                     </td>
-                                                    <td className="px-6 py-2 text-sm text-gray-400">—</td>
-                                                    <td className="px-6 py-2 text-sm text-gray-400">—</td>
-                                                    <td className="px-6 py-2 whitespace-nowrap">
+                                                    <td className="px-6 py-1.5 text-xs text-gray-300">—</td>
+                                                    <td className="px-6 py-1.5 text-xs text-gray-300">—</td>
+                                                    <td className="px-6 py-1.5 whitespace-nowrap">
                                                         {mAttending ? (
-                                                            <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Attending</span>
+                                                            <span className="px-2 inline-flex text-xs leading-5 font-medium rounded-full bg-gray-100 text-gray-500">Attending</span>
                                                         ) : (
-                                                            <span className="text-xs text-gray-400">No Response</span>
+                                                            <span className="text-xs text-gray-300">—</span>
                                                         )}
                                                     </td>
-                                                    <td className="px-6 py-2 text-sm text-gray-500" colSpan={2}>
-                                                        {flags || '-'}
+                                                    <td className="px-6 py-1.5 text-xs text-gray-400" colSpan={2}>
+                                                        {flags || '—'}
                                                     </td>
-                                                    <td className="px-6 py-2 text-sm text-gray-400">—</td>
-                                                    <td className="px-6 py-2" />
+                                                    <td className="px-6 py-1.5 text-xs text-gray-300">—</td>
+                                                    <td className="px-6 py-1.5" />
                                                 </tr>
                                             );
                                         })}
