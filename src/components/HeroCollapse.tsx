@@ -404,19 +404,32 @@ export default function HeroCollapse({
       });
     }
 
-    // Snap to collapsed if page is scrolled past hero without animation
-    // (e.g. back-button restoring scroll position)
-    const snapIfNeeded = () => {
-      if (mobileStateRef.current !== 'full' || mobileProgressRef.current > 0) return;
-      if (window.scrollY < 10) return;
-      cancelAnimationFrame(mobileRafRef.current);
-      mobileStateRef.current = 'collapsed';
-      mobileProgressRef.current = 1;
-      applyMobileProgress(1);
-      window.dispatchEvent(new CustomEvent('hero-collapsing'));
+    // Scroll watcher — two jobs:
+    // 1. Snap to collapsed if page scrolled past hero without the animation
+    //    (back-button, hash nav, etc.)
+    // 2. Auto-trigger expand when scrolling back up to the section boundary,
+    //    including during iOS momentum scrolling where touch events don't fire.
+    const onScroll = () => {
+      const s = mobileStateRef.current;
+
+      // Job 1: snap to collapsed
+      if (s === 'full' && mobileProgressRef.current === 0 && window.scrollY > 10) {
+        cancelAnimationFrame(mobileRafRef.current);
+        mobileStateRef.current = 'collapsed';
+        mobileProgressRef.current = 1;
+        applyMobileProgress(1);
+        window.dispatchEvent(new CustomEvent('hero-collapsing'));
+        return;
+      }
+
+      // Job 2: auto-expand when momentum/active-scroll brings us back to boundary.
+      // Use a generous 80px buffer so it fires before the user fully stops.
+      if (s === 'collapsed' && window.scrollY <= mobileSectionScrollRoom() + 80) {
+        expand();
+      }
     };
-    window.addEventListener('scroll', snapIfNeeded, { passive: true });
-    snapIfNeeded();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
 
     let touchStartY: number | null = null;
     function onTouchStart(e: TouchEvent) { touchStartY = e.touches[0].clientY; }
@@ -472,7 +485,7 @@ export default function HeroCollapse({
       window.removeEventListener('touchmove',  onTouchMove);
       window.removeEventListener('touchend',   onTouchEnd);
       window.removeEventListener('wheel',      onWheel);
-      window.removeEventListener('scroll', snapIfNeeded);
+      window.removeEventListener('scroll', onScroll);
       if (mobileRafRef.current) cancelAnimationFrame(mobileRafRef.current);
       if (mobileParticleRaf.current) cancelAnimationFrame(mobileParticleRaf.current);
     };
