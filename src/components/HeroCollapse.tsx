@@ -277,18 +277,16 @@ export default function HeroCollapse({
       if (!mid || !top || !bot || !hint) return;
       const e = p < 0.5 ? 4*p*p*p : 1 - Math.pow(-2*p+2,3)/2;
 
-      // Collage padding — 80px top and bottom when fully collapsed, 0 when full-hero
+      // Collage padding — 100px top, 30px bottom when fully collapsed, 0 when full-hero
       const H    = window.innerHeight;
-      const CPAD = 80;
-      const pad  = CPAD * e;                       // 0 → 80px
-      const stripH = (H - 2 * pad) / 3;            // each strip's height in px
+      const PTOP = 100;
+      const PBOT = 30;
+      const padTop = PTOP * e;
+      const padBot = PBOT * e;
+      const stripH = (H - padTop - padBot) / 3;    // each strip's height in px
 
       // Middle strip: squish from full → padded center third
-      const midTop = pad + stripH * e;              // 0 → pad+stripH
-      mid.style.top    = `${midTop}px`;
-      mid.style.height = `${H - 2 * pad - stripH * 2 * e + stripH * 2 * e}px`; // = H at e=0, stripH at e=1
-      // Simpler: interpolate directly
-      mid.style.top    = `${(pad + stripH) * e}px`;
+      mid.style.top    = `${(padTop + stripH) * e}px`;
       mid.style.height = `${H + (stripH - H) * e}px`;
 
       // Separator lines on mid strip edges — ride with the squish
@@ -296,12 +294,12 @@ export default function HeroCollapse({
       mid.style.borderTop    = `2px solid rgba(255,255,255,${lineAlpha})`;
       mid.style.borderBottom = `2px solid rgba(255,255,255,${lineAlpha})`;
 
-      // Top strip: animate position and height alongside the padding
-      top.style.top    = `${pad}px`;
+      // Top strip: animate top edge and height
+      top.style.top    = `${padTop}px`;
       top.style.height = `${stripH}px`;
 
-      // Bottom strip: animate position and height alongside the padding
-      bot.style.bottom = `${pad}px`;
+      // Bottom strip: animate bottom edge and height
+      bot.style.bottom = `${padBot}px`;
       bot.style.height = `${stripH}px`;
 
       // Top/bot strips slide in from off-screen (0.15s delay)
