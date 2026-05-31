@@ -55,6 +55,8 @@ export default function HeroCollapse({
   );
   // Ref so interval/handlers always read the live current slide
   const currentSlideRef = useRef(0);
+  // Mobile full-screen hero uses xl resolution; drops to large during/after collapse
+  const [mobileHiRes, setMobileHiRes] = useState(true);
 
   const sectionRef   = useRef<HTMLDivElement>(null);
   const mainImgRef   = useRef<HTMLDivElement>(null);
@@ -101,7 +103,7 @@ export default function HeroCollapse({
     if (srcs.length === 0) return;
     let cancelled = false;
     const first = new window.Image();
-    first.src = photoSrc(srcs[0], isMobile ? 'medium' : 'xl');
+    first.src = photoSrc(srcs[0], 'xl');
     first.decode()
       .then(() => { if (!cancelled) setFirstReady(true); })
       .catch(() => { if (!cancelled) setFirstReady(true); });
@@ -455,10 +457,11 @@ export default function HeroCollapse({
     function collapse() {
       if (mobileStateRef.current !== 'full') return;
       mobileStateRef.current = 'animating';
+      // Drop to large resolution as animation starts — transition covers the swap
+      setMobileHiRes(false);
       window.dispatchEvent(new CustomEvent('hero-collapsing'));
       runMobileAnimation(1, () => {
         mobileStateRef.current = 'collapsed';
-        // Jump scroll to end of section so normal page scroll works — mirrors desktop
         window.scrollTo({ top: mobileSectionScrollRoom(), behavior: 'instant' });
       });
     }
@@ -466,11 +469,11 @@ export default function HeroCollapse({
     function expand() {
       if (mobileStateRef.current !== 'collapsed') return;
       mobileStateRef.current = 'animating';
+      // Restore xl resolution now while the strip is still tiny — it loads in
+      // the background so it's sharp by the time the hero is full-screen again
+      setMobileHiRes(true);
       window.dispatchEvent(new CustomEvent('hero-expanded'));
       runMobileAnimation(0, () => {
-        // scrollTo first while state is still 'animating' — this way the
-        // scroll event fires with state='animating' (ignored by both jobs)
-        // and can't accidentally trigger the job-1 snap-to-collapsed race.
         window.scrollTo({ top: 0, behavior: 'instant' });
         setTimeout(() => { mobileStateRef.current = 'full'; }, 50);
       });
@@ -614,7 +617,9 @@ export default function HeroCollapse({
           <div className="absolute inset-0 bg-gray-800 transition-opacity duration-700"
                style={{ opacity: firstReady ? 0 : 1, zIndex: 2 }} />
           {srcs.map((src, i) => (
-            <img key={src} src={photoSrc(src, 'large')} alt="Hero"
+            <img key={src}
+                 src={photoSrc(src, mobileHiRes ? 'xl' : 'large')}
+                 alt="Hero"
                  fetchPriority={i === 0 ? 'high' : 'low'}
                  className="absolute inset-0 w-full h-full object-cover"
                  style={{
