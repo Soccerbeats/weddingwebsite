@@ -68,16 +68,21 @@ html {
   scroll-behavior: smooth;
 }
 
-/* ─── No scrollbar layout shift on mobile ────────────────── */
-/* Desktop browsers reserve space for the scrollbar. Mobile browsers
-   overlay the scrollbar so no space is reserved — enforce that. */
+/* ─── Prevent horizontal scroll on mobile ────────────────── */
+/* overflow-y: scroll on html was removed: it made html an explicit scroll
+   container with overflow-x: auto. On first window.scrollTo() Chrome
+   finalises the scrollbar layout, 100vw > content area, and horizontal
+   scroll becomes possible. iOS always uses overlay (0-width) scrollbars
+   so there was never a gutter to fix. scrollbar-width: none is enough. */
 @media (max-width: 768px) {
   html {
-    scrollbar-width: none;       /* Firefox */
-    overflow-y: scroll;
+    scrollbar-width: none;       /* Firefox — hide without reserving space */
   }
   html::-webkit-scrollbar {
     display: none;               /* Chrome / Safari / WebKit */
+  }
+  body {
+    overflow-x: hidden;          /* Hard stop — no horizontal scroll ever */
   }
 }
 
