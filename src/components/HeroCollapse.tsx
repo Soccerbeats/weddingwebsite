@@ -9,11 +9,6 @@ interface HeroCollapseProps {
   interval?: number;
   bgColor?: string;
   children?: React.ReactNode;
-  // Mobile-only text props — rendered directly with refs so animation can drive them
-  mobileSubtitle?: string;
-  mobileTitle?: string;
-  mobileDateLine1?: string;
-  mobileDateLine2?: string;
 }
 
 // Photo positions — center-anchored offsets (vw/vh) from the sticky container center.
@@ -43,10 +38,6 @@ export default function HeroCollapse({
   bgColor = '#ffffff',
   children,
   interval = 5000,
-  mobileSubtitle,
-  mobileTitle,
-  mobileDateLine1,
-  mobileDateLine2,
 }: HeroCollapseProps) {
   const srcs = images.length > 0 ? images : (fallbackImage ? [fallbackImage] : []);
 
@@ -83,9 +74,6 @@ export default function HeroCollapse({
   }>>([]);
   const mobileParticleRaf = useRef<number>(0);
   const mobilePostHintRef  = useRef<HTMLDivElement>(null);
-  const mobileSubtitleRef  = useRef<HTMLParagraphElement>(null);
-  const mobileTitleRef     = useRef<HTMLHeadingElement>(null);
-  const mobileDateRef      = useRef<HTMLParagraphElement>(null);
 
   // ── Detect mobile (also responds to resize / DevTools viewport changes) ──
   useEffect(() => {
@@ -284,40 +272,6 @@ export default function HeroCollapse({
     const hint = mobileHintRef.current;
     if (!mid || !top || !bot) return;
 
-    // Per-element text animation — measured lazily on first animation frame.
-    // Uses refs read at call-time (not closed-over values) so they're always current.
-    let textMeasured = false;
-    let subtitleDY = 0, titleDY = 0, dateDY = 0;
-
-    function measureTextTargets() {
-      if (textMeasured) return;
-      const subtitleEl = mobileSubtitleRef.current;
-      const titleEl    = mobileTitleRef.current;
-      const dateEl     = mobileDateRef.current;
-      if (!subtitleEl || !titleEl || !dateEl) return;
-
-      // ROOT CAUSE FIX: CSS animations (fill-mode:both) sit above inline styles
-      // in the cascade — they silently override el.style.transform. Cancel them
-      // now so our JS transforms take effect.
-      subtitleEl.style.animation = 'none';
-      titleEl.style.animation    = 'none';
-      dateEl.style.animation     = 'none';
-
-      const H   = window.innerHeight;
-      const PAD = 14; // px gap from the white divider line
-
-      const sr = subtitleEl.getBoundingClientRect();
-      subtitleDY = (H * 0.3333 - PAD - sr.height / 2) - (sr.top + sr.height / 2);
-
-      const tr = titleEl.getBoundingClientRect();
-      titleDY = H * 0.5 - (tr.top + tr.height / 2);
-
-      const dr = dateEl.getBoundingClientRect();
-      dateDY = (H * 0.6667 + PAD + dr.height / 2) - (dr.top + dr.height / 2);
-
-      textMeasured = true;
-    }
-
     function applyMobileProgress(p: number) {
       if (!mid || !top || !bot || !text || !hint) return;
       const e = p < 0.5 ? 4*p*p*p : 1 - Math.pow(-2*p+2,3)/2;
@@ -336,6 +290,12 @@ export default function HeroCollapse({
       top.style.transform = `translateY(${-100 * (1 - topE)}%)`;
       bot.style.transform = `translateY(${100 * (1 - topE)}%)`;
 
+      // Hero text fades out during collapse
+      if (text) {
+        text.style.opacity   = String(Math.max(0, 1 - e * 3));
+        text.style.transform = `translateY(${-e * 30}px)`;
+      }
+
       // Pre-collapse scroll hint fades out
       hint.style.opacity = String(Math.max(0, 1 - p * 5));
 
@@ -343,27 +303,10 @@ export default function HeroCollapse({
       const postHint = mobilePostHintRef.current;
       if (postHint) postHint.style.opacity = String(Math.max(0, (p - 0.85) / 0.15));
 
-      // ── Per-element text animation ──────────────────────────
-      if (p > 0.01 && !textMeasured) measureTextTargets();
-
-      // Read refs at call-time — never stale
-      const subtitleEl = mobileSubtitleRef.current;
-      const titleEl    = mobileTitleRef.current;
-      const dateEl     = mobileDateRef.current;
-
-      if (subtitleEl) subtitleEl.style.transform = `translateY(${subtitleDY * e}px) scale(${1 - 0.15 * e})`;
-      if (titleEl)    titleEl.style.transform    = `translateY(${titleDY    * e}px) scale(${1 - 0.45 * e})`;
-      if (dateEl)     dateEl.style.transform     = `translateY(${dateDY     * e}px) scale(${1 - 0.15 * e})`;
-
-      // On full reset (expand complete), clear transforms + restore animation property
-      // and re-measure next collapse
-      if (p === 0) {
-        [mobileSubtitleRef.current, mobileTitleRef.current, mobileDateRef.current].forEach(el => {
-          if (!el) return;
-          el.style.transform = '';
-          el.style.animation = '';   // let JSX-set animation resume naturally
-        });
-        textMeasured = false;
+      // On expand complete, restore text overlay
+      if (p === 0 && text) {
+        text.style.opacity   = '1';
+        text.style.transform = '';
       }
     }
 
@@ -670,36 +613,13 @@ export default function HeroCollapse({
           </div>
         </div>
 
-        {/* ── Text overlay — elements have direct refs so animation can drive them ── */}
+        {/* ── Text overlay ── */}
         <div ref={mobileTextRef} style={{
           position: 'absolute', inset: 0, zIndex: 20,
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
           pointerEvents: 'none',
         }}>
-          {mobileSubtitle && (
-            <p ref={mobileSubtitleRef}
-               className="text-white text-xl font-serif italic tracking-wider text-center px-6"
-               style={{ animation: 'page-enter 700ms cubic-bezier(0.25,0.46,0.45,0.94) 200ms both', willChange: 'transform' }}>
-              {mobileSubtitle}
-            </p>
-          )}
-          {mobileTitle && (
-            <h1 ref={mobileTitleRef}
-                className="text-5xl font-serif text-white tracking-tight text-center px-4 my-4"
-                style={{ animation: 'page-enter 800ms cubic-bezier(0.25,0.46,0.45,0.94) 400ms both', willChange: 'transform' }}>
-              {mobileTitle}
-            </h1>
-          )}
-          {(mobileDateLine1 || mobileDateLine2) && (
-            <p ref={mobileDateRef}
-               className="text-white text-base font-light tracking-widest uppercase text-center px-6"
-               style={{ animation: 'page-enter 700ms cubic-bezier(0.25,0.46,0.45,0.94) 600ms both', willChange: 'transform' }}>
-              {mobileDateLine1}
-              {mobileDateLine1 && mobileDateLine2 && <br />}
-              {mobileDateLine2}
-            </p>
-          )}
-          {/* Desktop children not rendered on mobile — keep for desktop branch only */}
+          {children}
         </div>
 
         {/* Pre-collapse scroll hint */}
