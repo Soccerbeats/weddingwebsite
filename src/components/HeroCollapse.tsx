@@ -444,15 +444,34 @@ export default function HeroCollapse({
     }
     function onTouchEnd() { touchStartY = null; }
 
+    // Wheel handler — for desktop browsers at phone-sized viewport widths.
+    // Real mobile devices send touch events (above); desktop sends wheel events.
+    // Both paths call the same collapse()/expand() so behaviour is identical.
+    const onWheel = (e: WheelEvent) => {
+      const s = mobileStateRef.current;
+      if (s === 'animating') { e.preventDefault(); return; }
+      if (s === 'full' && e.deltaY > 0) {
+        e.preventDefault();
+        collapse();
+        return;
+      }
+      if (s === 'collapsed' && e.deltaY < 0) {
+        const atBoundary = window.scrollY <= mobileSectionScrollRoom() + 8;
+        if (atBoundary) { e.preventDefault(); expand(); }
+      }
+    };
+
     window.addEventListener('touchstart', onTouchStart, { passive: true });
     window.addEventListener('touchmove',  onTouchMove,  { passive: false });
     window.addEventListener('touchend',   onTouchEnd,   { passive: true });
+    window.addEventListener('wheel',      onWheel,      { passive: false });
 
     applyMobileProgress(0);
     return () => {
       window.removeEventListener('touchstart', onTouchStart);
       window.removeEventListener('touchmove',  onTouchMove);
       window.removeEventListener('touchend',   onTouchEnd);
+      window.removeEventListener('wheel',      onWheel);
       window.removeEventListener('scroll', snapIfNeeded);
       if (mobileRafRef.current) cancelAnimationFrame(mobileRafRef.current);
       if (mobileParticleRaf.current) cancelAnimationFrame(mobileParticleRaf.current);
