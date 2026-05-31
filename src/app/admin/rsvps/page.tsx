@@ -8,6 +8,8 @@ interface DietaryEntry {
     vegan?: boolean;
     gluten_free?: boolean;
     nut_allergy?: boolean;
+    other?: boolean;
+    other_text?: string;
     note?: string;
 }
 
@@ -570,6 +572,7 @@ export default function RSVPDashboard() {
                                                             entry.vegan && 'Vegan',
                                                             entry.gluten_free && 'Gluten Free',
                                                             entry.nut_allergy && 'Nut Allergy',
+                                                            entry.other && (entry.other_text || 'Other'),
                                                         ].filter(Boolean);
                                                         if (!flags.length) return [];
                                                         return [(

@@ -14,6 +14,8 @@ interface MemberCard {
     vegan: boolean;
     gluten_free: boolean;
     nut_allergy: boolean;
+    other: boolean;
+    other_text: string;
 }
 
 function buildCards(primaryName: string, partyMembers: PartyMember[], existingDietary: any[]): MemberCard[] {
@@ -31,6 +33,8 @@ function buildCards(primaryName: string, partyMembers: PartyMember[], existingDi
             vegan: existing?.vegan ?? false,
             gluten_free: existing?.gluten_free ?? false,
             nut_allergy: existing?.nut_allergy ?? false,
+            other: existing?.other ?? false,
+            other_text: existing?.other_text ?? '',
         };
     });
 }
@@ -141,6 +145,8 @@ export default function RSVPForm() {
             vegan: c.vegan,
             gluten_free: c.gluten_free,
             nut_allergy: c.nut_allergy,
+            other: c.other,
+            other_text: c.other ? c.other_text : '',
         }));
 
         try {
@@ -344,13 +350,14 @@ export default function RSVPForm() {
                                     {card.attending && (
                                         <div>
                                             <p className="text-xs text-gray-500 mb-2">Dietary restrictions</p>
-                                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                                                 {([
                                                     { field: 'vegetarian', label: 'Vegetarian' },
                                                     { field: 'vegan', label: 'Vegan' },
                                                     { field: 'gluten_free', label: 'Gluten Free' },
                                                     { field: 'nut_allergy', label: 'Nut Allergy' },
-                                                ] as { field: keyof Pick<MemberCard, 'vegetarian' | 'vegan' | 'gluten_free' | 'nut_allergy'>; label: string }[]).map(({ field, label }) => (
+                                                    { field: 'other', label: 'Other' },
+                                                ] as { field: keyof Pick<MemberCard, 'vegetarian' | 'vegan' | 'gluten_free' | 'nut_allergy' | 'other'>; label: string }[]).map(({ field, label }) => (
                                                     <label key={field} className="flex items-center gap-2 cursor-pointer">
                                                         <input
                                                             type="checkbox"
@@ -362,6 +369,15 @@ export default function RSVPForm() {
                                                     </label>
                                                 ))}
                                             </div>
+                                            {card.other && (
+                                                <input
+                                                    type="text"
+                                                    value={card.other_text}
+                                                    onChange={(e) => updateCard(i, { other_text: e.target.value })}
+                                                    placeholder="Please describe your dietary restriction"
+                                                    className="mt-2 appearance-none block w-full px-3 py-2 border border-gray-300 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-accent focus:border-accent"
+                                                />
+                                            )}
                                         </div>
                                     )}
                                 </div>
