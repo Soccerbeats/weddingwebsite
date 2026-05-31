@@ -7,7 +7,7 @@ export async function POST(request: Request) {
         const body = await request.json();
         const { guestName, email, phone, attending, guestCount, dietaryRestrictions, message } = body;
 
-        if (!guestName || !email || attending === undefined) {
+        if (!guestName || !email || !phone || attending === undefined) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
@@ -103,7 +103,7 @@ export async function PUT(request: Request) {
         const body = await request.json();
         const { id, guestName, email, phone, attending, guestCount, dietaryRestrictions, message } = body;
 
-        if (!id || !guestName || !email || attending === undefined) {
+        if (!id || !guestName || !email || !phone || attending === undefined) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 

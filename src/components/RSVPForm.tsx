@@ -268,9 +268,9 @@ export default function RSVPForm() {
                     />
                 </div>
                 <div>
-                    <label htmlFor="phone" className="block text-sm font-medium text-gray-700 ml-1">Phone</label>
+                    <label htmlFor="phone" className="block text-sm font-medium text-gray-700 ml-1">Phone *</label>
                     <input
-                        type="tel" name="phone" id="phone"
+                        type="tel" name="phone" id="phone" required
                         value={formData.phone} onChange={handleChange}
                         className="mt-1 appearance-none block w-full px-4 py-3 border border-gray-300 rounded-2xl shadow-sm placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-accent focus:border-accent sm:text-sm transition-shadow"
                     />
