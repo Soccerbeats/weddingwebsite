@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 interface DietaryEntry {
     name: string;
@@ -545,65 +545,79 @@ export default function RSVPDashboard() {
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
-                                    {rsvps.map((rsvp) => (
-                                        <tr key={rsvp.id} className="group hover:bg-gray-50 relative">
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm font-medium text-gray-900">{rsvp.guest_name}</div>
-                                                {rsvp.attending && rsvp.number_of_guests >= 2 && rsvp.plus_one_name && (
-                                                    <div className="text-sm text-gray-400">+ {rsvp.plus_one_name}</div>
-                                                )}
-                                                <div className="text-sm text-gray-500">{rsvp.email}</div>
-                                                {rsvp.phone && <div className="text-sm text-gray-500">{rsvp.phone}</div>}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${rsvp.attending ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                                                    }`}>
-                                                    {rsvp.attending ? 'Attending' : 'Declined'}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                {rsvp.attending ? rsvp.number_of_guests : '-'}
-                                            </td>
-                                            <td className="px-6 py-4 text-sm text-gray-500 max-w-xs">
-                                                {Array.isArray(rsvp.dietary_restrictions) ? (() => {
-                                                    const rows = rsvp.dietary_restrictions.flatMap((entry, i) => {
-                                                        const flags = [
-                                                            entry.vegetarian && 'Vegetarian',
-                                                            entry.vegan && 'Vegan',
-                                                            entry.gluten_free && 'Gluten Free',
-                                                            entry.nut_allergy && 'Nut Allergy',
-                                                            entry.other && (entry.other_text || 'Other'),
-                                                        ].filter(Boolean);
-                                                        if (!flags.length) return [];
-                                                        return [(
-                                                            <div key={i} className="whitespace-nowrap">
-                                                                <span className="font-medium text-gray-700">{entry.name}:</span>{' '}
-                                                                {flags.join(', ')}
-                                                            </div>
-                                                        )];
-                                                    });
-                                                    return rows.length ? rows : '-';
-                                                })() : (rsvp.dietary_restrictions || '-')}
-                                            </td>
-                                            <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">
-                                                {rsvp.message || '-'}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 relative">
-                                                {new Date(rsvp.created_at).toLocaleDateString()}
-                                                <div className="absolute right-0 inset-y-0 flex items-center pr-4 opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-l from-gray-50 via-gray-50 to-transparent pl-8">
-                                                    <button
-                                                        onClick={() => {
-                                                            setDeletingRsvp(rsvp);
-                                                            setConfirmName('');
-                                                        }}
-                                                        className="text-red-600 hover:text-red-900 bg-white border border-gray-200 shadow-sm px-3 py-1 rounded-md text-xs font-medium"
-                                                    >
-                                                        Delete
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
+                                    {rsvps.map((rsvp) => {
+                                        const members = Array.isArray(rsvp.dietary_restrictions)
+                                            ? rsvp.dietary_restrictions.slice(1)
+                                            : [];
+                                        const hasParty = members.length > 0;
+                                        const primaryDietary = Array.isArray(rsvp.dietary_restrictions)
+                                            ? rsvp.dietary_restrictions[0]
+                                            : null;
+                                        const dietaryFlags = (entry: DietaryEntry | null) => {
+                                            if (!entry) return '-';
+                                            const flags = [
+                                                entry.vegetarian && 'Vegetarian',
+                                                entry.vegan && 'Vegan',
+                                                entry.gluten_free && 'Gluten Free',
+                                                entry.nut_allergy && 'Nut Allergy',
+                                                entry.other && (entry.other_text || 'Other'),
+                                            ].filter(Boolean);
+                                            return flags.length ? flags.join(', ') : '-';
+                                        };
+                                        return (
+                                            <React.Fragment key={rsvp.id}>
+                                                {/* Primary guest row */}
+                                                <tr className={`group hover:bg-amber-50/30 relative ${hasParty ? 'border-l-4 border-accent' : ''}`}>
+                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                        <div className="text-sm font-semibold text-gray-900">{rsvp.guest_name}</div>
+                                                        <div className="text-sm text-gray-500">{rsvp.email}</div>
+                                                        {rsvp.phone && <div className="text-sm text-gray-500">{rsvp.phone}</div>}
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${rsvp.attending ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                                            {rsvp.attending ? 'Attending' : 'Declined'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                        {rsvp.attending ? rsvp.number_of_guests : '-'}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-sm text-gray-500 max-w-xs">
+                                                        {dietaryFlags(primaryDietary)}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">
+                                                        {rsvp.message || '-'}
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 relative">
+                                                        {new Date(rsvp.created_at).toLocaleDateString()}
+                                                        <div className="absolute right-0 inset-y-0 flex items-center pr-4 opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-l from-amber-50/30 via-amber-50/30 to-transparent pl-8">
+                                                            <button
+                                                                onClick={() => { setDeletingRsvp(rsvp); setConfirmName(''); }}
+                                                                className="text-red-600 hover:text-red-900 bg-white border border-gray-200 shadow-sm px-3 py-1 rounded-md text-xs font-medium"
+                                                            >
+                                                                Delete
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                                {/* Party member sub-rows */}
+                                                {members.map((member, mi) => (
+                                                    <tr key={`${rsvp.id}-m${mi}`} className="bg-accent/5 border-l-4 border-accent">
+                                                        <td className="pl-10 pr-6 py-2 whitespace-nowrap">
+                                                            <span className="text-xs text-gray-400 mr-1">└</span>
+                                                            <span className="text-sm text-gray-700">{member.name || <span className="italic text-gray-400">Unknown</span>}</span>
+                                                        </td>
+                                                        <td className="px-6 py-2 whitespace-nowrap">
+                                                            <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Attending</span>
+                                                        </td>
+                                                        <td className="px-6 py-2 text-sm text-gray-400">—</td>
+                                                        <td className="px-6 py-2 text-sm text-gray-500">{dietaryFlags(member)}</td>
+                                                        <td className="px-6 py-2 text-sm text-gray-400">—</td>
+                                                        <td className="px-6 py-2 text-sm text-gray-400">—</td>
+                                                    </tr>
+                                                ))}
+                                            </React.Fragment>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>
@@ -761,8 +775,27 @@ export default function RSVPDashboard() {
                                 <tbody className="bg-white divide-y divide-gray-200">
                                     {filteredGuests.map((guest) => {
                                         const isLikelyNotComing = guest.rsvp_status === 'likely_not_coming';
+                                        const members = guest.party_members || [];
+                                        const hasParty = members.length > 0;
+                                        // Find this guest's RSVP dietary data for member details
+                                        const rsvp = rsvps.find(r => r.guest_name.toLowerCase() === guest.guest_name.toLowerCase());
+                                        const memberDietary = Array.isArray(rsvp?.dietary_restrictions)
+                                            ? rsvp.dietary_restrictions.slice(1)
+                                            : [];
+                                        const dietaryFlags = (entry: DietaryEntry | null | undefined) => {
+                                            if (!entry) return null;
+                                            const flags = [
+                                                entry.vegetarian && 'Vegetarian',
+                                                entry.vegan && 'Vegan',
+                                                entry.gluten_free && 'Gluten Free',
+                                                entry.nut_allergy && 'Nut Allergy',
+                                                entry.other && (entry.other_text || 'Other'),
+                                            ].filter(Boolean);
+                                            return flags.length ? flags.join(', ') : null;
+                                        };
                                         return (
-                                        <tr key={guest.id} className={`hover:bg-gray-50 ${isLikelyNotComing ? 'bg-red-50/40' : ''}`}>
+                                        <React.Fragment key={guest.id}>
+                                        <tr className={`hover:bg-amber-50/20 ${isLikelyNotComing ? 'bg-red-50/40' : ''} ${hasParty ? 'border-l-4 border-accent' : ''}`}>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <input
                                                     type="checkbox"
@@ -772,12 +805,7 @@ export default function RSVPDashboard() {
                                                 />
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className={`text-sm font-medium ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-900'}`}>{guest.guest_name}</div>
-                                                {(guest.party_members || []).map((m, i) => (
-                                                    <div key={i} className="text-sm text-gray-400">
-                                                        + {m.name || <span className="italic">Unknown Guest {i + 2}</span>}
-                                                    </div>
-                                                ))}
+                                                <div className={`text-sm font-semibold ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-900'}`}>{guest.guest_name}</div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className={`text-sm ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-500'}`}>{guest.email || '-'}</div>
@@ -832,6 +860,38 @@ export default function RSVPDashboard() {
                                                 </button>
                                             </td>
                                         </tr>
+                                        {/* Party member sub-rows */}
+                                        {members.map((member, mi) => {
+                                            const mDietary = memberDietary[mi];
+                                            const mAttending = !!mDietary;
+                                            const flags = dietaryFlags(mDietary);
+                                            return (
+                                                <tr key={`${guest.id}-m${mi}`} className="bg-accent/5 border-l-4 border-accent">
+                                                    <td className="px-6 py-2" />
+                                                    <td className="pl-10 pr-6 py-2 whitespace-nowrap" colSpan={1}>
+                                                        <span className="text-xs text-gray-400 mr-1">└</span>
+                                                        <span className={`text-sm ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-700'}`}>
+                                                            {member.name || <span className="italic text-gray-400">Unknown Guest {mi + 2}</span>}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-2 text-sm text-gray-400">—</td>
+                                                    <td className="px-6 py-2 text-sm text-gray-400">—</td>
+                                                    <td className="px-6 py-2 whitespace-nowrap">
+                                                        {mAttending ? (
+                                                            <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Attending</span>
+                                                        ) : (
+                                                            <span className="text-xs text-gray-400">No Response</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-6 py-2 text-sm text-gray-500" colSpan={2}>
+                                                        {flags || '-'}
+                                                    </td>
+                                                    <td className="px-6 py-2 text-sm text-gray-400">—</td>
+                                                    <td className="px-6 py-2" />
+                                                </tr>
+                                            );
+                                        })}
+                                        </React.Fragment>
                                         );
                                     })}
                                 </tbody>
