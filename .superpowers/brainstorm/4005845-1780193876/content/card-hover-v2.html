@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Hover Effects</title>
+<style>
+  body { font-family: Georgia, serif; background: #f9f7f4; margin: 0; padding: 24px; color: #333; }
+  h2 { text-align: center; font-size: 22px; margin-bottom: 4px; }
+  .subtitle { text-align: center; color: #888; font-size: 14px; margin-bottom: 32px; font-family: sans-serif; }
+
+  .section { margin-bottom: 48px; }
+  .section-label { font-family: sans-serif; font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: #D4AF37; margin-bottom: 12px; }
+  .section h3 { font-size: 16px; margin: 0 0 4px; }
+  .section p { font-size: 13px; color: #666; margin: 0 0 16px; font-family: sans-serif; }
+
+  .pair { display: flex; gap: 20px; flex-wrap: wrap; }
+
+  /* Base card */
+  .demo-card {
+    position: relative;
+    width: 260px;
+    height: 180px;
+    border-radius: 12px;
+    overflow: hidden;
+    background: linear-gradient(135deg, #8B7355, #5a4a3a);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .demo-card .bg {
+    position: absolute; inset: 0;
+    background: linear-gradient(135deg, #8B7355 0%, #3d2b1f 100%);
+    background-size: cover;
+    transition: transform 0.4s ease;
+  }
+  .demo-card .overlay {
+    position: absolute; inset: 0;
+    background: linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.1) 60%, transparent 100%);
+    transition: background 0.4s ease;
+  }
+  .demo-card .text {
+    position: absolute; bottom: 0; left: 0; right: 0; padding: 18px;
+  }
+  .demo-card .eyebrow { color: #D4AF37; font-size: 10px; letter-spacing: 3px; text-transform: uppercase; margin-bottom: 3px; font-family: sans-serif; }
+  .demo-card .title { color: white; font-size: 19px; }
+  .demo-card .arrow { color: rgba(255,255,255,0.6); font-size: 12px; margin-top: 3px; font-family: sans-serif; }
+
+  .state-label {
+    font-family: sans-serif;
+    font-size: 11px;
+    color: #999;
+    text-align: center;
+    margin-top: 8px;
+    width: 260px;
+  }
+
+  /* Option A: lift + zoom */
+  .opt-a-hover .bg { transform: scale(1.08); }
+  .opt-a-hover { transform: translateY(-6px); box-shadow: 0 16px 40px rgba(0,0,0,0.25); }
+
+  /* Option B: overlay brightens */
+  .opt-b-hover .overlay { background: linear-gradient(to top, rgba(0,0,0,0.38) 0%, rgba(0,0,0,0.05) 60%, transparent 100%); }
+
+  /* Option C: gold border */
+  .opt-c-hover { box-shadow: 0 0 0 3px #D4AF37, 0 8px 24px rgba(0,0,0,0.15); }
+
+  .choice-btn {
+    display: block;
+    margin: 12px auto 0;
+    padding: 8px 24px;
+    background: #D4AF37;
+    color: white;
+    border: none;
+    border-radius: 50px;
+    font-size: 12px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    cursor: pointer;
+    font-family: sans-serif;
+  }
+  .choice-btn:hover { background: #b8941f; }
+  .choice-btn.selected { background: #2d6a4f; }
+
+  .selected-banner {
+    display: none;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: #2d6a4f;
+    color: white;
+    text-align: center;
+    padding: 14px;
+    font-family: sans-serif;
+    font-size: 14px;
+    z-index: 999;
+  }
+</style>
+</head>
+<body>
+
+<h2>Card Hover Effects</h2>
+<p class="subtitle">Each row shows the default state (left) vs. hover state (right)</p>
+
+<!-- Option A -->
+<div class="section">
+  <div class="section-label">Option A</div>
+  <h3>Lift + image zoom</h3>
+  <p>Card rises up and the photo subtly zooms in — feels premium and modern.</p>
+  <div class="pair">
+    <div>
+      <div class="demo-card">
+        <div class="bg"></div>
+        <div class="overlay"></div>
+        <div class="text">
+          <div class="eyebrow">Our Story</div>
+          <div class="title">Timeline</div>
+          <div class="arrow">From first date to forever →</div>
+        </div>
+      </div>
+      <div class="state-label">Default</div>
+    </div>
+    <div>
+      <div class="demo-card opt-a-hover" style="transition:none;">
+        <div class="bg"></div>
+        <div class="overlay"></div>
+        <div class="text">
+          <div class="eyebrow">Our Story</div>
+          <div class="title">Timeline</div>
+          <div class="arrow">From first date to forever →</div>
+        </div>
+      </div>
+      <div class="state-label">On hover</div>
+    </div>
+  </div>
+  <button class="choice-btn" onclick="pick('A', this)">Choose A</button>
+</div>
+
+<!-- Option B -->
+<div class="section">
+  <div class="section-label">Option B</div>
+  <h3>Overlay brightens</h3>
+  <p>The dark gradient lightens on hover, revealing more of the photo. Soft and elegant.</p>
+  <div class="pair">
+    <div>
+      <div class="demo-card">
+        <div class="bg"></div>
+        <div class="overlay"></div>
+        <div class="text">
+          <div class="eyebrow">Our Story</div>
+          <div class="title">Timeline</div>
+          <div class="arrow">From first date to forever →</div>
+        </div>
+      </div>
+      <div class="state-label">Default</div>
+    </div>
+    <div>
+      <div class="demo-card opt-b-hover" style="transition:none;">
+        <div class="bg"></div>
+        <div class="overlay" style="background:linear-gradient(to top, rgba(0,0,0,0.38) 0%, rgba(0,0,0,0.05) 60%, transparent 100%);"></div>
+        <div class="text">
+          <div class="eyebrow">Our Story</div>
+          <div class="title">Timeline</div>
+          <div class="arrow">From first date to forever →</div>
+        </div>
+      </div>
+      <div class="state-label">On hover</div>
+    </div>
+  </div>
+  <button class="choice-btn" onclick="pick('B', this)">Choose B</button>
+</div>
+
+<!-- Option C -->
+<div class="section">
+  <div class="section-label">Option C</div>
+  <h3>Gold accent border</h3>
+  <p>A gold ring appears around the card on hover. Minimal, ties into the site's accent color.</p>
+  <div class="pair">
+    <div>
+      <div class="demo-card">
+        <div class="bg"></div>
+        <div class="overlay"></div>
+        <div class="text">
+          <div class="eyebrow">Our Story</div>
+          <div class="title">Timeline</div>
+          <div class="arrow">From first date to forever →</div>
+        </div>
+      </div>
+      <div class="state-label">Default</div>
+    </div>
+    <div>
+      <div class="demo-card opt-c-hover" style="transition:none;">
+        <div class="bg"></div>
+        <div class="overlay"></div>
+        <div class="text">
+          <div class="eyebrow">Our Story</div>
+          <div class="title">Timeline</div>
+          <div class="arrow">From first date to forever →</div>
+        </div>
+      </div>
+      <div class="state-label">On hover</div>
+    </div>
+  </div>
+  <button class="choice-btn" onclick="pick('C', this)">Choose C</button>
+</div>
+
+<!-- Option D -->
+<div class="section">
+  <div class="section-label">Option D</div>
+  <h3>No hover effect</h3>
+  <p>Cards stay static. Only the cursor changes to a pointer. Clean and minimal.</p>
+  <div class="pair">
+    <div>
+      <div class="demo-card">
+        <div class="bg"></div>
+        <div class="overlay"></div>
+        <div class="text">
+          <div class="eyebrow">Our Story</div>
+          <div class="title">Timeline</div>
+          <div class="arrow">From first date to forever →</div>
+        </div>
+      </div>
+      <div class="state-label">Default = Hover (no change)</div>
+    </div>
+  </div>
+  <button class="choice-btn" onclick="pick('D', this)">Choose D</button>
+</div>
+
+<div class="selected-banner" id="banner"></div>
+
+<script>
+function pick(option, btn) {
+  document.querySelectorAll('.choice-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  btn.textContent = '✓ Selected';
+  const banner = document.getElementById('banner');
+  banner.style.display = 'block';
+  banner.textContent = 'Option ' + option + ' selected — let me know in the terminal!';
+  if (window.__companion) window.__companion.select(option, 'Option ' + option);
+}
+</script>
+</body>
+</html>

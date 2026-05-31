@@ -1,0 +1,52 @@
+<h2>Navigation Card Style</h2>
+<p class="subtitle">These cards sit at the bottom of the home page and link to other pages. Which visual style feels right?</p>
+
+<div class="cards">
+
+  <!-- Option A: Full bleed image, text overlay at bottom -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="position:relative;height:200px;background:linear-gradient(135deg,#8B7355,#5a4a3a);border-radius:8px;overflow:hidden;">
+      <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,0.7) 0%,rgba(0,0,0,0.1) 60%,transparent 100%);"></div>
+      <div style="position:absolute;bottom:0;left:0;right:0;padding:20px;">
+        <div style="color:#D4AF37;font-size:11px;letter-spacing:3px;text-transform:uppercase;margin-bottom:4px;">Our Story</div>
+        <div style="color:white;font-size:20px;font-family:Georgia,serif;">Timeline</div>
+        <div style="color:rgba(255,255,255,0.7);font-size:12px;margin-top:4px;">From first date to forever →</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Full bleed, overlay text</h3>
+      <p>Image fills the entire card. Title and subtitle float over a dark gradient at the bottom. Clean, modern, image-forward.</p>
+    </div>
+  </div>
+
+  <!-- Option B: Image top half, text below on white -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:linear-gradient(135deg,#8B7355,#5a4a3a);height:140px;border-radius:8px 8px 0 0;"></div>
+    <div style="background:white;padding:16px 20px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;margin-bottom:8px;">
+      <div style="color:#D4AF37;font-size:10px;letter-spacing:3px;text-transform:uppercase;margin-bottom:4px;">Our Story</div>
+      <div style="font-family:Georgia,serif;font-size:18px;color:#111;margin-bottom:4px;">Timeline</div>
+      <div style="color:#6b7280;font-size:13px;">From first date to forever →</div>
+    </div>
+    <div class="card-body">
+      <h3>B — Image top, text panel below</h3>
+      <p>Image sits above a clean white text area. Clear hierarchy, very readable. Works well even with busy photos.</p>
+    </div>
+  </div>
+
+  <!-- Option C: Tall card, image background, centered text with button -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="position:relative;height:200px;background:linear-gradient(135deg,#8B7355,#5a4a3a);border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;">
+      <div style="position:absolute;inset:0;background:rgba(0,0,0,0.45);"></div>
+      <div style="position:relative;text-align:center;padding:20px;">
+        <div style="color:#D4AF37;font-size:10px;letter-spacing:3px;text-transform:uppercase;margin-bottom:8px;">Our Story</div>
+        <div style="color:white;font-size:24px;font-family:Georgia,serif;margin-bottom:12px;">Timeline</div>
+        <div style="display:inline-block;border:1px solid rgba(212,175,55,0.7);color:#D4AF37;font-size:11px;letter-spacing:2px;padding:6px 16px;border-radius:50px;text-transform:uppercase;">View →</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Centered overlay with button</h3>
+      <p>Dark overlay, centered content, gold accent border button. More dramatic. Works great for wide/landscape photos.</p>
+    </div>
+  </div>
+
+</div>

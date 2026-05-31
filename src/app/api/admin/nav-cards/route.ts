@@ -56,6 +56,51 @@ export async function POST(request: Request) {
   }
 }
 
+export async function PATCH(request: Request) {
+  try {
+    const { slug, sourceFilename } = await request.json();
+
+    if (!slug || !sourceFilename) {
+      return NextResponse.json({ error: 'slug and sourceFilename required' }, { status: 400 });
+    }
+    if (!VALID_SLUGS.includes(slug)) {
+      return NextResponse.json({ error: 'Invalid slug' }, { status: 400 });
+    }
+
+    const sourcePath = path.join(process.cwd(), 'public/photos', sourceFilename);
+    if (!fs.existsSync(sourcePath)) {
+      return NextResponse.json({ error: 'Source file not found' }, { status: 404 });
+    }
+
+    if (!fs.existsSync(NAV_CARDS_DIR)) {
+      fs.mkdirSync(NAV_CARDS_DIR, { recursive: true });
+    }
+
+    const ext = sourceFilename.split('.').pop() || 'jpg';
+    const filename = `${slug}.${ext}`;
+    const destPath = path.join(NAV_CARDS_DIR, filename);
+
+    // Remove old files for this slug
+    for (const oldExt of ['jpg', 'jpeg', 'png', 'webp', 'avif']) {
+      const old = path.join(NAV_CARDS_DIR, `${slug}.${oldExt}`);
+      if (old !== destPath && fs.existsSync(old)) fs.unlinkSync(old);
+    }
+
+    fs.copyFileSync(sourcePath, destPath);
+
+    const config = getSiteConfig() as unknown as Record<string, unknown>;
+    const navCards = (config.navCards as Record<string, string>) || {};
+    navCards[slug] = filename;
+    config.navCards = navCards;
+    saveConfig(config);
+
+    return NextResponse.json({ success: true, filename });
+  } catch (error) {
+    console.error('nav-cards PATCH error:', error);
+    return NextResponse.json({ error: 'Link failed' }, { status: 500 });
+  }
+}
+
 export async function DELETE(request: Request) {
   try {
     const { slug } = await request.json();

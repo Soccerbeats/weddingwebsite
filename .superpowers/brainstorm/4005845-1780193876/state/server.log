@@ -1,0 +1,7 @@
+{"type":"server-started","port":52117,"host":"0.0.0.0","url_host":"10.0.0.253","url":"http://10.0.0.253:52117","screen_dir":"/home/austin/ai/WeddingWebsite/.superpowers/brainstorm/4005845-1780193876/content","state_dir":"/home/austin/ai/WeddingWebsite/.superpowers/brainstorm/4005845-1780193876/state"}
+{"type":"screen-added","file":"/home/austin/ai/WeddingWebsite/.superpowers/brainstorm/4005845-1780193876/content/card-style.html"}
+{"source":"user-event","type":"click","text":"Our Story\n        Timeline\n        From first date to forever →\n      \n    \n    \n      A — Full bleed, overlay text\n      Image fills the entire card. Title and subtitle float over a dark gradient at the bottom. Clean, modern, image-forward.","choice":"a","id":null,"timestamp":1780193933205}
+{"type":"screen-added","file":"/home/austin/ai/WeddingWebsite/.superpowers/brainstorm/4005845-1780193876/content/card-hover.html"}
+{"type":"screen-added","file":"/home/austin/ai/WeddingWebsite/.superpowers/brainstorm/4005845-1780193876/content/card-hover-v2.html"}
+{"type":"screen-added","file":"/home/austin/ai/WeddingWebsite/.superpowers/brainstorm/4005845-1780193876/content/waiting.html"}
+{"type":"server-stopped","reason":"owner process exited"}

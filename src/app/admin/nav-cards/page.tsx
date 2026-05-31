@@ -10,6 +10,13 @@ interface PageConfig {
   image: string | null;
 }
 
+interface SitePhoto {
+  id: number;
+  filename: string;
+  alt: string;
+  title: string;
+}
+
 const PAGE_DEFS: Omit<PageConfig, 'image'>[] = [
   { slug: 'our-story',     label: 'Timeline',      href: '/our-story' },
   { slug: 'wedding-party', label: 'Wedding Party', href: '/wedding-party' },
@@ -27,6 +34,11 @@ export default function AdminNavCards() {
   const [message, setMessage] = useState('');
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
+  // Photo picker state
+  const [pickerSlug, setPickerSlug] = useState<string | null>(null);
+  const [sitePhotos, setSitePhotos] = useState<SitePhoto[]>([]);
+  const [photosLoading, setPhotosLoading] = useState(false);
+
   useEffect(() => {
     fetch('/api/nav-cards')
       .then(r => r.json())
@@ -37,9 +49,13 @@ export default function AdminNavCards() {
       });
   }, []);
 
+  const showMessage = (msg: string) => {
+    setMessage(msg);
+    setTimeout(() => setMessage(''), 3000);
+  };
+
   const handleUpload = async (slug: string, file: File) => {
     setUploading(slug);
-    setMessage('');
     const fd = new FormData();
     fd.append('slug', slug);
     fd.append('file', file);
@@ -47,12 +63,11 @@ export default function AdminNavCards() {
     const data = await res.json();
     if (data.success) {
       setPages(prev => prev.map(p => p.slug === slug ? { ...p, image: data.filename } : p));
-      setMessage('Image updated!');
+      showMessage('Image updated!');
     } else {
-      setMessage('Upload failed.');
+      showMessage('Upload failed.');
     }
     setUploading(null);
-    setTimeout(() => setMessage(''), 3000);
   };
 
   const handleRemove = async (slug: string) => {
@@ -64,10 +79,38 @@ export default function AdminNavCards() {
     });
     if ((await res.json()).success) {
       setPages(prev => prev.map(p => p.slug === slug ? { ...p, image: null } : p));
-      setMessage('Image removed.');
+      showMessage('Image removed.');
     }
     setUploading(null);
-    setTimeout(() => setMessage(''), 3000);
+  };
+
+  const openPicker = async (slug: string) => {
+    setPickerSlug(slug);
+    if (sitePhotos.length === 0) {
+      setPhotosLoading(true);
+      const res = await fetch('/api/admin/photos');
+      const data = await res.json();
+      setSitePhotos(data || []);
+      setPhotosLoading(false);
+    }
+  };
+
+  const handlePickPhoto = async (slug: string, filename: string) => {
+    setPickerSlug(null);
+    setUploading(slug);
+    const res = await fetch('/api/admin/nav-cards', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slug, sourceFilename: filename }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      setPages(prev => prev.map(p => p.slug === slug ? { ...p, image: data.filename } : p));
+      showMessage('Image set from gallery!');
+    } else {
+      showMessage('Failed to set image.');
+    }
+    setUploading(null);
   };
 
   return (
@@ -99,7 +142,7 @@ export default function AdminNavCards() {
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-xs text-accent/60 font-sans">
-                  No image
+                  Default
                 </div>
               )}
             </div>
@@ -111,7 +154,7 @@ export default function AdminNavCards() {
             </div>
 
             {/* Actions */}
-            <div className="flex items-center gap-3 flex-shrink-0">
+            <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
               <input
                 type="file"
                 accept="image/*"
@@ -124,11 +167,18 @@ export default function AdminNavCards() {
                 }}
               />
               <button
+                onClick={() => openPicker(page.slug)}
+                disabled={uploading === page.slug}
+                className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors disabled:opacity-50"
+              >
+                Gallery
+              </button>
+              <button
                 onClick={() => fileInputRefs.current[page.slug]?.click()}
                 disabled={uploading === page.slug}
                 className="px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent-dark transition-colors disabled:opacity-50"
               >
-                {uploading === page.slug ? 'Uploading…' : page.image ? 'Replace' : 'Upload'}
+                {uploading === page.slug ? 'Saving…' : page.image ? 'Replace' : 'Upload'}
               </button>
               {page.image && (
                 <button
@@ -143,6 +193,57 @@ export default function AdminNavCards() {
           </div>
         ))}
       </div>
+
+      {/* Photo picker modal */}
+      {pickerSlug && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+              <h2 className="text-lg font-bold text-gray-900">
+                Pick from site photos — {PAGE_DEFS.find(p => p.slug === pickerSlug)?.label}
+              </h2>
+              <button
+                onClick={() => setPickerSlug(null)}
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1 p-6">
+              {photosLoading ? (
+                <div className="text-center text-gray-400 py-12">Loading photos…</div>
+              ) : sitePhotos.length === 0 ? (
+                <div className="text-center text-gray-400 py-12">
+                  No photos uploaded yet. Upload photos in the Photos section first.
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-3">
+                  {sitePhotos.map(photo => (
+                    <button
+                      key={photo.id}
+                      onClick={() => handlePickPhoto(pickerSlug, photo.filename)}
+                      className="group relative aspect-video rounded-xl overflow-hidden border-2 border-transparent hover:border-accent transition-all"
+                    >
+                      <Image
+                        src={`/api/photos/${photo.filename}`}
+                        alt={photo.alt || photo.filename}
+                        fill
+                        unoptimized
+                        className="object-cover group-hover:scale-105 transition-transform duration-200"
+                      />
+                      {photo.title && (
+                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2">
+                          <p className="text-white text-xs truncate">{photo.title}</p>
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

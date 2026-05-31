@@ -43,11 +43,11 @@ export async function GET() {
       SELECT
         COUNT(*)::int AS total_invited,
         COALESCE(SUM(party_size), 0)::int AS total_party_size,
-        COUNT(*) FILTER (WHERE rsvp_status = 'confirmed')::int AS confirmed,
+        COUNT(*) FILTER (WHERE rsvp_status = 'attending')::int AS confirmed,
         COUNT(*) FILTER (WHERE rsvp_status = 'declined')::int AS declined_guests,
         COUNT(*) FILTER (WHERE side = 'bride')::int AS bride_side,
         COUNT(*) FILTER (WHERE side = 'groom')::int AS groom_side,
-        COUNT(*) FILTER (WHERE invited = true AND (rsvp_status IS NULL OR rsvp_status = ''))::int AS pending,
+        COUNT(*) FILTER (WHERE invited = true AND (rsvp_status IS NULL OR rsvp_status NOT IN ('attending', 'declined', 'likely_not_coming')))::int AS pending,
         COALESCE(SUM(party_size) FILTER (WHERE rsvp_status = 'likely_not_coming'), 0)::int AS likely_not_coming
       FROM guest_list
     `);
