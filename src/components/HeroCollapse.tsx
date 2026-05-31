@@ -287,17 +287,24 @@ export default function HeroCollapse({
       dateEl     = text.querySelector('[data-hero-role="date"]');
       buttonsEl  = text.querySelector('[data-hero-role="buttons"]');
       const H = window.innerHeight;
+      const PAD = 14; // px gap from the white divider line
+
       if (subtitleEl) {
         const r = subtitleEl.getBoundingClientRect();
-        subtitleDY = H * 0.1667 - (r.top + r.height / 2);
+        // Bottom-aligned to top strip: element bottom sits PAD above the divider at H*0.3333
+        const targetCenterY = H * 0.3333 - PAD - r.height / 2;
+        subtitleDY = targetCenterY - (r.top + r.height / 2);
       }
       if (titleEl) {
         const r = titleEl.getBoundingClientRect();
-        titleDY = H * 0.50 - (r.top + r.height / 2);
+        // Centered in mid strip
+        titleDY = H * 0.5 - (r.top + r.height / 2);
       }
       if (dateEl) {
         const r = dateEl.getBoundingClientRect();
-        dateDY = H * 0.8333 - (r.top + r.height / 2);
+        // Top-aligned to bottom strip: element top sits PAD below the divider at H*0.6667
+        const targetCenterY = H * 0.6667 + PAD + r.height / 2;
+        dateDY = targetCenterY - (r.top + r.height / 2);
       }
       textMeasured = true;
     }
@@ -331,19 +338,13 @@ export default function HeroCollapse({
       if (p > 0.01 && !textMeasured) measureTextTargets();
 
       if (subtitleEl) {
-        const dy = subtitleDY * e;
-        subtitleEl.style.transform = `translateY(${dy}px) scale(${1 - 0.1 * e})`;
-        subtitleEl.style.marginBottom = '0';
+        subtitleEl.style.transform = `translateY(${subtitleDY * e}px) scale(${1 - 0.15 * e})`;
       }
       if (titleEl) {
-        const dy = titleDY * e;
-        titleEl.style.transform = `translateY(${dy}px) scale(${1 - 0.45 * e})`;
-        titleEl.style.marginBottom = '0';
+        titleEl.style.transform = `translateY(${titleDY * e}px) scale(${1 - 0.45 * e})`;
       }
       if (dateEl) {
-        const dy = dateDY * e;
-        dateEl.style.transform = `translateY(${dy}px) scale(${1 - 0.15 * e})`;
-        dateEl.style.marginBottom = '0';
+        dateEl.style.transform = `translateY(${dateDY * e}px) scale(${1 - 0.15 * e})`;
       }
       if (buttonsEl) {
         buttonsEl.style.opacity = String(Math.max(0, 1 - e * 4));
@@ -614,7 +615,7 @@ export default function HeroCollapse({
           <div className="absolute inset-0 bg-gray-800 transition-opacity duration-700"
                style={{ opacity: firstReady ? 0 : 1, zIndex: 2 }} />
           {srcs.map((src, i) => (
-            <img key={src} src={photoSrc(src, 'medium')} alt="Hero"
+            <img key={src} src={photoSrc(src, 'large')} alt="Hero"
                  fetchPriority={i === 0 ? 'high' : 'low'}
                  className="absolute inset-0 w-full h-full object-cover"
                  style={{
