@@ -7,29 +7,40 @@ export async function POST(request: Request) {
         const body = await request.json();
         const { guestName, email, phone, attending, guestCount, dietaryRestrictions, message } = body;
 
-        // Validate required fields
         if (!guestName || !email || attending === undefined) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
-        // 1. Save to Database
         const client = await pool.connect();
         try {
-            // Insert into rsvps table
+            // Server-side party size validation
+            const guestRow = await client.query(
+                'SELECT party_size FROM guest_list WHERE LOWER(guest_name) = LOWER($1)',
+                [guestName]
+            );
+            if (guestRow.rows.length > 0) {
+                const maxParty = guestRow.rows[0].party_size;
+                if (attending && guestCount > maxParty) {
+                    return NextResponse.json({ error: `Party size exceeds maximum of ${maxParty}` }, { status: 400 });
+                }
+            }
+
+            const dietaryJson = Array.isArray(dietaryRestrictions)
+                ? JSON.stringify(dietaryRestrictions)
+                : dietaryRestrictions || null;
+
             await client.query(
                 `INSERT INTO rsvps (guest_name, email, phone, attending, number_of_guests, dietary_restrictions, message)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-                [guestName, email, phone, attending, attending ? guestCount : 0, dietaryRestrictions, message]
+                 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                [guestName, email, phone, attending, attending ? guestCount : 0, dietaryJson, message]
             );
 
-            // Update guest_list table if the guest exists, or insert if they don't
             const existingGuest = await client.query(
                 'SELECT id FROM guest_list WHERE LOWER(guest_name) = LOWER($1)',
                 [guestName]
             );
 
             if (existingGuest.rows.length > 0) {
-                // Update existing guest
                 await client.query(
                     `UPDATE guest_list
                      SET email = $1, phone = $2, party_size = $3, rsvp_status = $4, updated_at = NOW()
@@ -37,7 +48,6 @@ export async function POST(request: Request) {
                     [email, phone, attending ? guestCount : 1, attending ? 'attending' : 'declined', guestName]
                 );
             } else {
-                // Insert new guest
                 await client.query(
                     `INSERT INTO guest_list (guest_name, email, phone, party_size, rsvp_status, updated_at)
                      VALUES ($1, $2, $3, $4, $5, NOW())`,
@@ -48,20 +58,18 @@ export async function POST(request: Request) {
             client.release();
         }
 
-        // 2. Send Email (if configured)
         if (process.env.SMTP_HOST && process.env.SMTP_USER) {
             try {
                 const transporter = nodemailer.createTransport({
                     host: process.env.SMTP_HOST,
                     port: parseInt(process.env.SMTP_PORT || '587'),
-                    secure: false, // true for 465, false for other ports
+                    secure: false,
                     auth: {
                         user: process.env.SMTP_USER,
                         pass: process.env.SMTP_PASS,
                     },
                 });
 
-                // Email to Guest
                 await transporter.sendMail({
                     from: `"Sarah & James" <${process.env.SMTP_USER}>`,
                     to: email,
@@ -70,7 +78,6 @@ export async function POST(request: Request) {
                     html: `<h1>RSVP Confirmation</h1><p>Hi ${guestName},</p><p>Thank you so much for RSVPing to our wedding. We have confirmed your response: <strong>${attending ? 'Attending' : 'Not Attending'}</strong>.</p><p>Best,<br>Sarah & James</p>`,
                 });
 
-                // Email to Couple (Notification)
                 if (process.env.NOTIFICATION_EMAIL) {
                     await transporter.sendMail({
                         from: `"Wedding Bot" <${process.env.SMTP_USER}>`,
@@ -81,7 +88,6 @@ export async function POST(request: Request) {
                 }
             } catch (emailError) {
                 console.error('Failed to send email:', emailError);
-                // Continue even if email fails, as DB save was successful
             }
         }
 
@@ -97,24 +103,36 @@ export async function PUT(request: Request) {
         const body = await request.json();
         const { id, guestName, email, phone, attending, guestCount, dietaryRestrictions, message } = body;
 
-        // Validate required fields
         if (!id || !guestName || !email || attending === undefined) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
-        // Update the RSVP in database
         const client = await pool.connect();
         try {
-            // Update rsvps table
+            // Server-side party size validation
+            const guestRow = await client.query(
+                'SELECT party_size FROM guest_list WHERE LOWER(guest_name) = LOWER($1)',
+                [guestName]
+            );
+            if (guestRow.rows.length > 0) {
+                const maxParty = guestRow.rows[0].party_size;
+                if (attending && guestCount > maxParty) {
+                    return NextResponse.json({ error: `Party size exceeds maximum of ${maxParty}` }, { status: 400 });
+                }
+            }
+
+            const dietaryJson = Array.isArray(dietaryRestrictions)
+                ? JSON.stringify(dietaryRestrictions)
+                : dietaryRestrictions || null;
+
             await client.query(
                 `UPDATE rsvps
                  SET email = $1, phone = $2, attending = $3, number_of_guests = $4,
-                     dietary_restrictions = $5, message = $6
+                     dietary_restrictions = $5, message = $6, updated_at = NOW()
                  WHERE id = $7`,
-                [email, phone, attending, attending ? guestCount : 0, dietaryRestrictions, message, id]
+                [email, phone, attending, attending ? guestCount : 0, dietaryJson, message, id]
             );
 
-            // Update guest_list table
             await client.query(
                 `UPDATE guest_list
                  SET email = $1, phone = $2, party_size = $3, rsvp_status = $4, updated_at = NOW()

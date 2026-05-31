@@ -31,9 +31,46 @@ CREATE TABLE IF NOT EXISTS guest_list (
   notes TEXT,
   invited BOOLEAN DEFAULT true,
   rsvp_status VARCHAR(50),
+  plus_one_name VARCHAR(255),
+  address TEXT,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
+
+-- Idempotent migrations for columns added after initial deploy
+ALTER TABLE guest_list ADD COLUMN IF NOT EXISTS plus_one_name VARCHAR(255);
+ALTER TABLE guest_list ADD COLUMN IF NOT EXISTS address TEXT;
+ALTER TABLE rsvps ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
+
+-- Migrate dietary_restrictions from TEXT to JSONB
+DO $$
+BEGIN
+  -- Only run if the column is still TEXT type
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'rsvps'
+      AND column_name = 'dietary_restrictions'
+      AND data_type = 'text'
+  ) THEN
+    -- Rename old column
+    ALTER TABLE rsvps RENAME COLUMN dietary_restrictions TO dietary_restrictions_legacy;
+    -- Add new JSONB column
+    ALTER TABLE rsvps ADD COLUMN dietary_restrictions JSONB;
+    -- Migrate existing non-empty text values into the new structure
+    UPDATE rsvps
+    SET dietary_restrictions = jsonb_build_array(
+      jsonb_build_object(
+        'name', guest_name,
+        'note', dietary_restrictions_legacy,
+        'vegetarian', false,
+        'vegan', false,
+        'gluten_free', false,
+        'nut_allergy', false
+      )
+    )
+    WHERE dietary_restrictions_legacy IS NOT NULL AND dietary_restrictions_legacy <> '';
+  END IF;
+END $$;
 
 -- Seating chart tables
 CREATE TABLE IF NOT EXISTS floor_plans (

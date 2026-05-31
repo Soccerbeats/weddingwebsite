@@ -2,14 +2,24 @@
 
 import { useEffect, useState } from 'react';
 
+interface DietaryEntry {
+    name: string;
+    vegetarian?: boolean;
+    vegan?: boolean;
+    gluten_free?: boolean;
+    nut_allergy?: boolean;
+    note?: string;
+}
+
 interface RSVP {
     id: number;
     guest_name: string;
+    plus_one_name?: string;
     email: string;
     phone: string;
     attending: boolean;
     number_of_guests: number;
-    dietary_restrictions: string;
+    dietary_restrictions: DietaryEntry[] | string | null;
     message: string;
     created_at: string;
 }
@@ -527,6 +537,9 @@ export default function RSVPDashboard() {
                                         <tr key={rsvp.id} className="group hover:bg-gray-50 relative">
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="text-sm font-medium text-gray-900">{rsvp.guest_name}</div>
+                                                {rsvp.attending && rsvp.number_of_guests >= 2 && rsvp.plus_one_name && (
+                                                    <div className="text-sm text-gray-400">+ {rsvp.plus_one_name}</div>
+                                                )}
                                                 <div className="text-sm text-gray-500">{rsvp.email}</div>
                                                 {rsvp.phone && <div className="text-sm text-gray-500">{rsvp.phone}</div>}
                                             </td>
@@ -539,8 +552,25 @@ export default function RSVPDashboard() {
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                                 {rsvp.attending ? rsvp.number_of_guests : '-'}
                                             </td>
-                                            <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">
-                                                {rsvp.dietary_restrictions || '-'}
+                                            <td className="px-6 py-4 text-sm text-gray-500 max-w-xs">
+                                                {Array.isArray(rsvp.dietary_restrictions) ? (() => {
+                                                    const rows = rsvp.dietary_restrictions.flatMap((entry, i) => {
+                                                        const flags = [
+                                                            entry.vegetarian && 'Vegetarian',
+                                                            entry.vegan && 'Vegan',
+                                                            entry.gluten_free && 'Gluten Free',
+                                                            entry.nut_allergy && 'Nut Allergy',
+                                                        ].filter(Boolean);
+                                                        if (!flags.length) return [];
+                                                        return [(
+                                                            <div key={i} className="whitespace-nowrap">
+                                                                <span className="font-medium text-gray-700">{entry.name}:</span>{' '}
+                                                                {flags.join(', ')}
+                                                            </div>
+                                                        )];
+                                                    });
+                                                    return rows.length ? rows : '-';
+                                                })() : (rsvp.dietary_restrictions || '-')}
                                             </td>
                                             <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">
                                                 {rsvp.message || '-'}

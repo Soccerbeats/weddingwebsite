@@ -8,7 +8,12 @@ export async function GET() {
     try {
         const client = await pool.connect();
         try {
-            const result = await client.query('SELECT * FROM rsvps ORDER BY created_at DESC');
+            const result = await client.query(`
+                SELECT r.*, gl.plus_one_name
+                FROM rsvps r
+                LEFT JOIN guest_list gl ON LOWER(gl.guest_name) = LOWER(r.guest_name)
+                ORDER BY r.created_at DESC
+            `);
             return NextResponse.json({ rsvps: result.rows });
         } finally {
             client.release();

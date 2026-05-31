@@ -2,6 +2,23 @@
 
 import { useState, useEffect } from 'react';
 
+interface DietaryEntry {
+    name: string;
+    vegetarian: boolean;
+    vegan: boolean;
+    gluten_free: boolean;
+    nut_allergy: boolean;
+}
+
+function buildDietaryEntries(guestCount: number, mainName: string, plusOneName?: string): DietaryEntry[] {
+    const entries: DietaryEntry[] = [];
+    for (let i = 0; i < guestCount; i++) {
+        let name = i === 0 ? mainName : (i === 1 && plusOneName ? plusOneName : `Guest ${i + 1}`);
+        entries.push({ name, vegetarian: false, vegan: false, gluten_free: false, nut_allergy: false });
+    }
+    return entries;
+}
+
 export default function RSVPForm() {
     const [step, setStep] = useState<'verification' | 'form'>('verification');
     const [verifiedGuest, setVerifiedGuest] = useState<any>(null);
@@ -17,20 +34,30 @@ export default function RSVPForm() {
         phone: '',
         attending: 'yes',
         guestCount: 1,
-        dietaryRestrictions: '',
         message: ''
     });
 
+    const [dietaryEntries, setDietaryEntries] = useState<DietaryEntry[]>([]);
     const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
     const [errorMessage, setErrorMessage] = useState('');
 
     useEffect(() => {
-        // Fetch site config for bride/groom names
         fetch('/api/admin/site-config')
             .then(res => res.json())
             .then(data => setConfig(data))
             .catch(err => console.error('Error fetching config:', err));
     }, []);
+
+    // Rebuild dietary entries when guest count or attending changes
+    useEffect(() => {
+        if (step !== 'form' || formData.attending !== 'yes') return;
+        const count = formData.guestCount;
+        setDietaryEntries(prev => {
+            const newEntries = buildDietaryEntries(count, formData.guestName, verifiedGuest?.plus_one_name);
+            // Preserve existing checkbox state for entries that already exist
+            return newEntries.map((entry, i) => prev[i] ? { ...entry, ...prev[i], name: entry.name } : entry);
+        });
+    }, [formData.guestCount, formData.attending, step]);
 
     const handleVerification = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -50,27 +77,41 @@ export default function RSVPForm() {
                 setVerifiedGuest(data.guest);
                 setExistingRsvp(data.existingRsvp);
 
-                // If existing RSVP, populate with that data; otherwise use guest data
+                let count = 1;
+                let attending = 'yes';
+                let email = '';
+                let phone = '';
+                let message = '';
+
                 if (data.existingRsvp) {
-                    setFormData(prev => ({
-                        ...prev,
-                        guestName: data.guest.name,
-                        email: data.existingRsvp.email || '',
-                        phone: data.existingRsvp.phone || '',
-                        attending: data.existingRsvp.attending ? 'yes' : 'no',
-                        guestCount: data.existingRsvp.guestCount || 1,
-                        dietaryRestrictions: data.existingRsvp.dietaryRestrictions || '',
-                        message: data.existingRsvp.message || '',
-                    }));
+                    email = data.existingRsvp.email || '';
+                    phone = data.existingRsvp.phone || '';
+                    attending = data.existingRsvp.attending ? 'yes' : 'no';
+                    count = data.existingRsvp.guestCount || 1;
+                    message = data.existingRsvp.message || '';
+
+                    // Restore dietary entries from existing RSVP
+                    const existing = data.existingRsvp.dietaryRestrictions;
+                    if (Array.isArray(existing) && existing.length > 0) {
+                        setDietaryEntries(existing);
+                    } else {
+                        setDietaryEntries(buildDietaryEntries(count, data.guest.name, data.guest.plus_one_name));
+                    }
                 } else {
-                    setFormData(prev => ({
-                        ...prev,
-                        guestName: data.guest.name,
-                        email: data.guest.email || '',
-                        phone: data.guest.phone || '',
-                        guestCount: data.guest.party_size || 1,
-                    }));
+                    email = data.guest.email || '';
+                    phone = data.guest.phone || '';
+                    count = data.guest.party_size || 1;
+                    setDietaryEntries(buildDietaryEntries(count, data.guest.name, data.guest.plus_one_name));
                 }
+
+                setFormData({
+                    guestName: data.guest.name,
+                    email,
+                    phone,
+                    attending,
+                    guestCount: count,
+                    message,
+                });
                 setStep('form');
             } else {
                 setVerificationError(data.message || 'Guest not found on the list.');
@@ -85,10 +126,16 @@ export default function RSVPForm() {
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
-        setFormData(prev => ({
-            ...prev,
-            [name]: value
-        }));
+        setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleGuestCountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const count = parseInt(e.target.value) || 1;
+        setFormData(prev => ({ ...prev, guestCount: count }));
+    };
+
+    const handleDietaryChange = (index: number, field: keyof Omit<DietaryEntry, 'name'>, checked: boolean) => {
+        setDietaryEntries(prev => prev.map((entry, i) => i === index ? { ...entry, [field]: checked } : entry));
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -96,30 +143,32 @@ export default function RSVPForm() {
         setStatus('submitting');
         setErrorMessage('');
 
+        const dietary = formData.attending === 'yes' ? dietaryEntries : [];
+
         try {
             const isUpdate = existingRsvp !== null;
             const response = await fetch('/api/rsvp', {
                 method: isUpdate ? 'PUT' : 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     ...formData,
                     ...(isUpdate ? { id: existingRsvp.id } : {}),
                     attending: formData.attending === 'yes',
-                    guestCount: parseInt(formData.guestCount.toString())
+                    guestCount: parseInt(formData.guestCount.toString()),
+                    dietaryRestrictions: dietary,
                 }),
             });
 
             if (!response.ok) {
-                throw new Error('Failed to submit RSVP');
+                const data = await response.json().catch(() => ({}));
+                throw new Error(data.error || 'Failed to submit RSVP');
             }
 
             setStatus('success');
-        } catch (error) {
+        } catch (error: any) {
             console.error(error);
             setStatus('error');
-            setErrorMessage('Something went wrong. Please try again later.');
+            setErrorMessage(error.message || 'Something went wrong. Please try again later.');
         }
     };
 
@@ -133,7 +182,7 @@ export default function RSVPForm() {
                 </div>
                 <h3 className="text-lg leading-6 font-medium text-gray-900">RSVP {existingRsvp ? 'Updated' : 'Received'}!</h3>
                 <p className="mt-2 text-base text-gray-500">
-                    Thank you for letting us know. We've sent a confirmation email to the happy couple♥
+                    Thank you for letting us know. We&apos;ve sent a confirmation email to the happy couple♥
                 </p>
                 <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
                     <p className="text-sm text-blue-800">
@@ -144,17 +193,12 @@ export default function RSVPForm() {
         );
     }
 
-    // Step 1: Name Verification
     if (step === 'verification') {
         return (
             <div className="bg-white p-8 rounded-3xl shadow-xl border-t-4 border-accent">
                 <div className="text-center mb-6">
-                    <h2 className="text-2xl font-serif text-gray-900 mb-2">
-                        Welcome!
-                    </h2>
-                    <p className="text-gray-600">
-                        Please enter your name as it appears on your invitation to begin.
-                    </p>
+                    <h2 className="text-2xl font-serif text-gray-900 mb-2">Welcome!</h2>
+                    <p className="text-gray-600">Please enter your name as it appears on your invitation to begin.</p>
                 </div>
 
                 <form onSubmit={handleVerification} className="space-y-6">
@@ -182,9 +226,7 @@ export default function RSVPForm() {
                                     </svg>
                                 </div>
                                 <div className="ml-3">
-                                    <h3 className="text-sm font-medium text-red-800">
-                                        {verificationError}
-                                    </h3>
+                                    <h3 className="text-sm font-medium text-red-800">{verificationError}</h3>
                                 </div>
                             </div>
                         </div>
@@ -204,7 +246,6 @@ export default function RSVPForm() {
         );
     }
 
-    // Step 2: RSVP Form
     return (
         <form onSubmit={handleSubmit} className="space-y-6 bg-white p-8 rounded-3xl shadow-xl border-t-4 border-accent">
             <div className={`border rounded-2xl p-4 mb-6 ${existingRsvp ? 'bg-blue-50 border-blue-200' : 'bg-green-50 border-green-200'}`}>
@@ -227,9 +268,7 @@ export default function RSVPForm() {
 
             <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
                 <div className="sm:col-span-2">
-                    <label htmlFor="email" className="block text-sm font-medium text-gray-700 ml-1">
-                        Email *
-                    </label>
+                    <label htmlFor="email" className="block text-sm font-medium text-gray-700 ml-1">Email *</label>
                     <div className="mt-1">
                         <input
                             type="email"
@@ -244,9 +283,7 @@ export default function RSVPForm() {
                 </div>
 
                 <div>
-                    <label htmlFor="phone" className="block text-sm font-medium text-gray-700 ml-1">
-                        Phone
-                    </label>
+                    <label htmlFor="phone" className="block text-sm font-medium text-gray-700 ml-1">Phone</label>
                     <div className="mt-1">
                         <input
                             type="tel"
@@ -260,9 +297,7 @@ export default function RSVPForm() {
                 </div>
 
                 <div>
-                    <label htmlFor="attending" className="block text-sm font-medium text-gray-700 ml-1">
-                        Will you be attending? *
-                    </label>
+                    <label htmlFor="attending" className="block text-sm font-medium text-gray-700 ml-1">Will you be attending? *</label>
                     <div className="mt-1">
                         <select
                             id="attending"
@@ -280,9 +315,7 @@ export default function RSVPForm() {
 
                 {formData.attending === 'yes' && (
                     <div className="sm:col-span-2">
-                        <label htmlFor="guestCount" className="block text-sm font-medium text-gray-700 ml-1">
-                            Number of Guests *
-                        </label>
+                        <label htmlFor="guestCount" className="block text-sm font-medium text-gray-700 ml-1">Number of Guests *</label>
                         <div className="mt-1">
                             <input
                                 type="number"
@@ -292,48 +325,62 @@ export default function RSVPForm() {
                                 max={verifiedGuest?.party_size || 10}
                                 required
                                 value={formData.guestCount}
-                                onChange={handleChange}
+                                onChange={handleGuestCountChange}
                                 className="appearance-none block w-full px-4 py-3 border border-gray-300 rounded-2xl shadow-sm placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-accent focus:border-accent sm:text-sm transition-shadow"
                             />
                             {verifiedGuest?.party_size && (
-                                <p className="mt-1 text-sm text-gray-500">
-                                    Maximum party size: {verifiedGuest.party_size}
-                                </p>
+                                <p className="mt-1 text-sm text-gray-500">Maximum party size: {verifiedGuest.party_size}</p>
                             )}
                         </div>
                     </div>
                 )}
+            </div>
 
-                <div className="sm:col-span-2">
-                    <label htmlFor="dietaryRestrictions" className="block text-sm font-medium text-gray-700 ml-1">
-                        Dietary Restrictions
-                    </label>
-                    <div className="mt-1">
-                        <textarea
-                            id="dietaryRestrictions"
-                            name="dietaryRestrictions"
-                            rows={3}
-                            value={formData.dietaryRestrictions}
-                            onChange={handleChange}
-                            className="appearance-none block w-full px-4 py-3 border border-gray-300 rounded-2xl shadow-sm placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-accent focus:border-accent sm:text-sm transition-shadow"
-                        />
+            {/* Per-guest dietary restrictions */}
+            {formData.attending === 'yes' && dietaryEntries.length > 0 && (
+                <div>
+                    <h3 className="text-sm font-medium text-gray-700 ml-1 mb-3">Dietary Restrictions</h3>
+                    <div className="space-y-3">
+                        {dietaryEntries.map((entry, i) => (
+                            <div key={i} className="border border-gray-200 rounded-2xl p-4 bg-gray-50">
+                                <p className="text-sm font-semibold text-gray-800 mb-3">{entry.name}</p>
+                                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                                    {([
+                                        { field: 'vegetarian', label: 'Vegetarian' },
+                                        { field: 'vegan', label: 'Vegan' },
+                                        { field: 'gluten_free', label: 'Gluten Free' },
+                                        { field: 'nut_allergy', label: 'Nut Allergy' },
+                                    ] as { field: keyof Omit<DietaryEntry, 'name'>; label: string }[]).map(({ field, label }) => (
+                                        <label key={field} className="flex items-center gap-2 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={entry[field]}
+                                                onChange={(e) => handleDietaryChange(i, field, e.target.checked)}
+                                                className="h-4 w-4 rounded border-gray-300 text-accent focus:ring-accent"
+                                            />
+                                            <span className="text-sm text-gray-700">{label}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </div>
+            )}
 
-                <div className="sm:col-span-2">
-                    <label htmlFor="message" className="block text-sm font-medium text-gray-700 ml-1">
-                        Message for {config?.brideName || 'Bride'} & {config?.groomName || 'Groom'}♥
-                    </label>
-                    <div className="mt-1">
-                        <textarea
-                            id="message"
-                            name="message"
-                            rows={3}
-                            value={formData.message}
-                            onChange={handleChange}
-                            className="appearance-none block w-full px-4 py-3 border border-gray-300 rounded-2xl shadow-sm placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-accent focus:border-accent sm:text-sm transition-shadow"
-                        />
-                    </div>
+            <div className="sm:col-span-2">
+                <label htmlFor="message" className="block text-sm font-medium text-gray-700 ml-1">
+                    Message for {config?.brideName || 'Bride'} & {config?.groomName || 'Groom'}♥
+                </label>
+                <div className="mt-1">
+                    <textarea
+                        id="message"
+                        name="message"
+                        rows={3}
+                        value={formData.message}
+                        onChange={handleChange}
+                        className="appearance-none block w-full px-4 py-3 border border-gray-300 rounded-2xl shadow-sm placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-accent focus:border-accent sm:text-sm transition-shadow"
+                    />
                 </div>
             </div>
 
@@ -341,9 +388,7 @@ export default function RSVPForm() {
                 <div className="rounded-2xl bg-red-50 p-4">
                     <div className="flex">
                         <div className="ml-3">
-                            <h3 className="text-sm font-medium text-red-800">
-                                {errorMessage}
-                            </h3>
+                            <h3 className="text-sm font-medium text-red-800">{errorMessage}</h3>
                         </div>
                     </div>
                 </div>
