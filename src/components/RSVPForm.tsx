@@ -128,10 +128,16 @@ export default function RSVPForm() {
         e.preventDefault();
 
         // Validate: unnamed attending guests must have a name filled in
+        // Also validate: "Other" dietary requires text
         if (formData.attending === 'yes') {
             for (let i = 0; i < cards.length; i++) {
                 if (cards[i].attending && cards[i].nameEditable && !cards[i].name.trim()) {
                     setErrorMessage(`Please enter a name for Guest ${i + 1} before submitting.`);
+                    setStatus('error');
+                    return;
+                }
+                if (cards[i].attending && cards[i].other && !cards[i].other_text.trim()) {
+                    setErrorMessage(`Please describe the dietary restriction for ${cards[i].name || `Guest ${i + 1}`}.`);
                     setStatus('error');
                     return;
                 }
