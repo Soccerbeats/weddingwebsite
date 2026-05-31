@@ -73,6 +73,7 @@ export default function HeroCollapse({
     color: string; rot: number; rotV: number; isPetal: boolean;
   }>>([]);
   const mobileParticleRaf = useRef<number>(0);
+  const mobilePostHintRef = useRef<HTMLDivElement>(null);
 
   // ── Detect mobile (also responds to resize / DevTools viewport changes) ──
   useEffect(() => {
@@ -271,26 +272,93 @@ export default function HeroCollapse({
     const hint = mobileHintRef.current;
     if (!mid || !top || !bot) return;
 
+    // Per-element text animation state (measured lazily on first frame)
+    let textMeasured = false;
+    let subtitleEl: HTMLElement | null = null;
+    let titleEl: HTMLElement | null = null;
+    let dateEl: HTMLElement | null = null;
+    let buttonsEl: HTMLElement | null = null;
+    let subtitleDY = 0, titleDY = 0, dateDY = 0;
+
+    function measureTextTargets() {
+      if (textMeasured || !text) return;
+      subtitleEl = text.querySelector('[data-hero-role="subtitle"]');
+      titleEl    = text.querySelector('[data-hero-role="title"]');
+      dateEl     = text.querySelector('[data-hero-role="date"]');
+      buttonsEl  = text.querySelector('[data-hero-role="buttons"]');
+      const H = window.innerHeight;
+      if (subtitleEl) {
+        const r = subtitleEl.getBoundingClientRect();
+        subtitleDY = H * 0.1667 - (r.top + r.height / 2);
+      }
+      if (titleEl) {
+        const r = titleEl.getBoundingClientRect();
+        titleDY = H * 0.50 - (r.top + r.height / 2);
+      }
+      if (dateEl) {
+        const r = dateEl.getBoundingClientRect();
+        dateDY = H * 0.8333 - (r.top + r.height / 2);
+      }
+      textMeasured = true;
+    }
+
     function applyMobileProgress(p: number) {
       if (!mid || !top || !bot || !text || !hint) return;
       const e = p < 0.5 ? 4*p*p*p : 1 - Math.pow(-2*p+2,3)/2;
-      // Middle: full → center third
+
+      // Middle strip: full → center third
       mid.style.top    = (33.333 * e) + '%';
       mid.style.height = (100 - 66.666 * e) + '%';
-      // Separator lines: on the mid strip's own top/bottom edges so they
-      // physically ride with the squish — fade in after 30% progress
+
+      // Separator lines ride with the mid strip's edges
       const lineAlpha = Math.max(0, Math.min(1, (p - 0.3) / 0.4)).toFixed(3);
       mid.style.borderTop    = `2px solid rgba(255,255,255,${lineAlpha})`;
       mid.style.borderBottom = `2px solid rgba(255,255,255,${lineAlpha})`;
-      // Top: slide in from above (0.15s delay)
+
+      // Top strip slides in from above (0.15s delay)
       const topE = (() => { const t = Math.max(0, Math.min(1, (p - 0.15) / 0.85)); return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2; })();
       top.style.transform = `translateY(${-100 * (1 - topE)}%)`;
-      // Bottom: slide in from below (0.15s delay)
       bot.style.transform = `translateY(${100 * (1 - topE)}%)`;
-      // Text fade
-      text.style.opacity   = String(Math.max(0, 1 - e * 3));
-      text.style.transform = `translateY(${-e * 30}px)`;
-      hint.style.opacity   = String(Math.max(0, 1 - p * 5));
+
+      // Pre-collapse scroll hint fades out
+      hint.style.opacity = String(Math.max(0, 1 - p * 5));
+
+      // Post-collapse scroll hint fades in on bottom strip
+      const postHint = mobilePostHintRef.current;
+      if (postHint) postHint.style.opacity = String(Math.max(0, (p - 0.85) / 0.15));
+
+      // ── Per-element text animation ──────────────────────────
+      if (p > 0.01 && !textMeasured) measureTextTargets();
+
+      if (subtitleEl) {
+        const dy = subtitleDY * e;
+        subtitleEl.style.transform = `translateY(${dy}px) scale(${1 - 0.1 * e})`;
+        subtitleEl.style.marginBottom = '0';
+      }
+      if (titleEl) {
+        const dy = titleDY * e;
+        titleEl.style.transform = `translateY(${dy}px) scale(${1 - 0.45 * e})`;
+        titleEl.style.marginBottom = '0';
+      }
+      if (dateEl) {
+        const dy = dateDY * e;
+        dateEl.style.transform = `translateY(${dy}px) scale(${1 - 0.15 * e})`;
+        dateEl.style.marginBottom = '0';
+      }
+      if (buttonsEl) {
+        buttonsEl.style.opacity = String(Math.max(0, 1 - e * 4));
+        buttonsEl.style.pointerEvents = p > 0.1 ? 'none' : 'auto';
+      }
+
+      // On full reset (expand complete), restore margins
+      if (p === 0) {
+        [subtitleEl, titleEl, dateEl].forEach(el => {
+          if (el) { el.style.transform = ''; el.style.marginBottom = ''; }
+        });
+        if (buttonsEl) { buttonsEl.style.opacity = '1'; buttonsEl.style.pointerEvents = 'auto'; }
+        // Re-measure next time
+        textMeasured = false;
+      }
     }
 
     function fireParticles(direction: 'collapse' | 'expand') {
@@ -536,7 +604,7 @@ export default function HeroCollapse({
           </div>
         </div>
 
-        {/* MIDDLE strip — main slideshow, compresses vertically */}
+        {/* MIDDLE strip — main slideshow, images only (text lives outside) */}
         <div ref={mobileMidRef} style={{
           position: 'absolute', left: 0, right: 0,
           top: 0, height: '100%',
@@ -561,28 +629,10 @@ export default function HeroCollapse({
             background: 'linear-gradient(to bottom, rgba(0,0,0,0.45) 0%, transparent 100%)',
             zIndex: 4, pointerEvents: 'none',
           }} />
-          {/* Hero text */}
-          <div ref={mobileTextRef} style={{
-            position: 'absolute', inset: 0, zIndex: 20,
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-          }}>
-            {children}
-          </div>
-          {/* Scroll hint */}
-          <div ref={mobileHintRef} style={{
-            position: 'absolute', bottom: '20px', left: 0, right: 0,
-            textAlign: 'center', zIndex: 21,
-          }}>
-            <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
-                          animation: 'hint-bounce 1.8s ease-in-out infinite' }}>
-              <span style={{ fontSize: '10px', letterSpacing: '3px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)' }}>scroll</span>
-              <span style={{ fontSize: '16px', color: 'rgba(255,255,255,0.4)' }}>↓</span>
-            </div>
-          </div>
-          {/* Slide dots */}
+          {/* Slide dots — above text overlay so always tappable; raised above scroll hint */}
           {srcs.length > 1 && (
             <div style={{
-              position: 'absolute', bottom: '52px', left: 0, right: 0,
+              position: 'absolute', bottom: '56px', left: 0, right: 0,
               display: 'flex', justifyContent: 'center', gap: '8px', zIndex: 25,
             }}>
               {srcs.map((_, i) => (
@@ -611,6 +661,39 @@ export default function HeroCollapse({
             <img src={photoSrc(botSrc, 'medium')} alt=""
                  style={{ position: 'absolute', bottom: 0, left: 0, right: 0, width: '100%', height: '33.333%', objectFit: 'cover' }} />
             <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 1 }} />
+          </div>
+        </div>
+
+        {/* ── Text overlay — sits above all strips so text can animate freely ── */}
+        <div ref={mobileTextRef} style={{
+          position: 'absolute', inset: 0, zIndex: 20,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          pointerEvents: 'none',
+        }}>
+          {children}
+        </div>
+
+        {/* Pre-collapse scroll hint */}
+        <div ref={mobileHintRef} style={{
+          position: 'absolute', bottom: '20px', left: 0, right: 0,
+          textAlign: 'center', zIndex: 21, pointerEvents: 'none',
+        }}>
+          <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
+                        animation: 'hint-bounce 1.8s ease-in-out infinite' }}>
+            <span style={{ fontSize: '10px', letterSpacing: '3px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)' }}>scroll</span>
+            <span style={{ fontSize: '16px', color: 'rgba(255,255,255,0.4)' }}>↓</span>
+          </div>
+        </div>
+
+        {/* Post-collapse scroll hint — on the bottom strip, fades in when animation completes */}
+        <div ref={mobilePostHintRef} style={{
+          position: 'absolute', bottom: '20px', left: 0, right: 0,
+          textAlign: 'center', zIndex: 21, opacity: 0, pointerEvents: 'none',
+        }}>
+          <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
+                        animation: 'hint-bounce 1.8s ease-in-out infinite' }}>
+            <span style={{ fontSize: '10px', letterSpacing: '3px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)' }}>scroll</span>
+            <span style={{ fontSize: '16px', color: 'rgba(255,255,255,0.4)' }}>↓</span>
           </div>
         </div>
 

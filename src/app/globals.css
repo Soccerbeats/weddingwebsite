@@ -68,6 +68,19 @@ html {
   scroll-behavior: smooth;
 }
 
+/* ─── No scrollbar layout shift on mobile ────────────────── */
+/* Desktop browsers reserve space for the scrollbar. Mobile browsers
+   overlay the scrollbar so no space is reserved — enforce that. */
+@media (max-width: 768px) {
+  html {
+    scrollbar-width: none;       /* Firefox */
+    overflow-y: scroll;
+  }
+  html::-webkit-scrollbar {
+    display: none;               /* Chrome / Safari / WebKit */
+  }
+}
+
 /* ─── GPU-composited scrolling on mobile hero ─────────────── */
 .hero-section {
   transform: translateZ(0);
