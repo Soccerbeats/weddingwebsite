@@ -45,6 +45,8 @@ export default function RSVPDashboard() {
     const [isAddingGuest, setIsAddingGuest] = useState(false);
     const [selectedGuests, setSelectedGuests] = useState<number[]>([]);
     const [config, setConfig] = useState<any>(null);
+    const [rsvpSubtitle, setRsvpSubtitle] = useState('');
+    const [subtitleSaving, setSubtitleSaving] = useState(false);
     const [showImportModal, setShowImportModal] = useState(false);
     const [csvFile, setCsvFile] = useState<File | null>(null);
     const [importing, setImporting] = useState(false);
@@ -67,11 +69,22 @@ export default function RSVPDashboard() {
         fetchConfig();
     }, []);
 
+    const handleSaveSubtitle = async () => {
+        setSubtitleSaving(true);
+        await fetch('/api/admin/site-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rsvpSubtitle }),
+        }).catch(console.error);
+        setSubtitleSaving(false);
+    };
+
     const fetchConfig = async () => {
         try {
             const response = await fetch('/api/admin/site-config');
             const data = await response.json();
             setConfig(data);
+            if (data.rsvpSubtitle) setRsvpSubtitle(data.rsvpSubtitle);
         } catch (error) {
             console.error('Error fetching config:', error);
         }
@@ -415,6 +428,28 @@ export default function RSVPDashboard() {
 
     return (
         <div>
+            {/* Nav Card Subtitle */}
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-6">
+                <h2 className="text-lg font-bold text-gray-900 mb-1">Nav Card Subtitle</h2>
+                <p className="text-sm text-gray-500 mb-3">Short tagline shown on the RSVP card at the bottom of the home page.</p>
+                <div className="flex gap-3">
+                    <input
+                        type="text"
+                        value={rsvpSubtitle}
+                        onChange={(e) => setRsvpSubtitle(e.target.value)}
+                        className="flex-1 rounded-lg border border-gray-300 p-2 text-sm text-gray-900 focus:border-accent focus:ring-accent"
+                        placeholder="e.g. Let us know you're coming"
+                    />
+                    <button
+                        onClick={handleSaveSubtitle}
+                        disabled={subtitleSaving}
+                        className="px-5 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent-dark transition-colors disabled:opacity-50"
+                    >
+                        {subtitleSaving ? 'Saving…' : 'Save'}
+                    </button>
+                </div>
+            </div>
+
             <div className="flex items-center justify-between mb-6">
                 <div>
                     <h1 className="text-3xl font-bold text-gray-900 mb-2">RSVP & Guest Management</h1>

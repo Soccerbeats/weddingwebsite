@@ -11,6 +11,7 @@ interface ScheduleEvent {
 
 export default function AdminSchedule() {
     const [events, setEvents] = useState<ScheduleEvent[]>([]);
+    const [scheduleSubtitle, setScheduleSubtitle] = useState('');
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState('');
 
@@ -24,6 +25,7 @@ export default function AdminSchedule() {
                     // Default starter event if empty
                     setEvents([{ time: '4:00 PM', title: 'Ceremony', description: '', location: '' }]);
                 }
+                if (data.scheduleSubtitle) setScheduleSubtitle(data.scheduleSubtitle);
             });
     }, []);
 
@@ -52,7 +54,7 @@ export default function AdminSchedule() {
             const res = await fetch('/api/admin/site-config', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ scheduleEvents: events }),
+                body: JSON.stringify({ scheduleEvents: events, scheduleSubtitle }),
             });
 
             if (res.ok) {
@@ -151,6 +153,19 @@ export default function AdminSchedule() {
                         Add New Event
                     </button>
 
+                </div>
+
+                {/* Nav Card Subtitle */}
+                <div className="space-y-4 bg-gradient-to-br from-accent/5 to-accent-light/10 rounded-xl p-6 border border-accent/10">
+                    <h2 className="text-xl font-semibold text-gray-900">Nav Card Subtitle</h2>
+                    <p className="text-sm text-gray-500">Short tagline shown on the Schedule card at the bottom of the home page.</p>
+                    <input
+                        type="text"
+                        value={scheduleSubtitle}
+                        onChange={(e) => setScheduleSubtitle(e.target.value)}
+                        className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
+                        placeholder="e.g. Every moment planned for you"
+                    />
                 </div>
 
                 <div className="pt-4 sticky bottom-6">

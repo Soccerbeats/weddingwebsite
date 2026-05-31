@@ -39,6 +39,7 @@ function genId() { return Math.random().toString(36).slice(2, 10); }
 export default function AdminRegistryPage() {
     const [fund, setFund] = useState<FundConfig>(DEFAULTS);
     const [bgColor, setBgColor] = useState('#ffffff');
+    const [registryPageSubtitle, setRegistryPageSubtitle] = useState('');
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState('');
@@ -69,6 +70,7 @@ export default function AdminRegistryPage() {
             .then(data => {
                 if (data.registry) setFund({ ...DEFAULTS, ...data.registry, items: data.registry.items || [] });
                 setBgColor(data.pageBgColors?.registry || '#ffffff');
+                if (data.registryPageSubtitle) setRegistryPageSubtitle(data.registryPageSubtitle);
             })
             .finally(() => setLoading(false));
         fetch('/api/admin/registry-items')
@@ -208,6 +210,7 @@ export default function AdminRegistryPage() {
             const config = await configRes.json();
             config.registry = updatedFund ?? fund;
             config.pageBgColors = { ...(config.pageBgColors || {}), registry: bgColor };
+            config.registryPageSubtitle = registryPageSubtitle;
             const res = await fetch('/api/admin/site-config', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -796,6 +799,13 @@ export default function AdminRegistryPage() {
                             <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                             <textarea rows={4} value={fund.description} onChange={e => setFund(p => ({ ...p, description: e.target.value }))}
                                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Nav Card Subtitle</label>
+                            <p className="text-xs text-gray-500 mb-1">Short tagline shown on the Registry card at the bottom of the home page.</p>
+                            <input type="text" value={registryPageSubtitle} onChange={e => setRegistryPageSubtitle(e.target.value)}
+                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                                placeholder="e.g. Help us start our adventure" />
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Background Color</label>

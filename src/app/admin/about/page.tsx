@@ -11,6 +11,7 @@ export default function AdminAbout() {
         venueAddress: '',
         ceremonyText: '',
         receptionText: '',
+        aboutSubtitle: '',
     });
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState('');
@@ -149,6 +150,19 @@ export default function AdminAbout() {
                             placeholder="e.g. Dinner and dancing will follow immediately."
                         />
                     </div>
+                </div>
+
+                {/* Nav Card Subtitle */}
+                <div className="space-y-4 bg-gradient-to-br from-accent/5 to-accent-light/10 rounded-xl p-6 border border-accent/10">
+                    <h2 className="text-xl font-semibold text-gray-900">Nav Card Subtitle</h2>
+                    <p className="text-sm text-gray-500">Short tagline shown on the About card at the bottom of the home page.</p>
+                    <input
+                        type="text"
+                        value={config.aboutSubtitle || ''}
+                        onChange={(e) => setConfig({ ...config, aboutSubtitle: e.target.value })}
+                        className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
+                        placeholder="e.g. Where it all began"
+                    />
                 </div>
 
                 <div className="pt-4">
