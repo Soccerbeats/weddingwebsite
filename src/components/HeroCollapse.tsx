@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { photoSrc } from '@/lib/photoSrc';
 
 interface HeroCollapseProps {
@@ -257,8 +257,11 @@ export default function HeroCollapse({
   }
 
   // ── Mobile: vertical collapse animation on first scroll ──────────────────
+  // useLayoutEffect so refs are populated by the time this runs after every
+  // render — critical when isMobile flips true in DevTools/resize because
+  // useEffect fires before the browser has committed the new mobile JSX.
   // eslint-disable-next-line react-hooks/rules-of-hooks
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!isMobile) return;
 
     const mid  = mobileMidRef.current;
@@ -274,6 +277,11 @@ export default function HeroCollapse({
       // Middle: full → center third
       mid.style.top    = (33.333 * e) + '%';
       mid.style.height = (100 - 66.666 * e) + '%';
+      // Separator lines: on the mid strip's own top/bottom edges so they
+      // physically ride with the squish — fade in after 30% progress
+      const lineAlpha = Math.max(0, Math.min(1, (p - 0.3) / 0.4)).toFixed(3);
+      mid.style.borderTop    = `2px solid rgba(255,255,255,${lineAlpha})`;
+      mid.style.borderBottom = `2px solid rgba(255,255,255,${lineAlpha})`;
       // Top: slide in from above (0.15s delay)
       const topE = (() => { const t = Math.max(0, Math.min(1, (p - 0.15) / 0.85)); return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2; })();
       top.style.transform = `translateY(${-100 * (1 - topE)}%)`;
@@ -475,14 +483,13 @@ export default function HeroCollapse({
           style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', zIndex: 30, pointerEvents: 'none' }}
         />
 
-        {/* TOP strip — slides in from above; border-bottom IS the separator line */}
+        {/* TOP strip — slides in from above */}
         <div ref={mobileTopRef} style={{
           position: 'absolute', left: 0, right: 0,
           top: 0, height: '33.333%',
           overflow: 'hidden',
           transform: 'translateY(-100%)',
           zIndex: 5,
-          borderBottom: '2px solid rgba(255,255,255,0.85)',
         }}>
           <div style={{ position: 'absolute', inset: 0, height: '300%', top: 0 }}>
             <div className="absolute inset-0 bg-gray-800 transition-opacity duration-700"
@@ -556,14 +563,13 @@ export default function HeroCollapse({
           )}
         </div>
 
-        {/* BOTTOM strip — slides in from below; border-top IS the separator line */}
+        {/* BOTTOM strip — slides in from below */}
         <div ref={mobileBotRef} style={{
           position: 'absolute', left: 0, right: 0,
           bottom: 0, height: '33.333%',
           overflow: 'hidden',
           transform: 'translateY(100%)',
           zIndex: 5,
-          borderTop: '2px solid rgba(255,255,255,0.85)',
         }}>
           <div style={{ position: 'absolute', inset: 0, height: '300%', bottom: 0, top: 'auto' }}>
             <img src={photoSrc(botSrc, 'medium')} alt=""
