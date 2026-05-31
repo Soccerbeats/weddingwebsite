@@ -9,6 +9,11 @@ interface HeroCollapseProps {
   interval?: number;
   bgColor?: string;
   children?: React.ReactNode;
+  // Mobile-only text props — rendered directly with refs so animation can drive them
+  mobileSubtitle?: string;
+  mobileTitle?: string;
+  mobileDateLine1?: string;
+  mobileDateLine2?: string;
 }
 
 // Photo positions — center-anchored offsets (vw/vh) from the sticky container center.
@@ -38,6 +43,10 @@ export default function HeroCollapse({
   bgColor = '#ffffff',
   children,
   interval = 5000,
+  mobileSubtitle,
+  mobileTitle,
+  mobileDateLine1,
+  mobileDateLine2,
 }: HeroCollapseProps) {
   const srcs = images.length > 0 ? images : (fallbackImage ? [fallbackImage] : []);
 
@@ -73,7 +82,10 @@ export default function HeroCollapse({
     color: string; rot: number; rotV: number; isPetal: boolean;
   }>>([]);
   const mobileParticleRaf = useRef<number>(0);
-  const mobilePostHintRef = useRef<HTMLDivElement>(null);
+  const mobilePostHintRef  = useRef<HTMLDivElement>(null);
+  const mobileSubtitleRef  = useRef<HTMLParagraphElement>(null);
+  const mobileTitleRef     = useRef<HTMLHeadingElement>(null);
+  const mobileDateRef      = useRef<HTMLParagraphElement>(null);
 
   // ── Detect mobile (also responds to resize / DevTools viewport changes) ──
   useEffect(() => {
@@ -272,40 +284,33 @@ export default function HeroCollapse({
     const hint = mobileHintRef.current;
     if (!mid || !top || !bot) return;
 
-    // Per-element text animation state (measured lazily on first frame)
+    // Per-element text animation — measured lazily on first animation frame.
+    // Uses refs read at call-time (not closed-over values) so they're always current.
     let textMeasured = false;
-    let subtitleEl: HTMLElement | null = null;
-    let titleEl: HTMLElement | null = null;
-    let dateEl: HTMLElement | null = null;
-    let buttonsEl: HTMLElement | null = null;
     let subtitleDY = 0, titleDY = 0, dateDY = 0;
 
     function measureTextTargets() {
-      if (textMeasured || !text) return;
-      subtitleEl = text.querySelector('[data-hero-role="subtitle"]');
-      titleEl    = text.querySelector('[data-hero-role="title"]');
-      dateEl     = text.querySelector('[data-hero-role="date"]');
-      buttonsEl  = text.querySelector('[data-hero-role="buttons"]');
-      const H = window.innerHeight;
+      if (textMeasured) return;
+      const subtitleEl = mobileSubtitleRef.current;
+      const titleEl    = mobileTitleRef.current;
+      const dateEl     = mobileDateRef.current;
+      if (!subtitleEl || !titleEl || !dateEl) return;
+
+      const H   = window.innerHeight;
       const PAD = 14; // px gap from the white divider line
 
-      if (subtitleEl) {
-        const r = subtitleEl.getBoundingClientRect();
-        // Bottom-aligned to top strip: element bottom sits PAD above the divider at H*0.3333
-        const targetCenterY = H * 0.3333 - PAD - r.height / 2;
-        subtitleDY = targetCenterY - (r.top + r.height / 2);
-      }
-      if (titleEl) {
-        const r = titleEl.getBoundingClientRect();
-        // Centered in mid strip
-        titleDY = H * 0.5 - (r.top + r.height / 2);
-      }
-      if (dateEl) {
-        const r = dateEl.getBoundingClientRect();
-        // Top-aligned to bottom strip: element top sits PAD below the divider at H*0.6667
-        const targetCenterY = H * 0.6667 + PAD + r.height / 2;
-        dateDY = targetCenterY - (r.top + r.height / 2);
-      }
+      const sr = subtitleEl.getBoundingClientRect();
+      // Bottom-aligned inside top strip: bottom edge sits PAD above the divider at H*0.3333
+      subtitleDY = (H * 0.3333 - PAD - sr.height / 2) - (sr.top + sr.height / 2);
+
+      const tr = titleEl.getBoundingClientRect();
+      // Centered in mid strip
+      titleDY = H * 0.5 - (tr.top + tr.height / 2);
+
+      const dr = dateEl.getBoundingClientRect();
+      // Top-aligned inside bottom strip: top edge sits PAD below the divider at H*0.6667
+      dateDY = (H * 0.6667 + PAD + dr.height / 2) - (dr.top + dr.height / 2);
+
       textMeasured = true;
     }
 
@@ -337,27 +342,18 @@ export default function HeroCollapse({
       // ── Per-element text animation ──────────────────────────
       if (p > 0.01 && !textMeasured) measureTextTargets();
 
-      if (subtitleEl) {
-        subtitleEl.style.transform = `translateY(${subtitleDY * e}px) scale(${1 - 0.15 * e})`;
-      }
-      if (titleEl) {
-        titleEl.style.transform = `translateY(${titleDY * e}px) scale(${1 - 0.45 * e})`;
-      }
-      if (dateEl) {
-        dateEl.style.transform = `translateY(${dateDY * e}px) scale(${1 - 0.15 * e})`;
-      }
-      if (buttonsEl) {
-        buttonsEl.style.opacity = String(Math.max(0, 1 - e * 4));
-        buttonsEl.style.pointerEvents = p > 0.1 ? 'none' : 'auto';
-      }
+      // Read refs at call-time — never stale
+      const subtitleEl = mobileSubtitleRef.current;
+      const titleEl    = mobileTitleRef.current;
+      const dateEl     = mobileDateRef.current;
 
-      // On full reset (expand complete), restore margins
+      if (subtitleEl) subtitleEl.style.transform = `translateY(${subtitleDY * e}px) scale(${1 - 0.15 * e})`;
+      if (titleEl)    titleEl.style.transform    = `translateY(${titleDY    * e}px) scale(${1 - 0.45 * e})`;
+      if (dateEl)     dateEl.style.transform     = `translateY(${dateDY     * e}px) scale(${1 - 0.15 * e})`;
+
+      // On full reset (expand complete), clear transforms and re-measure next collapse
       if (p === 0) {
-        [subtitleEl, titleEl, dateEl].forEach(el => {
-          if (el) { el.style.transform = ''; el.style.marginBottom = ''; }
-        });
-        if (buttonsEl) { buttonsEl.style.opacity = '1'; buttonsEl.style.pointerEvents = 'auto'; }
-        // Re-measure next time
+        [subtitleEl, titleEl, dateEl].forEach(el => { if (el) el.style.transform = ''; });
         textMeasured = false;
       }
     }
@@ -665,13 +661,36 @@ export default function HeroCollapse({
           </div>
         </div>
 
-        {/* ── Text overlay — sits above all strips so text can animate freely ── */}
+        {/* ── Text overlay — elements have direct refs so animation can drive them ── */}
         <div ref={mobileTextRef} style={{
           position: 'absolute', inset: 0, zIndex: 20,
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
           pointerEvents: 'none',
         }}>
-          {children}
+          {mobileSubtitle && (
+            <p ref={mobileSubtitleRef}
+               className="text-white text-xl font-serif italic tracking-wider text-center px-6"
+               style={{ animation: 'page-enter 700ms cubic-bezier(0.25,0.46,0.45,0.94) 200ms both', willChange: 'transform' }}>
+              {mobileSubtitle}
+            </p>
+          )}
+          {mobileTitle && (
+            <h1 ref={mobileTitleRef}
+                className="text-5xl font-serif text-white tracking-tight text-center px-4 my-4"
+                style={{ animation: 'page-enter 800ms cubic-bezier(0.25,0.46,0.45,0.94) 400ms both', willChange: 'transform' }}>
+              {mobileTitle}
+            </h1>
+          )}
+          {(mobileDateLine1 || mobileDateLine2) && (
+            <p ref={mobileDateRef}
+               className="text-white text-base font-light tracking-widest uppercase text-center px-6"
+               style={{ animation: 'page-enter 700ms cubic-bezier(0.25,0.46,0.45,0.94) 600ms both', willChange: 'transform' }}>
+              {mobileDateLine1}
+              {mobileDateLine1 && mobileDateLine2 && <br />}
+              {mobileDateLine2}
+            </p>
+          )}
+          {/* Desktop children not rendered on mobile — keep for desktop branch only */}
         </div>
 
         {/* Pre-collapse scroll hint */}

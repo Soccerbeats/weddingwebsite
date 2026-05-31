@@ -39,6 +39,10 @@ export default function Home() {
         fallbackImage={config.homeHero}
         interval={slideshowInterval}
         bgColor={bgColor}
+        mobileSubtitle={config.homeHeadline || "We're getting married!"}
+        mobileTitle={`${config.brideName} & ${config.groomName}`}
+        mobileDateLine1={config.weddingDate}
+        mobileDateLine2={isBasicMode && !showVenue ? undefined : config.weddingLocation}
       >
         <p
           data-hero-role="subtitle"
