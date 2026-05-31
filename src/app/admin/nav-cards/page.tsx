@@ -17,7 +17,6 @@ interface PageConfig {
   label: string;
   href: string;
   image: string | null;
-  defaultPhoto?: string | null;
 }
 
 interface SitePhoto {
@@ -52,11 +51,10 @@ export default function AdminNavCards() {
   useEffect(() => {
     fetch('/api/nav-cards')
       .then(r => r.json())
-      .then((cards: { slug: string; image: string | null; defaultPhoto?: string | null }[]) => {
+      .then((cards: { slug: string; image: string | null }[]) => {
         const imageMap: Record<string, string | null> = {};
-        const defaultMap: Record<string, string | null> = {};
-        cards.forEach(c => { imageMap[c.slug] = c.image; defaultMap[c.slug] = c.defaultPhoto || null; });
-        setPages(PAGE_DEFS.map(p => ({ ...p, image: imageMap[p.slug] || null, defaultPhoto: defaultMap[p.slug] || null })));
+        cards.forEach(c => { imageMap[c.slug] = c.image; });
+        setPages(PAGE_DEFS.map(p => ({ ...p, image: imageMap[p.slug] || null })));
       });
   }, []);
 
@@ -143,25 +141,18 @@ export default function AdminNavCards() {
           <div key={page.slug} className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 flex items-center gap-6">
             {/* Thumbnail */}
             <div className="w-24 h-16 rounded-lg overflow-hidden flex-shrink-0 relative">
-              {page.image ? (
-                <Image
-                  src={`/api/photos/nav-cards/${page.image}`}
-                  alt={page.label}
-                  fill
-                  unoptimized
-                  className="object-cover grayscale"
-                />
-              ) : page.defaultPhoto ? (
-                <Image
-                  src={`/api/photos/${page.defaultPhoto}`}
-                  alt={page.label}
-                  fill
-                  unoptimized
-                  className="object-cover grayscale"
-                />
-              ) : (
-                <div className={`w-full h-full bg-gradient-to-br ${SLUG_GRADIENTS[page.slug] || 'from-gray-700 to-gray-500'} flex items-center justify-center`}>
-                  <span className="text-[10px] text-white/50 font-sans uppercase tracking-wider">No photos</span>
+              <Image
+                src={page.image
+                  ? `/api/photos/nav-cards/${page.image}`
+                  : `/images/nav-defaults/${page.slug}.jpg`}
+                alt={page.label}
+                fill
+                unoptimized
+                className="object-cover grayscale"
+              />
+              {!page.image && (
+                <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                  <span className="text-[9px] text-white/70 font-sans uppercase tracking-wider">Default</span>
                 </div>
               )}
             </div>

@@ -105,25 +105,15 @@ export default function NavCards() {
                            transition-all duration-[350ms] ease-out
                            group-hover:-translate-y-[6px] group-hover:shadow-xl"
               >
-                {card.image ? (
-                  <Image
-                    src={`/api/photos/nav-cards/${card.image}`}
-                    alt={card.label}
-                    fill
-                    unoptimized
-                    className="object-cover grayscale transition-transform duration-[350ms] ease-out group-hover:scale-105"
-                  />
-                ) : card.defaultPhoto ? (
-                  <Image
-                    src={`/api/photos/${card.defaultPhoto}`}
-                    alt={card.label}
-                    fill
-                    unoptimized
-                    className="object-cover grayscale transition-transform duration-[350ms] ease-out group-hover:scale-105"
-                  />
-                ) : (
-                  <DefaultCardBg slug={card.slug} />
-                )}
+                <Image
+                  src={card.image
+                    ? `/api/photos/nav-cards/${card.image}`
+                    : `/images/nav-defaults/${card.slug}.jpg`}
+                  alt={card.label}
+                  fill
+                  unoptimized
+                  className="object-cover grayscale transition-transform duration-[350ms] ease-out group-hover:scale-105"
+                />
 
                 {/* Dark gradient overlay */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />

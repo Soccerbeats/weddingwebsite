@@ -12,15 +12,19 @@ git commit -m "describe changes here"
 git push origin main
 ```
 
-### 2. Build the Docker Image
+### 2. Build and Push the Docker Image
 ```bash
-docker build -t ghcr.io/soccerbeats/weddingwebsite:latest --target production .
-```
-
-### 3. Push to GitHub Container Registry
-```bash
+docker pull ghcr.io/soccerbeats/weddingwebsite:latest 2>/dev/null || true && \
+docker build \
+  --cache-from ghcr.io/soccerbeats/weddingwebsite:latest \
+  --target production \
+  -t ghcr.io/soccerbeats/weddingwebsite:latest \
+  . && \
 docker push ghcr.io/soccerbeats/weddingwebsite:latest
 ```
+
+> **Note**: The `--cache-from` flag reuses layers from the previous image. The `npm run build`
+> step before `docker build` is NOT needed — the Dockerfile runs it internally.
 
 ### 4. Portainer (Manual Step - User Handles This)
 The user manually pulls and redeploys the new image via the Portainer UI.

@@ -3,8 +3,6 @@ import { getSiteConfig } from '@/lib/config';
 import pool from '@/lib/db';
 import { jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
-import fs from 'fs';
-import path from 'path';
 
 const JWT_SECRET = new TextEncoder().encode(process.env.ADMIN_PASSWORD || 'default_secret_password');
 
@@ -38,20 +36,6 @@ const ALL_PAGES: NavCard[] = [
   { href: '/rsvp',          slug: 'rsvp',          label: 'RSVP',          eyebrow: 'Join Us',     subtitle: '', image: null },
 ];
 
-function getSitePhotos(): string[] {
-  try {
-    const photosPath = path.join(process.cwd(), 'public/config/photos.json');
-    if (!fs.existsSync(photosPath)) return [];
-    const data = JSON.parse(fs.readFileSync(photosPath, 'utf8'));
-    const photos: { filename: string; hearted?: boolean }[] = data.photos || [];
-    // Hearted first, then the rest
-    const hearted = photos.filter(p => p.hearted).map(p => p.filename);
-    const rest = photos.filter(p => !p.hearted).map(p => p.filename);
-    return [...hearted, ...rest];
-  } catch {
-    return [];
-  }
-}
 
 export async function GET() {
   try {
@@ -80,7 +64,6 @@ export async function GET() {
     };
 
     const navCards = config.navCards || {};
-    const sitePhotos = getSitePhotos();
 
     const cards = ALL_PAGES
       .filter(p => {
@@ -88,12 +71,10 @@ export async function GET() {
         if (p.slug === 'registry' && !config.registry?.enabled) return false;
         return true;
       })
-      .map((p, i) => ({
+      .map(p => ({
         ...p,
         subtitle: subtitleMap[p.slug] || '',
-        // Use custom image if set, otherwise cycle through site photos as defaults
         image: navCards[p.slug] || null,
-        defaultPhoto: sitePhotos.length > 0 ? sitePhotos[i % sitePhotos.length] : null,
       }));
 
     return NextResponse.json(cards);
