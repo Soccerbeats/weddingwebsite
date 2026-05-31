@@ -57,6 +57,7 @@ export default function HeroCollapse({
   const progressRef = useRef(0); // 0 = full screen, 1 = fully collapsed
 
   // Mobile-specific refs
+  const mobileSectionRef = useRef<HTMLDivElement>(null);
   const mobileMidRef    = useRef<HTMLDivElement>(null);
   const mobileTopRef    = useRef<HTMLDivElement>(null);
   const mobileBotRef    = useRef<HTMLDivElement>(null);
@@ -282,12 +283,6 @@ export default function HeroCollapse({
       text.style.opacity   = String(Math.max(0, 1 - e * 3));
       text.style.transform = `translateY(${-e * 30}px)`;
       hint.style.opacity   = String(Math.max(0, 1 - p * 5));
-      // Dividers fade in as strips approach their seams (start at 50% progress)
-      const divAlpha = String(Math.max(0, Math.min(1, (p - 0.5) / 0.4)));
-      const divTopEl = document.getElementById('mobile-div-top');
-      const divBotEl = document.getElementById('mobile-div-bot');
-      if (divTopEl) divTopEl.style.opacity = divAlpha;
-      if (divBotEl) divBotEl.style.opacity = divAlpha;
     }
 
     function fireParticles(direction: 'collapse' | 'expand') {
@@ -373,35 +368,74 @@ export default function HeroCollapse({
       mobileRafRef.current = requestAnimationFrame(tick);
     }
 
+    // Scroll room = outer section height minus one viewport (mirrors desktop pattern)
+    const mobileSectionScrollRoom = () => {
+      const section = mobileSectionRef.current;
+      if (!section) return 0;
+      return section.offsetTop + section.offsetHeight - window.innerHeight;
+    };
+
     function collapse() {
       if (mobileStateRef.current !== 'full') return;
       mobileStateRef.current = 'animating';
       window.dispatchEvent(new CustomEvent('hero-collapsing'));
-      runMobileAnimation(1, () => { mobileStateRef.current = 'collapsed'; });
+      runMobileAnimation(1, () => {
+        mobileStateRef.current = 'collapsed';
+        // Jump scroll to end of section so normal page scroll works — mirrors desktop
+        window.scrollTo({ top: mobileSectionScrollRoom(), behavior: 'instant' });
+      });
     }
 
     function expand() {
       if (mobileStateRef.current !== 'collapsed') return;
       mobileStateRef.current = 'animating';
       window.dispatchEvent(new CustomEvent('hero-expanded'));
-      runMobileAnimation(0, () => { mobileStateRef.current = 'full'; });
+      runMobileAnimation(0, () => {
+        mobileStateRef.current = 'full';
+        window.scrollTo({ top: 0, behavior: 'instant' });
+      });
     }
+
+    // Snap to collapsed if page is scrolled past hero without animation
+    // (e.g. back-button restoring scroll position)
+    const snapIfNeeded = () => {
+      if (mobileStateRef.current !== 'full' || mobileProgressRef.current > 0) return;
+      if (window.scrollY < 10) return;
+      cancelAnimationFrame(mobileRafRef.current);
+      mobileStateRef.current = 'collapsed';
+      mobileProgressRef.current = 1;
+      applyMobileProgress(1);
+      window.dispatchEvent(new CustomEvent('hero-collapsing'));
+    };
+    window.addEventListener('scroll', snapIfNeeded, { passive: true });
+    snapIfNeeded();
 
     let touchStartY: number | null = null;
     function onTouchStart(e: TouchEvent) { touchStartY = e.touches[0].clientY; }
     function onTouchMove(e: TouchEvent) {
+      const s = mobileStateRef.current;
+
+      // Always block scroll during animation
+      if (s === 'animating') { e.preventDefault(); return; }
+
       if (touchStartY === null) return;
       const dy = touchStartY - e.touches[0].clientY;
-      const s = mobileStateRef.current;
-      // Prevent page scroll while animating or while we own the gesture
-      if (s === 'animating') { e.preventDefault(); return; }
-      if (dy > 12 && s === 'full')      { e.preventDefault(); collapse(); return; }
-      if (dy < -12 && s === 'collapsed') { e.preventDefault(); expand();   return; }
-      // After collapse, allow normal page scroll (don't preventDefault)
+
+      // Hero is full: any downward intent → consume entirely, trigger animation
+      if (s === 'full') {
+        e.preventDefault(); // block ALL scroll while hero is full
+        if (dy > 5) collapse();
+        return;
+      }
+
+      // Hero is collapsed and user is at section boundary: upward swipe → expand
+      if (s === 'collapsed') {
+        const atBoundary = window.scrollY <= mobileSectionScrollRoom() + 10;
+        if (atBoundary && dy < -5) { e.preventDefault(); expand(); return; }
+      }
     }
     function onTouchEnd() { touchStartY = null; }
 
-    // Must be non-passive to call preventDefault
     window.addEventListener('touchstart', onTouchStart, { passive: true });
     window.addEventListener('touchmove',  onTouchMove,  { passive: false });
     window.addEventListener('touchend',   onTouchEnd,   { passive: true });
@@ -411,6 +445,7 @@ export default function HeroCollapse({
       window.removeEventListener('touchstart', onTouchStart);
       window.removeEventListener('touchmove',  onTouchMove);
       window.removeEventListener('touchend',   onTouchEnd);
+      window.removeEventListener('scroll', snapIfNeeded);
       if (mobileRafRef.current) cancelAnimationFrame(mobileRafRef.current);
       if (mobileParticleRaf.current) cancelAnimationFrame(mobileParticleRaf.current);
     };
@@ -419,8 +454,11 @@ export default function HeroCollapse({
   if (isMobile) {
     const topSrc = srcs[1] ?? srcs[0];
     const botSrc = srcs[2] ?? srcs[0];
+    // 200svh outer section mirrors desktop 200vh pattern:
+    // sticky inner stays at top while scroll room lets us jump scrollY after animation
     return (
-      <div className="relative" style={{ height: '100svh', overflow: 'hidden', backgroundColor: bgColor }}>
+      <div ref={mobileSectionRef} style={{ height: '200svh' }}>
+      <div className="relative" style={{ position: 'sticky', top: 0, height: '100svh', overflow: 'hidden', backgroundColor: bgColor }}>
         {/* Particle canvas — dimensions set via ResizeObserver so they're correct after layout */}
         <canvas
           ref={el => {
@@ -437,13 +475,14 @@ export default function HeroCollapse({
           style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', zIndex: 30, pointerEvents: 'none' }}
         />
 
-        {/* TOP strip — slides in from above */}
+        {/* TOP strip — slides in from above; border-bottom IS the separator line */}
         <div ref={mobileTopRef} style={{
           position: 'absolute', left: 0, right: 0,
           top: 0, height: '33.333%',
           overflow: 'hidden',
           transform: 'translateY(-100%)',
           zIndex: 5,
+          borderBottom: '2px solid rgba(255,255,255,0.85)',
         }}>
           <div style={{ position: 'absolute', inset: 0, height: '300%', top: 0 }}>
             <div className="absolute inset-0 bg-gray-800 transition-opacity duration-700"
@@ -517,13 +556,14 @@ export default function HeroCollapse({
           )}
         </div>
 
-        {/* BOTTOM strip — slides in from below */}
+        {/* BOTTOM strip — slides in from below; border-top IS the separator line */}
         <div ref={mobileBotRef} style={{
           position: 'absolute', left: 0, right: 0,
           bottom: 0, height: '33.333%',
           overflow: 'hidden',
           transform: 'translateY(100%)',
           zIndex: 5,
+          borderTop: '2px solid rgba(255,255,255,0.85)',
         }}>
           <div style={{ position: 'absolute', inset: 0, height: '300%', bottom: 0, top: 'auto' }}>
             <img src={photoSrc(botSrc, 'medium')} alt=""
@@ -532,17 +572,8 @@ export default function HeroCollapse({
           </div>
         </div>
 
-        {/* White separator lines — always rendered at the strip seams, visible once strips arrive */}
-        <div id="mobile-div-top" style={{
-          position: 'absolute', left: 0, right: 0, top: '33.333%',
-          height: '2px', background: 'rgba(255,255,255,0.85)', zIndex: 20, opacity: 0,
-        }} />
-        <div id="mobile-div-bot" style={{
-          position: 'absolute', left: 0, right: 0, top: '66.666%',
-          height: '2px', background: 'rgba(255,255,255,0.85)', zIndex: 20, opacity: 0,
-        }} />
-
         <style>{`@keyframes hint-bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(5px)} }`}</style>
+      </div>
       </div>
     );
   }
