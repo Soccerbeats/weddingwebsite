@@ -296,19 +296,23 @@ export default function HeroCollapse({
       const dateEl     = mobileDateRef.current;
       if (!subtitleEl || !titleEl || !dateEl) return;
 
+      // ROOT CAUSE FIX: CSS animations (fill-mode:both) sit above inline styles
+      // in the cascade — they silently override el.style.transform. Cancel them
+      // now so our JS transforms take effect.
+      subtitleEl.style.animation = 'none';
+      titleEl.style.animation    = 'none';
+      dateEl.style.animation     = 'none';
+
       const H   = window.innerHeight;
       const PAD = 14; // px gap from the white divider line
 
       const sr = subtitleEl.getBoundingClientRect();
-      // Bottom-aligned inside top strip: bottom edge sits PAD above the divider at H*0.3333
       subtitleDY = (H * 0.3333 - PAD - sr.height / 2) - (sr.top + sr.height / 2);
 
       const tr = titleEl.getBoundingClientRect();
-      // Centered in mid strip
       titleDY = H * 0.5 - (tr.top + tr.height / 2);
 
       const dr = dateEl.getBoundingClientRect();
-      // Top-aligned inside bottom strip: top edge sits PAD below the divider at H*0.6667
       dateDY = (H * 0.6667 + PAD + dr.height / 2) - (dr.top + dr.height / 2);
 
       textMeasured = true;
@@ -351,9 +355,14 @@ export default function HeroCollapse({
       if (titleEl)    titleEl.style.transform    = `translateY(${titleDY    * e}px) scale(${1 - 0.45 * e})`;
       if (dateEl)     dateEl.style.transform     = `translateY(${dateDY     * e}px) scale(${1 - 0.15 * e})`;
 
-      // On full reset (expand complete), clear transforms and re-measure next collapse
+      // On full reset (expand complete), clear transforms + restore animation property
+      // and re-measure next collapse
       if (p === 0) {
-        [subtitleEl, titleEl, dateEl].forEach(el => { if (el) el.style.transform = ''; });
+        [mobileSubtitleRef.current, mobileTitleRef.current, mobileDateRef.current].forEach(el => {
+          if (!el) return;
+          el.style.transform = '';
+          el.style.animation = '';   // let JSX-set animation resume naturally
+        });
         textMeasured = false;
       }
     }
