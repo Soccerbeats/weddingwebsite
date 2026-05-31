@@ -1,6 +1,22 @@
 import { NextResponse } from 'next/server';
 import { getSiteConfig } from '@/lib/config';
 import pool from '@/lib/db';
+import { jwtVerify } from 'jose';
+import { cookies } from 'next/headers';
+
+const JWT_SECRET = new TextEncoder().encode(process.env.ADMIN_PASSWORD || 'default_secret_password');
+
+async function isAdmin(): Promise<boolean> {
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get('admin_token')?.value;
+    if (!token) return false;
+    await jwtVerify(token, JWT_SECRET);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 interface NavCard {
   href: string;
@@ -23,15 +39,18 @@ const ALL_PAGES: NavCard[] = [
 export async function GET() {
   try {
     const config = getSiteConfig();
+    const admin = await isAdmin();
 
     const hiddenPaths = new Set<string>();
-    try {
-      const result = await pool.query('SELECT page_path, is_hidden FROM wip_toggles');
-      for (const row of result.rows) {
-        if (row.is_hidden) hiddenPaths.add(row.page_path);
+    if (!admin) {
+      try {
+        const result = await pool.query('SELECT page_path, is_hidden FROM wip_toggles');
+        for (const row of result.rows) {
+          if (row.is_hidden) hiddenPaths.add(row.page_path);
+        }
+      } catch {
+        // DB unavailable — show all cards
       }
-    } catch {
-      // DB unavailable — show all cards
     }
 
     const subtitleMap: Record<string, string> = {
