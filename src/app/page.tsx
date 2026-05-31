@@ -144,7 +144,7 @@ export default function Home() {
               </FadeIn>
               <FadeIn animation="slide-left" delay={100}>
                 <div className="mt-10 lg:mt-0 relative">
-                  <div className="aspect-w-3 aspect-h-4 rounded-3xl overflow-hidden bg-gray-100 shadow-xl border-4 border-white transform rotate-2 hover:rotate-0 transition-transform duration-500">
+                  <div className="aspect-w-3 aspect-h-4 rounded-3xl overflow-hidden bg-gray-100 shadow-xl border-4 border-white transform md:rotate-2 hover:rotate-0 transition-transform duration-500">
                     {config.aboutHero ? (
                       <img src={`/api/photos/${config.aboutHero}`} alt="About Couple" className="h-full w-full object-cover" />
                     ) : (

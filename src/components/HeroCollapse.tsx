@@ -56,6 +56,23 @@ export default function HeroCollapse({
   const stateRef    = useRef<CollapseState>('full');
   const progressRef = useRef(0); // 0 = full screen, 1 = fully collapsed
 
+  // Mobile-specific refs
+  const mobileMidRef    = useRef<HTMLDivElement>(null);
+  const mobileTopRef    = useRef<HTMLDivElement>(null);
+  const mobileBotRef    = useRef<HTMLDivElement>(null);
+  const mobileTextRef   = useRef<HTMLDivElement>(null);
+  const mobileHintRef   = useRef<HTMLDivElement>(null);
+  const mobileCanvasRef = useRef<HTMLCanvasElement>(null);
+  const mobileStateRef  = useRef<CollapseState>('full');
+  const mobileProgressRef = useRef(0);
+  const mobileRafRef    = useRef<number>(0);
+  const mobileParticles = useRef<Array<{
+    x: number; y: number; vx: number; vy: number;
+    size: number; life: number; decay: number;
+    color: string; rot: number; rotV: number; isPetal: boolean;
+  }>>([]);
+  const mobileParticleRaf = useRef<number>(0);
+
   // ── Detect mobile ────────────────────────────────────────────────────────
   useEffect(() => {
     setIsMobile(window.matchMedia('(max-width: 768px)').matches);
@@ -234,13 +251,201 @@ export default function HeroCollapse({
     );
   }
 
-  // ── Mobile: normal hero, no collapse ─────────────────────────────────────
+  // ── Mobile: vertical collapse animation on first scroll ──────────────────
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useEffect(() => {
+    if (!isMobile) return;
+
+    const mid  = mobileMidRef.current;
+    const top  = mobileTopRef.current;
+    const bot  = mobileBotRef.current;
+    const text = mobileTextRef.current;
+    const hint = mobileHintRef.current;
+    if (!mid || !top || !bot) return;
+
+    function applyMobileProgress(p: number) {
+      if (!mid || !top || !bot || !text || !hint) return;
+      const e = p < 0.5 ? 4*p*p*p : 1 - Math.pow(-2*p+2,3)/2;
+      // Middle: full → center third
+      mid.style.top    = (33.333 * e) + '%';
+      mid.style.height = (100 - 66.666 * e) + '%';
+      // Top: slide in from above (0.15s delay)
+      const topE = (() => { const t = Math.max(0, Math.min(1, (p - 0.15) / 0.85)); return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2; })();
+      top.style.transform = `translateY(${-100 * (1 - topE)}%)`;
+      // Bottom: slide in from below (0.15s delay)
+      bot.style.transform = `translateY(${100 * (1 - topE)}%)`;
+      // Text fade
+      text.style.opacity   = String(Math.max(0, 1 - e * 3));
+      text.style.transform = `translateY(${-e * 30}px)`;
+      hint.style.opacity   = String(Math.max(0, 1 - p * 5));
+      const divAlpha = String(Math.max(0, (p - 0.85) / 0.15));
+      const divTopEl = document.getElementById('mobile-div-top');
+      const divBotEl = document.getElementById('mobile-div-bot');
+      if (divTopEl) divTopEl.style.opacity = divAlpha;
+      if (divBotEl) divBotEl.style.opacity = divAlpha;
+    }
+
+    function fireParticles(direction: 'collapse' | 'expand') {
+      const canvas = mobileCanvasRef.current;
+      if (!canvas) return;
+      const W = canvas.offsetWidth, H = canvas.offsetHeight;
+      const count = 32;
+      for (let i = 0; i < count; i++) {
+        let x: number, y: number, vx: number, vy: number;
+        if (direction === 'collapse') {
+          const seam = Math.random() < 0.5 ? H * 0.333 : H * 0.667;
+          x = Math.random() * W;
+          y = seam + (Math.random() - 0.5) * 8;
+          const angle = (Math.random() - 0.5) * Math.PI * 1.4;
+          const speed = 1.2 + Math.random() * 2.2;
+          vx = Math.cos(angle) * speed;
+          vy = Math.sin(angle) * speed * 0.6;
+        } else {
+          x = W / 2 + (Math.random() - 0.5) * 40;
+          y = H / 2 + (Math.random() - 0.5) * 40;
+          const angle = Math.random() * Math.PI * 2;
+          const speed = 1.5 + Math.random() * 3;
+          vx = Math.cos(angle) * speed;
+          vy = Math.sin(angle) * speed;
+        }
+        const type = Math.random();
+        mobileParticles.current.push({
+          x, y, vx, vy,
+          size:    2 + Math.random() * 3,
+          life:    1,
+          decay:   0.012 + Math.random() * 0.018,
+          color:   type < 0.5 ? 'rgba(212,175,55,A)' : type < 0.75 ? 'rgba(255,255,255,A)' : 'rgba(220,140,140,A)',
+          rot:     Math.random() * Math.PI * 2,
+          rotV:    (Math.random() - 0.5) * 0.15,
+          isPetal: Math.random() < 0.35,
+        });
+      }
+      if (mobileParticleRaf.current) cancelAnimationFrame(mobileParticleRaf.current);
+      function particleTick() {
+        const canvas = mobileCanvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        mobileParticles.current = mobileParticles.current.filter(p => p.life > 0);
+        for (const p of mobileParticles.current) {
+          p.x += p.vx; p.y += p.vy; p.vy += 0.045; p.vx *= 0.978;
+          p.rot += p.rotV; p.life -= p.decay;
+          const alpha = Math.max(0, p.life);
+          const col = p.color.replace('A', alpha.toFixed(2));
+          ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+          if (p.isPetal) {
+            ctx.beginPath(); ctx.ellipse(0, 0, p.size * 0.6, p.size * 1.4, 0, 0, Math.PI * 2);
+            ctx.fillStyle = col; ctx.fill();
+          } else {
+            ctx.beginPath(); ctx.arc(0, 0, p.size * 0.5, 0, Math.PI * 2);
+            ctx.fillStyle = col; ctx.fill();
+          }
+          ctx.restore();
+        }
+        if (mobileParticles.current.length > 0) mobileParticleRaf.current = requestAnimationFrame(particleTick);
+        else ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+      mobileParticleRaf.current = requestAnimationFrame(particleTick);
+    }
+
+    function runMobileAnimation(target: number, onDone: () => void) {
+      const from = mobileProgressRef.current;
+      const start = performance.now();
+      let particleFired = false;
+      if (mobileRafRef.current) cancelAnimationFrame(mobileRafRef.current);
+      function tick(now: number) {
+        const t = Math.min(1, (now - start) / ANIM_DURATION);
+        mobileProgressRef.current = from + (target - from) * t;
+        applyMobileProgress(mobileProgressRef.current);
+        if (!particleFired && mobileProgressRef.current >= 0.65 && mobileProgressRef.current <= 0.85) {
+          particleFired = true;
+          fireParticles(target === 1 ? 'collapse' : 'expand');
+        }
+        if (t < 1) mobileRafRef.current = requestAnimationFrame(tick);
+        else { mobileProgressRef.current = target; applyMobileProgress(target); onDone(); }
+      }
+      mobileRafRef.current = requestAnimationFrame(tick);
+    }
+
+    function collapse() {
+      if (mobileStateRef.current !== 'full') return;
+      mobileStateRef.current = 'animating';
+      window.dispatchEvent(new CustomEvent('hero-collapsing'));
+      runMobileAnimation(1, () => { mobileStateRef.current = 'collapsed'; });
+    }
+
+    function expand() {
+      if (mobileStateRef.current !== 'collapsed') return;
+      mobileStateRef.current = 'animating';
+      window.dispatchEvent(new CustomEvent('hero-expanded'));
+      runMobileAnimation(0, () => { mobileStateRef.current = 'full'; });
+    }
+
+    let touchStartY: number | null = null;
+    function onTouchStart(e: TouchEvent) { touchStartY = e.touches[0].clientY; }
+    function onTouchMove(e: TouchEvent) {
+      if (touchStartY === null) return;
+      const dy = touchStartY - e.touches[0].clientY;
+      if (dy > 25 && mobileStateRef.current === 'full')      collapse();
+      if (dy < -25 && mobileStateRef.current === 'collapsed') expand();
+    }
+    function onTouchEnd() { touchStartY = null; }
+
+    window.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchmove',  onTouchMove,  { passive: true });
+    window.addEventListener('touchend',   onTouchEnd,   { passive: true });
+
+    applyMobileProgress(0);
+    return () => {
+      window.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('touchmove',  onTouchMove);
+      window.removeEventListener('touchend',   onTouchEnd);
+      if (mobileRafRef.current) cancelAnimationFrame(mobileRafRef.current);
+      if (mobileParticleRaf.current) cancelAnimationFrame(mobileParticleRaf.current);
+    };
+  }, [isMobile]);
+
   if (isMobile) {
+    const topSrc = srcs[1] ?? srcs[0];
+    const botSrc = srcs[2] ?? srcs[0];
     return (
-      <div className="relative" style={{ height: '100svh' }}>
-        <div className="absolute inset-0 overflow-hidden bg-gray-900">
-          <div className="absolute inset-0 bg-gray-800 transition-opacity duration-700 z-10"
-               style={{ opacity: firstReady ? 0 : 1 }} />
+      <div className="relative" style={{ height: '100svh', overflow: 'hidden', backgroundColor: bgColor }}>
+        {/* Particle canvas */}
+        <canvas
+          ref={el => {
+            (mobileCanvasRef as React.MutableRefObject<HTMLCanvasElement | null>).current = el;
+            if (el) { el.width = el.offsetWidth; el.height = el.offsetHeight; }
+          }}
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', zIndex: 30, pointerEvents: 'none' }}
+        />
+
+        {/* TOP strip — slides in from above */}
+        <div ref={mobileTopRef} style={{
+          position: 'absolute', left: 0, right: 0,
+          top: 0, height: '33.333%',
+          overflow: 'hidden',
+          transform: 'translateY(-100%)',
+          zIndex: 5,
+        }}>
+          <div style={{ position: 'absolute', inset: 0, height: '300%', top: 0 }}>
+            <div className="absolute inset-0 bg-gray-800 transition-opacity duration-700"
+                 style={{ opacity: firstReady ? 0 : 1, zIndex: 2 }} />
+            <img src={photoSrc(topSrc, 'medium')} alt=""
+                 style={{ position: 'absolute', inset: 0, width: '100%', height: '33.333%', objectFit: 'cover' }} />
+            <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 1 }} />
+          </div>
+        </div>
+
+        {/* MIDDLE strip — main slideshow, compresses vertically */}
+        <div ref={mobileMidRef} style={{
+          position: 'absolute', left: 0, right: 0,
+          top: 0, height: '100%',
+          overflow: 'hidden',
+          zIndex: 10,
+        }}>
+          <div className="absolute inset-0 bg-gray-800 transition-opacity duration-700"
+               style={{ opacity: firstReady ? 0 : 1, zIndex: 2 }} />
           {srcs.map((src, i) => (
             <img key={src} src={photoSrc(src, 'medium')} alt="Hero"
                  fetchPriority={i === 0 ? 'high' : 'low'}
@@ -251,13 +456,78 @@ export default function HeroCollapse({
                    zIndex: i === currentSlide ? 1 : 0,
                  }} />
           ))}
-          <div className="absolute inset-0 bg-black/40 z-20" />
-          <div className="absolute top-0 left-0 right-0 h-40 z-30 pointer-events-none"
-               style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.45) 0%, transparent 100%)' }} />
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.40)', zIndex: 3 }} />
+          <div style={{
+            position: 'absolute', top: 0, left: 0, right: 0, height: '160px',
+            background: 'linear-gradient(to bottom, rgba(0,0,0,0.45) 0%, transparent 100%)',
+            zIndex: 4, pointerEvents: 'none',
+          }} />
+          {/* Hero text */}
+          <div ref={mobileTextRef} style={{
+            position: 'absolute', inset: 0, zIndex: 20,
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          }}>
+            {children}
+          </div>
+          {/* Scroll hint */}
+          <div ref={mobileHintRef} style={{
+            position: 'absolute', bottom: '20px', left: 0, right: 0,
+            textAlign: 'center', zIndex: 21,
+          }}>
+            <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
+                          animation: 'hint-bounce 1.8s ease-in-out infinite' }}>
+              <span style={{ fontSize: '10px', letterSpacing: '3px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)' }}>scroll</span>
+              <span style={{ fontSize: '16px', color: 'rgba(255,255,255,0.4)' }}>↓</span>
+            </div>
+          </div>
+          {/* Slide dots */}
+          {srcs.length > 1 && (
+            <div style={{
+              position: 'absolute', bottom: '52px', left: 0, right: 0,
+              display: 'flex', justifyContent: 'center', gap: '8px', zIndex: 25,
+            }}>
+              {srcs.map((_, i) => (
+                <button key={i} onClick={() => setCurrentSlide(i)}
+                        aria-label={`Slide ${i + 1}`}
+                        style={{
+                          width: i === currentSlide ? '24px' : '10px', height: '10px',
+                          borderRadius: '9999px', border: 'none', cursor: 'pointer', padding: 0,
+                          background: i === currentSlide ? 'white' : 'rgba(255,255,255,0.5)',
+                          transition: 'all 300ms',
+                        }} />
+              ))}
+            </div>
+          )}
         </div>
-        <div className="relative z-40 h-full flex flex-col items-center justify-center text-center px-4">
-          {children}
+
+        {/* BOTTOM strip — slides in from below */}
+        <div ref={mobileBotRef} style={{
+          position: 'absolute', left: 0, right: 0,
+          bottom: 0, height: '33.333%',
+          overflow: 'hidden',
+          transform: 'translateY(100%)',
+          zIndex: 5,
+        }}>
+          <div style={{ position: 'absolute', inset: 0, height: '300%', bottom: 0, top: 'auto' }}>
+            <img src={photoSrc(botSrc, 'medium')} alt=""
+                 style={{ position: 'absolute', bottom: 0, left: 0, right: 0, width: '100%', height: '33.333%', objectFit: 'cover' }} />
+            <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 1 }} />
+          </div>
         </div>
+
+        {/* Gold dividers (revealed after collapse) */}
+        <div id="mobile-div-top" style={{
+          position: 'absolute', left: 0, right: 0, top: '33.333%',
+          height: '1px', background: 'rgba(212,175,55,0.5)', zIndex: 20, opacity: 0,
+          transition: 'opacity 0.3s ease 0.6s',
+        }} />
+        <div id="mobile-div-bot" style={{
+          position: 'absolute', left: 0, right: 0, top: '66.666%',
+          height: '1px', background: 'rgba(212,175,55,0.5)', zIndex: 20, opacity: 0,
+          transition: 'opacity 0.3s ease 0.6s',
+        }} />
+
+        <style>{`@keyframes hint-bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(5px)} }`}</style>
       </div>
     );
   }

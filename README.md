@@ -16,8 +16,9 @@ A beautiful, customizable wedding website built with Next.js 16. Features includ
   - 🛍️ **Registry** — Product grid linked to Target and Amazon; shows thumbnail, title, price, description; clicking opens the product page directly
 - **RSVP**: Guest RSVP form with name verification against guest list
 - **Animations**:
-  - Hero collapse: scroll down → hero condenses to strip + scattered polaroid photos fly in; scroll up → reverses
-  - Nav banner → island: full-width frosted glass bar morphs into floating pill on scroll (all pages); both animations run simultaneously
+  - Hero collapse (desktop): scroll down → hero condenses to strip + scattered polaroid photos fly in; scroll up → reverses
+  - Hero collapse (mobile): swipe up → hero squishes vertically into center third while top/bottom photos slide in from edges; swipe down reverses; particle burst (gold sparks + rose petals) fires at strip seams on both collapse and expand
+  - Nav banner → island: full-width frosted glass bar morphs into floating pill on scroll (all pages); both desktop and mobile hero dispatches fire this simultaneously
   - FadeIn: scroll-triggered `fade`, `slide-up`, `slide-left`, `slide-right`, `scale` on page sections
   - HeartBurst: double-click/double-tap anywhere spawns floating hearts
   - Page transitions: fade+rise animation on every route change

@@ -4,6 +4,14 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [2026-06-01] — Mobile hero collapse animation + about image tilt fix
+
+### Added
+- **Mobile hero collapse animation** — On first swipe-up the full-screen hero squishes vertically into the center third while a second photo slides down from above and a third rises up from below, all in the same 900ms cubic ease-in-out as desktop. Swipe down when collapsed to reverse the animation and restore the full hero. Dispatches the same `hero-collapsing` / `hero-expanded` CustomEvents as desktop so the nav pill transition fires simultaneously. Particle burst (gold sparks, white sparks, rose petals) fires at the strip-seam lines at ~70% through both collapse and expand.
+
+### Fixed
+- **About section image tilt on mobile** — The couple photo in the "How We Met" section was always rotated 2°. Now the tilt only applies on `md` breakpoint and above (`md:rotate-2`); on mobile the image sits perfectly straight.
+
 ## [2026-05-31] — RSVP dietary restrictions overhaul, party member cards, dashboard fixes, nav cards
 
 ### Added
