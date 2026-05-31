@@ -3,11 +3,21 @@
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 
+const SLUG_GRADIENTS: Record<string, string> = {
+  'our-story':     'from-rose-900 via-rose-700 to-pink-600',
+  'wedding-party': 'from-violet-900 via-purple-700 to-fuchsia-600',
+  'schedule':      'from-sky-900 via-blue-700 to-cyan-600',
+  'photos':        'from-amber-900 via-orange-700 to-yellow-600',
+  'registry':      'from-emerald-900 via-green-700 to-teal-600',
+  'rsvp':          'from-slate-800 via-gray-700 to-zinc-600',
+};
+
 interface PageConfig {
   slug: string;
   label: string;
   href: string;
   image: string | null;
+  defaultPhoto?: string | null;
 }
 
 interface SitePhoto {
@@ -42,10 +52,11 @@ export default function AdminNavCards() {
   useEffect(() => {
     fetch('/api/nav-cards')
       .then(r => r.json())
-      .then((cards: { slug: string; image: string | null }[]) => {
+      .then((cards: { slug: string; image: string | null; defaultPhoto?: string | null }[]) => {
         const imageMap: Record<string, string | null> = {};
-        cards.forEach(c => { imageMap[c.slug] = c.image; });
-        setPages(PAGE_DEFS.map(p => ({ ...p, image: imageMap[p.slug] || null })));
+        const defaultMap: Record<string, string | null> = {};
+        cards.forEach(c => { imageMap[c.slug] = c.image; defaultMap[c.slug] = c.defaultPhoto || null; });
+        setPages(PAGE_DEFS.map(p => ({ ...p, image: imageMap[p.slug] || null, defaultPhoto: defaultMap[p.slug] || null })));
       });
   }, []);
 
@@ -90,7 +101,7 @@ export default function AdminNavCards() {
       setPhotosLoading(true);
       const res = await fetch('/api/admin/photos');
       const data = await res.json();
-      setSitePhotos(data || []);
+      setSitePhotos(Array.isArray(data) ? data : (data.photos || []));
       setPhotosLoading(false);
     }
   };
@@ -131,18 +142,26 @@ export default function AdminNavCards() {
         {pages.map(page => (
           <div key={page.slug} className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 flex items-center gap-6">
             {/* Thumbnail */}
-            <div className="w-24 h-16 rounded-lg overflow-hidden bg-gradient-to-br from-accent/30 to-accent-dark/30 flex-shrink-0 relative">
+            <div className="w-24 h-16 rounded-lg overflow-hidden flex-shrink-0 relative">
               {page.image ? (
                 <Image
                   src={`/api/photos/nav-cards/${page.image}`}
                   alt={page.label}
                   fill
                   unoptimized
-                  className="object-cover"
+                  className="object-cover grayscale"
+                />
+              ) : page.defaultPhoto ? (
+                <Image
+                  src={`/api/photos/${page.defaultPhoto}`}
+                  alt={page.label}
+                  fill
+                  unoptimized
+                  className="object-cover grayscale"
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-xs text-accent/60 font-sans">
-                  Default
+                <div className={`w-full h-full bg-gradient-to-br ${SLUG_GRADIENTS[page.slug] || 'from-gray-700 to-gray-500'} flex items-center justify-center`}>
+                  <span className="text-[10px] text-white/50 font-sans uppercase tracking-wider">No photos</span>
                 </div>
               )}
             </div>

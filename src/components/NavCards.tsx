@@ -76,6 +76,7 @@ interface NavCard {
   eyebrow: string;
   subtitle: string;
   image: string | null;
+  defaultPhoto: string | null;
 }
 
 export default function NavCards() {
@@ -110,7 +111,15 @@ export default function NavCards() {
                     alt={card.label}
                     fill
                     unoptimized
-                    className="object-cover transition-transform duration-[350ms] ease-out group-hover:scale-105"
+                    className="object-cover grayscale transition-transform duration-[350ms] ease-out group-hover:scale-105"
+                  />
+                ) : card.defaultPhoto ? (
+                  <Image
+                    src={`/api/photos/${card.defaultPhoto}`}
+                    alt={card.label}
+                    fill
+                    unoptimized
+                    className="object-cover grayscale transition-transform duration-[350ms] ease-out group-hover:scale-105"
                   />
                 ) : (
                   <DefaultCardBg slug={card.slug} />
