@@ -69,6 +69,12 @@ export interface SiteConfig {
     // Page Subtitles
     timelineSubtitle?: string;
     photosSubtitle?: string;
+    aboutSubtitle?: string;
+    scheduleSubtitle?: string;
+    registryPageSubtitle?: string;
+    rsvpSubtitle?: string;
+    // Nav Cards image map (key = page slug)
+    navCards?: Record<string, string>;
     // Wedding Color Palette
     weddingColorPalette?: string[]; // 5 custom colors
     // Public Page Background Colors
