@@ -21,6 +21,34 @@ export async function GET(
             return new NextResponse('File not found', { status: 404 });
         }
 
+        // Thumb mode: last segment is literally "thumb"
+        if (filepath[filepath.length - 1] === 'thumb') {
+            const thumbPath = path.join(photosDir, ...filepath.slice(0, -1));
+            if (!thumbPath.startsWith(photosDir + path.sep)) {
+                return new NextResponse('Forbidden', { status: 403 });
+            }
+            if (!fs.existsSync(thumbPath)) {
+                return new NextResponse('Not found', { status: 404 });
+            }
+            try {
+                const thumb = await sharp(thumbPath)
+                    .resize(300, 200, { fit: 'cover', position: 'centre' })
+                    .jpeg({ quality: 70 })
+                    .toBuffer();
+                return new NextResponse(new Uint8Array(thumb), {
+                    headers: {
+                        'Content-Type': 'image/jpeg',
+                        'Cache-Control': 'public, max-age=31536000, immutable',
+                    },
+                });
+            } catch {
+                const original = fs.readFileSync(thumbPath);
+                return new NextResponse(new Uint8Array(original), {
+                    headers: { 'Content-Type': 'image/jpeg' },
+                });
+            }
+        }
+
         // Optional width resize via ?w=1200
         const { searchParams } = request.nextUrl;
         const w = parseInt(searchParams.get('w') || '0');
