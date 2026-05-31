@@ -5,12 +5,17 @@ import sharp from 'sharp';
 
 export async function GET(
     request: NextRequest,
-    { params }: { params: Promise<{ filename: string }> }
+    { params }: { params: Promise<{ filepath: string[] }> }
 ) {
     try {
-        const { filename } = await params;
-        const safeName = path.basename(filename);
-        const filePath = path.join(process.cwd(), 'public/photos', safeName);
+        const { filepath } = await params;
+        const photosDir = path.join(process.cwd(), 'public/photos');
+        const filePath = path.join(photosDir, ...filepath);
+
+        // Security: ensure resolved path stays within photos dir
+        if (!filePath.startsWith(photosDir + path.sep) && filePath !== photosDir) {
+            return new NextResponse('Forbidden', { status: 403 });
+        }
 
         if (!fs.existsSync(filePath)) {
             return new NextResponse('File not found', { status: 404 });
@@ -36,7 +41,7 @@ export async function GET(
 
         // Full resolution
         const fileBuffer = fs.readFileSync(filePath);
-        const ext = path.extname(safeName).toLowerCase();
+        const ext = path.extname(filePath).toLowerCase();
         const contentTypeMap: { [key: string]: string } = {
             '.jpg': 'image/jpeg',
             '.jpeg': 'image/jpeg',
@@ -44,6 +49,7 @@ export async function GET(
             '.gif': 'image/gif',
             '.webp': 'image/webp',
             '.svg': 'image/svg+xml',
+            '.avif': 'image/avif',
         };
         const contentType = contentTypeMap[ext] || 'application/octet-stream';
 
