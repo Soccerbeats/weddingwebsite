@@ -545,8 +545,6 @@ export default function HeroCollapse({
   }, [isMobile]);
 
   if (isMobile) {
-    const topSrc = srcs[1] ?? srcs[0];
-    const botSrc = srcs[2] ?? srcs[0];
     // 200svh outer section mirrors desktop 200vh pattern:
     // sticky inner stays at top while scroll room lets us jump scrollY after animation
     return (
@@ -568,7 +566,7 @@ export default function HeroCollapse({
           style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', zIndex: 30, pointerEvents: 'none' }}
         />
 
-        {/* TOP strip — slides in from above */}
+        {/* TOP strip — slides in from above; crossfades at currentSlide+1 offset */}
         <div ref={mobileTopRef} style={{
           position: 'absolute', left: 0, right: 0,
           top: 0, height: '33.333%',
@@ -576,13 +574,15 @@ export default function HeroCollapse({
           transform: 'translateY(-100%)',
           zIndex: 5,
         }}>
-          <div style={{ position: 'absolute', inset: 0, height: '300%', top: 0 }}>
-            <div className="absolute inset-0 bg-gray-800 transition-opacity duration-700"
-                 style={{ opacity: firstReady ? 0 : 1, zIndex: 2 }} />
-            <img src={photoSrc(topSrc, 'medium')} alt=""
-                 style={{ position: 'absolute', inset: 0, width: '100%', height: '33.333%', objectFit: 'cover' }} />
-            <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 1 }} />
-          </div>
+          <div className="absolute inset-0 bg-gray-800 transition-opacity duration-700"
+               style={{ opacity: firstReady ? 0 : 1, zIndex: 2 }} />
+          {srcs.map((src, i) => {
+            const active = i === (currentSlide + 1) % srcs.length;
+            return <img key={src} src={photoSrc(src, 'medium')} alt=""
+              className="absolute inset-0 w-full h-full object-cover"
+              style={{ opacity: active ? 1 : 0, transition: 'opacity 1200ms cubic-bezier(0.4,0,0.2,1)', zIndex: active ? 1 : 0 }} />;
+          })}
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 3 }} />
         </div>
 
         {/* MIDDLE strip — main slideshow, images only (text lives outside) */}
@@ -630,7 +630,7 @@ export default function HeroCollapse({
           )}
         </div>
 
-        {/* BOTTOM strip — slides in from below */}
+        {/* BOTTOM strip — slides in from below; crossfades at currentSlide+2 offset */}
         <div ref={mobileBotRef} style={{
           position: 'absolute', left: 0, right: 0,
           bottom: 0, height: '33.333%',
@@ -638,11 +638,15 @@ export default function HeroCollapse({
           transform: 'translateY(100%)',
           zIndex: 5,
         }}>
-          <div style={{ position: 'absolute', inset: 0, height: '300%', bottom: 0, top: 'auto' }}>
-            <img src={photoSrc(botSrc, 'medium')} alt=""
-                 style={{ position: 'absolute', bottom: 0, left: 0, right: 0, width: '100%', height: '33.333%', objectFit: 'cover' }} />
-            <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 1 }} />
-          </div>
+          <div className="absolute inset-0 bg-gray-800 transition-opacity duration-700"
+               style={{ opacity: firstReady ? 0 : 1, zIndex: 2 }} />
+          {srcs.map((src, i) => {
+            const active = i === (currentSlide + 2) % srcs.length;
+            return <img key={src} src={photoSrc(src, 'medium')} alt=""
+              className="absolute inset-0 w-full h-full object-cover"
+              style={{ opacity: active ? 1 : 0, transition: 'opacity 1200ms cubic-bezier(0.4,0,0.2,1)', zIndex: active ? 1 : 0 }} />;
+          })}
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 3 }} />
         </div>
 
         {/* ── Text overlay ── */}
@@ -704,31 +708,36 @@ export default function HeroCollapse({
           background: 'linear-gradient(to bottom, rgba(0,0,0,0.45) 0%, transparent 100%)',
         }} />
 
-        {/* ── Scattered photos — fly in from off-screen ── */}
-        {srcs.slice(1, 1 + SCATTER.length).map((src, i) => (
+        {/* ── Scattered photos — each frame crossfades at currentSlide+1+i offset ── */}
+        {srcs.length > 1 && SCATTER.map((s, i) => (
           <div
-            key={src}
+            key={i}
             ref={el => { scatterRefs.current[i] = el; }}
             style={{
               position: 'absolute',
               left: '50%',
               top:  '50%',
-              marginLeft: `-${SCATTER[i].w / 2}vw`,
-              marginTop:  `-${SCATTER[i].w * (4 / 3) / 2}vh`,
-              width:  `${SCATTER[i].w}vw`,
+              marginLeft: `-${s.w / 2}vw`,
+              marginTop:  `-${s.w * (4 / 3) / 2}vh`,
+              width:  `${s.w}vw`,
               aspectRatio: '3 / 4',
               overflow: 'hidden',
               borderRadius: '16px',
               boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
               border: '4px solid white',
               opacity: 0,
-              transform: `translate(${SCATTER[i].x < 0 ? -120 : 120}vw, ${SCATTER[i].y}vh) rotate(0deg)`,
+              transform: `translate(${s.x < 0 ? -120 : 120}vw, ${s.y}vh) rotate(0deg)`,
               transition: 'none',
               zIndex: 15,
             }}
           >
-            <img src={photoSrc(src, 'medium')} alt=""
-                 style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            {srcs.map((src, j) => {
+              const active = j === (currentSlide + 1 + i) % srcs.length;
+              return <img key={src} src={photoSrc(src, 'medium')} alt=""
+                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover',
+                         opacity: active ? 1 : 0,
+                         transition: 'opacity 1200ms cubic-bezier(0.4,0,0.2,1)' }} />;
+            })}
           </div>
         ))}
 
