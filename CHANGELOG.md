@@ -4,6 +4,26 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [2026-06-01 session 2] — Mobile hero polish: scroll hijack, padding, UX fixes
+
+### Added
+- **Mobile hero scroll hijack** — Outer section is 200svh with sticky inner, mirroring the desktop pattern. Any downward touch/wheel is consumed entirely by the collapse animation; after completion `window.scrollTo` jumps past the section so normal scroll begins immediately. Upward scroll back to section boundary auto-triggers expand (including during iOS momentum via `scroll` event listener). Wheel handler added alongside touch so phone-sized desktop browser windows work identically.
+- **Collage padding** — When collapsed, 90px top padding (clears nav bar) and 30px bottom padding animate in with the strips. All strip positions/heights computed in px from `window.innerHeight` so padding is exact.
+- **Post-collapse scroll hint** — "scroll ↓" fades in on the bottom strip after animation completes, positioned inside the strip (`padBot + 14px` from bottom).
+- **Scrollbar layout shift fix** — `scrollbar-width: none` + `::webkit-scrollbar { display: none }` on mobile in `globals.css` so no reserved scrollbar gutter.
+
+### Fixed
+- **Separator lines animate with mid strip** — Lines are `borderTop`/`borderBottom` on the mid strip div, riding the squish from full-screen to center third.
+- **Text overlay stays centered in mid strip** — Text translateY follows mid strip center offset `(PTOP−PBOT)/2 × e` as asymmetric padding grows; scales 1.0→0.65 to squeeze text into the smaller strip instead of fading.
+- **iOS momentum expand** — Scroll event listener auto-triggers expand when `scrollY ≤ sectionScrollRoom − 80px` so users don't have to stop and re-swipe.
+- **Double-animation on expand** — `scrollTo(0)` now fires while state is still `animating`, preventing the race where the job-1 snap-to-collapsed triggered immediately after expand.
+- **DevTools phone-size viewport** — `isMobile` now updates via `MediaQueryList` change event; mobile `useLayoutEffect` runs after DOM commit so refs are always populated.
+- **Image quality** — Mobile hero slideshow bumped from `medium` (960px) to `large` (1280px) for sharp retina display.
+- **Date/location** — Two lines on mobile (`<br className="md:hidden">`), both center-aligned.
+- **About image tilt** — `rotate-2` → `md:rotate-2`; image sits straight on mobile.
+- **Slideshow dots** — Raised 10px in hero mode (bottom: 66px); lowered 30px in collage mode (bottom: 36px), animated continuously.
+- **Scroll hint / dots overlap** — Dots at bottom: 66px, pre-collapse hint at bottom: 20px — no overlap.
+
 ## [2026-06-01] — Mobile hero collapse animation + about image tilt fix
 
 ### Added
