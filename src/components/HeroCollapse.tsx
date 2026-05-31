@@ -423,8 +423,9 @@ export default function HeroCollapse({
       }
 
       // Job 2: auto-expand when momentum/active-scroll brings us back to boundary.
-      // Use a generous 80px buffer so it fires before the user fully stops.
-      if (s === 'collapsed' && window.scrollY <= mobileSectionScrollRoom() + 80) {
+      // Use a negative buffer so this only fires when the user has scrolled
+      // UP past the landing point, not immediately after the collapse jump.
+      if (s === 'collapsed' && window.scrollY <= mobileSectionScrollRoom() - 80) {
         expand();
       }
     };
