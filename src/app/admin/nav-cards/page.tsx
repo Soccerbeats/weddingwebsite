@@ -11,7 +11,6 @@ interface PageConfig {
 }
 
 const PAGE_DEFS: Omit<PageConfig, 'image'>[] = [
-  { slug: 'about',         label: 'About',         href: '/#about' },
   { slug: 'our-story',     label: 'Timeline',      href: '/our-story' },
   { slug: 'wedding-party', label: 'Wedding Party', href: '/wedding-party' },
   { slug: 'schedule',      label: 'Schedule',      href: '/schedule' },

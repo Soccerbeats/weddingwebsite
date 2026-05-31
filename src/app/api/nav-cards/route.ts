@@ -12,7 +12,6 @@ interface NavCard {
 }
 
 const ALL_PAGES: NavCard[] = [
-  { href: '/#about',        slug: 'about',         label: 'About',         eyebrow: 'Our Story',   subtitle: '', image: null },
   { href: '/our-story',     slug: 'our-story',     label: 'Timeline',      eyebrow: 'Our Journey', subtitle: '', image: null },
   { href: '/wedding-party', slug: 'wedding-party', label: 'Wedding Party', eyebrow: 'The Crew',    subtitle: '', image: null },
   { href: '/schedule',      slug: 'schedule',      label: 'Schedule',      eyebrow: 'The Day',     subtitle: '', image: null },
@@ -36,7 +35,6 @@ export async function GET() {
     }
 
     const subtitleMap: Record<string, string> = {
-      'about':         config.aboutSubtitle        || '',
       'our-story':     config.timelineSubtitle      || '',
       'wedding-party': config.weddingPartySubtitle  || '',
       'schedule':      config.scheduleSubtitle      || '',
