@@ -72,8 +72,9 @@ export default function HeroCollapse({
     size: number; life: number; decay: number;
     color: string; rot: number; rotV: number; isPetal: boolean;
   }>>([]);
-  const mobileParticleRaf = useRef<number>(0);
-  const mobilePostHintRef  = useRef<HTMLDivElement>(null);
+  const mobileParticleRaf    = useRef<number>(0);
+  const mobilePostHintRef    = useRef<HTMLDivElement>(null);
+  const mobileDotsRef        = useRef<HTMLDivElement>(null);
 
   // ── Detect mobile (also responds to resize / DevTools viewport changes) ──
   useEffect(() => {
@@ -273,28 +274,63 @@ export default function HeroCollapse({
     if (!mid || !top || !bot) return;
 
     function applyMobileProgress(p: number) {
-      if (!mid || !top || !bot || !text || !hint) return;
+      if (!mid || !top || !bot || !hint) return;
       const e = p < 0.5 ? 4*p*p*p : 1 - Math.pow(-2*p+2,3)/2;
 
-      // Middle strip: full → center third
-      mid.style.top    = (33.333 * e) + '%';
-      mid.style.height = (100 - 66.666 * e) + '%';
+      // Collage padding — 80px top and bottom when fully collapsed, 0 when full-hero
+      const H    = window.innerHeight;
+      const CPAD = 80;
+      const pad  = CPAD * e;                       // 0 → 80px
+      const stripH = (H - 2 * pad) / 3;            // each strip's height in px
 
-      // Separator lines ride with the mid strip's edges
+      // Middle strip: squish from full → padded center third
+      const midTop = pad + stripH * e;              // 0 → pad+stripH
+      mid.style.top    = `${midTop}px`;
+      mid.style.height = `${H - 2 * pad - stripH * 2 * e + stripH * 2 * e}px`; // = H at e=0, stripH at e=1
+      // Simpler: interpolate directly
+      mid.style.top    = `${(pad + stripH) * e}px`;
+      mid.style.height = `${H + (stripH - H) * e}px`;
+
+      // Separator lines on mid strip edges — ride with the squish
       const lineAlpha = Math.max(0, Math.min(1, (p - 0.3) / 0.4)).toFixed(3);
       mid.style.borderTop    = `2px solid rgba(255,255,255,${lineAlpha})`;
       mid.style.borderBottom = `2px solid rgba(255,255,255,${lineAlpha})`;
 
-      // Top strip slides in from above (0.15s delay)
+      // Top strip: animate position and height alongside the padding
+      top.style.top    = `${pad}px`;
+      top.style.height = `${stripH}px`;
+
+      // Bottom strip: animate position and height alongside the padding
+      bot.style.bottom = `${pad}px`;
+      bot.style.height = `${stripH}px`;
+
+      // Top/bot strips slide in from off-screen (0.15s delay)
       const topE = (() => { const t = Math.max(0, Math.min(1, (p - 0.15) / 0.85)); return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2; })();
       top.style.transform = `translateY(${-100 * (1 - topE)}%)`;
       bot.style.transform = `translateY(${100 * (1 - topE)}%)`;
 
-      // Hero text fades out during collapse
+      // Text: scale down to fit mid strip instead of fading out
       if (text) {
-        text.style.opacity   = String(Math.max(0, 1 - e * 3));
-        text.style.transform = `translateY(${-e * 30}px)`;
+        // Scale from 1.0 → 0.65 so text squeezes to fit the shrinking strip
+        const scale = 1 - 0.35 * e;
+        text.style.transform    = `scale(${scale.toFixed(3)})`;
+        text.style.opacity      = '1';
+        text.style.pointerEvents = p > 0.05 ? 'none' : 'auto';
+        // Fade out buttons (can't use in collage mode anyway)
+        const btns = text.querySelector('[data-hero-role="buttons"]') as HTMLElement | null;
+        if (btns) btns.style.opacity = String(Math.max(0, 1 - e * 4));
+        // Restore on full expand
+        if (p === 0) {
+          text.style.transform     = '';
+          text.style.opacity       = '1';
+          text.style.pointerEvents = 'auto';
+          if (btns) btns.style.opacity = '1';
+        }
       }
+
+      // Slideshow dots: hero mode bottom=66px → collage mode bottom=36px
+      const dots = mobileDotsRef.current;
+      if (dots) dots.style.bottom = `${66 - 30 * e}px`;
 
       // Pre-collapse scroll hint fades out
       hint.style.opacity = String(Math.max(0, 1 - p * 5));
@@ -302,12 +338,6 @@ export default function HeroCollapse({
       // Post-collapse scroll hint fades in on bottom strip
       const postHint = mobilePostHintRef.current;
       if (postHint) postHint.style.opacity = String(Math.max(0, (p - 0.85) / 0.15));
-
-      // On expand complete, restore text overlay
-      if (p === 0 && text) {
-        text.style.opacity   = '1';
-        text.style.transform = '';
-      }
     }
 
     function fireParticles(direction: 'collapse' | 'expand') {
@@ -578,10 +608,10 @@ export default function HeroCollapse({
             background: 'linear-gradient(to bottom, rgba(0,0,0,0.45) 0%, transparent 100%)',
             zIndex: 4, pointerEvents: 'none',
           }} />
-          {/* Slide dots — above text overlay so always tappable; raised above scroll hint */}
+          {/* Slide dots — animated bottom via mobileDotsRef */}
           {srcs.length > 1 && (
-            <div style={{
-              position: 'absolute', bottom: '56px', left: 0, right: 0,
+            <div ref={mobileDotsRef} style={{
+              position: 'absolute', bottom: '66px', left: 0, right: 0,
               display: 'flex', justifyContent: 'center', gap: '8px', zIndex: 25,
             }}>
               {srcs.map((_, i) => (
