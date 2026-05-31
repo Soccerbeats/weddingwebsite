@@ -28,13 +28,16 @@ A beautiful, customizable wedding website built with Next.js 16. Features includ
   - Stats cards: Total RSVPs, Total Attending (individual guest count), Declined, Missing RSVPs (invited but no response)
   - Filter by: All, No Response, Attending, Declined, Not Invited, Bride's Side, Groom's Side
   - Name search
+  - Party sub-rows: additional party members appear as soft gray sub-rows under the head guest row, with their dietary data
 - **Guest List**:
   - Import from CSV (handles quoted fields, commas in addresses)
   - Manual add/edit/delete
-  - Fields: name, email, phone, party_size, side, notes, plus_one_name, address
-  - Upsert on reimport — preserves email, phone, invited, notes, side; updates party_size, plus_one_name, address
+  - Fields: name, email, phone, party_size, side, notes, party_members (JSONB), address
+  - Supports families of 4+ with named/unnamed party member slots
+  - Upsert on reimport — preserves email, phone, invited, notes, side; updates party_size, party_members, address
   - Import results: Added / Updated / Failed counts
-  - RSVP submission syncs email/phone/rsvp_status back to guest_list
+  - RSVP submission syncs email/phone/rsvp_status and resolved party member names back to guest_list
+  - Party sub-rows visible in guest list table
 - **Photo Management**: Upload, drag-reorder, heart to publish, thumbnail API (`/api/photos/[filename]/thumb`), edit titles/descriptions, delete; **"Set Venue Photo"** button assigns a photo to display in the Venue section on the home page
 - **Timeline Editor**: Create and manage milestones with up to 2 photos each; oldest-first order
 - **Content Editors**: Home, About, Wedding Party, Schedule, Q&A (with Markdown `[text](url)` hyperlink support via "🔗 Insert Link" button)
@@ -44,6 +47,7 @@ A beautiful, customizable wedding website built with Next.js 16. Features includ
   - *Honeymoon Fund*: Add/edit/remove experience items; log contributions received; progress bars; "Fully Funded" badge
   - *Registry Items*: Paste a product URL → auto-fetches OG metadata (title, image, description, price); edit any field before saving; grouped by store (Target / Amazon / Other); edit and delete saved items
   - *Settings*: Page title, subtitle, description text, background color, payment method handles (Zelle/Venmo/Cash App/PayPal)
+- **Nav Cards**: Set background images for the home page navigation cards. Each card has a bundled grayscale default photo; use **Upload** to replace with a custom image or **Gallery** to pick from photos already on the site.
 - **Seating Chart**: Visual floor plan builder — add/resize room shape, place tables (round/rectangle/sweetheart), drag-drop guests from sidebar, party cohesion coloring
 - **WIP Control**:
   - Per-page **WIP** toggle (shows "coming soon" to non-admins)
@@ -152,14 +156,17 @@ npm run dev
 ## Deployment (Portainer Production)
 
 ```bash
-# Build and push
-docker build -t ghcr.io/soccerbeats/weddingwebsite:latest --target production .
+# Build and push (--cache-from speeds up repeat builds significantly)
+docker pull ghcr.io/soccerbeats/weddingwebsite:latest 2>/dev/null || true && \
+docker build --cache-from ghcr.io/soccerbeats/weddingwebsite:latest --target production \
+  -t ghcr.io/soccerbeats/weddingwebsite:latest . && \
 docker push ghcr.io/soccerbeats/weddingwebsite:latest
 
 # Then in Portainer: Pull and redeploy
 ```
 
 > ⚠️ Always use image name `ghcr.io/soccerbeats/weddingwebsite:latest` — do not change it.
+> The Dockerfile runs `npm run build` internally — no need to run it locally before `docker build`.
 
 ## Admin Panel Guide
 
@@ -208,6 +215,25 @@ John Doe,john@email.com,555-1234,2,groom,Vegan meal,Jane Doe,"123 Main St, Milwa
 - Addresses with commas must be quoted
 - `side`: `bride` or `groom`
 - Duplicate names are upserted (not duplicated)
+- For families of 4+, set `party_size` accordingly; add known names via the admin edit modal after import using the party members slots
+
+### RSVP — Per-Guest Dietary Restrictions
+
+Each party member gets their own card on the RSVP form with checkboxes:
+- Vegetarian, Vegan, Gluten Free, Nut Allergy
+- **Other** — checking this reveals a required text input; the form cannot be submitted until it is filled in
+
+Party members can be toggled attending/not attending individually. Unnamed guest slots require the submitter to enter a name before marking them as attending.
+
+### Nav Cards — Setting Images
+
+In **Admin → Nav Cards**:
+1. Each page card shows a preview thumbnail (grayscale default photo if no custom image is set)
+2. **Upload** — upload a new image from your device
+3. **Gallery** — opens a modal of all photos already uploaded to the site; click any to use it
+4. **Remove** — reverts to the default bundled photo
+
+All nav card images display in black and white on the public site.
 
 ### Countdown Display Modes
 

@@ -4,6 +4,32 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [2026-05-31] — RSVP dietary restrictions overhaul, party member cards, dashboard fixes, nav cards
+
+### Added
+- **Per-guest dietary restriction cards** — Each guest in the RSVP form now gets their own card with checkboxes: Vegetarian, Vegan, Gluten Free, Nut Allergy, Other. "Other" reveals a required text field; submission is blocked until it's filled in.
+- **Attending toggle per guest card** — Additional party members have an attending toggle; toggling on an unnamed slot reveals a required name input.
+- **Party members support (families of 4+)** — `party_members JSONB` column on `guest_list`; supports named and unnamed extra guests. Unnamed slots force the RSVP filler to enter a name. Party size enforced server-side.
+- **Party sub-rows in RSVP and Guest List admin tables** — Each head guest row shows soft gray sub-rows for additional party members, with their dietary data if available. Styled with `bg-gray-50/60`, thin `border-l-2 border-gray-200` left accent, compact padding, muted text.
+- **"Make Changes" button on RSVP success screen** — Replaces the static info box; re-opens the RSVP form pre-filled.
+- **Phone number mandatory** — RSVP form and API both require phone before submission.
+- **Resolved member names written back to guest_list** — When a guest names an unnamed party slot during RSVP, that name is persisted to `guest_list.party_members` for future sessions.
+- **Nav card default photos** — Bundled royalty-free Unsplash photos (`public/images/nav-defaults/`) for each card slug (our-story, wedding-party, schedule, photos, registry, rsvp). Render in grayscale by default.
+- **Nav card gallery picker** — "Gallery" button in Admin → Nav Cards opens a modal of all site photos (loaded as thumbnails via `/api/photos/<filename>/thumb` for fast loading). Clicking picks a photo and copies it to the nav-cards slot.
+- **Nav card PATCH API** — `PATCH /api/admin/nav-cards` accepts `{ slug, sourceFilename }` to copy an existing site photo to the nav-cards dir.
+
+### Fixed
+- **Dashboard guest list counts all showing 0** — SQL was checking `rsvp_status = 'confirmed'` but RSVP API writes `'attending'`. Fixed to use `'attending'`.
+- **Dashboard pending count** — Now correctly excludes `attending`, `declined`, and `likely_not_coming` statuses.
+- **party_size overwritten on re-RSVP** — Removed `party_size` mutation from the RSVP submit/update API; the pre-set admin value is now preserved.
+- **Nav cards crashing the home page** — `dangerouslySetInnerHTML` caused hydration errors; replaced with proper React JSX SVG components.
+- **Gallery button crash** — Photos API returns `{ photos: [] }` not a plain array; fixed parsing with `Array.isArray(data) ? data : data.photos`.
+- **Docker deploy speed** — Added `--cache-from` flag; dropped the redundant local `npm run build` before `docker build`. Updated `deploy.md`.
+
+### Changed
+- **Nav card images are grayscale** — CSS `grayscale` filter applied to all nav card images (both custom and defaults).
+- **Admin nav card thumbnails** — Now show real photo previews (custom or default) instead of a gradient placeholder box.
+
 ## [2026-05-27] — Venue photo + Get Directions button
 
 ### Added
