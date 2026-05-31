@@ -73,9 +73,13 @@ export default function HeroCollapse({
   }>>([]);
   const mobileParticleRaf = useRef<number>(0);
 
-  // ── Detect mobile ────────────────────────────────────────────────────────
+  // ── Detect mobile (also responds to resize / DevTools viewport changes) ──
   useEffect(() => {
-    setIsMobile(window.matchMedia('(max-width: 768px)').matches);
+    const mq = window.matchMedia('(max-width: 768px)');
+    setIsMobile(mq.matches);
+    const onChange = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
   }, []);
 
   // ── Preload images ────────────────────────────────────────────────────────
@@ -278,7 +282,8 @@ export default function HeroCollapse({
       text.style.opacity   = String(Math.max(0, 1 - e * 3));
       text.style.transform = `translateY(${-e * 30}px)`;
       hint.style.opacity   = String(Math.max(0, 1 - p * 5));
-      const divAlpha = String(Math.max(0, (p - 0.85) / 0.15));
+      // Dividers fade in as strips approach their seams (start at 50% progress)
+      const divAlpha = String(Math.max(0, Math.min(1, (p - 0.5) / 0.4)));
       const divTopEl = document.getElementById('mobile-div-top');
       const divBotEl = document.getElementById('mobile-div-bot');
       if (divTopEl) divTopEl.style.opacity = divAlpha;
@@ -387,13 +392,18 @@ export default function HeroCollapse({
     function onTouchMove(e: TouchEvent) {
       if (touchStartY === null) return;
       const dy = touchStartY - e.touches[0].clientY;
-      if (dy > 25 && mobileStateRef.current === 'full')      collapse();
-      if (dy < -25 && mobileStateRef.current === 'collapsed') expand();
+      const s = mobileStateRef.current;
+      // Prevent page scroll while animating or while we own the gesture
+      if (s === 'animating') { e.preventDefault(); return; }
+      if (dy > 12 && s === 'full')      { e.preventDefault(); collapse(); return; }
+      if (dy < -12 && s === 'collapsed') { e.preventDefault(); expand();   return; }
+      // After collapse, allow normal page scroll (don't preventDefault)
     }
     function onTouchEnd() { touchStartY = null; }
 
+    // Must be non-passive to call preventDefault
     window.addEventListener('touchstart', onTouchStart, { passive: true });
-    window.addEventListener('touchmove',  onTouchMove,  { passive: true });
+    window.addEventListener('touchmove',  onTouchMove,  { passive: false });
     window.addEventListener('touchend',   onTouchEnd,   { passive: true });
 
     applyMobileProgress(0);
@@ -411,11 +421,18 @@ export default function HeroCollapse({
     const botSrc = srcs[2] ?? srcs[0];
     return (
       <div className="relative" style={{ height: '100svh', overflow: 'hidden', backgroundColor: bgColor }}>
-        {/* Particle canvas */}
+        {/* Particle canvas — dimensions set via ResizeObserver so they're correct after layout */}
         <canvas
           ref={el => {
             (mobileCanvasRef as React.MutableRefObject<HTMLCanvasElement | null>).current = el;
-            if (el) { el.width = el.offsetWidth; el.height = el.offsetHeight; }
+            if (!el) return;
+            const ro = new ResizeObserver(() => {
+              el.width  = el.offsetWidth;
+              el.height = el.offsetHeight;
+            });
+            ro.observe(el);
+            // Store cleanup on element for GC
+            (el as HTMLCanvasElement & { _ro?: ResizeObserver })._ro = ro;
           }}
           style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', zIndex: 30, pointerEvents: 'none' }}
         />
@@ -515,16 +532,14 @@ export default function HeroCollapse({
           </div>
         </div>
 
-        {/* Gold dividers (revealed after collapse) */}
+        {/* White separator lines — always rendered at the strip seams, visible once strips arrive */}
         <div id="mobile-div-top" style={{
           position: 'absolute', left: 0, right: 0, top: '33.333%',
-          height: '1px', background: 'rgba(212,175,55,0.5)', zIndex: 20, opacity: 0,
-          transition: 'opacity 0.3s ease 0.6s',
+          height: '2px', background: 'rgba(255,255,255,0.85)', zIndex: 20, opacity: 0,
         }} />
         <div id="mobile-div-bot" style={{
           position: 'absolute', left: 0, right: 0, top: '66.666%',
-          height: '1px', background: 'rgba(212,175,55,0.5)', zIndex: 20, opacity: 0,
-          transition: 'opacity 0.3s ease 0.6s',
+          height: '2px', background: 'rgba(255,255,255,0.85)', zIndex: 20, opacity: 0,
         }} />
 
         <style>{`@keyframes hint-bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(5px)} }`}</style>
