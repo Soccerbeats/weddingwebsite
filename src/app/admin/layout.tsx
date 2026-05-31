@@ -33,6 +33,7 @@ export default function AdminLayout({
         { href: '/admin/photos', label: 'Photos' },
         { href: '/admin/timeline', label: 'Timeline' },
         { href: '/admin/home', label: 'Home Page' },
+        { href: '/admin/nav-cards', label: 'Nav Cards' },
         { href: '/admin/about', label: 'About Page' },
         { href: '/admin/wedding-party', label: 'Wedding Party' },
         { href: '/admin/faqs', label: 'Q&A' },
