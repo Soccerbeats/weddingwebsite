@@ -178,12 +178,12 @@ export default function AdminSettings() {
                     <div>
                         <label className="block text-sm font-medium text-gray-700">RSVP Deadline</label>
                         <input
-                            type="text"
+                            type="date"
                             value={config.rsvpDeadline || ''}
                             onChange={(e) => setConfig({ ...config, rsvpDeadline: e.target.value })}
                             className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
-                            placeholder="e.g. September 15, 2024"
                         />
+                        <p className="mt-1 text-xs text-gray-500">The public RSVP page shows this date and counts down the days remaining.</p>
                     </div>
                 </div>
 
