@@ -84,6 +84,26 @@ export default function Home() {
             </Link>
           </div>
         )}
+        {!isBasicMode && (
+          <div
+            data-hero-role="scroll"
+            className="hidden sm:flex flex-col items-center gap-2 mt-14"
+            style={{ animation: 'page-enter 700ms cubic-bezier(0.25, 0.46, 0.45, 0.94) 1100ms both' }}
+          >
+            <span className="text-white/80 text-xs uppercase tracking-[0.25em] font-light">
+              Scroll Down
+            </span>
+            <svg
+              className="h-6 w-6 text-white/80 animate-bounce"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              aria-hidden="true"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+            </svg>
+          </div>
+        )}
       </HeroCollapse>
 
       {/* ── Intro / Countdown Section ── */}

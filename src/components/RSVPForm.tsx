@@ -201,16 +201,42 @@ export default function RSVPForm() {
                 <p className="mt-2 text-base text-gray-500">
                     Thank you for letting us know. We&apos;ve sent a confirmation to the happy couple♥
                 </p>
-                <button
-                    onClick={() => {
-                        setStatus('idle');
-                        setStep('form');
-                        setExistingRsvp({ ...existingRsvp, id: existingRsvp?.id });
-                    }}
-                    className="mt-6 inline-flex justify-center py-2 px-6 border border-gray-300 rounded-full text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent transition-all"
-                >
-                    Make changes
-                </button>
+                <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center items-center">
+                    <button
+                        onClick={() => {
+                            setStatus('idle');
+                            setStep('form');
+                            setExistingRsvp({ ...existingRsvp, id: existingRsvp?.id });
+                        }}
+                        className="inline-flex justify-center py-2 px-6 border border-gray-300 rounded-full text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent transition-all"
+                    >
+                        Make changes
+                    </button>
+                    <a
+                        href="https://www.choicehotels.com/reservations/groups/tk74b5"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 justify-center py-2 px-6 rounded-full text-sm font-medium text-white bg-pink-500 hover:bg-pink-600 shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-pink-400 transition-all transform hover:-translate-y-0.5"
+                    >
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 21h18M5 21V7l7-4 7 4v14M9 9h.01M9 13h.01M9 17h.01M15 9h.01M15 13h.01M15 17h.01" />
+                        </svg>
+                        Book Your Room
+                    </a>
+                </div>
+
+                <div className="mt-8 mx-auto max-w-md text-left bg-pink-50 border border-pink-100 rounded-2xl p-5 flex gap-3">
+                    <svg className="h-5 w-5 text-pink-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                    </svg>
+                    <p className="text-sm text-gray-600 leading-relaxed">
+                        Need a place to rest your head? Evan &amp; Austin have lovingly reserved a block of rooms
+                        at <span className="font-medium text-gray-800">The Harbor View</span> just for our guests.
+                        Tap <span className="font-medium text-gray-800">Book Your Room</span> above to claim a spot within our block.
+                        Prefer to call and arrange your stay another way? That&apos;s perfectly wonderful too &mdash; whatever
+                        makes your trip to celebrate with us the sweetest. ♥
+                    </p>
+                </div>
             </div>
         );
     }
