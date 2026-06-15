@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { DEFAULT_ROOM_BLOCK_MESSAGE } from '@/lib/roomBlock';
 
 interface PartyMember {
     name: string | null;
@@ -48,9 +49,6 @@ interface RSVPFormProps {
     roomBlockHotel?: string;
     roomBlockUrl?: string;
 }
-
-const DEFAULT_ROOM_BLOCK_MESSAGE =
-    "Need a place to rest your head? {names} have lovingly reserved a block of rooms at {hotel} just for our guests. Tap {book} to claim a spot within our block. Prefer to call and arrange your stay another way? That's perfectly wonderful too — whatever makes your trip to celebrate with us the sweetest. ♥";
 
 // Render the editable message, expanding the protected tokens. The {book} link's
 // URL comes from the Booking URL setting (not the message text), so editing the

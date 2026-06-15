@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { DEFAULT_ROOM_BLOCK_MESSAGE } from '@/lib/roomBlock';
 
 export default function AdminSettings() {
     const [config, setConfig] = useState({
@@ -23,7 +24,13 @@ export default function AdminSettings() {
     useEffect(() => {
         fetch('/api/admin/site-config')
             .then(res => res.json())
-            .then(data => setConfig(prev => ({ ...prev, ...data })));
+            // Pre-fill the room-block message with the default wording so it's
+            // visible and overwritable when nothing has been saved yet.
+            .then(data => setConfig(prev => ({
+                ...prev,
+                ...data,
+                roomBlockMessage: data.roomBlockMessage || DEFAULT_ROOM_BLOCK_MESSAGE,
+            })));
     }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
