@@ -13,6 +13,7 @@ export default function AdminSettings() {
         rsvpDeadline: '',
         roomBlockHotel: '',
         roomBlockUrl: '',
+        roomBlockMessage: '',
         countdownMode: 'full',
         logoMode: false,
     });
@@ -212,6 +213,24 @@ export default function AdminSettings() {
                                 className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
                                 placeholder="https://www.choicehotels.com/reservations/groups/tk74b5"
                             />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700">Room Block Message</label>
+                            <textarea
+                                rows={5}
+                                value={config.roomBlockMessage || ''}
+                                onChange={(e) => setConfig({ ...config, roomBlockMessage: e.target.value })}
+                                className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
+                                placeholder="Leave blank to use the default wording."
+                            />
+                            <div className="mt-2 text-xs text-gray-500 space-y-1">
+                                <p>Shown on the RSVP confirmation card. Leave blank to use the default wording. You can use these tokens:</p>
+                                <ul className="list-disc list-inside space-y-0.5">
+                                    <li><code className="text-accent font-mono">{'{names}'}</code> — the couple&apos;s names (e.g. Heaven &amp; Austin)</li>
+                                    <li><code className="text-accent font-mono">{'{hotel}'}</code> — the hotel / room block name above</li>
+                                    <li><code className="text-accent font-mono">{'{book}'}</code> — a clickable &quot;Book Your Room&quot; link. Its address comes from the Booking URL above, so editing this message can never break the link.</li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
                 </div>

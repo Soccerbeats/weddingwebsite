@@ -49,6 +49,25 @@ interface RSVPFormProps {
     roomBlockUrl?: string;
 }
 
+const DEFAULT_ROOM_BLOCK_MESSAGE =
+    "Need a place to rest your head? {names} have lovingly reserved a block of rooms at {hotel} just for our guests. Tap {book} to claim a spot within our block. Prefer to call and arrange your stay another way? That's perfectly wonderful too — whatever makes your trip to celebrate with us the sweetest. ♥";
+
+// Render the editable message, expanding the protected tokens. The {book} link's
+// URL comes from the Booking URL setting (not the message text), so editing the
+// copy can never break the link.
+function renderRoomBlockMessage(message: string, names: string, hotel: string, bookingUrl: string) {
+    return message.split(/(\{names\}|\{hotel\}|\{book\})/g).map((seg, i) => {
+        if (seg === '{names}') return <span key={i}>{names || 'We'}</span>;
+        if (seg === '{hotel}') return <span key={i} className="font-medium text-gray-800">{hotel}</span>;
+        if (seg === '{book}') {
+            return bookingUrl
+                ? <a key={i} href={bookingUrl} target="_blank" rel="noopener noreferrer" className="text-accent font-semibold underline decoration-accent/40 hover:text-accent-dark hover:decoration-accent transition-colors">Book Your Room</a>
+                : <span key={i} className="font-medium text-gray-800">Book Your Room</span>;
+        }
+        return <span key={i}>{seg}</span>;
+    });
+}
+
 export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBlockUrl = '' }: RSVPFormProps = {}) {
     const [step, setStep] = useState<'verification' | 'form'>('verification');
     const [verifiedGuest, setVerifiedGuest] = useState<any>(null);
@@ -203,6 +222,7 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
             : coupleNames;
         const hotel = config?.roomBlockHotel ?? roomBlockHotel;
         const bookingUrl = config?.roomBlockUrl ?? roomBlockUrl;
+        const roomMessage = (config?.roomBlockMessage?.trim()) || DEFAULT_ROOM_BLOCK_MESSAGE;
         // Receipt summary of who's attending
         const isAttending = formData.attending === 'yes';
         const attendees = isAttending ? cards.filter(c => c.attending && c.name?.trim()) : [];
@@ -283,12 +303,8 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
                         <svg className="h-5 w-5 text-accent flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                         </svg>
-                        <p className="text-sm text-gray-600 leading-relaxed">
-                            Need a place to rest your head? {names || 'We'} have lovingly reserved a block of rooms
-                            at <span className="font-medium text-gray-800">{hotel}</span> just for our guests.
-                            {bookingUrl && <> Tap <span className="font-medium text-gray-800">Book Your Room</span> above to claim a spot within our block.</>}
-                            {' '}Prefer to call and arrange your stay another way? That&apos;s perfectly wonderful too &mdash; whatever
-                            makes your trip to celebrate with us the sweetest. ♥
+                        <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">
+                            {renderRoomBlockMessage(roomMessage, names, hotel, bookingUrl)}
                         </p>
                     </div>
                 )}

@@ -41,6 +41,7 @@ export interface SiteConfig {
     // Accommodations / room block (shown on RSVP confirmation)
     roomBlockHotel?: string;
     roomBlockUrl?: string;
+    roomBlockMessage?: string;  // editable body; supports {names} {hotel} {book} tokens
     countdownMode?: 'full' | 'simple' | 'days-only';
     // Theme Colors
     accentColor?: string;
