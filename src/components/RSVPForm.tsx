@@ -203,6 +203,12 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
             : coupleNames;
         const hotel = config?.roomBlockHotel ?? roomBlockHotel;
         const bookingUrl = config?.roomBlockUrl ?? roomBlockUrl;
+        // Receipt summary of who's attending
+        const isAttending = formData.attending === 'yes';
+        const attendees = isAttending ? cards.filter(c => c.attending && c.name?.trim()) : [];
+        const numberWords = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
+        const partyWord = numberWords[attendees.length] ?? String(attendees.length);
+        const partyLabel = `Party of ${partyWord}`;
         return (
             <div className="text-center py-12 bg-gray-50 rounded-2xl border border-gray-100 p-8">
                 <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
@@ -214,6 +220,38 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
                 <p className="mt-2 text-base text-gray-500">
                     Thank you for letting us know. We&apos;ve sent a confirmation to the happy couple♥
                 </p>
+
+                {/* Receipt-style summary of the RSVP */}
+                <div className="mt-6 mx-auto max-w-sm text-left bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+                    <div className="flex items-center justify-between border-b border-dashed border-gray-200 pb-3 mb-3">
+                        <span className="text-xs uppercase tracking-widest text-gray-400 font-semibold">Your RSVP</span>
+                        {isAttending && (
+                            <span className="text-sm font-semibold text-accent capitalize">{partyLabel}</span>
+                        )}
+                    </div>
+                    {isAttending ? (
+                        <>
+                            <ul className="space-y-2">
+                                {attendees.map((c, i) => (
+                                    <li key={i} className="flex items-center gap-2 text-sm text-gray-800">
+                                        <svg className="h-4 w-4 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        <span>{c.name}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                            <p className="mt-3 text-xs text-gray-400">
+                                {attendees.length} {attendees.length === 1 ? 'guest' : 'guests'} joyfully attending ♥
+                            </p>
+                        </>
+                    ) : (
+                        <p className="text-sm text-gray-600">
+                            We&apos;ll miss you dearly, but thank you for letting us know. ♥
+                        </p>
+                    )}
+                </div>
+
                 <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center items-center">
                     <button
                         onClick={() => {
