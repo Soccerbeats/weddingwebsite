@@ -54,7 +54,7 @@ export default function WeddingPartyPage() {
         {/* Bride's Party */}
         <div className="mb-20">
           <h2 className="text-3xl font-serif font-bold text-center text-gray-900 mb-12">
-            {config.brideName}'s Party
+            {config.brideName}'s Bridesmaids
           </h2>
 
           {weddingParty.brideParty.length === 0 ? (
@@ -109,7 +109,7 @@ export default function WeddingPartyPage() {
         {/* Groom's Party */}
         <div className="mb-20">
           <h2 className="text-3xl font-serif font-bold text-center text-gray-900 mb-12">
-            {config.groomName}'s Party
+            {config.groomName}'s Groomsmen
           </h2>
 
           {weddingParty.groomParty.length === 0 ? (
