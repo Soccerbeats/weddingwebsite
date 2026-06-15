@@ -62,9 +62,9 @@ export default function WeddingPartyPage() {
               Wedding party members will be announced soon!
             </p>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <div className="flex flex-wrap justify-center gap-8">
               {weddingParty.brideParty.map((member: WeddingPartyMember, index: number) => (
-                <FadeIn key={index} animation="slide-up" delay={(index % 3) * 80} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
+                <FadeIn key={index} animation="slide-up" delay={(index % 3) * 80} className="w-full md:w-[calc(50%-1rem)] lg:w-[calc((100%-4rem)/3)] bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
                   {member.photo ? (
                     <div className="relative h-64 bg-gray-200">
                       <img
@@ -117,9 +117,9 @@ export default function WeddingPartyPage() {
               Wedding party members will be announced soon!
             </p>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <div className="flex flex-wrap justify-center gap-8">
               {weddingParty.groomParty.map((member: WeddingPartyMember, index: number) => (
-                <FadeIn key={index} animation="slide-up" delay={(index % 3) * 80} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
+                <FadeIn key={index} animation="slide-up" delay={(index % 3) * 80} className="w-full md:w-[calc(50%-1rem)] lg:w-[calc((100%-4rem)/3)] bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
                   {member.photo ? (
                     <div className="relative h-64 bg-gray-200">
                       <img
@@ -168,9 +168,9 @@ export default function WeddingPartyPage() {
               {config.somethingBlueCrewTitle || 'Something Blue Crew'}
             </h2>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-3xl mx-auto">
+            <div className="flex flex-wrap justify-center gap-8 max-w-3xl mx-auto">
               {weddingParty.somethingBlueCrew.map((member: WeddingPartyMember, index: number) => (
-                <div key={index} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
+                <div key={index} className="w-full md:w-[calc(50%-1rem)] bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
                   {member.photo ? (
                     <div className="relative h-64 bg-gray-200">
                       <img
