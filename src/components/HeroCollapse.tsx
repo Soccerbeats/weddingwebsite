@@ -662,31 +662,7 @@ export default function HeroCollapse({
             background: 'linear-gradient(to bottom, rgba(0,0,0,0.45) 0%, transparent 100%)',
             zIndex: 4, pointerEvents: 'none',
           }} />
-          {/* Slide dots — animated bottom via mobileDotsRef */}
-          {srcs.length > 1 && (
-            <div ref={mobileDotsRef} style={{
-              position: 'absolute', bottom: '66px', left: 0, right: 0,
-              display: 'flex', justifyContent: 'center', gap: '8px', zIndex: 25,
-            }}>
-              {srcs.map((_, i) => (
-                <button key={i} onClick={() => {
-                          const prev = currentSlideRef.current;
-                          if (i === prev) return;
-                          currentSlideRef.current = i;
-                          setCurrentSlide(i);
-                          setTopImageIdx(t => t === i ? prev : t);
-                          setBotImageIdx(b => b === i ? prev : b);
-                        }}
-                        aria-label={`Slide ${i + 1}`}
-                        style={{
-                          width: i === currentSlide ? '24px' : '10px', height: '10px',
-                          borderRadius: '9999px', border: 'none', cursor: 'pointer', padding: 0,
-                          background: i === currentSlide ? 'white' : 'rgba(255,255,255,0.5)',
-                          transition: 'all 300ms',
-                        }} />
-              ))}
-            </div>
-          )}
+          {/* Slide dots intentionally omitted on mobile — desktop only */}
         </div>
 
         {/* BOTTOM strip — slides in from below; crossfades at currentSlide+2 offset */}
