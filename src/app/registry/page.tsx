@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import type { FundItem } from '@/lib/config';
 import type { RegistryItem } from '@/app/api/admin/registry-items/route';
 
@@ -27,6 +28,15 @@ interface SiteData {
 
 function ContributeModal({ item, fund, onClose }: { item: FundItem; fund: FundConfig; onClose: () => void }) {
     const [zelleCopied, setZelleCopied] = useState(false);
+    const [mounted, setMounted] = useState(false);
+    // Render via a portal to <body> so the fixed overlay isn't trapped by a
+    // transformed ancestor (FadeIn uses CSS transforms). Lock body scroll while open.
+    useEffect(() => {
+        setMounted(true);
+        const prev = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = prev; };
+    }, []);
     const remaining = Math.max(0, item.price - item.funded);
     const suggestedAmount = remaining > 0 ? remaining : item.price;
     const showFinancials = fund.showFinancials !== false;
@@ -80,7 +90,9 @@ function ContributeModal({ item, fund, onClose }: { item: FundItem; fund: FundCo
         },
     ].filter(Boolean) as { name: string; icon: string; handle: string; url: string | null; webFallback: string | null }[];
 
-    return (
+    if (!mounted) return null;
+
+    return createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
             <div
@@ -179,7 +191,8 @@ function ContributeModal({ item, fund, onClose }: { item: FundItem; fund: FundCo
                     }
                 </p>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }
 
