@@ -196,6 +196,13 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
     };
 
     if (status === 'success') {
+        // Prefer the live-fetched config (the RSVP page is statically rendered, so
+        // server-passed props would be baked in empty at build time).
+        const names = (config?.brideName && config?.groomName)
+            ? `${config.brideName} & ${config.groomName}`
+            : coupleNames;
+        const hotel = config?.roomBlockHotel ?? roomBlockHotel;
+        const bookingUrl = config?.roomBlockUrl ?? roomBlockUrl;
         return (
             <div className="text-center py-12 bg-gray-50 rounded-2xl border border-gray-100 p-8">
                 <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
@@ -218,9 +225,9 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
                     >
                         Make changes
                     </button>
-                    {roomBlockHotel && roomBlockUrl && (
+                    {hotel && bookingUrl && (
                         <a
-                            href={roomBlockUrl}
+                            href={bookingUrl}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-2 justify-center py-2 px-6 rounded-full text-sm font-medium text-white bg-accent hover:bg-accent-dark shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent transition-all transform hover:-translate-y-0.5"
@@ -233,15 +240,15 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
                     )}
                 </div>
 
-                {roomBlockHotel && (
+                {hotel && (
                     <div className="mt-8 mx-auto max-w-md text-left bg-accent/5 border border-accent/20 rounded-2xl p-5 flex gap-3">
                         <svg className="h-5 w-5 text-accent flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                         </svg>
                         <p className="text-sm text-gray-600 leading-relaxed">
-                            Need a place to rest your head? {coupleNames || 'We'} have lovingly reserved a block of rooms
-                            at <span className="font-medium text-gray-800">{roomBlockHotel}</span> just for our guests.
-                            {roomBlockUrl && <> Tap <span className="font-medium text-gray-800">Book Your Room</span> above to claim a spot within our block.</>}
+                            Need a place to rest your head? {names || 'We'} have lovingly reserved a block of rooms
+                            at <span className="font-medium text-gray-800">{hotel}</span> just for our guests.
+                            {bookingUrl && <> Tap <span className="font-medium text-gray-800">Book Your Room</span> above to claim a spot within our block.</>}
                             {' '}Prefer to call and arrange your stay another way? That&apos;s perfectly wonderful too &mdash; whatever
                             makes your trip to celebrate with us the sweetest. ♥
                         </p>
