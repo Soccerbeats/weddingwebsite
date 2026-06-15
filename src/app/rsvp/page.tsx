@@ -1,6 +1,10 @@
 import { getSiteConfig } from '@/lib/config';
 import RSVPForm from '@/components/RSVPForm';
 
+// Read live config at request time (admin edits to the RSVP deadline, room block,
+// etc. take effect without a rebuild) instead of baking it in at build time.
+export const dynamic = 'force-dynamic';
+
 export default function RSVPPage() {
     const config = getSiteConfig();
     const bgColor = config.pageBgColors?.rsvp || '#ffffff';
