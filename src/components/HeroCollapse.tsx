@@ -190,6 +190,18 @@ export default function HeroCollapse({
     rafRef.current = requestAnimationFrame(tick);
   };
 
+  // ── Always (re)enter the homepage at the very top ───────────────────────
+  // Navigating here from another page (especially while scrolled) could
+  // otherwise restore a scrolled position and snap the hero mid-animation.
+  // Force the top on mount, unless deep-linking to a hash (e.g. #about).
+  // useLayoutEffect + a follow-up rAF beats late browser scroll restoration.
+  useLayoutEffect(() => {
+    if (typeof window === 'undefined' || window.location.hash) return;
+    window.scrollTo(0, 0);
+    const raf = requestAnimationFrame(() => window.scrollTo(0, 0));
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
   // ── Snap to collapsed if page scrolls past hero without wheel animation ──
   // This handles hash-link navigation (e.g. clicking "About" in the nav),
   // which jumps scrollY past the section without triggering the wheel handler.
@@ -352,14 +364,22 @@ export default function HeroCollapse({
         text.style.transform    = `translateY(${textDY.toFixed(1)}px) scale(${scale.toFixed(3)})`;
         text.style.opacity      = '1';
         text.style.pointerEvents = p > 0.05 ? 'none' : 'auto';
-        // Fade out buttons (can't use in collage mode anyway)
+        // Collapse the buttons (height + fade) AND the gap the date reserves for
+        // them, so the title/date settle into the true center of the mid strip.
         const btns = text.querySelector('[data-hero-role="buttons"]') as HTMLElement | null;
-        if (btns) btns.style.opacity = String(Math.max(0, 1 - e * 4));
+        if (btns) {
+          btns.style.overflow  = 'hidden';
+          btns.style.opacity   = String(Math.max(0, 1 - e * 4));
+          btns.style.maxHeight = `${btns.scrollHeight * (1 - e)}px`;
+        }
+        const date = text.querySelector('[data-hero-role="date"]') as HTMLElement | null;
+        if (date) date.style.marginBottom = `${48 * (1 - e)}px`;   // collapse date's mb-12 (3rem)
         if (p === 0) {
           text.style.transform     = '';
           text.style.opacity       = '1';
           text.style.pointerEvents = 'auto';
-          if (btns) btns.style.opacity = '1';
+          if (btns) { btns.style.opacity = '1'; btns.style.maxHeight = ''; btns.style.overflow = ''; }
+          if (date) date.style.marginBottom = '';
         }
       }
 
