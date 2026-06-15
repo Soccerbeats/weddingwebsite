@@ -18,7 +18,11 @@ export default function RSVPPage() {
                         </p>
                     </div>
 
-                    <RSVPForm />
+                    <RSVPForm
+                        coupleNames={`${config.brideName} & ${config.groomName}`}
+                        roomBlockHotel={config.roomBlockHotel || ''}
+                        roomBlockUrl={config.roomBlockUrl || ''}
+                    />
 
                     <div className="mt-12 text-center text-gray-500">
                         <p>

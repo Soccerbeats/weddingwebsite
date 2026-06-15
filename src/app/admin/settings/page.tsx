@@ -11,6 +11,8 @@ export default function AdminSettings() {
         weddingLocation: '',
         weddingVenue: '',
         rsvpDeadline: '',
+        roomBlockHotel: '',
+        roomBlockUrl: '',
         countdownMode: 'full',
         logoMode: false,
     });
@@ -182,6 +184,35 @@ export default function AdminSettings() {
                             className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
                             placeholder="e.g. September 15, 2024"
                         />
+                    </div>
+                </div>
+
+                <div className="pt-6 border-t border-gray-100">
+                    <h2 className="text-xl font-semibold text-gray-900 mb-4">Accommodations / Room Block</h2>
+                    <p className="text-sm text-gray-500 mb-4">
+                        Shown to guests on the RSVP confirmation screen. Leave the hotel name blank to hide the room-block card entirely.
+                    </p>
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700">Hotel / Room Block Name</label>
+                            <input
+                                type="text"
+                                value={config.roomBlockHotel || ''}
+                                onChange={(e) => setConfig({ ...config, roomBlockHotel: e.target.value })}
+                                className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
+                                placeholder="e.g. The Harbor View"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700">Booking URL</label>
+                            <input
+                                type="url"
+                                value={config.roomBlockUrl || ''}
+                                onChange={(e) => setConfig({ ...config, roomBlockUrl: e.target.value })}
+                                className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
+                                placeholder="https://www.choicehotels.com/reservations/groups/tk74b5"
+                            />
+                        </div>
                     </div>
                 </div>
 

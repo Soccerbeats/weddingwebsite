@@ -38,6 +38,9 @@ export interface SiteConfig {
     weddingVenue?: string;
     weddingTime: string;
     rsvpDeadline?: string;
+    // Accommodations / room block (shown on RSVP confirmation)
+    roomBlockHotel?: string;
+    roomBlockUrl?: string;
     countdownMode?: 'full' | 'simple' | 'days-only';
     // Theme Colors
     accentColor?: string;

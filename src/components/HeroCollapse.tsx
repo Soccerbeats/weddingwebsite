@@ -264,9 +264,24 @@ export default function HeroCollapse({
       }
     };
 
+    // Reset to the slideshow start — fired when the user clicks "Home" in the nav.
+    // Without this, clicking Home while already collapsed leaves the collage on screen.
+    const onReset = () => {
+      cancelAnimationFrame(rafRef.current);
+      stateRef.current = 'full';
+      progressRef.current = 0;
+      applyProgress(0);
+      window.scrollTo({ top: 0, behavior: 'instant' });
+      window.dispatchEvent(new CustomEvent('hero-expanded'));
+    };
+
     // Non-passive so we can preventDefault
     window.addEventListener('wheel', onWheel, { passive: false });
-    return () => window.removeEventListener('wheel', onWheel);
+    window.addEventListener('hero-reset', onReset);
+    return () => {
+      window.removeEventListener('wheel', onWheel);
+      window.removeEventListener('hero-reset', onReset);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMobile]);
 
@@ -550,10 +565,22 @@ export default function HeroCollapse({
       }
     };
 
+    // Reset to the slideshow start — fired when the user clicks "Home" in the nav.
+    const onReset = () => {
+      if (mobileRafRef.current) cancelAnimationFrame(mobileRafRef.current);
+      mobileStateRef.current = 'full';
+      mobileProgressRef.current = 0;
+      setMobileHiRes(true);
+      applyMobileProgress(0);
+      window.scrollTo({ top: 0, behavior: 'instant' });
+      window.dispatchEvent(new CustomEvent('hero-expanded'));
+    };
+
     window.addEventListener('touchstart', onTouchStart, { passive: true });
     window.addEventListener('touchmove',  onTouchMove,  { passive: false });
     window.addEventListener('touchend',   onTouchEnd,   { passive: true });
     window.addEventListener('wheel',      onWheel,      { passive: false });
+    window.addEventListener('hero-reset', onReset);
 
     applyMobileProgress(0);
     return () => {
@@ -561,6 +588,7 @@ export default function HeroCollapse({
       window.removeEventListener('touchmove',  onTouchMove);
       window.removeEventListener('touchend',   onTouchEnd);
       window.removeEventListener('wheel',      onWheel);
+      window.removeEventListener('hero-reset', onReset);
       window.removeEventListener('scroll', onScroll);
       if (mobileRafRef.current) cancelAnimationFrame(mobileRafRef.current);
       if (mobileParticleRaf.current) cancelAnimationFrame(mobileParticleRaf.current);

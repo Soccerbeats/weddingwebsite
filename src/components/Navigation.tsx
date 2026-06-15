@@ -185,6 +185,7 @@ export default function Navigation({
                 <div ref={logoRef} style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
                     <Link
                         href="/"
+                        onClick={() => window.dispatchEvent(new CustomEvent('hero-reset'))}
                         className={logoMode && weddingLogo
                             ? 'block py-1'
                             : 'font-serif text-2xl font-bold tracking-tighter'}
@@ -213,6 +214,7 @@ export default function Navigation({
                             <Link
                                 key={link.href}
                                 href={link.href}
+                                onClick={() => { if (link.href === '/') window.dispatchEvent(new CustomEvent('hero-reset')); }}
                                 className="relative px-3 py-2 text-sm font-medium uppercase tracking-widest group whitespace-nowrap"
                                 style={{
                                     color: active ? activeColor : linkColor,
@@ -298,6 +300,7 @@ export default function Navigation({
                             <Link
                                 key={link.href}
                                 href={link.href}
+                                onClick={() => { setIsOpen(false); if (link.href === '/') window.dispatchEvent(new CustomEvent('hero-reset')); }}
                                 className={`block px-4 py-3 rounded-lg text-base font-medium uppercase tracking-widest text-center transition-all duration-200 ${
                                     active ? 'text-accent bg-accent/5' : 'text-gray-900 hover:text-accent hover:bg-gray-50'
                                 }`}

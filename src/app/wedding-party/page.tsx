@@ -168,7 +168,7 @@ export default function WeddingPartyPage() {
               {config.somethingBlueCrewTitle || 'Something Blue Crew'}
             </h2>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-3xl mx-auto">
               {weddingParty.somethingBlueCrew.map((member: WeddingPartyMember, index: number) => (
                 <div key={index} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
                   {member.photo ? (
