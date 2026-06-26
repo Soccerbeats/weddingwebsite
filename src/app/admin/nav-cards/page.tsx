@@ -3,15 +3,6 @@
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 
-const SLUG_GRADIENTS: Record<string, string> = {
-  'our-story':     'from-rose-900 via-rose-700 to-pink-600',
-  'wedding-party': 'from-violet-900 via-purple-700 to-fuchsia-600',
-  'schedule':      'from-sky-900 via-blue-700 to-cyan-600',
-  'photos':        'from-amber-900 via-orange-700 to-yellow-600',
-  'registry':      'from-emerald-900 via-green-700 to-teal-600',
-  'rsvp':          'from-slate-800 via-gray-700 to-zinc-600',
-};
-
 interface PageConfig {
   slug: string;
   label: string;
@@ -88,7 +79,7 @@ export default function AdminNavCards() {
     });
     if ((await res.json()).success) {
       setPages(prev => prev.map(p => p.slug === slug ? { ...p, image: null } : p));
-      showMessage('Image removed.');
+      showMessage('Photo removed — card now shows a solid color.');
     }
     setUploading(null);
   };
@@ -126,8 +117,10 @@ export default function AdminNavCards() {
     <div className="max-w-3xl">
       <h1 className="text-3xl font-bold text-gray-900 mb-2">Nav Cards</h1>
       <p className="text-gray-600 mb-8">
-        Set background images for the navigation cards that appear at the bottom of the home page.
-        Cards only show for pages that are active in Work in Progress settings.
+        Set background images for the navigation cards that appear in the Explore section at the
+        bottom of the home page. Use <strong>Remove</strong> to drop the photo entirely — the card
+        then shows a solid accent color instead. Cards only show for pages that are active in Work in
+        Progress settings.
       </p>
 
       {message && (
@@ -141,18 +134,17 @@ export default function AdminNavCards() {
           <div key={page.slug} className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 flex items-center gap-6">
             {/* Thumbnail */}
             <div className="w-24 h-16 rounded-lg overflow-hidden flex-shrink-0 relative">
-              <Image
-                src={page.image
-                  ? `/api/photos/nav-cards/${page.image}`
-                  : `/images/nav-defaults/${page.slug}.jpg`}
-                alt={page.label}
-                fill
-                unoptimized
-                className="object-cover grayscale"
-              />
-              {!page.image && (
-                <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-                  <span className="text-[9px] text-white/70 font-sans uppercase tracking-wider">Default</span>
+              {page.image ? (
+                <Image
+                  src={`/api/photos/nav-cards/${page.image}`}
+                  alt={page.label}
+                  fill
+                  unoptimized
+                  className="object-cover grayscale"
+                />
+              ) : (
+                <div className="absolute inset-0 bg-accent flex items-center justify-center">
+                  <span className="text-[9px] text-white/80 font-sans uppercase tracking-wider">No photo</span>
                 </div>
               )}
             </div>
