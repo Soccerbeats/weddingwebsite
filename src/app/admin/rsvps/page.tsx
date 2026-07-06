@@ -46,7 +46,7 @@ interface Guest {
 }
 
 type Tab = 'rsvps' | 'guestlist';
-type GuestFilter = 'all' | 'no_response' | 'attending' | 'declined' | 'likely_not_coming' | 'not_invited' | 'bride' | 'groom';
+type GuestFilter = 'all' | 'no_response' | 'attending' | 'declined' | 'likely_not_coming' | 'invited' | 'not_invited' | 'bride' | 'groom';
 
 export default function RSVPDashboard() {
     const [activeTab, setActiveTab] = useState<Tab>('rsvps');
@@ -428,6 +428,7 @@ export default function RSVPDashboard() {
     const totalGuests = rsvps.reduce((acc, curr) => acc + (curr.attending ? curr.number_of_guests : 0), 0);
     const totalDeclinedGuests = rsvps.filter(r => !r.attending).reduce((acc, curr) => acc + (curr.number_of_guests || 1), 0);
     const totalInvited = guests.filter(g => g.invited).reduce((acc, curr) => acc + curr.party_size, 0);
+    const totalNotInvited = guests.filter(g => !g.invited).reduce((acc, curr) => acc + curr.party_size, 0);
     const likelyNotComingCount = guests.filter(g => g.rsvp_status === 'likely_not_coming').reduce((acc, curr) => acc + curr.party_size, 0);
     const totalGuestListSize = guests.filter(g => g.rsvp_status !== 'likely_not_coming').reduce((acc, curr) => acc + curr.party_size, 0);
     const missingRsvps = guests.filter(g => g.invited && !g.rsvp_status).reduce((acc, curr) => acc + curr.party_size, 0);
@@ -441,6 +442,7 @@ export default function RSVPDashboard() {
             case 'attending': return g.rsvp_status === 'attending';
             case 'declined': return g.rsvp_status === 'declined';
             case 'likely_not_coming': return g.rsvp_status === 'likely_not_coming';
+            case 'invited': return g.invited;
             case 'not_invited': return !g.invited;
             case 'bride': return g.side === 'bride';
             case 'groom': return g.side === 'groom';
@@ -629,10 +631,14 @@ export default function RSVPDashboard() {
             {activeTab === 'guestlist' && (
                 <>
                     {/* Guest List Stats */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-6 mb-8">
                         <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-200">
                             <p className="text-sm font-medium text-gray-500">Total Invited</p>
                             <p className="text-3xl font-bold text-gray-900">{totalInvited}</p>
+                        </div>
+                        <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-200">
+                            <p className="text-sm font-medium text-gray-500">Not Invited Yet</p>
+                            <p className="text-3xl font-bold text-gray-900">{totalNotInvited}</p>
                         </div>
                         <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-200">
                             <p className="text-sm font-medium text-gray-500">Expected Guests</p>
@@ -726,6 +732,7 @@ export default function RSVPDashboard() {
                                 { key: 'attending', label: '✓ Attending', color: 'green' },
                                 { key: 'declined', label: '✗ Declined', color: 'red' },
                                 { key: 'likely_not_coming', label: '🙁 Likely Not Coming', color: 'orange' },
+                                { key: 'invited', label: '✉ Invited', color: 'blue' },
                                 { key: 'not_invited', label: 'Not Invited', color: 'gray' },
                                 { key: 'bride', label: `${config?.brideName || 'Bride'}'s Side`, color: 'pink' },
                                 { key: 'groom', label: `${config?.groomName || 'Groom'}'s Side`, color: 'blue' },

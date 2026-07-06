@@ -114,9 +114,20 @@ export async function GET() {
       daysUntil = Math.ceil((weddingMs - nowMs) / (1000 * 60 * 60 * 24));
     }
 
+    // Days left before the RSVP deadline. Stored as YYYY-MM-DD (date picker) or
+    // legacy free text. Same whole-day math as the public RSVP page.
+    let rsvpDaysLeft: number | null = null;
+    if (siteConfig.rsvpDeadline && /^\d{4}-\d{2}-\d{2}$/.test(siteConfig.rsvpDeadline)) {
+      const [y, m, d] = siteConfig.rsvpDeadline.split('-').map(Number);
+      const deadline = new Date(y, m - 1, d);
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      rsvpDaysLeft = Math.round((deadline.getTime() - today.getTime()) / 86_400_000);
+    }
+
     return NextResponse.json({
       siteConfig,
-      countdown: { daysUntil },
+      countdown: { daysUntil, rsvpDaysLeft },
       rsvp: {
         total: rsvp.total,
         attending: rsvp.attending,

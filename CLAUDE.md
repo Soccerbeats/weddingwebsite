@@ -21,6 +21,19 @@ Do all five steps — don't skip any. README, CHANGELOG, and vault updates shoul
 
 ---
 
+## After Every Code Change
+
+After any code change (feature, fix, refactor), **always build and push the Docker image** so Austin can pull and redeploy from Portainer:
+
+```bash
+docker build -t ghcr.io/soccerbeats/weddingwebsite:latest --target production .
+docker push ghcr.io/soccerbeats/weddingwebsite:latest
+```
+
+Do this automatically — don't wait to be asked.
+
+---
+
 ## Project Overview
 This is a Next.js 16 wedding website with an admin panel for content management. The site uses file-based JSON storage for configuration and PostgreSQL for RSVPs and guest lists. It's deployed via Docker to a Portainer instance.
 

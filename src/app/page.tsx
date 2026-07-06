@@ -107,7 +107,7 @@ export default function Home() {
       </HeroCollapse>
 
       {/* ── Intro / Countdown Section ── */}
-      <div className="py-24 bg-white">
+      <div className="relative -mt-8 rounded-t-[40px] py-24 bg-white shadow-[0_-8px_24px_-4px_rgba(0,0,0,0.12)]">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <FadeIn animation="slide-up">
             <h2 className="text-3xl font-serif text-gray-900 mb-6">
@@ -133,11 +133,13 @@ export default function Home() {
         </div>
       </div>
 
-      {/* ── About Section (anchor target for nav "About" link) ── */}
-      <div id="about" style={{ backgroundColor: aboutBgColor }}>
+      {/* ── About Section (anchor target for nav "About" link) ──
+           No background here: each inner band carries its own solid colour so
+           the rounded tops can reveal the band above them. */}
+      <div id="about" className="relative">
 
         {/* Header */}
-        <div className="relative py-20 bg-gray-50">
+        <div className="relative -mt-8 rounded-t-[40px] py-20 bg-gray-50 shadow-[0_-8px_24px_-4px_rgba(0,0,0,0.12)]">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
             <FadeIn animation="slide-up">
               <h2 className="text-4xl font-serif text-gray-900 tracking-tight sm:text-5xl md:text-6xl">
@@ -153,7 +155,7 @@ export default function Home() {
         </div>
 
         {/* How We Met */}
-        <div className="py-16 overflow-hidden">
+        <div className="relative -mt-8 rounded-t-[40px] py-16 overflow-hidden shadow-[0_-8px_24px_-4px_rgba(0,0,0,0.12)]" style={{ backgroundColor: aboutBgColor }}>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="relative lg:grid lg:grid-cols-2 lg:gap-8 items-center">
               <FadeIn animation="slide-right">
@@ -185,7 +187,7 @@ export default function Home() {
 
         {/* Venue Section */}
         {(!isBasicMode || showVenue) && (
-          <div className="bg-gray-50 py-16">
+          <div className="relative -mt-8 rounded-t-[40px] bg-gray-50 py-16 shadow-[0_-8px_24px_-4px_rgba(0,0,0,0.12)]">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               {config.venuePhoto && (
                 <FadeIn animation="slide-up">
@@ -248,7 +250,7 @@ export default function Home() {
 
         {/* FAQ Section */}
         {!isBasicMode && (
-          <div id="faqs" className="py-16">
+          <div id="faqs" className="relative z-10 -mt-8 rounded-[40px] py-16 shadow-[0_-8px_24px_-4px_rgba(0,0,0,0.12),0_18px_40px_-8px_rgba(0,0,0,0.16)]" style={{ backgroundColor: aboutBgColor }}>
             <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
               <FadeIn animation="slide-up">
                 <h2 className="text-3xl font-serif text-center text-gray-900 mb-12">
@@ -275,7 +277,9 @@ export default function Home() {
           </div>
         )}
         {/* Nav Cards */}
-        <NavCards />
+        <div className="relative z-0 -mt-10 bg-white">
+          <NavCards />
+        </div>
 
       </div>
     </div>

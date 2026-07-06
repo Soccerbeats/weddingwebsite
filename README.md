@@ -5,7 +5,7 @@ A beautiful, customizable wedding website built with Next.js 16. Features includ
 ## Features
 
 ### Public Site
-- **Home Page**: Hero slideshow that collapses into a condensed strip on scroll (desktop), countdown timer, intro text, and About section all on one page
+- **Home Page**: Hero slideshow that collapses into a condensed strip on scroll (desktop), countdown timer, intro text, and About section all on one page. Content below the hero is built as a stack of overlapping "bands" — each section has rounded top corners (40px radius) and a soft drop shadow so the section boundaries and rounded edges read clearly against the blush page background. The Details & FAQ section is a fully-rounded white card, and the Explore (nav cards) section below it is white.
 - **About (merged into Home)**: Our Story, How We Met, The Venue (with optional venue photo), Ceremony/Reception cards, and FAQ — all appear below the home intro; nav "About" link auto-scrolls to `#about` anchor; `/about` redirects there; "Get Directions" renders as a styled pill button with a map-pin icon when a venue address is set
 - **Timeline**: Interactive vertical timeline of relationship milestones with photos; scroll-triggered entrance animations
 - **Wedding Party**: Member cards with scroll-triggered animations; responsive images at 5 breakpoints
@@ -25,6 +25,7 @@ A beautiful, customizable wedding website built with Next.js 16. Features includ
 - **Responsive Design**: Mobile-friendly across all pages; nav island adapts width per screen size
 
 ### Admin Panel
+- **Dashboard**: At-a-glance overview cards (countdown, RSVPs, guest list, content, seating, Q&A). The **RSVPs & Guests** card includes an **RSVP Deadline** stat showing days left before the RSVP cutoff — amber within 7 days, red once the deadline has passed, "—" if no deadline is set.
 - **RSVP Management**:
   - Stats cards: Total RSVPs, Total Attending (individual guest count), Declined, Missing RSVPs (invited but no response)
   - Filter by: All, No Response, Attending, Declined, Not Invited, Bride's Side, Groom's Side
@@ -39,7 +40,7 @@ A beautiful, customizable wedding website built with Next.js 16. Features includ
   - Import results: Added / Updated / Failed counts
   - RSVP submission syncs email/phone/rsvp_status and resolved party member names back to guest_list
   - Party sub-rows visible in guest list table
-- **Photo Management**: Upload, drag-reorder, heart to publish, thumbnail API (`/api/photos/[filename]/thumb`), edit titles/descriptions, delete; **"Set Venue Photo"** button assigns a photo to display in the Venue section on the home page
+- **Photo Management**: Upload, drag-reorder, heart to publish, thumbnail API (`/api/photos/[filename]/thumb`), edit titles/descriptions, delete; **"Set Venue Photo"** button assigns a photo to display in the Venue section on the home page. Hearting a photo re-sorts it to the top without jumping the page (scroll position preserved); a floating **↑** button scrolls back to the top of the grid
 - **Timeline Editor**: Create and manage milestones with up to 2 photos each; oldest-first order
 - **Content Editors**: Home, About, Wedding Party, Schedule, Q&A (with Markdown `[text](url)` hyperlink support via "🔗 Insert Link" button)
 - **General Settings**: Wedding date/time/venue, color scheme (accent/light/dark), page background colors, countdown display mode

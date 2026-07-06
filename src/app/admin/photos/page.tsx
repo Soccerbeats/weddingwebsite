@@ -66,16 +66,17 @@ function SortablePhoto({ photo, siteConfig, onSetHero, onDelete, onToggleHeart, 
                 {photo.filename}
             </div>
             <Image
-                src={`/photos/${photo.filename}`}
+                src={`/api/photos/${photo.filename}?w=640`}
                 alt={photo.alt}
                 fill
+                unoptimized
                 sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                 className="absolute inset-0 w-full h-full object-cover"
             />
 
             {/* Heart button (always visible in top left) - has higher z-index to stay above overlay */}
             <button
-                onClick={() => onToggleHeart(photo.id, !photo.hearted)}
+                onClick={(e) => { e.currentTarget.blur(); onToggleHeart(photo.id, !photo.hearted); }}
                 className={`absolute top-2 left-2 z-20 rounded-full p-1.5 shadow-lg transition-all duration-300 ${
                     photo.hearted
                         ? 'bg-red-500 hover:bg-red-600 hover:shadow-xl'
@@ -246,6 +247,9 @@ export default function AdminPhotos() {
     };
 
     const handleToggleHeart = async (id: number, hearted: boolean) => {
+        // Hearting re-sorts the photo toward the top of the grid; capture the
+        // current scroll position so the reorder doesn't jump the page up.
+        const scrollY = window.scrollY;
         try {
             const res = await fetch('/api/admin/photos', {
                 method: 'PATCH',
@@ -263,6 +267,8 @@ export default function AdminPhotos() {
                         return (a.order || 0) - (b.order || 0);
                     });
                 });
+                // Restore the viewport position after the reorder re-renders.
+                requestAnimationFrame(() => window.scrollTo(0, scrollY));
             }
         } catch (err) {
             console.error('Failed to toggle heart:', err);
@@ -436,7 +442,7 @@ export default function AdminPhotos() {
                         <span className="text-xs font-bold text-gray-500 uppercase">Home Page</span>
                         {siteConfig.homeHero ? (
                             <div className="h-20 w-32 bg-gray-200 mt-1 relative rounded-lg overflow-hidden shadow-md">
-                                <img src={`/photos/${siteConfig.homeHero}`} className="h-full w-full object-cover" />
+                                <img src={`/api/photos/${siteConfig.homeHero}?w=320`} className="h-full w-full object-cover" />
                             </div>
                         ) : <div className="h-20 w-32 bg-gray-200 mt-1 flex items-center justify-center text-xs rounded-lg">None</div>}
                     </div>
@@ -444,7 +450,7 @@ export default function AdminPhotos() {
                         <span className="text-xs font-bold text-gray-500 uppercase">About Page</span>
                         {siteConfig.aboutHero ? (
                             <div className="h-20 w-32 bg-gray-200 mt-1 relative rounded-lg overflow-hidden shadow-md">
-                                <img src={`/photos/${siteConfig.aboutHero}`} className="h-full w-full object-cover" />
+                                <img src={`/api/photos/${siteConfig.aboutHero}?w=320`} className="h-full w-full object-cover" />
                             </div>
                         ) : <div className="h-20 w-32 bg-gray-200 mt-1 flex items-center justify-center text-xs rounded-lg">None</div>}
                     </div>
@@ -452,7 +458,7 @@ export default function AdminPhotos() {
                         <span className="text-xs font-bold text-gray-500 uppercase">Footer</span>
                         {siteConfig.footerHeroImage ? (
                             <div className="h-20 w-32 bg-gray-200 mt-1 relative rounded-lg overflow-hidden shadow-md">
-                                <img src={`/photos/${siteConfig.footerHeroImage}`} className="h-full w-full object-cover" />
+                                <img src={`/api/photos/${siteConfig.footerHeroImage}?w=320`} className="h-full w-full object-cover" />
                             </div>
                         ) : <div className="h-20 w-32 bg-gray-200 mt-1 flex items-center justify-center text-xs rounded-lg">None</div>}
                     </div>
@@ -460,7 +466,7 @@ export default function AdminPhotos() {
                         <span className="text-xs font-bold text-gray-500 uppercase">Wedding Logo</span>
                         {siteConfig.weddingLogo ? (
                             <div className="h-20 w-32 bg-gray-200 mt-1 relative rounded-lg overflow-hidden shadow-md">
-                                <img src={`/photos/${siteConfig.weddingLogo}`} className="h-full w-full object-cover" />
+                                <img src={`/api/photos/${siteConfig.weddingLogo}?w=320`} className="h-full w-full object-cover" />
                             </div>
                         ) : <div className="h-20 w-32 bg-gray-200 mt-1 flex items-center justify-center text-xs rounded-lg">None</div>}
                     </div>
@@ -468,7 +474,7 @@ export default function AdminPhotos() {
                         <span className="text-xs font-bold text-gray-500 uppercase">Venue Photo</span>
                         {siteConfig.venuePhoto ? (
                             <div className="h-20 w-32 bg-gray-200 mt-1 relative rounded-lg overflow-hidden shadow-md">
-                                <img src={`/photos/${siteConfig.venuePhoto}`} className="h-full w-full object-cover" />
+                                <img src={`/api/photos/${siteConfig.venuePhoto}?w=320`} className="h-full w-full object-cover" />
                             </div>
                         ) : <div className="h-20 w-32 bg-gray-200 mt-1 flex items-center justify-center text-xs rounded-lg">None</div>}
                     </div>
@@ -548,6 +554,18 @@ export default function AdminPhotos() {
                     </div>
                 </div>
             )}
+
+            {/* Scroll to top */}
+            <button
+                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                className="fixed bottom-6 right-6 z-40 bg-accent text-white rounded-full p-3 shadow-lg hover:bg-accent-dark hover:shadow-xl transition-all duration-300"
+                title="Scroll to top"
+                aria-label="Scroll to top"
+            >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                </svg>
+            </button>
         </div>
     );
 }

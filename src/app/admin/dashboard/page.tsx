@@ -5,7 +5,7 @@ import Link from 'next/link';
 
 interface DashboardData {
   siteConfig: any;
-  countdown: { daysUntil: number | null };
+  countdown: { daysUntil: number | null; rsvpDaysLeft: number | null };
   rsvp: { total: number; attending: number; declined: number; totalGuests: number };
   guestList: {
     totalInvited: number;
@@ -241,6 +241,27 @@ export default function DashboardPage() {
     : 0;
   const likelyNotComing = guestList.likelyNotComing;
 
+  // RSVP deadline countdown → stat display
+  const rsvpDaysLeft = countdown.rsvpDaysLeft;
+  let deadlineValue: string | number = '—';
+  let deadlineSub = 'no deadline set';
+  let deadlineColor: string | undefined = undefined;
+  if (rsvpDaysLeft !== null) {
+    if (rsvpDaysLeft > 0) {
+      deadlineValue = rsvpDaysLeft;
+      deadlineSub = rsvpDaysLeft === 1 ? 'day left' : 'days left';
+      deadlineColor = rsvpDaysLeft <= 7 ? '#d97706' : '#111827';
+    } else if (rsvpDaysLeft === 0) {
+      deadlineValue = 'Today';
+      deadlineSub = 'deadline today';
+      deadlineColor = '#d97706';
+    } else {
+      deadlineValue = 'Passed';
+      deadlineSub = 'deadline passed';
+      deadlineColor = '#dc2626';
+    }
+  }
+
   const wipOn = wipToggles.filter(t => t.is_wip && !t.is_hidden);
   const wipOff = wipToggles.filter(t => !t.is_wip && !t.is_hidden);
   const wipHidden = wipToggles.filter(t => t.is_hidden);
@@ -310,6 +331,7 @@ export default function DashboardPage() {
             <Stat label="Declined" value={rsvp.declined} sub="can't make it" valueColor="#dc2626" />
             <Stat label="Headcount" value={rsvp.totalGuests} sub="guests confirmed" />
             <Stat label="Likely Not Coming" value={likelyNotComing} sub="marked in guest list" valueColor="#d97706" />
+            <Stat label="RSVP Deadline" value={deadlineValue} sub={deadlineSub} valueColor={deadlineColor} />
           </div>
           <div className="border-t border-gray-100" />
           {recentRsvps.length > 0 ? (

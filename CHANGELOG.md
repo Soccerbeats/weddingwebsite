@@ -4,6 +4,29 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [2026-07-06 session 2] — Home page section styling: shadows, larger radius, rounded FAQ card
+
+### Added
+- **Drop shadows on all home page bands** — Each stacked section below the hero (Intro/Countdown, About header, How We Met, Venue, FAQ) now carries an **upward-casting** shadow (`shadow-[0_-8px_24px_-4px_rgba(0,0,0,0.12)]`). Upward is intentional: each band pulls up `-mt-8` over the one above it, so a normal downward shadow would be buried under the next band. This makes each section's rounded top edge lift off the section above it.
+
+### Changed
+- **Section corner radius 22px → 40px** — All home page bands (`rounded-t-[40px]`) for a softer, more pronounced rounded look.
+- **Explore (nav cards) section is now white** — Wrapper background changed from `aboutBgColor` to `bg-white`.
+- **Details & FAQ is now a fully-rounded card** — Changed from `rounded-t-[40px]` (top only) to `rounded-[40px]` (all four corners) with a two-sided shadow (up + down) so both the rounded top and bottom read as a floating card.
+
+### Fixed
+- **Pink strip above the Explore section** — A `mb-14` gap that had been added under the FAQ card exposed a full-width strip of the blush home-page background (`bgColor`, which intentionally peeks through the rounded-corner notches of each white band). Removed the gap; the white Explore section now tucks flush under the FAQ (`-mt-10`), with the FAQ layered on top (`z-10`) so its rounded bottom + shadow render against white instead of the pink background.
+
+## [2026-07-06] — Photo display fix, admin photo UX, dashboard RSVP deadline stat
+
+### Fixed
+- **Admin & public gallery photos not displaying** — The admin photo grid (and its hero previews) and the public `PhotoGallery` were the only components still referencing images via the raw `/photos/<file>` static path (through Next's image optimizer). Next.js standalone's static file handler only serves `public/` files that existed when the container **started**, so any photo uploaded to the volume afterward returned 404 there (and a 400 from `/_next/image`), leaving the admin card showing just the filename placeholder. Root cause confirmed with live `curl` inside the container: `/photos/<new>` → 404, `/_next/image?url=/photos/<new>` → 400, `/api/photos/<new>` → 200. Both files now route through the `fs`-based `/api/photos/<file>` route used everywhere else, so runtime-uploaded photos always display and future uploads never regress.
+- **Hearting a photo jumped the page to the top** — Hearting re-sorts the photo toward the top of the admin grid; the reorder + focused button scrolled the viewport up. Now the scroll position is captured and restored (`requestAnimationFrame` + button `blur()`), so the photo moves up while the viewport stays put.
+
+### Added
+- **Scroll-to-top button (admin photos)** — Small fixed **↑** button (bottom-right) that smooth-scrolls the photo management page back to the top.
+- **RSVP Deadline stat (dashboard)** — New count stat in the **RSVPs & Guests** card showing days left before the RSVP deadline (`siteConfig.rsvpDeadline`). Amber within 7 days, red once passed, "—" when no deadline is set. `GET /api/admin/dashboard` now returns `countdown.rsvpDaysLeft`.
+
 ## [2026-06-01 session 2] — Mobile hero polish: scroll hijack, padding, UX fixes
 
 ### Added
