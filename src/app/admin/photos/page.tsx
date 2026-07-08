@@ -105,43 +105,42 @@ function SortablePhoto({ photo, siteConfig, onSetHero, onDelete, onToggleHeart, 
                 </svg>
             </button>
 
-            <div
-                onClick={(e) => e.stopPropagation()}
-                className="absolute inset-0 bg-black/80 p-2 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between z-10"
-            >
+            {/* Overlay background bubbles clicks up to open the viewer; each
+                action button stops propagation so it only does its own thing. */}
+            <div className="absolute inset-0 bg-black/80 p-2 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between z-10">
                 <div className="flex flex-col gap-2 items-center justify-center flex-1">
                     <button
-                        onClick={() => onEdit(photo)}
+                        onClick={(e) => { e.stopPropagation(); onEdit(photo); }}
                         className="text-xs bg-blue-500 hover:bg-blue-600 text-white py-1.5 px-3 rounded-lg border border-blue-400 shadow-md hover:shadow-lg transition-all duration-300"
                     >
                         Edit Details
                     </button>
                     <button
-                        onClick={() => onSetHero('homeHero', photo.filename)}
+                        onClick={(e) => { e.stopPropagation(); onSetHero('homeHero', photo.filename); }}
                         className="text-xs bg-white/10 hover:bg-white/20 text-white py-1.5 px-3 rounded-lg border border-white/30 shadow-md hover:shadow-lg transition-all duration-300"
                     >
                         Set Home Hero
                     </button>
                     <button
-                        onClick={() => onSetHero('aboutHero', photo.filename)}
+                        onClick={(e) => { e.stopPropagation(); onSetHero('aboutHero', photo.filename); }}
                         className="text-xs bg-white/10 hover:bg-white/20 text-white py-1.5 px-3 rounded-lg border border-white/30 shadow-md hover:shadow-lg transition-all duration-300"
                     >
                         Set About Hero
                     </button>
                     <button
-                        onClick={() => onSetHero('footerHeroImage', photo.filename)}
+                        onClick={(e) => { e.stopPropagation(); onSetHero('footerHeroImage', photo.filename); }}
                         className="text-xs bg-white/10 hover:bg-white/20 text-white py-1.5 px-3 rounded-lg border border-white/30 shadow-md hover:shadow-lg transition-all duration-300"
                     >
                         Set Footer Hero
                     </button>
                     <button
-                        onClick={() => onSetHero('weddingLogo', photo.filename)}
+                        onClick={(e) => { e.stopPropagation(); onSetHero('weddingLogo', photo.filename); }}
                         className="text-xs bg-white/10 hover:bg-white/20 text-white py-1.5 px-3 rounded-lg border border-white/30 shadow-md hover:shadow-lg transition-all duration-300"
                     >
                         Set Wedding Logo
                     </button>
                     <button
-                        onClick={() => onSetHero('venuePhoto', photo.filename)}
+                        onClick={(e) => { e.stopPropagation(); onSetHero('venuePhoto', photo.filename); }}
                         className="text-xs bg-white/10 hover:bg-white/20 text-white py-1.5 px-3 rounded-lg border border-white/30 shadow-md hover:shadow-lg transition-all duration-300"
                     >
                         Set Venue Photo
@@ -155,7 +154,7 @@ function SortablePhoto({ photo, siteConfig, onSetHero, onDelete, onToggleHeart, 
                         <div className="text-gray-400 text-[10px] truncate mt-1">{photo.filename}</div>
                     </div>
                     <button
-                        onClick={() => onDelete(photo.id)}
+                        onClick={(e) => { e.stopPropagation(); onDelete(photo.id); }}
                         className="text-red-400 hover:text-red-200"
                         title="Delete"
                     >
