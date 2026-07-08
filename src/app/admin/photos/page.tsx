@@ -19,6 +19,7 @@ import {
     rectSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import PhotoLightbox from '@/components/PhotoLightbox';
 
 interface Photo {
     id: number;
@@ -38,9 +39,10 @@ interface SortablePhotoProps {
     onDelete: (id: number) => void;
     onToggleHeart: (id: number, hearted: boolean) => void;
     onEdit: (photo: Photo) => void;
+    onOpen: () => void;
 }
 
-function SortablePhoto({ photo, siteConfig, onSetHero, onDelete, onToggleHeart, onEdit }: SortablePhotoProps) {
+function SortablePhoto({ photo, siteConfig, onSetHero, onDelete, onToggleHeart, onEdit, onOpen }: SortablePhotoProps) {
     const {
         attributes,
         listeners,
@@ -60,7 +62,8 @@ function SortablePhoto({ photo, siteConfig, onSetHero, onDelete, onToggleHeart, 
         <div
             ref={setNodeRef}
             style={style}
-            className="relative group bg-gray-100 rounded-2xl overflow-hidden border border-gray-200 aspect-square shadow-lg hover:shadow-xl transition-all duration-300"
+            onClick={onOpen}
+            className="relative group bg-gray-100 rounded-2xl overflow-hidden border border-gray-200 aspect-square shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer"
         >
             <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-400 break-all p-2 bg-gray-50">
                 {photo.filename}
@@ -76,7 +79,7 @@ function SortablePhoto({ photo, siteConfig, onSetHero, onDelete, onToggleHeart, 
 
             {/* Heart button (always visible in top left) - has higher z-index to stay above overlay */}
             <button
-                onClick={(e) => { e.currentTarget.blur(); onToggleHeart(photo.id, !photo.hearted); }}
+                onClick={(e) => { e.stopPropagation(); e.currentTarget.blur(); onToggleHeart(photo.id, !photo.hearted); }}
                 className={`absolute top-2 left-2 z-20 rounded-full p-1.5 shadow-lg transition-all duration-300 ${
                     photo.hearted
                         ? 'bg-red-500 hover:bg-red-600 hover:shadow-xl'
@@ -93,6 +96,7 @@ function SortablePhoto({ photo, siteConfig, onSetHero, onDelete, onToggleHeart, 
             <button
                 {...listeners}
                 {...attributes}
+                onClick={(e) => e.stopPropagation()}
                 className="absolute top-2 right-2 z-20 bg-white/90 hover:bg-white rounded-full p-1.5 cursor-grab active:cursor-grabbing shadow-lg hover:shadow-xl transition-all duration-300"
                 title="Drag to reorder"
             >
@@ -101,7 +105,10 @@ function SortablePhoto({ photo, siteConfig, onSetHero, onDelete, onToggleHeart, 
                 </svg>
             </button>
 
-            <div className="absolute inset-0 bg-black/80 p-2 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between z-10">
+            <div
+                onClick={(e) => e.stopPropagation()}
+                className="absolute inset-0 bg-black/80 p-2 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between z-10"
+            >
                 <div className="flex flex-col gap-2 items-center justify-center flex-1">
                     <button
                         onClick={() => onEdit(photo)}
@@ -170,7 +177,14 @@ export default function AdminPhotos() {
     const [editForm, setEditForm] = useState({ title: '', description: '' });
     const [photosSubtitle, setPhotosSubtitle] = useState('Moments from our journey together.');
     const [subtitleSaving, setSubtitleSaving] = useState(false);
+    // The lightbox tracks the open photo by id (not index) so that hearting —
+    // which re-sorts the grid — keeps the same photo in view.
+    const [viewerPhotoId, setViewerPhotoId] = useState<number | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const viewerIndex = viewerPhotoId === null
+        ? null
+        : photos.findIndex((p) => p.id === viewerPhotoId);
 
     const sensors = useSensors(
         useSensor(PointerSensor),
@@ -387,6 +401,89 @@ export default function AdminPhotos() {
         }
     };
 
+    // Delete from within the lightbox: after removal, advance to the next photo
+    // (or close if it was the last one) so the viewer never lands on nothing.
+    const handleViewerDelete = async (photo: Photo) => {
+        if (!confirm('Are you sure you want to delete this photo?')) return;
+
+        const idx = photos.findIndex((p) => p.id === photo.id);
+        const remaining = photos.filter((p) => p.id !== photo.id);
+
+        try {
+            const res = await fetch('/api/admin/photos', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: photo.id }),
+            });
+
+            if (res.ok) {
+                setPhotos(remaining);
+                if (remaining.length === 0) {
+                    setViewerPhotoId(null);
+                } else {
+                    const nextIdx = Math.min(idx, remaining.length - 1);
+                    setViewerPhotoId(remaining[nextIdx].id);
+                }
+            } else {
+                alert('Delete failed');
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    const heroButtons: { type: 'homeHero' | 'aboutHero' | 'footerHeroImage' | 'weddingLogo' | 'venuePhoto'; label: string }[] = [
+        { type: 'homeHero', label: 'Home Hero' },
+        { type: 'aboutHero', label: 'About Hero' },
+        { type: 'footerHeroImage', label: 'Footer Hero' },
+        { type: 'weddingLogo', label: 'Wedding Logo' },
+        { type: 'venuePhoto', label: 'Venue Photo' },
+    ];
+
+    // Compact control bar rendered inside the lightbox for the current photo.
+    const renderViewerControls = (photo: Photo) => (
+        <div className="flex flex-wrap items-center justify-center gap-2 rounded-2xl bg-black/70 px-3 py-2 shadow-xl backdrop-blur max-w-full">
+            <button
+                onClick={() => handleToggleHeart(photo.id, !photo.hearted)}
+                className={`rounded-full p-2 shadow-md transition-all duration-300 ${
+                    photo.hearted ? 'bg-red-500 hover:bg-red-600' : 'bg-white/90 hover:bg-white'
+                }`}
+                title={photo.hearted ? 'Unheart photo' : 'Heart photo'}
+            >
+                <svg className={`w-5 h-5 ${photo.hearted ? 'text-white fill-current' : 'text-gray-700'}`} viewBox="0 0 20 20" fill={photo.hearted ? 'currentColor' : 'none'} stroke={photo.hearted ? 'none' : 'currentColor'} strokeWidth={photo.hearted ? 0 : 2}>
+                    <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
+                </svg>
+            </button>
+
+            <span className="mx-1 h-6 w-px bg-white/30" aria-hidden />
+
+            {heroButtons.map(({ type, label }) => (
+                <button
+                    key={type}
+                    onClick={() => setHero(type, photo.filename)}
+                    className="rounded-lg border border-white/30 bg-white/10 px-3 py-1.5 text-xs text-white shadow-md transition-all duration-300 hover:bg-white/20"
+                >
+                    Set {label}
+                </button>
+            ))}
+
+            <span className="mx-1 h-6 w-px bg-white/30" aria-hidden />
+
+            <button
+                onClick={() => handleEditPhoto(photo)}
+                className="rounded-lg border border-blue-400 bg-blue-500 px-3 py-1.5 text-xs text-white shadow-md transition-all duration-300 hover:bg-blue-600"
+            >
+                Edit Details
+            </button>
+            <button
+                onClick={() => handleViewerDelete(photo)}
+                className="rounded-lg border border-red-400 bg-red-500 px-3 py-1.5 text-xs text-white shadow-md transition-all duration-300 hover:bg-red-600"
+            >
+                Delete
+            </button>
+        </div>
+    );
+
     return (
         <div>
             <div className="flex justify-between items-center mb-6">
@@ -497,15 +594,24 @@ export default function AdminPhotos() {
                                 onDelete={handleDelete}
                                 onToggleHeart={handleToggleHeart}
                                 onEdit={handleEditPhoto}
+                                onOpen={() => setViewerPhotoId(photo.id)}
                             />
                         ))}
                     </div>
                 </SortableContext>
             </DndContext>
 
+            <PhotoLightbox
+                photos={photos}
+                index={viewerIndex !== null && viewerIndex >= 0 ? viewerIndex : null}
+                onClose={() => setViewerPhotoId(null)}
+                onNavigate={(newIndex) => setViewerPhotoId(photos[newIndex].id)}
+                controls={renderViewerControls}
+            />
+
             {/* Edit Photo Modal */}
             {editingPhoto && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50">
                     <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
                         <h3 className="text-lg font-bold text-gray-900 mb-4">Edit Photo Details</h3>
 
