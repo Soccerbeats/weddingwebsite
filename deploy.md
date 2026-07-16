@@ -34,7 +34,7 @@ Alternatively, a Portainer webhook may auto-deploy when a new image is pushed.
 
 - **Image name**: ALWAYS use `ghcr.io/soccerbeats/weddingwebsite:latest` — NEVER change this
 - **Build target**: Always use `--target production`
-- **Do NOT push** unless the user explicitly asks to deploy
+- **Auto-deploy after every code change**: per Austin's standing instruction (see `CLAUDE.md` → "After Every Code Change"), push to GitHub and build/push the Docker image automatically after any change — no need to ask. This supersedes the older "only deploy when asked" gate.
 
 ## Where It Deploys
 

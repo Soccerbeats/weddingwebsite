@@ -23,14 +23,23 @@ Do all five steps — don't skip any. README, CHANGELOG, and vault updates shoul
 
 ## After Every Code Change
 
-After any code change (feature, fix, refactor), **always build and push the Docker image** so Austin can pull and redeploy from Portainer:
+After any code change (feature, fix, refactor), **always deploy — automatically, without waiting to be asked**. This is Austin's standing instruction and it **overrides** the "do not push unless explicitly asked" rule in `deploy.md`. Do both steps, in order:
+
+1. **Push to GitHub** (commit any pending changes on `main`, then push):
+
+```bash
+git add -A && git commit -m "describe the change"   # if not already committed
+git push origin main
+```
+
+2. **Build and push the Docker image** so Austin can pull and redeploy from Portainer:
 
 ```bash
 docker build -t ghcr.io/soccerbeats/weddingwebsite:latest --target production .
 docker push ghcr.io/soccerbeats/weddingwebsite:latest
 ```
 
-Do this automatically — don't wait to be asked.
+Do this automatically after every change — don't wait to be asked.
 
 ---
 
