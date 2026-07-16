@@ -61,6 +61,8 @@ export default function AdminRegistryPage() {
     const [selectedDonor, setSelectedDonor] = useState<{ id: number; guest_name: string } | null>(null);
     const [donationEvent, setDonationEvent] = useState('Wedding Day');
     const [otherEvent, setOtherEvent] = useState('');
+    const [coGivers, setCoGivers] = useState<{ id: number | null; name: string }[]>([]);
+    const [coGiverSearch, setCoGiverSearch] = useState('');
     const [importing, setImporting] = useState(false);
     const [importResult, setImportResult] = useState<{ added: number; skipped: number } | null>(null);
     const csvInputRef = useRef<HTMLInputElement>(null);
@@ -256,6 +258,15 @@ export default function AdminRegistryPage() {
         save(updated);
     };
 
+    const addCoGiver = (person: { id: number | null; name: string }) => {
+        const name = person.name.trim();
+        if (!name) return;
+        if (coGivers.some(c => c.name.toLowerCase() === name.toLowerCase())) { setCoGiverSearch(''); return; }
+        setCoGivers([...coGivers, { id: person.id, name }]);
+        setCoGiverSearch('');
+    };
+    const removeCoGiver = (name: string) => setCoGivers(coGivers.filter(c => c.name !== name));
+
     const logContribution = async () => {
         if (!contributingItem) return;
         const amount = parseFloat(contributionAmount);
@@ -281,6 +292,7 @@ export default function AdminRegistryPage() {
                         fund_item_id: contributingItem.id,
                         fund_item_title: contributingItem.title,
                         event: eventValue,
+                        co_donors: coGivers,
                     }),
                 });
             } catch (e) {
@@ -293,6 +305,8 @@ export default function AdminRegistryPage() {
         setSelectedDonor(null);
         setDonationEvent('Wedding Day');
         setOtherEvent('');
+        setCoGivers([]);
+        setCoGiverSearch('');
         save(updated);
     };
 
@@ -904,7 +918,7 @@ export default function AdminRegistryPage() {
             {/* Log contribution modal */}
             {contributingItem && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-black/40" onClick={() => { setContributingItem(null); setDonorSearch(''); setSelectedDonor(null); setDonationEvent('Wedding Day'); setOtherEvent(''); }} />
+                    <div className="absolute inset-0 bg-black/40" onClick={() => { setContributingItem(null); setDonorSearch(''); setSelectedDonor(null); setDonationEvent('Wedding Day'); setOtherEvent(''); setCoGivers([]); setCoGiverSearch(''); }} />
                     <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 z-10">
                         <h2 className="text-lg font-bold text-gray-900 mb-1">Log a Gift</h2>
                         <p className="text-sm text-gray-500 mb-4">{contributingItem.emoji} {contributingItem.title}</p>
@@ -954,6 +968,39 @@ export default function AdminRegistryPage() {
                                 )}
                             </div>
                         )}
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Co-givers (optional)</label>
+                        {coGivers.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mb-2">
+                                {coGivers.map(c => (
+                                    <span key={c.name} className="inline-flex items-center gap-1 bg-gray-100 rounded-full px-2 py-1 text-xs">
+                                        {c.name}
+                                        <button type="button" onClick={() => removeCoGiver(c.name)} className="text-gray-400 hover:text-gray-600">✕</button>
+                                    </span>
+                                ))}
+                            </div>
+                        )}
+                        <input
+                            type="text"
+                            value={coGiverSearch}
+                            onChange={e => setCoGiverSearch(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter' && coGiverSearch.trim()) { e.preventDefault(); addCoGiver({ id: null, name: coGiverSearch }); } }}
+                            placeholder="Add a co-giver (type & Enter, or pick below)"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                        />
+                        {coGiverSearch.trim() && (
+                            <div className="mt-1 max-h-32 overflow-y-auto border border-gray-200 rounded-lg mb-4">
+                                {donorGuests
+                                    .filter(g => g.guest_name.toLowerCase().includes(coGiverSearch.toLowerCase()))
+                                    .slice(0, 8)
+                                    .map(g => (
+                                        <button key={g.id} type="button" onClick={() => addCoGiver({ id: g.id, name: g.guest_name })}
+                                            className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-100">
+                                            {g.guest_name}
+                                        </button>
+                                    ))}
+                            </div>
+                        )}
+                        {!coGiverSearch.trim() && <div className="mb-4" />}
                         <label className="block text-sm font-medium text-gray-700 mb-1">From what event?</label>
                         <select
                             value={donationEvent}
@@ -979,7 +1026,7 @@ export default function AdminRegistryPage() {
                                 className="flex-1 bg-accent text-white py-2 rounded-lg text-sm font-medium disabled:opacity-40">
                                 Save
                             </button>
-                            <button onClick={() => { setContributingItem(null); setDonorSearch(''); setSelectedDonor(null); setDonationEvent('Wedding Day'); setOtherEvent(''); }}
+                            <button onClick={() => { setContributingItem(null); setDonorSearch(''); setSelectedDonor(null); setDonationEvent('Wedding Day'); setOtherEvent(''); setCoGivers([]); setCoGiverSearch(''); }}
                                 className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg text-sm">
                                 Cancel
                             </button>
