@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import type { FundItem } from '@/lib/config';
 
 interface DietaryEntry {
     name: string;
@@ -66,6 +67,14 @@ export default function RSVPDashboard() {
     const [rsvps, setRsvps] = useState<RSVP[]>([]);
     const [guests, setGuests] = useState<Guest[]>([]);
     const [donations, setDonations] = useState<Donation[]>([]);
+    const [showDonationModal, setShowDonationModal] = useState(false);
+    const [donationDonorSearch, setDonationDonorSearch] = useState('');
+    const [donationDonor, setDonationDonor] = useState<{ id: number; guest_name: string } | null>(null);
+    const [donationAmount, setDonationAmount] = useState('');
+    const [donationFundId, setDonationFundId] = useState('');
+    const [donationEvent, setDonationEvent] = useState('Wedding Day');
+    const [donationOtherEvent, setDonationOtherEvent] = useState('');
+    const [savingDonation, setSavingDonation] = useState(false);
     const [loading, setLoading] = useState(true);
     const [deletingRsvp, setDeletingRsvp] = useState<RSVP | null>(null);
     const [confirmName, setConfirmName] = useState('');
@@ -154,6 +163,61 @@ export default function RSVPDashboard() {
             setDonations(Array.isArray(data) ? data : []);
         } catch (error) {
             console.error('Error fetching donations:', error);
+        }
+    };
+
+    const resetDonationModal = () => {
+        setShowDonationModal(false);
+        setDonationDonorSearch('');
+        setDonationDonor(null);
+        setDonationAmount('');
+        setDonationFundId('');
+        setDonationEvent('Wedding Day');
+        setDonationOtherEvent('');
+    };
+
+    const saveDonation = async () => {
+        const amount = parseFloat(donationAmount);
+        if (!donationDonor || !amount || isNaN(amount) || !donationFundId) return;
+        const funds: FundItem[] = config?.registry?.items || [];
+        const fund = funds.find(f => f.id === donationFundId);
+        if (!fund) return;
+        const eventValue = donationEvent === 'Other' ? (donationOtherEvent.trim() || 'Other') : donationEvent;
+        setSavingDonation(true);
+        try {
+            // 1. Advance fund progress against fresh config (mirrors Registry save())
+            const configRes = await fetch('/api/admin/site-config');
+            const freshConfig = await configRes.json();
+            const items: FundItem[] = (freshConfig.registry?.items || []).map((i: FundItem) =>
+                i.id === donationFundId ? { ...i, funded: Math.min(i.price, i.funded + amount) } : i
+            );
+            freshConfig.registry = { ...(freshConfig.registry || {}), items };
+            await fetch('/api/admin/site-config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(freshConfig),
+            });
+            // 2. Record the donation row
+            await fetch('/api/admin/donations', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    guest_id: donationDonor.id,
+                    guest_name: donationDonor.guest_name,
+                    amount,
+                    fund_item_id: fund.id,
+                    fund_item_title: fund.title,
+                    event: eventValue,
+                }),
+            });
+            // 3. Refresh UI
+            await fetchDonations();
+            await fetchConfig();
+            resetDonationModal();
+        } catch (e) {
+            console.error('Failed to save donation:', e);
+        } finally {
+            setSavingDonation(false);
         }
     };
 
@@ -959,6 +1023,12 @@ export default function RSVPDashboard() {
                 <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
                     <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
                         <p className="text-sm text-gray-500">{donations.length} donation{donations.length === 1 ? '' : 's'} · Total ${donations.reduce((s, d) => s + d.amount, 0).toLocaleString()}</p>
+                        <button
+                            onClick={() => setShowDonationModal(true)}
+                            className="bg-accent text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90"
+                        >
+                            + Log Donation
+                        </button>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="min-w-full divide-y divide-gray-200">
@@ -985,6 +1055,109 @@ export default function RSVPDashboard() {
                                 ))}
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            )}
+
+            {/* Log Donation Modal */}
+            {showDonationModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/40" onClick={resetDonationModal} />
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 z-10">
+                        <h2 className="text-lg font-bold text-gray-900 mb-4">Log a Donation</h2>
+
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Who donated?</label>
+                        {donationDonor ? (
+                            <div className="flex items-center justify-between border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4">
+                                <span>{donationDonor.guest_name}</span>
+                                <button type="button" onClick={() => { setDonationDonor(null); setDonationDonorSearch(''); }} className="text-gray-400 hover:text-gray-600">✕</button>
+                            </div>
+                        ) : (
+                            <div className="mb-4">
+                                <input
+                                    type="text"
+                                    value={donationDonorSearch}
+                                    onChange={e => setDonationDonorSearch(e.target.value)}
+                                    placeholder="Search guest list..."
+                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                                />
+                                {donationDonorSearch.trim() && (
+                                    <div className="mt-1 max-h-40 overflow-y-auto border border-gray-200 rounded-lg">
+                                        {guests
+                                            .filter(g => g.guest_name.toLowerCase().includes(donationDonorSearch.toLowerCase()))
+                                            .slice(0, 8)
+                                            .map(g => (
+                                                <button
+                                                    key={g.id}
+                                                    type="button"
+                                                    onClick={() => { setDonationDonor({ id: g.id, guest_name: g.guest_name }); setDonationDonorSearch(''); }}
+                                                    className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-100"
+                                                >
+                                                    {g.guest_name}
+                                                </button>
+                                            ))}
+                                        {guests.filter(g => g.guest_name.toLowerCase().includes(donationDonorSearch.toLowerCase())).length === 0 && (
+                                            <p className="px-3 py-2 text-sm text-gray-400">No matching guest</p>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Amount received ($)</label>
+                        <input
+                            type="number"
+                            value={donationAmount}
+                            onChange={e => setDonationAmount(e.target.value)}
+                            placeholder="0"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4"
+                        />
+
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Fund</label>
+                        <select
+                            value={donationFundId}
+                            onChange={e => setDonationFundId(e.target.value)}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4"
+                        >
+                            <option value="">Select a fund...</option>
+                            {(config?.registry?.items || []).map((f: FundItem) => (
+                                <option key={f.id} value={f.id}>{f.title}</option>
+                            ))}
+                        </select>
+
+                        <label className="block text-sm font-medium text-gray-700 mb-1">From what event?</label>
+                        <select
+                            value={donationEvent}
+                            onChange={e => setDonationEvent(e.target.value)}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-3"
+                        >
+                            <option>Bridal Shower</option>
+                            <option>Engagement Party</option>
+                            <option>Wedding Day</option>
+                            <option>Other</option>
+                        </select>
+                        {donationEvent === 'Other' && (
+                            <input
+                                type="text"
+                                value={donationOtherEvent}
+                                onChange={e => setDonationOtherEvent(e.target.value)}
+                                placeholder="Name the event"
+                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4"
+                            />
+                        )}
+
+                        <div className="flex gap-2 mt-2">
+                            <button
+                                onClick={saveDonation}
+                                disabled={savingDonation || !donationDonor || !donationAmount || !donationFundId}
+                                className="flex-1 bg-accent text-white py-2 rounded-lg text-sm font-medium disabled:opacity-40"
+                            >
+                                {savingDonation ? 'Saving...' : 'Save'}
+                            </button>
+                            <button onClick={resetDonationModal} className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg text-sm">
+                                Cancel
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
