@@ -45,7 +45,18 @@ interface Guest {
     created_at: string;
 }
 
-type Tab = 'rsvps' | 'guestlist';
+interface Donation {
+    id: number;
+    guest_id: number | null;
+    guest_name: string;
+    amount: number;
+    fund_item_id: string | null;
+    fund_item_title: string | null;
+    event: string | null;
+    created_at: string;
+}
+
+type Tab = 'rsvps' | 'guestlist' | 'donations';
 type GuestFilter = 'all' | 'no_response' | 'attending' | 'declined' | 'likely_not_coming' | 'invited' | 'not_invited' | 'bride' | 'groom';
 
 export default function RSVPDashboard() {
@@ -54,6 +65,7 @@ export default function RSVPDashboard() {
     const [guestSearch, setGuestSearch] = useState('');
     const [rsvps, setRsvps] = useState<RSVP[]>([]);
     const [guests, setGuests] = useState<Guest[]>([]);
+    const [donations, setDonations] = useState<Donation[]>([]);
     const [loading, setLoading] = useState(true);
     const [deletingRsvp, setDeletingRsvp] = useState<RSVP | null>(null);
     const [confirmName, setConfirmName] = useState('');
@@ -83,6 +95,12 @@ export default function RSVPDashboard() {
         fetchRsvps();
         fetchGuests();
         fetchConfig();
+        fetchDonations();
+        const params = new URLSearchParams(window.location.search);
+        const tab = params.get('tab');
+        if (tab === 'donations' || tab === 'guestlist' || tab === 'rsvps') {
+            setActiveTab(tab as Tab);
+        }
     }, []);
 
     const handleSaveSubtitle = async () => {
@@ -126,6 +144,16 @@ export default function RSVPDashboard() {
             setGuests(data);
         } catch (error) {
             console.error('Error fetching guests:', error);
+        }
+    };
+
+    const fetchDonations = async () => {
+        try {
+            const response = await fetch('/api/admin/donations');
+            const data = await response.json();
+            setDonations(Array.isArray(data) ? data : []);
+        } catch (error) {
+            console.error('Error fetching donations:', error);
         }
     };
 
@@ -450,6 +478,11 @@ export default function RSVPDashboard() {
         }
     });
 
+    const donationTotalByGuestId = donations.reduce<Record<number, number>>((acc, d) => {
+        if (d.guest_id != null) acc[d.guest_id] = (acc[d.guest_id] || 0) + d.amount;
+        return acc;
+    }, {});
+
     return (
         <div>
             {/* Nav Card Subtitle */}
@@ -501,6 +534,16 @@ export default function RSVPDashboard() {
                         }`}
                     >
                         Guest List
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('donations')}
+                        className={`px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-md ${
+                            activeTab === 'donations'
+                                ? 'bg-accent text-white shadow-lg'
+                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300 hover:shadow-lg'
+                        }`}
+                    >
+                        Donations
                     </button>
                 </div>
             </div>
@@ -775,6 +818,7 @@ export default function RSVPDashboard() {
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">RSVP Status</th>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Notes</th>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Address</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Donated</th>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Invited</th>
                                         <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
                                     </tr>
@@ -838,6 +882,9 @@ export default function RSVPDashboard() {
                                             <td className={`px-6 py-4 text-sm max-w-xs truncate ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-500'}`}>
                                                 {guest.address || '-'}
                                             </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                                                {donationTotalByGuestId[guest.id] ? `$${donationTotalByGuestId[guest.id].toLocaleString()}` : '-'}
+                                            </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                                                     guest.invited ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
@@ -890,7 +937,7 @@ export default function RSVPDashboard() {
                                                             <span className="text-xs text-gray-300">—</span>
                                                         )}
                                                     </td>
-                                                    <td className="px-6 py-1.5 text-xs text-gray-400" colSpan={2}>
+                                                    <td className="px-6 py-1.5 text-xs text-gray-400" colSpan={3}>
                                                         {flags || '—'}
                                                     </td>
                                                     <td className="px-6 py-1.5 text-xs text-gray-300">—</td>
@@ -906,6 +953,40 @@ export default function RSVPDashboard() {
                         </div>
                     </div>
                 </>
+            )}
+
+            {activeTab === 'donations' && (
+                <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                        <p className="text-sm text-gray-500">{donations.length} donation{donations.length === 1 ? '' : 's'} · Total ${donations.reduce((s, d) => s + d.amount, 0).toLocaleString()}</p>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Guest</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fund</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Event</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                                {donations.length === 0 ? (
+                                    <tr><td colSpan={5} className="px-6 py-8 text-center text-sm text-gray-400">No donations recorded yet.</td></tr>
+                                ) : donations.map(d => (
+                                    <tr key={d.id} className="hover:bg-gray-50">
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">{d.guest_name}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${d.amount.toLocaleString()}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{d.fund_item_title || '-'}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{d.event || '-'}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(d.created_at).toLocaleDateString()}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             )}
 
             {/* Delete RSVP Modal */}
