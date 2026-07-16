@@ -56,6 +56,11 @@ export default function AdminRegistryPage() {
     const [showAddForm, setShowAddForm] = useState(false);
     const [contributingItem, setContributingItem] = useState<FundItem | null>(null);
     const [contributionAmount, setContributionAmount] = useState('');
+    const [donorGuests, setDonorGuests] = useState<{ id: number; guest_name: string }[]>([]);
+    const [donorSearch, setDonorSearch] = useState('');
+    const [selectedDonor, setSelectedDonor] = useState<{ id: number; guest_name: string } | null>(null);
+    const [donationEvent, setDonationEvent] = useState('Wedding Day');
+    const [otherEvent, setOtherEvent] = useState('');
     const [importing, setImporting] = useState(false);
     const [importResult, setImportResult] = useState<{ added: number; skipped: number } | null>(null);
     const csvInputRef = useRef<HTMLInputElement>(null);
@@ -76,6 +81,9 @@ export default function AdminRegistryPage() {
         fetch('/api/admin/registry-items')
             .then(r => r.json())
             .then(items => setRegistryItems(Array.isArray(items) ? items : []));
+        fetch('/api/admin/guest-list')
+            .then(r => r.json())
+            .then(data => setDonorGuests(Array.isArray(data) ? data.map((g: { id: number; guest_name: string }) => ({ id: g.id, guest_name: g.guest_name })) : []));
     }, []);
 
     const handleCsvImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -248,10 +256,11 @@ export default function AdminRegistryPage() {
         save(updated);
     };
 
-    const logContribution = () => {
+    const logContribution = async () => {
         if (!contributingItem) return;
         const amount = parseFloat(contributionAmount);
         if (!amount || isNaN(amount)) return;
+        const eventValue = donationEvent === 'Other' ? (otherEvent.trim() || 'Other') : donationEvent;
         const updated = {
             ...fund,
             items: fund.items.map(i => i.id === contributingItem.id
@@ -260,8 +269,30 @@ export default function AdminRegistryPage() {
             ),
         };
         setFund(updated);
+        if (selectedDonor) {
+            try {
+                await fetch('/api/admin/donations', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        guest_id: selectedDonor.id,
+                        guest_name: selectedDonor.guest_name,
+                        amount,
+                        fund_item_id: contributingItem.id,
+                        fund_item_title: contributingItem.title,
+                        event: eventValue,
+                    }),
+                });
+            } catch (e) {
+                console.error('Failed to record donation:', e);
+            }
+        }
         setContributingItem(null);
         setContributionAmount('');
+        setDonorSearch('');
+        setSelectedDonor(null);
+        setDonationEvent('Wedding Day');
+        setOtherEvent('');
         save(updated);
     };
 
@@ -284,6 +315,7 @@ export default function AdminRegistryPage() {
                 </div>
                 <div className="flex items-center gap-4">
                     {message && <span className={`text-sm font-medium ${message === 'Saved!' ? 'text-green-600' : 'text-red-600'}`}>{message}</span>}
+                    <a href="/admin/rsvps?tab=donations" className="text-sm text-accent hover:text-accent-dark underline">View donations →</a>
                     <a href="/registry" target="_blank" rel="noopener noreferrer" className="text-sm text-accent hover:text-accent-dark underline">View page →</a>
                 </div>
             </div>
@@ -860,7 +892,7 @@ export default function AdminRegistryPage() {
             {/* Log contribution modal */}
             {contributingItem && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-black/40" onClick={() => setContributingItem(null)} />
+                    <div className="absolute inset-0 bg-black/40" onClick={() => { setContributingItem(null); setDonorSearch(''); setSelectedDonor(null); setDonationEvent('Wedding Day'); setOtherEvent(''); }} />
                     <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 z-10">
                         <h2 className="text-lg font-bold text-gray-900 mb-1">Log a Gift</h2>
                         <p className="text-sm text-gray-500 mb-4">{contributingItem.emoji} {contributingItem.title}</p>
@@ -873,12 +905,69 @@ export default function AdminRegistryPage() {
                             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4"
                             autoFocus
                         />
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Who donated?</label>
+                        {selectedDonor ? (
+                            <div className="flex items-center justify-between border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4">
+                                <span>{selectedDonor.guest_name}</span>
+                                <button type="button" onClick={() => { setSelectedDonor(null); setDonorSearch(''); }} className="text-gray-400 hover:text-gray-600">✕</button>
+                            </div>
+                        ) : (
+                            <div className="mb-4">
+                                <input
+                                    type="text"
+                                    value={donorSearch}
+                                    onChange={e => setDonorSearch(e.target.value)}
+                                    placeholder="Search guest list..."
+                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                                />
+                                {donorSearch.trim() && (
+                                    <div className="mt-1 max-h-40 overflow-y-auto border border-gray-200 rounded-lg">
+                                        {donorGuests
+                                            .filter(g => g.guest_name.toLowerCase().includes(donorSearch.toLowerCase()))
+                                            .slice(0, 8)
+                                            .map(g => (
+                                                <button
+                                                    key={g.id}
+                                                    type="button"
+                                                    onClick={() => { setSelectedDonor(g); setDonorSearch(''); }}
+                                                    className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-100"
+                                                >
+                                                    {g.guest_name}
+                                                </button>
+                                            ))}
+                                        {donorGuests.filter(g => g.guest_name.toLowerCase().includes(donorSearch.toLowerCase())).length === 0 && (
+                                            <p className="px-3 py-2 text-sm text-gray-400">No matching guest</p>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                        <label className="block text-sm font-medium text-gray-700 mb-1">From what event?</label>
+                        <select
+                            value={donationEvent}
+                            onChange={e => setDonationEvent(e.target.value)}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-3"
+                        >
+                            <option>Bridal Shower</option>
+                            <option>Engagement Party</option>
+                            <option>Wedding Day</option>
+                            <option>Other</option>
+                        </select>
+                        {donationEvent === 'Other' && (
+                            <input
+                                type="text"
+                                value={otherEvent}
+                                onChange={e => setOtherEvent(e.target.value)}
+                                placeholder="Name the event"
+                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4"
+                            />
+                        )}
                         <div className="flex gap-2">
                             <button onClick={logContribution} disabled={!contributionAmount}
                                 className="flex-1 bg-accent text-white py-2 rounded-lg text-sm font-medium disabled:opacity-40">
                                 Save
                             </button>
-                            <button onClick={() => setContributingItem(null)}
+                            <button onClick={() => { setContributingItem(null); setDonorSearch(''); setSelectedDonor(null); setDonationEvent('Wedding Day'); setOtherEvent(''); }}
                                 className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg text-sm">
                                 Cancel
                             </button>
