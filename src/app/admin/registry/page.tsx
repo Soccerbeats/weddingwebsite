@@ -315,8 +315,20 @@ export default function AdminRegistryPage() {
                 </div>
                 <div className="flex items-center gap-4">
                     {message && <span className={`text-sm font-medium ${message === 'Saved!' ? 'text-green-600' : 'text-red-600'}`}>{message}</span>}
-                    <a href="/admin/rsvps?tab=donations" className="text-sm text-accent hover:text-accent-dark underline">View donations →</a>
-                    <a href="/registry" target="_blank" rel="noopener noreferrer" className="text-sm text-accent hover:text-accent-dark underline">View page →</a>
+                    <a
+                        href="/admin/rsvps?tab=donations"
+                        className="px-4 py-2 rounded-xl text-sm font-medium bg-gray-200 text-gray-700 hover:bg-gray-300 shadow-md hover:shadow-lg transition-all duration-300"
+                    >
+                        View donations →
+                    </a>
+                    <a
+                        href="/registry"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-4 py-2 rounded-xl text-sm font-medium bg-accent text-white hover:bg-accent-dark shadow-md hover:shadow-lg transition-all duration-300"
+                    >
+                        View page →
+                    </a>
                 </div>
             </div>
 
