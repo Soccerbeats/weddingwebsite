@@ -55,6 +55,7 @@ interface Donation {
     fund_item_title: string | null;
     event: string | null;
     created_at: string;
+    co_donors?: { id: number | null; name: string }[];
 }
 
 type Tab = 'rsvps' | 'guestlist' | 'donations';
@@ -75,6 +76,11 @@ export default function RSVPDashboard() {
     const [donationEvent, setDonationEvent] = useState('Wedding Day');
     const [donationOtherEvent, setDonationOtherEvent] = useState('');
     const [savingDonation, setSavingDonation] = useState(false);
+    const [coGivers, setCoGivers] = useState<{ id: number | null; name: string }[]>([]);
+    const [coGiverSearch, setCoGiverSearch] = useState('');
+    const [editingDonationId, setEditingDonationId] = useState<number | null>(null);
+    const [origDonation, setOrigDonation] = useState<{ amount: number; fund_item_id: string | null } | null>(null);
+    const [deletingDonation, setDeletingDonation] = useState<Donation | null>(null);
     const [loading, setLoading] = useState(true);
     const [deletingRsvp, setDeletingRsvp] = useState<RSVP | null>(null);
     const [confirmName, setConfirmName] = useState('');
@@ -174,6 +180,33 @@ export default function RSVPDashboard() {
         setDonationFundId('');
         setDonationEvent('Wedding Day');
         setDonationOtherEvent('');
+        setCoGivers([]);
+        setCoGiverSearch('');
+        setEditingDonationId(null);
+        setOrigDonation(null);
+    };
+
+    const addCoGiver = (person: { id: number | null; name: string }) => {
+        const name = person.name.trim();
+        if (!name) return;
+        if (coGivers.some(c => c.name.toLowerCase() === name.toLowerCase())) { setCoGiverSearch(''); return; }
+        setCoGivers([...coGivers, { id: person.id, name }]);
+        setCoGiverSearch('');
+    };
+    const removeCoGiver = (name: string) => setCoGivers(coGivers.filter(c => c.name !== name));
+
+    const openEditDonation = (d: Donation) => {
+        setEditingDonationId(d.id);
+        setOrigDonation({ amount: d.amount, fund_item_id: d.fund_item_id });
+        setDonationDonor(d.guest_id != null ? { id: d.guest_id, guest_name: d.guest_name } : { id: 0, guest_name: d.guest_name });
+        setDonationAmount(String(d.amount));
+        setDonationFundId(d.fund_item_id || '');
+        const presets = ['Bridal Shower', 'Engagement Party', 'Wedding Day'];
+        if (d.event && presets.includes(d.event)) { setDonationEvent(d.event); setDonationOtherEvent(''); }
+        else { setDonationEvent('Other'); setDonationOtherEvent(d.event || ''); }
+        setCoGivers(Array.isArray(d.co_donors) ? d.co_donors : []);
+        setCoGiverSearch('');
+        setShowDonationModal(true);
     };
 
     const saveDonation = async () => {
@@ -185,37 +218,80 @@ export default function RSVPDashboard() {
         const eventValue = donationEvent === 'Other' ? (donationOtherEvent.trim() || 'Other') : donationEvent;
         setSavingDonation(true);
         try {
-            // 1. Advance fund progress against fresh config (mirrors Registry save())
-            const configRes = await fetch('/api/admin/site-config');
-            const freshConfig = await configRes.json();
-            const items: FundItem[] = (freshConfig.registry?.items || []).map((i: FundItem) =>
-                i.id === donationFundId ? { ...i, funded: Math.min(i.price, i.funded + amount) } : i
-            );
-            freshConfig.registry = { ...(freshConfig.registry || {}), items };
-            await fetch('/api/admin/site-config', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(freshConfig),
-            });
-            // 2. Record the donation row
-            await fetch('/api/admin/donations', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    guest_id: donationDonor.id,
-                    guest_name: donationDonor.guest_name,
-                    amount,
-                    fund_item_id: fund.id,
-                    fund_item_title: fund.title,
-                    event: eventValue,
-                }),
-            });
-            // 3. Refresh UI
+            // Build per-fund delta map (edit reverses the original first)
+            const delta: Record<string, number> = {};
+            if (editingDonationId && origDonation?.fund_item_id) {
+                delta[origDonation.fund_item_id] = (delta[origDonation.fund_item_id] || 0) - origDonation.amount;
+            }
+            delta[donationFundId] = (delta[donationFundId] || 0) + amount;
+            await applyFundDeltas(delta);
+            // Write the donation row
+            const body = {
+                guest_id: donationDonor.id || null,
+                guest_name: donationDonor.guest_name,
+                amount,
+                fund_item_id: fund.id,
+                fund_item_title: fund.title,
+                event: eventValue,
+                co_donors: coGivers,
+            };
+            if (editingDonationId) {
+                await fetch('/api/admin/donations', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ...body, id: editingDonationId }),
+                });
+            } else {
+                await fetch('/api/admin/donations', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+            }
             await fetchDonations();
             await fetchConfig();
             resetDonationModal();
         } catch (e) {
             console.error('Failed to save donation:', e);
+        } finally {
+            setSavingDonation(false);
+        }
+    };
+
+    // Fetch fresh config, apply per-fund funded deltas clamped to [0, price], POST it back.
+    const applyFundDeltas = async (delta: Record<string, number>) => {
+        const configRes = await fetch('/api/admin/site-config');
+        const freshConfig = await configRes.json();
+        const items: FundItem[] = (freshConfig.registry?.items || []).map((i: FundItem) => {
+            const d = delta[i.id];
+            if (!d) return i;
+            return { ...i, funded: Math.max(0, Math.min(i.price, i.funded + d)) };
+        });
+        freshConfig.registry = { ...(freshConfig.registry || {}), items };
+        await fetch('/api/admin/site-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(freshConfig),
+        });
+    };
+
+    const confirmDeleteDonation = async () => {
+        if (!deletingDonation) return;
+        setSavingDonation(true);
+        try {
+            if (deletingDonation.fund_item_id) {
+                await applyFundDeltas({ [deletingDonation.fund_item_id]: -deletingDonation.amount });
+            }
+            await fetch('/api/admin/donations', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: deletingDonation.id }),
+            });
+            await fetchDonations();
+            await fetchConfig();
+            setDeletingDonation(null);
+        } catch (e) {
+            console.error('Failed to delete donation:', e);
         } finally {
             setSavingDonation(false);
         }
@@ -1039,18 +1115,25 @@ export default function RSVPDashboard() {
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fund</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Event</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
                                 {donations.length === 0 ? (
-                                    <tr><td colSpan={5} className="px-6 py-8 text-center text-sm text-gray-400">No donations recorded yet.</td></tr>
+                                    <tr><td colSpan={6} className="px-6 py-8 text-center text-sm text-gray-400">No donations recorded yet.</td></tr>
                                 ) : donations.map(d => (
                                     <tr key={d.id} className="hover:bg-gray-50">
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">{d.guest_name}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                                            {[d.guest_name, ...((d.co_donors || []).map(c => c.name))].join(', ')}
+                                        </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${d.amount.toLocaleString()}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{d.fund_item_title || '-'}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{d.event || '-'}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(d.created_at).toLocaleDateString()}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
+                                            <button onClick={() => openEditDonation(d)} className="text-accent hover:text-accent-dark mr-3">Edit</button>
+                                            <button onClick={() => setDeletingDonation(d)} className="text-red-600 hover:text-red-800">Delete</button>
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -1064,7 +1147,7 @@ export default function RSVPDashboard() {
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
                     <div className="absolute inset-0 bg-black/40" onClick={resetDonationModal} />
                     <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 z-10">
-                        <h2 className="text-lg font-bold text-gray-900 mb-4">Log a Donation</h2>
+                        <h2 className="text-lg font-bold text-gray-900 mb-4">{editingDonationId ? 'Edit Donation' : 'Log a Donation'}</h2>
 
                         <label className="block text-sm font-medium text-gray-700 mb-1">Who donated?</label>
                         {donationDonor ? (
@@ -1101,6 +1184,39 @@ export default function RSVPDashboard() {
                                         )}
                                     </div>
                                 )}
+                            </div>
+                        )}
+
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Co-givers (optional)</label>
+                        {coGivers.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mb-2">
+                                {coGivers.map(c => (
+                                    <span key={c.name} className="inline-flex items-center gap-1 bg-gray-100 rounded-full px-2 py-1 text-xs">
+                                        {c.name}
+                                        <button type="button" onClick={() => removeCoGiver(c.name)} className="text-gray-400 hover:text-gray-600">✕</button>
+                                    </span>
+                                ))}
+                            </div>
+                        )}
+                        <input
+                            type="text"
+                            value={coGiverSearch}
+                            onChange={e => setCoGiverSearch(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter' && coGiverSearch.trim()) { e.preventDefault(); addCoGiver({ id: null, name: coGiverSearch }); } }}
+                            placeholder="Add a co-giver (type & Enter, or pick below)"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4"
+                        />
+                        {coGiverSearch.trim() && (
+                            <div className="-mt-3 mb-4 max-h-32 overflow-y-auto border border-gray-200 rounded-lg">
+                                {guests
+                                    .filter(g => g.guest_name.toLowerCase().includes(coGiverSearch.toLowerCase()))
+                                    .slice(0, 8)
+                                    .map(g => (
+                                        <button key={g.id} type="button" onClick={() => addCoGiver({ id: g.id, name: g.guest_name })}
+                                            className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-100">
+                                            {g.guest_name}
+                                        </button>
+                                    ))}
                             </div>
                         )}
 
@@ -1155,6 +1271,28 @@ export default function RSVPDashboard() {
                                 {savingDonation ? 'Saving...' : 'Save'}
                             </button>
                             <button onClick={resetDonationModal} className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg text-sm">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Delete Donation Modal */}
+            {deletingDonation && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/40" onClick={() => setDeletingDonation(null)} />
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 z-10">
+                        <h2 className="text-lg font-bold text-gray-900 mb-2">Delete donation?</h2>
+                        <p className="text-sm text-gray-500 mb-4">
+                            {deletingDonation.guest_name} — ${deletingDonation.amount.toLocaleString()} toward {deletingDonation.fund_item_title || 'a fund'}. This subtracts the amount from that fund&apos;s progress and cannot be undone.
+                        </p>
+                        <div className="flex gap-2">
+                            <button onClick={confirmDeleteDonation} disabled={savingDonation}
+                                className="flex-1 bg-red-600 text-white py-2 rounded-lg text-sm font-medium disabled:opacity-40">
+                                {savingDonation ? 'Deleting...' : 'Delete'}
+                            </button>
+                            <button onClick={() => setDeletingDonation(null)} className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg text-sm">
                                 Cancel
                             </button>
                         </div>
