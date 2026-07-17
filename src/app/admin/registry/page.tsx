@@ -56,9 +56,9 @@ export default function AdminRegistryPage() {
     const [showAddForm, setShowAddForm] = useState(false);
     const [contributingItem, setContributingItem] = useState<FundItem | null>(null);
     const [contributionAmount, setContributionAmount] = useState('');
-    const [donorGuests, setDonorGuests] = useState<{ id: number; guest_name: string }[]>([]);
+    const [donorGuests, setDonorGuests] = useState<{ id: number; guest_name: string; party_members?: { name: string | null }[]; plus_one_name?: string | null }[]>([]);
     const [donorSearch, setDonorSearch] = useState('');
-    const [selectedDonor, setSelectedDonor] = useState<{ id: number; guest_name: string } | null>(null);
+    const [selectedDonor, setSelectedDonor] = useState<{ id: number | null; guest_name: string } | null>(null);
     const [donationEvent, setDonationEvent] = useState('Wedding Day');
     const [otherEvent, setOtherEvent] = useState('');
     const [coGivers, setCoGivers] = useState<{ id: number | null; name: string }[]>([]);
@@ -85,7 +85,7 @@ export default function AdminRegistryPage() {
             .then(items => setRegistryItems(Array.isArray(items) ? items : []));
         fetch('/api/admin/guest-list')
             .then(r => r.json())
-            .then(data => setDonorGuests(Array.isArray(data) ? data.map((g: { id: number; guest_name: string }) => ({ id: g.id, guest_name: g.guest_name })) : []));
+            .then(data => setDonorGuests(Array.isArray(data) ? data.map((g: { id: number; guest_name: string; party_members?: { name: string | null }[]; plus_one_name?: string | null }) => ({ id: g.id, guest_name: g.guest_name, party_members: g.party_members, plus_one_name: g.plus_one_name })) : []));
     }, []);
 
     const handleCsvImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -257,6 +257,25 @@ export default function AdminRegistryPage() {
         setEditingItem(null);
         save(updated);
     };
+
+    // People selectable as a donor / co-giver: every primary guest PLUS their
+    // plus-ones and party members (nested names on the guest row, not their own
+    // guest-list entries). id is null for non-primary people.
+    const donorPeople = donorGuests.flatMap(g => {
+        const people: { id: number | null; name: string; key: string }[] = [
+            { id: g.id, name: g.guest_name, key: `g-${g.id}` },
+        ];
+        const seen = new Set([g.guest_name.trim().toLowerCase()]);
+        const addPerson = (raw: string | null | undefined, suffix: string) => {
+            const name = (raw || '').trim();
+            if (!name || seen.has(name.toLowerCase())) return;
+            seen.add(name.toLowerCase());
+            people.push({ id: null, name, key: `g-${g.id}-${suffix}` });
+        };
+        (g.party_members || []).forEach((m, i) => addPerson(m.name, `m${i}`));
+        addPerson(g.plus_one_name, 'plus');
+        return people;
+    });
 
     const addCoGiver = (person: { id: number | null; name: string }) => {
         const name = person.name.trim();
@@ -948,20 +967,20 @@ export default function AdminRegistryPage() {
                                 />
                                 {donorSearch.trim() && (
                                     <div className="mt-1 max-h-40 overflow-y-auto border border-gray-200 rounded-lg">
-                                        {donorGuests
-                                            .filter(g => g.guest_name.toLowerCase().includes(donorSearch.toLowerCase()))
+                                        {donorPeople
+                                            .filter(p => p.name.toLowerCase().includes(donorSearch.toLowerCase()))
                                             .slice(0, 8)
-                                            .map(g => (
+                                            .map(p => (
                                                 <button
-                                                    key={g.id}
+                                                    key={p.key}
                                                     type="button"
-                                                    onClick={() => { setSelectedDonor(g); setDonorSearch(''); }}
+                                                    onClick={() => { setSelectedDonor({ id: p.id, guest_name: p.name }); setDonorSearch(''); }}
                                                     className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-100"
                                                 >
-                                                    {g.guest_name}
+                                                    {p.name}
                                                 </button>
                                             ))}
-                                        {donorGuests.filter(g => g.guest_name.toLowerCase().includes(donorSearch.toLowerCase())).length === 0 && (
+                                        {donorPeople.filter(p => p.name.toLowerCase().includes(donorSearch.toLowerCase())).length === 0 && (
                                             <p className="px-3 py-2 text-sm text-gray-400">No matching guest</p>
                                         )}
                                     </div>
@@ -989,13 +1008,13 @@ export default function AdminRegistryPage() {
                         />
                         {coGiverSearch.trim() && (
                             <div className="mt-1 max-h-32 overflow-y-auto border border-gray-200 rounded-lg mb-4">
-                                {donorGuests
-                                    .filter(g => g.guest_name.toLowerCase().includes(coGiverSearch.toLowerCase()))
+                                {donorPeople
+                                    .filter(p => p.name.toLowerCase().includes(coGiverSearch.toLowerCase()))
                                     .slice(0, 8)
-                                    .map(g => (
-                                        <button key={g.id} type="button" onClick={() => addCoGiver({ id: g.id, name: g.guest_name })}
+                                    .map(p => (
+                                        <button key={p.key} type="button" onClick={() => addCoGiver({ id: p.id, name: p.name })}
                                             className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-100">
-                                            {g.guest_name}
+                                            {p.name}
                                         </button>
                                     ))}
                             </div>
