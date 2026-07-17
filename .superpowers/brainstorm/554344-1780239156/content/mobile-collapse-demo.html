@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mobile Collapse Demo</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #111;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    min-height: 100vh;
+    padding: 32px 16px 48px;
+    color: #fff;
+  }
+  h1 { font-size: 20px; font-weight: 600; margin-bottom: 6px; text-align: center; }
+  .subtitle { color: #888; font-size: 13px; margin-bottom: 28px; text-align: center; }
+
+  /* ── Phone shell ── */
+  .phone {
+    width: 240px;
+    height: 480px;
+    background: #000;
+    border-radius: 36px;
+    border: 3px solid #333;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 40px 80px rgba(0,0,0,0.6);
+  }
+
+  /* ── The three strips ── */
+  .strip {
+    position: absolute;
+    left: 0; right: 0;
+    overflow: hidden;
+  }
+
+  /* TOP strip — starts above the screen */
+  #strip-top {
+    top: 0;
+    /* height will be set by JS: final = 33.333% of phone height */
+    height: 33.333%;
+    transform: translateY(-100%);
+  }
+
+  /* MIDDLE strip — starts full screen, shrinks to center third */
+  #strip-mid {
+    top: 0;
+    height: 100%;
+  }
+
+  /* BOTTOM strip — starts below the screen */
+  #strip-bot {
+    bottom: 0;
+    height: 33.333%;
+    transform: translateY(100%);
+  }
+
+  /* Background fills — using gradients to simulate photos */
+  .fill {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+  }
+
+  #strip-top .fill {
+    /* Simulated "photo 2" - warm tones */
+    background: linear-gradient(135deg, #3d1f0a 0%, #7a3d1a 40%, #c46a2a 100%);
+    /* Extend downward so it looks full-bleed when revealed */
+    height: 300%;
+    top: 0;
+  }
+
+  #strip-mid .fill {
+    /* Main slideshow photo - cool tones */
+    background: linear-gradient(160deg, #1a1a3a 0%, #2d4a6e 50%, #1a2a4a 100%);
+    height: 100%;
+    transition: none;
+  }
+
+  #strip-bot .fill {
+    /* Simulated "photo 3" - green/forest tones */
+    background: linear-gradient(135deg, #0a1f0a 0%, #1a3d1a 40%, #2a6a2a 100%);
+    /* Extend upward */
+    height: 300%;
+    bottom: 0;
+    top: auto;
+  }
+
+  /* Hero text overlay (only on middle strip) */
+  .hero-text {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    pointer-events: none;
+  }
+  .hero-text .name {
+    font-family: Georgia, serif;
+    font-size: 22px;
+    color: #fff;
+    letter-spacing: 3px;
+    text-shadow: 0 2px 12px rgba(0,0,0,0.5);
+  }
+  .hero-text .amp {
+    font-family: Georgia, serif;
+    font-size: 38px;
+    color: #d4af37;
+    line-height: 1.1;
+  }
+  .hero-text .date {
+    font-size: 10px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.7);
+    margin-top: 10px;
+  }
+
+  /* Thin gold dividers between strips (hidden until collapsed) */
+  .divider {
+    position: absolute;
+    left: 0; right: 0;
+    height: 1px;
+    background: rgba(212,175,55,0.5);
+    z-index: 20;
+    opacity: 0;
+    transition: opacity 0.3s ease 0.6s;
+  }
+  #div-top { top: 33.333%; }
+  #div-bot { top: 66.666%; }
+
+  /* Scroll hint */
+  .scroll-hint {
+    position: absolute;
+    bottom: 20px;
+    left: 0; right: 0;
+    text-align: center;
+    z-index: 15;
+    transition: opacity 0.4s;
+  }
+  .scroll-hint-inner {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    animation: hint-bounce 1.8s ease-in-out infinite;
+  }
+  .scroll-hint-inner span { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: rgba(255,255,255,0.5); }
+  .scroll-hint-inner .arrow { font-size: 18px; color: rgba(255,255,255,0.4); }
+  @keyframes hint-bounce {
+    0%, 100% { transform: translateY(0); }
+    50%       { transform: translateY(5px); }
+  }
+
+  /* Photo labels (appear after collapse) */
+  .strip-label {
+    position: absolute;
+    left: 12px;
+    bottom: 8px;
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.6);
+    z-index: 10;
+    opacity: 0;
+    transition: opacity 0.4s ease 0.7s;
+  }
+
+  /* ── Controls ── */
+  .controls {
+    margin-top: 28px;
+    display: flex;
+    gap: 12px;
+  }
+  button {
+    padding: 10px 22px;
+    border-radius: 999px;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    transition: opacity 0.2s, transform 0.1s;
+  }
+  button:active { transform: scale(0.97); }
+  #btn-collapse {
+    background: #d4af37;
+    color: #000;
+  }
+  #btn-reset {
+    background: #2a2a2a;
+    color: #fff;
+    border: 1px solid #444;
+  }
+  .hint-text {
+    margin-top: 16px;
+    font-size: 12px;
+    color: #555;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<h1>Mobile Collapse — First Scroll</h1>
+<p class="subtitle">Press "First Scroll ↓" to trigger the animation</p>
+
+<div class="phone" id="phone">
+
+  <!-- TOP strip (photo 2 — slides in from above) -->
+  <div class="strip" id="strip-top">
+    <div class="fill"></div>
+    <div class="strip-label">Engaged · Napa 2024</div>
+  </div>
+
+  <!-- MIDDLE strip (main slideshow — compresses vertically) -->
+  <div class="strip" id="strip-mid">
+    <div class="fill" id="mid-fill"></div>
+    <div class="hero-text" id="hero-text">
+      <div class="name">SARAH</div>
+      <div class="amp">&amp;</div>
+      <div class="name">JAMES</div>
+      <div class="date">June 14 · 2026</div>
+    </div>
+    <div class="scroll-hint" id="scroll-hint">
+      <div class="scroll-hint-inner">
+        <span>scroll</span>
+        <span class="arrow">↓</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM strip (photo 3 — slides in from below) -->
+  <div class="strip" id="strip-bot">
+    <div class="fill"></div>
+    <div class="strip-label">The Venue · Villa Rosa</div>
+  </div>
+
+  <!-- Gold dividers -->
+  <div class="divider" id="div-top"></div>
+  <div class="divider" id="div-bot"></div>
+
+</div>
+
+<div class="controls">
+  <button id="btn-collapse" onclick="collapse()">First Scroll ↓</button>
+  <button id="btn-reset" onclick="reset()">↺ Reset</button>
+</div>
+<p class="hint-text">On mobile, this triggers automatically on the first swipe-up</p>
+
+<script>
+  const DURATION = 900; // ms — same as desktop
+  const PHONE_H  = 480; // px — matches CSS
+
+  const stripMid  = document.getElementById('strip-mid');
+  const stripTop  = document.getElementById('strip-top');
+  const stripBot  = document.getElementById('strip-bot');
+  const heroText  = document.getElementById('hero-text');
+  const scrollHint = document.getElementById('scroll-hint');
+  const divTop    = document.getElementById('div-top');
+  const divBot    = document.getElementById('div-bot');
+  const btnCollapse = document.getElementById('btn-collapse');
+
+  let animating = false;
+  let collapsed = false;
+  let raf = null;
+
+  // Easing — cubic ease in-out (matches desktop)
+  function eio(t) {
+    return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2;
+  }
+
+  function applyProgress(p) {
+    const e = eio(p);
+
+    // ── Middle strip: full screen → center third
+    // top:    0%  → 33.333%
+    // height: 100% → 33.333%
+    const midTop    = 33.333 * e;
+    const midHeight = 100 - 66.666 * e;
+    stripMid.style.top    = midTop + '%';
+    stripMid.style.height = midHeight + '%';
+
+    // ── Top strip: translateY(-100%) → translateY(0)
+    // But we only want it to fill the top third (0..33.333%).
+    // It's already positioned top:0, height:33.333%.
+    // We slide it from -100% (of its own height) to 0.
+    const topDelay = 0.15;
+    const topP = Math.max(0, Math.min(1, (p - topDelay) / (1 - topDelay)));
+    const topE = eio(topP);
+    stripTop.style.transform = `translateY(${-100 * (1 - topE)}%)`;
+
+    // ── Bottom strip: translateY(100%) → translateY(0)
+    const botDelay = 0.15;
+    const botP = Math.max(0, Math.min(1, (p - botDelay) / (1 - botDelay)));
+    const botE = eio(botP);
+    stripBot.style.transform = `translateY(${100 * (1 - botE)}%)`;
+
+    // ── Hero text: fade out fast
+    const textP = Math.max(0, 1 - e * 3);
+    heroText.style.opacity   = textP;
+    heroText.style.transform = `translateY(${-e * 30}px)`;
+
+    // ── Scroll hint fades immediately
+    scrollHint.style.opacity = Math.max(0, 1 - p * 4);
+
+    // ── Dividers appear after collapse
+    if (p >= 0.85) {
+      divTop.style.opacity = String((p - 0.85) / 0.15);
+      divBot.style.opacity = String((p - 0.85) / 0.15);
+    }
+  }
+
+  function collapse() {
+    if (animating || collapsed) return;
+    animating = true;
+    btnCollapse.style.opacity = '0.4';
+    btnCollapse.style.pointerEvents = 'none';
+
+    const start = performance.now();
+    let progress = 0;
+
+    function tick(now) {
+      const t = Math.min(1, (now - start) / DURATION);
+      progress = t;
+      applyProgress(t);
+      if (t < 1) {
+        raf = requestAnimationFrame(tick);
+      } else {
+        animating = false;
+        collapsed = true;
+        // Show strip labels
+        document.querySelectorAll('.strip-label').forEach(el => el.style.opacity = '1');
+      }
+    }
+    raf = requestAnimationFrame(tick);
+  }
+
+  function reset() {
+    if (animating) { cancelAnimationFrame(raf); animating = false; }
+    collapsed = false;
+    applyProgress(0);
+    divTop.style.opacity = '0';
+    divBot.style.opacity = '0';
+    divTop.style.transition = 'none';
+    divBot.style.transition = 'none';
+    document.querySelectorAll('.strip-label').forEach(el => el.style.opacity = '0');
+    btnCollapse.style.opacity = '1';
+    btnCollapse.style.pointerEvents = 'auto';
+    // Re-enable divider transitions
+    setTimeout(() => {
+      divTop.style.transition = 'opacity 0.3s ease 0.6s';
+      divBot.style.transition = 'opacity 0.3s ease 0.6s';
+    }, 50);
+  }
+
+  // Touch/swipe support for mobile preview
+  let touchStartY = null;
+  const phone = document.getElementById('phone');
+  phone.addEventListener('touchstart', e => { touchStartY = e.touches[0].clientY; }, { passive: true });
+  phone.addEventListener('touchmove', e => {
+    if (touchStartY === null) return;
+    const dy = touchStartY - e.touches[0].clientY;
+    if (dy > 20 && !collapsed) collapse();
+  }, { passive: true });
+
+  // Init
+  applyProgress(0);
+</script>
+</body>
+</html>

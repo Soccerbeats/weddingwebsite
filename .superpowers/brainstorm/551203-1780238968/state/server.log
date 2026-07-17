@@ -1,0 +1,3 @@
+{"type":"server-started","port":62858,"host":"127.0.0.1","url_host":"localhost","url":"http://localhost:62858","screen_dir":"/home/austin/ai/WeddingWebsite/.superpowers/brainstorm/551203-1780238968/content","state_dir":"/home/austin/ai/WeddingWebsite/.superpowers/brainstorm/551203-1780238968/state"}
+{"type":"screen-added","file":"/home/austin/ai/WeddingWebsite/.superpowers/brainstorm/551203-1780238968/content/mobile-animations.html"}
+{"type":"server-stopped","reason":"idle timeout"}

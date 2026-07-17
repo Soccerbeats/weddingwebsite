@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mobile Hero Animation Concepts</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0f0f0f;
+    color: #fff;
+    min-height: 100vh;
+    padding: 32px 24px 48px;
+  }
+  h1 {
+    text-align: center;
+    font-size: 22px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: #fff;
+  }
+  .subtitle {
+    text-align: center;
+    color: #aaa;
+    font-size: 14px;
+    margin-bottom: 36px;
+  }
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 24px;
+    max-width: 960px;
+    margin: 0 auto;
+  }
+  .card {
+    background: #1a1a1a;
+    border: 2px solid #2a2a2a;
+    border-radius: 20px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color 0.2s, transform 0.2s;
+  }
+  .card:hover { border-color: #d4af37; transform: translateY(-2px); }
+  .card.selected { border-color: #d4af37; }
+  .card.selected .card-label { background: #d4af37; color: #000; }
+
+  /* Phone mockup shell */
+  .phone {
+    width: 160px;
+    height: 300px;
+    background: #111;
+    border-radius: 28px;
+    border: 3px solid #333;
+    margin: 24px auto 8px;
+    position: relative;
+    overflow: hidden;
+  }
+  .phone-screen {
+    width: 100%;
+    height: 100%;
+    border-radius: 25px;
+    overflow: hidden;
+    position: relative;
+    background: #1a1a2e;
+  }
+
+  /* ── CONCEPT A: Cinematic Reveal ────────────────────── */
+  .concept-a .hero-bg {
+    position: absolute; inset: 0;
+    background: linear-gradient(160deg, #2c1810 0%, #4a2c1a 40%, #1a1a2e 100%);
+  }
+  .concept-a .petals {
+    position: absolute; inset: 0;
+    overflow: hidden;
+  }
+  .concept-a .petal {
+    position: absolute;
+    width: 12px; height: 20px;
+    background: rgba(212,175,55,0.7);
+    border-radius: 50% 50% 50% 0;
+    animation: petal-fall 3s ease-in infinite;
+    opacity: 0;
+  }
+  .concept-a .petal:nth-child(1) { left: 20%; animation-delay: 0s; }
+  .concept-a .petal:nth-child(2) { left: 45%; animation-delay: 0.8s; width: 8px; height: 14px; }
+  .concept-a .petal:nth-child(3) { left: 70%; animation-delay: 1.4s; width: 10px; height: 16px; }
+  .concept-a .petal:nth-child(4) { left: 35%; animation-delay: 2.1s; }
+  .concept-a .petal:nth-child(5) { left: 60%; animation-delay: 0.3s; width: 9px; height: 15px; }
+  @keyframes petal-fall {
+    0%   { transform: translateY(-20px) rotate(0deg); opacity: 0; }
+    10%  { opacity: 0.9; }
+    90%  { opacity: 0.7; }
+    100% { transform: translateY(310px) rotate(180deg); opacity: 0; }
+  }
+  .concept-a .names {
+    position: absolute;
+    inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    animation: name-reveal 1.8s cubic-bezier(0.25,0.46,0.45,0.94) 0.3s both;
+  }
+  @keyframes name-reveal {
+    from { opacity: 0; transform: scale(0.85) translateY(12px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .concept-a .serif-name {
+    font-family: Georgia, serif;
+    font-size: 18px;
+    color: #fff;
+    letter-spacing: 2px;
+    text-shadow: 0 2px 12px rgba(0,0,0,0.6);
+  }
+  .concept-a .ampersand {
+    font-family: Georgia, serif;
+    font-size: 32px;
+    color: #d4af37;
+    line-height: 1;
+    margin: 2px 0;
+    animation: amp-pulse 2.5s ease-in-out 0.8s infinite;
+  }
+  @keyframes amp-pulse {
+    0%, 100% { transform: scale(1); }
+    50%       { transform: scale(1.08); }
+  }
+  .concept-a .date-line {
+    font-size: 9px;
+    letter-spacing: 3px;
+    color: rgba(255,255,255,0.7);
+    text-transform: uppercase;
+    margin-top: 10px;
+    animation: fade-in-up 1s ease 1.5s both;
+  }
+  .concept-a .scroll-hint {
+    position: absolute; bottom: 12px; left: 0; right: 0;
+    text-align: center;
+    animation: bounce-hint 1.5s ease-in-out 2s infinite;
+  }
+  .concept-a .scroll-hint::after {
+    content: '↓';
+    font-size: 14px;
+    color: rgba(255,255,255,0.5);
+  }
+  @keyframes bounce-hint {
+    0%, 100% { transform: translateY(0); }
+    50%       { transform: translateY(4px); }
+  }
+  @keyframes fade-in-up {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── CONCEPT B: Photo Strip Pull ───────────────────── */
+  .concept-b .phone-screen {
+    background: #0a0a0a;
+    overflow: hidden;
+  }
+  .concept-b .strip-container {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+  }
+  .concept-b .strip {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    animation: strip-slide-in 1.1s cubic-bezier(0.25,0.46,0.45,0.94) both;
+  }
+  .concept-b .strip:nth-child(1) { animation-delay: 0s; }
+  .concept-b .strip:nth-child(2) { animation-delay: 0.12s; }
+  .concept-b .strip:nth-child(3) { animation-delay: 0.22s; }
+  @keyframes strip-slide-in {
+    from { transform: translateX(-100%); opacity: 0; }
+    to   { transform: translateX(0);     opacity: 1; }
+  }
+  .concept-b .strip-inner {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-family: Georgia, serif;
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    color: rgba(255,255,255,0.9);
+    text-transform: uppercase;
+  }
+  .concept-b .strip:nth-child(1) .strip-inner {
+    background: linear-gradient(90deg, #2c1810, #4a2c1a);
+    font-size: 15px;
+    font-weight: 400;
+    letter-spacing: 3px;
+  }
+  .concept-b .strip:nth-child(2) .strip-inner {
+    background: linear-gradient(90deg, #1a1a2e, #2d2b55);
+    color: #d4af37;
+    font-size: 24px;
+    font-family: Georgia, serif;
+    letter-spacing: 4px;
+  }
+  .concept-b .strip:nth-child(3) .strip-inner {
+    background: linear-gradient(90deg, #111, #1f1f1f);
+    font-size: 9px;
+    letter-spacing: 2.5px;
+    color: rgba(255,255,255,0.6);
+  }
+  .concept-b .dividers {
+    position: absolute; inset: 0; pointer-events: none;
+    display: flex; flex-direction: column;
+    justify-content: space-evenly;
+  }
+  .concept-b .divider {
+    height: 1px;
+    background: rgba(212,175,55,0.3);
+    animation: divider-glow 2.5s ease-in-out 1.5s infinite alternate;
+  }
+  @keyframes divider-glow {
+    from { background: rgba(212,175,55,0.2); }
+    to   { background: rgba(212,175,55,0.6); }
+  }
+
+  /* ── CONCEPT C: Particle Bloom ──────────────────────── */
+  .concept-c .phone-screen {
+    background: radial-gradient(ellipse at 50% 45%, #1a1a3a 0%, #0a0a18 100%);
+  }
+  .concept-c .bloom-center {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column;
+  }
+  .concept-c .ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 1px solid rgba(212,175,55,0.4);
+    animation: ring-expand 2.4s ease-out infinite;
+  }
+  .concept-c .ring:nth-child(1) { width: 60px; height: 60px; animation-delay: 0s; }
+  .concept-c .ring:nth-child(2) { width: 60px; height: 60px; animation-delay: 0.6s; }
+  .concept-c .ring:nth-child(3) { width: 60px; height: 60px; animation-delay: 1.2s; }
+  @keyframes ring-expand {
+    0%   { transform: scale(0.5); opacity: 0.8; }
+    100% { transform: scale(4.5); opacity: 0; }
+  }
+  .concept-c .heart {
+    position: absolute;
+    font-size: 28px;
+    animation: heart-beat 1.2s ease-in-out infinite;
+    z-index: 2;
+  }
+  @keyframes heart-beat {
+    0%, 100% { transform: scale(1); }
+    50%       { transform: scale(1.12); }
+  }
+  .concept-c .particle {
+    position: absolute;
+    width: 3px; height: 3px;
+    background: #d4af37;
+    border-radius: 50%;
+    animation: particle-orbit 3s linear infinite;
+  }
+  .concept-c .particle:nth-child(4)  { animation-delay: 0s;    }
+  .concept-c .particle:nth-child(5)  { animation-delay: 0.5s;  }
+  .concept-c .particle:nth-child(6)  { animation-delay: 1.0s;  }
+  .concept-c .particle:nth-child(7)  { animation-delay: 1.5s;  }
+  .concept-c .particle:nth-child(8)  { animation-delay: 2.0s;  }
+  .concept-c .particle:nth-child(9)  { animation-delay: 2.5s;  }
+  @keyframes particle-orbit {
+    0%   { transform: rotate(0deg)   translateX(55px) scale(1); opacity: 1; }
+    50%  { opacity: 0.5; }
+    100% { transform: rotate(360deg) translateX(55px) scale(0.5); opacity: 0; }
+  }
+  .concept-c .text-center-c {
+    position: relative; z-index: 5;
+    display: flex; flex-direction: column; align-items: center;
+    margin-top: 20px;
+  }
+  .concept-c .names-c {
+    font-family: Georgia, serif;
+    font-size: 14px;
+    color: #fff;
+    letter-spacing: 2px;
+    animation: fade-pulse 2.5s ease-in-out infinite;
+  }
+  @keyframes fade-pulse {
+    0%, 100% { opacity: 0.8; }
+    50%       { opacity: 1; }
+  }
+  .concept-c .date-c {
+    font-size: 8px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #d4af37;
+    margin-top: 6px;
+    animation: fade-pulse 2.5s ease-in-out 0.5s infinite;
+  }
+  .concept-c .stars {
+    position: absolute; inset: 0; overflow: hidden;
+  }
+  .concept-c .star {
+    position: absolute;
+    width: 2px; height: 2px;
+    background: white;
+    border-radius: 50%;
+    animation: twinkle 2s ease-in-out infinite;
+  }
+  @keyframes twinkle {
+    0%, 100% { opacity: 0.2; }
+    50%       { opacity: 0.9; }
+  }
+
+  /* Card structure */
+  .card-label {
+    text-align: center;
+    padding: 6px 16px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #d4af37;
+    background: transparent;
+    transition: background 0.2s, color 0.2s;
+  }
+  .card-body {
+    padding: 16px 20px 20px;
+  }
+  .card-body h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: #fff;
+  }
+  .card-body p {
+    font-size: 13px;
+    line-height: 1.55;
+    color: #888;
+  }
+  .tag-row {
+    display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px;
+  }
+  .tag {
+    font-size: 10px; padding: 3px 8px;
+    border-radius: 999px;
+    border: 1px solid #333;
+    color: #aaa;
+    letter-spacing: 0.5px;
+  }
+  .tag.gold { border-color: rgba(212,175,55,0.4); color: #d4af37; }
+</style>
+</head>
+<body>
+<h1>Mobile Hero — Animation Concepts</h1>
+<p class="subtitle">Three ideas for that first-scroll magic on mobile. Click one to select.</p>
+
+<div class="cards">
+
+  <!-- ─── CONCEPT A ─── -->
+  <div class="card concept-a" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-label">A</div>
+    <div class="phone">
+      <div class="phone-screen">
+        <div class="hero-bg"></div>
+        <div class="petals">
+          <div class="petal"></div>
+          <div class="petal"></div>
+          <div class="petal"></div>
+          <div class="petal"></div>
+          <div class="petal"></div>
+        </div>
+        <div class="names">
+          <div class="serif-name">SARAH</div>
+          <div class="ampersand">&amp;</div>
+          <div class="serif-name">JAMES</div>
+          <div class="date-line">June 14 · 2026</div>
+        </div>
+        <div class="scroll-hint"></div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Cinematic Reveal</h3>
+      <p>Names fade + scale in from center as rose petals drift down from above. A gentle bounce arrow hints to scroll. Elegant and romantic — directly extends the existing hero feel.</p>
+      <div class="tag-row">
+        <span class="tag gold">Most romantic</span>
+        <span class="tag">CSS-only</span>
+        <span class="tag">Low complexity</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── CONCEPT B ─── -->
+  <div class="card concept-b" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-label">B</div>
+    <div class="phone">
+      <div class="phone-screen">
+        <div class="strip-container">
+          <div class="strip">
+            <div class="strip-inner">Sarah &amp; James</div>
+          </div>
+          <div class="strip">
+            <div class="strip-inner">2026</div>
+          </div>
+          <div class="strip">
+            <div class="strip-inner">June 14 · Napa Valley</div>
+          </div>
+        </div>
+        <div class="dividers">
+          <div class="divider"></div>
+          <div class="divider"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Photo Strip Pull</h3>
+      <p>Three horizontal bands slide in from the left in staggered sequence — each carrying a key detail. Feels like a film strip or editorial magazine reveal. Bold and modern.</p>
+      <div class="tag-row">
+        <span class="tag gold">Most dramatic</span>
+        <span class="tag">CSS-only</span>
+        <span class="tag">Works with photos</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── CONCEPT C ─── -->
+  <div class="card concept-c" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-label">C</div>
+    <div class="phone">
+      <div class="phone-screen">
+        <div class="stars">
+          <!-- stars positioned absolutely -->
+          <div class="star" style="left:15%;top:8%;animation-delay:0s"></div>
+          <div class="star" style="left:80%;top:15%;animation-delay:0.3s"></div>
+          <div class="star" style="left:25%;top:30%;animation-delay:0.8s"></div>
+          <div class="star" style="left:70%;top:60%;animation-delay:0.5s"></div>
+          <div class="star" style="left:10%;top:70%;animation-delay:1.1s"></div>
+          <div class="star" style="left:90%;top:80%;animation-delay:0.2s"></div>
+          <div class="star" style="left:50%;top:85%;animation-delay:1.5s"></div>
+          <div class="star" style="left:40%;top:20%;animation-delay:0.7s"></div>
+        </div>
+        <div class="bloom-center">
+          <div class="ring"></div>
+          <div class="ring"></div>
+          <div class="ring"></div>
+          <div class="heart">💛</div>
+          <div class="particle"></div>
+          <div class="particle"></div>
+          <div class="particle"></div>
+          <div class="particle"></div>
+          <div class="particle"></div>
+          <div class="particle"></div>
+        </div>
+        <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding-top:40px;">
+          <div class="text-center-c">
+            <div class="names-c">Sarah &amp; James</div>
+            <div class="date-c">June 14 · 2026</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Particle Bloom</h3>
+      <p>Expanding rings pulse outward from a glowing heart center while gold particles orbit. Stars twinkle in the background. Dreamy and ethereal — high "wow" factor but a different vibe than desktop.</p>
+      <div class="tag-row">
+        <span class="tag gold">Most whimsical</span>
+        <span class="tag">CSS-only</span>
+        <span class="tag">High energy</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function toggleSelect(el) {
+  document.querySelectorAll('.card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  // Record to events file via postMessage for the companion
+  if (window.parent !== window) {
+    window.parent.postMessage({ type: 'choice', choice: el.dataset.choice, text: el.querySelector('h3').textContent }, '*');
+  }
+  // Also try the companion's recordEvent if available
+  if (typeof recordEvent === 'function') {
+    recordEvent({ type: 'click', choice: el.dataset.choice, text: el.querySelector('h3').textContent });
+  }
+}
+</script>
+</body>
+</html>

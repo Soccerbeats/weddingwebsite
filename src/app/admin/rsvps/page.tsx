@@ -42,6 +42,7 @@ interface Guest {
     invited: boolean;
     rsvp_status?: string;
     party_members?: PartyMember[];
+    plus_one_name?: string | null;
     address?: string;
     created_at: string;
 }
@@ -618,6 +619,25 @@ export default function RSVPDashboard() {
         }
     });
 
+    // People selectable as a donor / co-giver: every primary guest PLUS their
+    // plus-ones and party members (which are names nested on the guest row, not
+    // their own guest-list entries). id is null for non-primary people.
+    const donationPeople = guests.flatMap(g => {
+        const people: { id: number | null; name: string; key: string }[] = [
+            { id: g.id, name: g.guest_name, key: `g-${g.id}` },
+        ];
+        const seen = new Set([g.guest_name.trim().toLowerCase()]);
+        const addPerson = (raw: string | null | undefined, suffix: string) => {
+            const name = (raw || '').trim();
+            if (!name || seen.has(name.toLowerCase())) return;
+            seen.add(name.toLowerCase());
+            people.push({ id: null, name, key: `g-${g.id}-${suffix}` });
+        };
+        (g.party_members || []).forEach((m, i) => addPerson(m.name, `m${i}`));
+        addPerson(g.plus_one_name, 'plus');
+        return people;
+    });
+
     const donationTotalByGuestId = donations.reduce<Record<number, number>>((acc, d) => {
         if (d.guest_id != null) acc[d.guest_id] = (acc[d.guest_id] || 0) + d.amount;
         return acc;
@@ -1166,20 +1186,20 @@ export default function RSVPDashboard() {
                                 />
                                 {donationDonorSearch.trim() && (
                                     <div className="mt-1 max-h-40 overflow-y-auto border border-gray-200 rounded-lg">
-                                        {guests
-                                            .filter(g => g.guest_name.toLowerCase().includes(donationDonorSearch.toLowerCase()))
+                                        {donationPeople
+                                            .filter(p => p.name.toLowerCase().includes(donationDonorSearch.toLowerCase()))
                                             .slice(0, 8)
-                                            .map(g => (
+                                            .map(p => (
                                                 <button
-                                                    key={g.id}
+                                                    key={p.key}
                                                     type="button"
-                                                    onClick={() => { setDonationDonor({ id: g.id, guest_name: g.guest_name }); setDonationDonorSearch(''); }}
+                                                    onClick={() => { setDonationDonor({ id: p.id ?? 0, guest_name: p.name }); setDonationDonorSearch(''); }}
                                                     className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-100"
                                                 >
-                                                    {g.guest_name}
+                                                    {p.name}
                                                 </button>
                                             ))}
-                                        {guests.filter(g => g.guest_name.toLowerCase().includes(donationDonorSearch.toLowerCase())).length === 0 && (
+                                        {donationPeople.filter(p => p.name.toLowerCase().includes(donationDonorSearch.toLowerCase())).length === 0 && (
                                             <p className="px-3 py-2 text-sm text-gray-400">No matching guest</p>
                                         )}
                                     </div>
@@ -1208,13 +1228,13 @@ export default function RSVPDashboard() {
                         />
                         {coGiverSearch.trim() && (
                             <div className="-mt-3 mb-4 max-h-32 overflow-y-auto border border-gray-200 rounded-lg">
-                                {guests
-                                    .filter(g => g.guest_name.toLowerCase().includes(coGiverSearch.toLowerCase()))
+                                {donationPeople
+                                    .filter(p => p.name.toLowerCase().includes(coGiverSearch.toLowerCase()))
                                     .slice(0, 8)
-                                    .map(g => (
-                                        <button key={g.id} type="button" onClick={() => addCoGiver({ id: g.id, name: g.guest_name })}
+                                    .map(p => (
+                                        <button key={p.key} type="button" onClick={() => addCoGiver({ id: p.id, name: p.name })}
                                             className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-100">
-                                            {g.guest_name}
+                                            {p.name}
                                         </button>
                                     ))}
                             </div>
