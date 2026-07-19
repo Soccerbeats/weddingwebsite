@@ -667,17 +667,17 @@ export default function RSVPDashboard() {
                 </div>
             </div>
 
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
                 <div>
                     <h1 className="text-3xl font-bold text-gray-900 mb-2">RSVP & Guest Management</h1>
                     <p className="text-gray-600">Track RSVPs and manage your guest list</p>
                 </div>
 
-                {/* Tab Buttons */}
-                <div className="flex gap-2">
+                {/* Tab Buttons — full width, equal columns on mobile so all three fit without horizontal scroll */}
+                <div className="flex gap-2 w-full sm:w-auto">
                     <button
                         onClick={() => setActiveTab('rsvps')}
-                        className={`px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-md ${
+                        className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-xl text-sm sm:text-base font-medium text-center transition-colors duration-300 shadow-md ${
                             activeTab === 'rsvps'
                                 ? 'bg-accent text-white shadow-lg'
                                 : 'bg-gray-200 text-gray-700 hover:bg-gray-300 hover:shadow-lg'
@@ -687,7 +687,7 @@ export default function RSVPDashboard() {
                     </button>
                     <button
                         onClick={() => setActiveTab('guestlist')}
-                        className={`px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-md ${
+                        className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-xl text-sm sm:text-base font-medium text-center transition-colors duration-300 shadow-md ${
                             activeTab === 'guestlist'
                                 ? 'bg-accent text-white shadow-lg'
                                 : 'bg-gray-200 text-gray-700 hover:bg-gray-300 hover:shadow-lg'
@@ -697,7 +697,7 @@ export default function RSVPDashboard() {
                     </button>
                     <button
                         onClick={() => setActiveTab('donations')}
-                        className={`px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-md ${
+                        className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-xl text-sm sm:text-base font-medium text-center transition-colors duration-300 shadow-md ${
                             activeTab === 'donations'
                                 ? 'bg-accent text-white shadow-lg'
                                 : 'bg-gray-200 text-gray-700 hover:bg-gray-300 hover:shadow-lg'
