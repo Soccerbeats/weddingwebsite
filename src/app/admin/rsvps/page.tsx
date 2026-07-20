@@ -677,27 +677,29 @@ export default function RSVPDashboard() {
                 <div className="flex gap-2 w-full sm:w-auto">
                     <button
                         onClick={() => setActiveTab('rsvps')}
-                        className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-xl text-sm sm:text-base font-medium text-center transition-colors duration-300 shadow-md ${
+                        className={`flex-1 sm:flex-none min-w-0 px-3 sm:px-4 py-2 rounded-xl text-sm sm:text-base font-medium text-center whitespace-nowrap transition-colors duration-300 shadow-md ${
                             activeTab === 'rsvps'
                                 ? 'bg-accent text-white shadow-lg'
                                 : 'bg-gray-200 text-gray-700 hover:bg-gray-300 hover:shadow-lg'
                         }`}
                     >
-                        RSVP Management
+                        <span className="sm:hidden">RSVPs</span>
+                        <span className="hidden sm:inline">RSVP Management</span>
                     </button>
                     <button
                         onClick={() => setActiveTab('guestlist')}
-                        className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-xl text-sm sm:text-base font-medium text-center transition-colors duration-300 shadow-md ${
+                        className={`flex-1 sm:flex-none min-w-0 px-3 sm:px-4 py-2 rounded-xl text-sm sm:text-base font-medium text-center whitespace-nowrap transition-colors duration-300 shadow-md ${
                             activeTab === 'guestlist'
                                 ? 'bg-accent text-white shadow-lg'
                                 : 'bg-gray-200 text-gray-700 hover:bg-gray-300 hover:shadow-lg'
                         }`}
                     >
-                        Guest List
+                        <span className="sm:hidden">Guests</span>
+                        <span className="hidden sm:inline">Guest List</span>
                     </button>
                     <button
                         onClick={() => setActiveTab('donations')}
-                        className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-xl text-sm sm:text-base font-medium text-center transition-colors duration-300 shadow-md ${
+                        className={`flex-1 sm:flex-none min-w-0 px-3 sm:px-4 py-2 rounded-xl text-sm sm:text-base font-medium text-center whitespace-nowrap transition-colors duration-300 shadow-md ${
                             activeTab === 'donations'
                                 ? 'bg-accent text-white shadow-lg'
                                 : 'bg-gray-200 text-gray-700 hover:bg-gray-300 hover:shadow-lg'
