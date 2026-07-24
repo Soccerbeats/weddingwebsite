@@ -179,21 +179,26 @@ export default function AdminWeddingPartyPage() {
 
       config.weddingParty[partyKey] = arrayMove(members, oldIndex, newIndex);
       setConfig({ ...config });
+      persistConfig(config).catch((e) => console.error('Error saving order:', e));
+    }
+  };
+
+  const persistConfig = async (cfg: any) => {
+    const response = await fetch('/api/admin/site-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cfg),
+    });
+    if (!response.ok) {
+      throw new Error('Save failed');
     }
   };
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      const response = await fetch('/api/admin/site-config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config),
-      });
-
-      if (response.ok) {
-        alert('Wedding party updated successfully!');
-      }
+      await persistConfig(config);
+      alert('Wedding party updated successfully!');
     } catch (error) {
       console.error('Error saving config:', error);
       alert('Failed to save changes');
@@ -324,6 +329,9 @@ export default function AdminWeddingPartyPage() {
         }
       }
 
+      // Persist immediately so the change sticks without a separate "Save All Changes" step
+      await persistConfig(config);
+
       setConfig({ ...config });
       setEditingParty(null);
       setEditingIndex(null);
@@ -342,6 +350,7 @@ export default function AdminWeddingPartyPage() {
     if (config.weddingParty) {
       delete config.weddingParty.officiant;
       setConfig({ ...config });
+      persistConfig(config).catch((e) => console.error('Error saving:', e));
     }
   };
 
@@ -351,6 +360,7 @@ export default function AdminWeddingPartyPage() {
     const partyKey = party === 'bride' ? 'brideParty' : party === 'groom' ? 'groomParty' : 'somethingBlueCrew';
     config.weddingParty[partyKey].splice(index, 1);
     setConfig({ ...config });
+    persistConfig(config).catch((e) => console.error('Error saving:', e));
   };
 
   if (loading) {
