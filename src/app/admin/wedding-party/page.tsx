@@ -56,21 +56,21 @@ function SortableRow({ member, index, party, onEdit, onDelete }: SortableRowProp
 
   return (
     <tr ref={setNodeRef} style={style} className={isDragging ? 'bg-gray-50' : ''}>
-      <td className="px-6 py-4 whitespace-nowrap">
+      <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
         <button
           {...attributes}
           {...listeners}
-          className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 focus:outline-none"
+          className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 focus:outline-none touch-none"
         >
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
           </svg>
         </button>
       </td>
-      <td className="px-6 py-4 whitespace-nowrap">{member.name}</td>
-      <td className="px-6 py-4 whitespace-nowrap">{member.role}</td>
-      <td className="px-6 py-4 whitespace-nowrap">{member.relationship}</td>
-      <td className="px-6 py-4 whitespace-nowrap text-right">
+      <td className="px-3 sm:px-6 py-4 whitespace-nowrap">{member.name}</td>
+      <td className="px-3 sm:px-6 py-4 whitespace-nowrap">{member.role}</td>
+      <td className="px-3 sm:px-6 py-4 whitespace-nowrap">{member.relationship}</td>
+      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right">
         <button
           onClick={() => onEdit(party, index)}
           className="text-blue-100 bg-blue-500 px-3 py-1 rounded hover:bg-blue-600 mr-2 text-sm"
@@ -424,18 +424,18 @@ export default function AdminWeddingPartyPage() {
           collisionDetection={closestCenter}
           onDragEnd={(event) => handleDragEnd(event, 'bride')}
         >
-          <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="bg-white rounded-lg shadow overflow-x-auto">
             {brideParty.length === 0 ? (
               <p className="p-6 text-gray-500 text-center">No members added yet</p>
             ) : (
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase w-12"></th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Relationship</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase w-12"></th>
+                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
+                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Relationship</th>
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
                   </tr>
                 </thead>
                 <SortableContext
@@ -478,18 +478,18 @@ export default function AdminWeddingPartyPage() {
           collisionDetection={closestCenter}
           onDragEnd={(event) => handleDragEnd(event, 'groom')}
         >
-          <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="bg-white rounded-lg shadow overflow-x-auto">
             {groomParty.length === 0 ? (
               <p className="p-6 text-gray-500 text-center">No members added yet</p>
             ) : (
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase w-12"></th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Relationship</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase w-12"></th>
+                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
+                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Relationship</th>
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
                   </tr>
                 </thead>
                 <SortableContext
@@ -532,18 +532,18 @@ export default function AdminWeddingPartyPage() {
           collisionDetection={closestCenter}
           onDragEnd={(event) => handleDragEnd(event, 'somethingBlueCrew')}
         >
-          <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="bg-white rounded-lg shadow overflow-x-auto">
             {somethingBlueCrew.length === 0 ? (
               <p className="p-6 text-gray-500 text-center">No members added yet</p>
             ) : (
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase w-12"></th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Relationship</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase w-12"></th>
+                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
+                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Relationship</th>
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
                   </tr>
                 </thead>
                 <SortableContext
