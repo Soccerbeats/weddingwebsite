@@ -98,3 +98,39 @@ html {
   60%  { opacity: 0.8; }
   100% { opacity: 0; transform: translate(-50%, -50%) translate(var(--dx), var(--dy)) scale(0.4); }
 }
+/* ─── RSVP confirmation check (ported from the Anna Voting app) ──── */
+.confirm-check {
+  width: 84px;
+  height: 84px;
+  margin: 0 auto 18px;
+}
+.confirm-check svg {
+  width: 100%;
+  height: 100%;
+}
+.confirm-circle {
+  stroke: #16a34a;
+  stroke-width: 3;
+  stroke-dasharray: 151;
+  stroke-dashoffset: 151;
+  animation: confirm-draw 0.5s ease forwards;
+}
+.confirm-tick {
+  stroke: #16a34a;
+  stroke-width: 4.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 40;
+  stroke-dashoffset: 40;
+  animation: confirm-draw 0.35s ease 0.4s forwards;
+}
+@keyframes confirm-draw {
+  to { stroke-dashoffset: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .confirm-circle,
+  .confirm-tick {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}

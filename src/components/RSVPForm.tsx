@@ -24,7 +24,7 @@ interface MemberCard {
     other_text: string;
 }
 
-function buildCards(primaryName: string, partyMembers: PartyMember[], existingDietary: any[]): MemberCard[] {
+function buildCards(primaryName: string, partyMembers: PartyMember[], existingDietary: any[], hasExistingRsvp: boolean): MemberCard[] {
     const totalSlots = 1 + partyMembers.length;
     return Array.from({ length: totalSlots }, (_, i) => {
         const isFirst = i === 0;
@@ -37,11 +37,15 @@ function buildCards(primaryName: string, partyMembers: PartyMember[], existingDi
         return {
             name: resolvedName,
             nameEditable: !isFirst && !knownName && !existing?.name,
-            // Never pre-filled: every member starts unanswered so the person RSVPing has
-            // to tick Attending or Not attending themselves, even when editing an existing
-            // RSVP. Saved dietary choices are still restored once they tick Attending.
+            // A brand-new RSVP starts blank so the guest has to tick Attending or Not
+            // attending for each person themselves — nothing is guessed on their behalf.
+            // Re-opening an RSVP they already sent shows back what they chose, otherwise it
+            // looks like their answers were lost. Attendance isn't stored per member; a
+            // submitted RSVP lists exactly its attendees in dietary_restrictions, and
+            // submitting requires answering everyone, so "absent from that list" means
+            // they were marked not attending.
             // (The primary guest is covered by the "Will you be attending?" answer above.)
-            attendance: isFirst ? 'yes' : null,
+            attendance: isFirst ? 'yes' : (hasExistingRsvp ? (existing ? 'yes' : 'no') : null),
             vegetarian: existing?.vegetarian ?? false,
             vegan: existing?.vegan ?? false,
             gluten_free: existing?.gluten_free ?? false,
@@ -128,7 +132,7 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
                     ? data.existingRsvp.dietaryRestrictions
                     : [];
 
-                setCards(buildCards(data.guest.name, data.guest.party_members || [], existingDietary));
+                setCards(buildCards(data.guest.name, data.guest.party_members || [], existingDietary, !!data.existingRsvp));
 
                 setFormData({
                     guestName: data.guest.name,
@@ -249,9 +253,10 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
         const partyLabel = `Party of ${partyWord}`;
         return (
             <div className="text-center py-12 bg-gray-50 rounded-2xl border border-gray-100 p-8">
-                <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
-                    <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                <div className="confirm-check">
+                    <svg viewBox="0 0 52 52">
+                        <circle className="confirm-circle" cx="26" cy="26" r="24" fill="none" />
+                        <path className="confirm-tick" fill="none" d="M14 27 L22.5 35.5 L38 18" />
                     </svg>
                 </div>
                 <h3 className="text-lg leading-6 font-medium text-gray-900">RSVP {existingRsvp ? 'Updated' : 'Received'}!</h3>
