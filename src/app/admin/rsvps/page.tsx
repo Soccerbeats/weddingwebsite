@@ -992,7 +992,7 @@ export default function RSVPDashboard() {
                             <table className="min-w-full divide-y divide-gray-200">
                                 <thead className="bg-gray-50">
                                     <tr>
-                                        <th className="px-6 py-3 text-left">
+                                        <th className="hidden lg:table-cell px-3 sm:px-6 py-3 text-left">
                                             <input
                                                 type="checkbox"
                                                 checked={filteredGuests.length > 0 && filteredGuests.every(g => selectedGuests.includes(g.id))}
@@ -1000,15 +1000,15 @@ export default function RSVPDashboard() {
                                                 className="rounded border-gray-300 text-accent focus:ring-accent"
                                             />
                                         </th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contact</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Party Size</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">RSVP Status</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Notes</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Address</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Donated</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Invited</th>
-                                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                        <th className="sticky left-0 lg:static z-20 bg-gray-50 px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                                        <th className="hidden lg:table-cell px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contact</th>
+                                        <th className="hidden md:table-cell px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Party Size</th>
+                                        <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">RSVP Status</th>
+                                        <th className="hidden md:table-cell px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Notes</th>
+                                        <th className="hidden xl:table-cell px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Address</th>
+                                        <th className="hidden lg:table-cell px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Donated</th>
+                                        <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Invited</th>
+                                        <th className="sticky right-0 z-20 bg-gray-50 px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
@@ -1034,8 +1034,8 @@ export default function RSVPDashboard() {
                                         };
                                         return (
                                         <React.Fragment key={guest.id}>
-                                        <tr className={`hover:bg-gray-50 ${isLikelyNotComing ? 'bg-red-50/40' : ''}`}>
-                                            <td className="px-6 py-4 whitespace-nowrap">
+                                        <tr className={`bg-white hover:bg-gray-50 ${isLikelyNotComing ? '!bg-red-50' : ''}`}>
+                                            <td className="hidden lg:table-cell px-3 sm:px-6 py-4 whitespace-nowrap">
                                                 <input
                                                     type="checkbox"
                                                     checked={selectedGuests.includes(guest.id)}
@@ -1043,7 +1043,7 @@ export default function RSVPDashboard() {
                                                     className="rounded border-gray-300 text-accent focus:ring-accent"
                                                 />
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
+                                            <td className="sticky left-0 lg:static z-10 bg-inherit px-3 sm:px-6 py-4 whitespace-nowrap">
                                                 <div className={`text-sm font-semibold ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-900'}`}>{guest.guest_name}</div>
                                                 {(guest.flag || (guest.notes && guest.notes.trim())) && (
                                                     <div className="flex flex-wrap items-center gap-1 mt-1">
@@ -1059,14 +1059,14 @@ export default function RSVPDashboard() {
                                                     </div>
                                                 )}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
+                                            <td className="hidden lg:table-cell px-3 sm:px-6 py-4 whitespace-nowrap">
                                                 <div className={`text-sm ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-500'}`}>{guest.email || '-'}</div>
                                                 <div className={`text-sm ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-500'}`}>{guest.phone || '-'}</div>
                                             </td>
-                                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-500'}`}>
+                                            <td className={`hidden md:table-cell px-3 sm:px-6 py-4 whitespace-nowrap text-sm ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-500'}`}>
                                                 {guest.party_size}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
+                                            <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
                                                 {guest.rsvp_status === 'attending' ? (
                                                     <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Attending</span>
                                                 ) : guest.rsvp_status === 'declined' ? (
@@ -1077,42 +1077,44 @@ export default function RSVPDashboard() {
                                                     <span className="text-sm text-gray-400">No Response</span>
                                                 )}
                                             </td>
-                                            <td className={`px-6 py-4 text-sm max-w-xs truncate ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-500'}`}>
+                                            <td className={`hidden md:table-cell px-3 sm:px-6 py-4 text-sm max-w-xs truncate ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-500'}`}>
                                                 {guest.notes || '-'}
                                             </td>
-                                            <td className={`px-6 py-4 text-sm max-w-xs truncate ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-500'}`}>
+                                            <td className={`hidden xl:table-cell px-3 sm:px-6 py-4 text-sm max-w-xs truncate ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-500'}`}>
                                                 {guest.address || '-'}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                                            <td className="hidden lg:table-cell px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                                                 {donationTotalByGuestId[guest.id] ? `$${donationTotalByGuestId[guest.id].toLocaleString()}` : '-'}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
+                                            <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
                                                 <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                                                     guest.invited ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
                                                 }`}>
                                                     {guest.invited ? 'Invited' : 'Not Invited'}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                <button
-                                                    onClick={() => handleMarkLikelyNotComing(guest)}
-                                                    title={isLikelyNotComing ? 'Clear likely not coming' : 'Mark as likely not coming'}
-                                                    className={`mr-3 text-xs px-2 py-1 rounded ${isLikelyNotComing ? 'bg-orange-100 text-orange-700 hover:bg-orange-200' : 'bg-gray-100 text-gray-500 hover:bg-orange-100 hover:text-orange-700'}`}
-                                                >
-                                                    🙁
-                                                </button>
-                                                <button
-                                                    onClick={() => openEditGuest(guest)}
-                                                    className="text-blue-600 hover:text-blue-900 mr-4"
-                                                >
-                                                    Edit
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDeleteGuest(guest.id)}
-                                                    className="text-red-600 hover:text-red-900"
-                                                >
-                                                    Delete
-                                                </button>
+                                            <td className="sticky right-0 z-10 bg-inherit px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                <div className="inline-flex items-center gap-2 justify-end">
+                                                    <button
+                                                        onClick={() => handleMarkLikelyNotComing(guest)}
+                                                        title={isLikelyNotComing ? 'Clear likely not coming' : 'Mark as likely not coming'}
+                                                        className={`text-xs px-2.5 py-1 rounded-full transition-colors ${isLikelyNotComing ? 'bg-orange-100 text-orange-700 hover:bg-orange-200' : 'bg-gray-100 text-gray-500 hover:bg-orange-100 hover:text-orange-700'}`}
+                                                    >
+                                                        🙁
+                                                    </button>
+                                                    <button
+                                                        onClick={() => openEditGuest(guest)}
+                                                        className="text-xs font-semibold px-3 py-1 rounded-full bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors"
+                                                    >
+                                                        Edit
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDeleteGuest(guest.id)}
+                                                        className="text-xs font-semibold px-3 py-1 rounded-full bg-red-100 text-red-700 hover:bg-red-200 transition-colors"
+                                                    >
+                                                        Delete
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                         {/* Party member sub-rows */}
@@ -1121,28 +1123,30 @@ export default function RSVPDashboard() {
                                             const mAttending = !!mDietary;
                                             const flags = dietaryFlags(mDietary);
                                             return (
-                                                <tr key={`${guest.id}-m${mi}`} className="bg-gray-50/60">
-                                                    <td className="px-6 py-1.5" />
-                                                    <td className="pl-10 pr-6 py-1.5 whitespace-nowrap border-l-2 border-gray-200">
+                                                <tr key={`${guest.id}-m${mi}`} className="bg-gray-50">
+                                                    <td className="hidden lg:table-cell px-3 sm:px-6 py-1.5" />
+                                                    <td className="sticky left-0 lg:static z-10 bg-inherit pl-6 sm:pl-10 pr-3 sm:pr-6 py-1.5 whitespace-nowrap border-l-2 border-gray-200">
                                                         <span className="text-gray-300 mr-1.5 text-xs">└</span>
                                                         <span className="text-sm text-gray-500 italic">
                                                             {member.name || `Unknown Guest ${mi + 2}`}
                                                         </span>
                                                     </td>
-                                                    <td className="px-6 py-1.5 text-xs text-gray-300">—</td>
-                                                    <td className="px-6 py-1.5 text-xs text-gray-300">—</td>
-                                                    <td className="px-6 py-1.5 whitespace-nowrap">
+                                                    <td className="hidden lg:table-cell px-3 sm:px-6 py-1.5 text-xs text-gray-300">—</td>
+                                                    <td className="hidden md:table-cell px-3 sm:px-6 py-1.5 text-xs text-gray-300">—</td>
+                                                    <td className="px-3 sm:px-6 py-1.5 whitespace-nowrap">
                                                         {mAttending ? (
                                                             <span className="px-2 inline-flex text-xs leading-5 font-medium rounded-full bg-gray-100 text-gray-500">Attending</span>
                                                         ) : (
                                                             <span className="text-xs text-gray-300">—</span>
                                                         )}
                                                     </td>
-                                                    <td className="px-6 py-1.5 text-xs text-gray-400" colSpan={3}>
+                                                    <td className="hidden md:table-cell px-3 sm:px-6 py-1.5 text-xs text-gray-400">
                                                         {flags || '—'}
                                                     </td>
-                                                    <td className="px-6 py-1.5 text-xs text-gray-300">—</td>
-                                                    <td className="px-6 py-1.5" />
+                                                    <td className="hidden xl:table-cell px-3 sm:px-6 py-1.5 text-xs text-gray-300">—</td>
+                                                    <td className="hidden lg:table-cell px-3 sm:px-6 py-1.5 text-xs text-gray-300">—</td>
+                                                    <td className="px-3 sm:px-6 py-1.5 text-xs text-gray-300">—</td>
+                                                    <td className="sticky right-0 z-10 bg-inherit px-3 sm:px-6 py-1.5" />
                                                 </tr>
                                             );
                                         })}
