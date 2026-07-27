@@ -666,13 +666,13 @@ export default function RSVPDashboard() {
                         type="text"
                         value={rsvpSubtitle}
                         onChange={(e) => setRsvpSubtitle(e.target.value)}
-                        className="flex-1 rounded-lg border border-gray-300 p-2 text-sm text-gray-900 focus:border-accent focus:ring-accent"
+                        className="flex-1 rounded-full border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
                         placeholder="e.g. Let us know you're coming"
                     />
                     <button
                         onClick={handleSaveSubtitle}
                         disabled={subtitleSaving}
-                        className="px-5 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent-dark transition-colors disabled:opacity-50"
+                        className="px-5 py-2 bg-accent text-white rounded-full text-sm font-medium hover:bg-accent-dark transition-colors disabled:opacity-50"
                     >
                         {subtitleSaving ? 'Saving…' : 'Save'}
                     </button>
@@ -689,7 +689,7 @@ export default function RSVPDashboard() {
                 <div className="flex gap-2 w-full sm:w-auto">
                     <button
                         onClick={() => setActiveTab('rsvps')}
-                        className={`flex-1 sm:flex-none min-w-0 px-3 sm:px-4 py-2 rounded-xl text-sm sm:text-base font-medium text-center whitespace-nowrap transition-colors duration-300 shadow-md ${
+                        className={`flex-1 sm:flex-none min-w-0 px-3 sm:px-4 py-2 rounded-full text-sm sm:text-base font-medium text-center whitespace-nowrap transition-colors duration-300 shadow-md ${
                             activeTab === 'rsvps'
                                 ? 'bg-accent text-white shadow-lg'
                                 : 'bg-gray-200 text-gray-700 hover:bg-gray-300 hover:shadow-lg'
@@ -700,7 +700,7 @@ export default function RSVPDashboard() {
                     </button>
                     <button
                         onClick={() => setActiveTab('guestlist')}
-                        className={`flex-1 sm:flex-none min-w-0 px-3 sm:px-4 py-2 rounded-xl text-sm sm:text-base font-medium text-center whitespace-nowrap transition-colors duration-300 shadow-md ${
+                        className={`flex-1 sm:flex-none min-w-0 px-3 sm:px-4 py-2 rounded-full text-sm sm:text-base font-medium text-center whitespace-nowrap transition-colors duration-300 shadow-md ${
                             activeTab === 'guestlist'
                                 ? 'bg-accent text-white shadow-lg'
                                 : 'bg-gray-200 text-gray-700 hover:bg-gray-300 hover:shadow-lg'
@@ -711,7 +711,7 @@ export default function RSVPDashboard() {
                     </button>
                     <button
                         onClick={() => setActiveTab('donations')}
-                        className={`flex-1 sm:flex-none min-w-0 px-3 sm:px-4 py-2 rounded-xl text-sm sm:text-base font-medium text-center whitespace-nowrap transition-colors duration-300 shadow-md ${
+                        className={`flex-1 sm:flex-none min-w-0 px-3 sm:px-4 py-2 rounded-full text-sm sm:text-base font-medium text-center whitespace-nowrap transition-colors duration-300 shadow-md ${
                             activeTab === 'donations'
                                 ? 'bg-accent text-white shadow-lg'
                                 : 'bg-gray-200 text-gray-700 hover:bg-gray-300 hover:shadow-lg'
@@ -727,23 +727,23 @@ export default function RSVPDashboard() {
                 <>
                     {/* Stats Cards */}
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-                        <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-200">
+                        <div className="bg-white p-6 rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 border border-gray-200">
                             <p className="text-sm font-medium text-gray-500">Total RSVPs</p>
                             <p className="text-3xl font-bold text-gray-900">{rsvps.length}</p>
                         </div>
-                        <div className="bg-white p-6 rounded-2xl shadow-lg border border-green-200">
+                        <div className="bg-white p-6 rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 border border-green-200">
                             <p className="text-sm font-medium text-green-600">Total Attending</p>
                             <p className="text-3xl font-bold text-green-700">{totalGuests}</p>
                         </div>
-                        <div className="bg-white p-6 rounded-2xl shadow-lg border border-red-200">
+                        <div className="bg-white p-6 rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 border border-red-200">
                             <p className="text-sm font-medium text-red-600">Declined</p>
                             <p className="text-3xl font-bold text-red-700">{totalDeclinedGuests}</p>
                         </div>
-                        <div className="bg-white p-6 rounded-2xl shadow-lg border border-orange-200">
+                        <div className="bg-white p-6 rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 border border-orange-200">
                             <p className="text-sm font-medium text-orange-600">Likely Not Coming</p>
                             <p className="text-3xl font-bold text-orange-700">{likelyNotComingCount}</p>
                         </div>
-                        <div className="bg-white p-6 rounded-2xl shadow-lg border border-yellow-200">
+                        <div className="bg-white p-6 rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 border border-yellow-200">
                             <p className="text-sm font-medium text-yellow-600">Missing RSVPs</p>
                             <p className="text-3xl font-bold text-yellow-700">{missingRsvps}</p>
                         </div>
@@ -811,7 +811,7 @@ export default function RSVPDashboard() {
                                                         <div className="absolute right-0 inset-y-0 flex items-center pr-4 opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-l from-gray-50 via-gray-50 to-transparent pl-8">
                                                             <button
                                                                 onClick={() => { setDeletingRsvp(rsvp); setConfirmName(''); }}
-                                                                className="text-red-600 hover:text-red-900 bg-white border border-gray-200 shadow-sm px-3 py-1 rounded-md text-xs font-medium"
+                                                                className="text-red-600 hover:text-red-900 bg-white border border-gray-200 shadow-sm px-3 py-1 rounded-full text-xs font-medium"
                                                             >
                                                                 Delete
                                                             </button>
@@ -849,24 +849,24 @@ export default function RSVPDashboard() {
                 <>
                     {/* Guest List Stats */}
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-6 mb-8">
-                        <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-200">
+                        <div className="bg-white p-6 rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 border border-gray-200">
                             <p className="text-sm font-medium text-gray-500">Total Invited</p>
                             <p className="text-3xl font-bold text-gray-900">{totalInvited}</p>
                         </div>
-                        <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-200">
+                        <div className="bg-white p-6 rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 border border-gray-200">
                             <p className="text-sm font-medium text-gray-500">Not Invited Yet</p>
                             <p className="text-3xl font-bold text-gray-900">{totalNotInvited}</p>
                         </div>
-                        <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-200">
+                        <div className="bg-white p-6 rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 border border-gray-200">
                             <p className="text-sm font-medium text-gray-500">Expected Guests</p>
                             <p className="text-3xl font-bold text-gray-900">{totalGuestListSize}</p>
                             <p className="text-xs text-gray-400 mt-1">excl. likely not coming</p>
                         </div>
-                        <div className="bg-white p-6 rounded-2xl shadow-lg border border-orange-200">
+                        <div className="bg-white p-6 rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 border border-orange-200">
                             <p className="text-sm font-medium text-orange-600">Likely Not Coming</p>
                             <p className="text-3xl font-bold text-orange-700">{likelyNotComingCount}</p>
                         </div>
-                        <div className="bg-white p-6 rounded-2xl shadow-lg border border-green-200">
+                        <div className="bg-white p-6 rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 border border-green-200">
                             <p className="text-sm font-medium text-gray-500">Total Attending</p>
                             <p className="text-3xl font-bold text-green-600">{totalGuests}</p>
                         </div>
@@ -882,19 +882,19 @@ export default function RSVPDashboard() {
                                     </span>
                                     <button
                                         onClick={handleBulkMarkInvited}
-                                        className="bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 text-sm transition-all duration-300 shadow-md hover:shadow-lg"
+                                        className="bg-blue-600 text-white px-4 py-2 rounded-full hover:bg-blue-700 text-sm transition-all duration-300 shadow-md hover:shadow-lg"
                                     >
                                         Mark as Invited
                                     </button>
                                     <button
                                         onClick={handleBulkUnmarkInvited}
-                                        className="bg-gray-500 text-white px-4 py-2 rounded-xl hover:bg-gray-600 text-sm transition-all duration-300 shadow-md hover:shadow-lg"
+                                        className="bg-gray-500 text-white px-4 py-2 rounded-full hover:bg-gray-600 text-sm transition-all duration-300 shadow-md hover:shadow-lg"
                                     >
                                         Mark as Not Invited
                                     </button>
                                     <button
                                         onClick={handleBulkDelete}
-                                        className="bg-red-600 text-white px-4 py-2 rounded-xl hover:bg-red-700 text-sm transition-all duration-300 shadow-md hover:shadow-lg"
+                                        className="bg-red-600 text-white px-4 py-2 rounded-full hover:bg-red-700 text-sm transition-all duration-300 shadow-md hover:shadow-lg"
                                     >
                                         Delete Selected
                                     </button>
@@ -904,7 +904,7 @@ export default function RSVPDashboard() {
                         <div className="flex gap-2">
                             <button
                                 onClick={() => setShowImportModal(true)}
-                                className="bg-green-600 text-white px-4 py-2 rounded-xl hover:bg-green-700 flex items-center gap-2 transition-all duration-300 shadow-md hover:shadow-lg"
+                                className="bg-green-600 text-white px-4 py-2 rounded-full hover:bg-green-700 flex items-center gap-2 transition-all duration-300 shadow-md hover:shadow-lg"
                             >
                                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
@@ -913,7 +913,7 @@ export default function RSVPDashboard() {
                             </button>
                             <button
                                 onClick={() => setShowReconcileModal(true)}
-                                className="bg-amber-500 text-white px-4 py-2 rounded-xl hover:bg-amber-600 flex items-center gap-2 transition-all duration-300 shadow-md hover:shadow-lg"
+                                className="bg-amber-500 text-white px-4 py-2 rounded-full hover:bg-amber-600 flex items-center gap-2 transition-all duration-300 shadow-md hover:shadow-lg"
                             >
                                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
@@ -937,7 +937,7 @@ export default function RSVPDashboard() {
                                         flag: '',
                                     });
                                 }}
-                                className="bg-accent text-white px-4 py-2 rounded-xl hover:bg-accent/90 transition-all duration-300 shadow-md hover:shadow-lg"
+                                className="bg-accent text-white px-4 py-2 rounded-full hover:bg-accent/90 transition-all duration-300 shadow-md hover:shadow-lg"
                             >
                                 Add Guest
                             </button>
@@ -951,7 +951,7 @@ export default function RSVPDashboard() {
                             placeholder="Search guests..."
                             value={guestSearch}
                             onChange={e => setGuestSearch(e.target.value)}
-                            className="px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 w-full sm:w-56"
+                            className="px-3 py-2 border border-gray-300 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 w-full sm:w-56"
                         />
                         <div className="flex flex-wrap gap-2">
                             {([
@@ -971,7 +971,7 @@ export default function RSVPDashboard() {
                                 <button
                                     key={f.key}
                                     onClick={() => setGuestFilter(f.key)}
-                                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
                                         guestFilter === f.key
                                             ? 'bg-accent text-white shadow-md'
                                             : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -1162,7 +1162,7 @@ export default function RSVPDashboard() {
                         <p className="text-sm text-gray-500">{donations.length} donation{donations.length === 1 ? '' : 's'} · Total ${donations.reduce((s, d) => s + d.amount, 0).toLocaleString()}</p>
                         <button
                             onClick={() => setShowDonationModal(true)}
-                            className="bg-accent text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90"
+                            className="bg-accent text-white px-4 py-2.5 rounded-full text-sm font-medium hover:opacity-90"
                         >
                             + Log Donation
                         </button>
@@ -1206,13 +1206,13 @@ export default function RSVPDashboard() {
             {/* Log Donation Modal */}
             {showDonationModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-black/40" onClick={resetDonationModal} />
-                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 z-10">
+                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={resetDonationModal} />
+                    <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 z-10">
                         <h2 className="text-lg font-bold text-gray-900 mb-4">{editingDonationId ? 'Edit Donation' : 'Log a Donation'}</h2>
 
                         <label className="block text-sm font-medium text-gray-700 mb-1">Who donated?</label>
                         {donationDonor ? (
-                            <div className="flex items-center justify-between border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4">
+                            <div className="flex items-center justify-between border border-gray-200 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all mb-4">
                                 <span>{donationDonor.guest_name}</span>
                                 <button type="button" onClick={() => { setDonationDonor(null); setDonationDonorSearch(''); }} className="text-gray-400 hover:text-gray-600">✕</button>
                             </div>
@@ -1223,10 +1223,10 @@ export default function RSVPDashboard() {
                                     value={donationDonorSearch}
                                     onChange={e => setDonationDonorSearch(e.target.value)}
                                     placeholder="Search guest list..."
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                                    className="w-full border border-gray-200 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
                                 />
                                 {donationDonorSearch.trim() && (
-                                    <div className="mt-1 max-h-40 overflow-y-auto border border-gray-200 rounded-lg">
+                                    <div className="mt-1 max-h-40 overflow-y-auto border border-gray-200 rounded-2xl">
                                         {donationPeople
                                             .filter(p => p.name.toLowerCase().includes(donationDonorSearch.toLowerCase()))
                                             .slice(0, 8)
@@ -1265,10 +1265,10 @@ export default function RSVPDashboard() {
                             onChange={e => setCoGiverSearch(e.target.value)}
                             onKeyDown={e => { if (e.key === 'Enter' && coGiverSearch.trim()) { e.preventDefault(); addCoGiver({ id: null, name: coGiverSearch }); } }}
                             placeholder="Add a co-giver (type & Enter, or pick below)"
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4"
+                            className="w-full border border-gray-200 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all mb-4"
                         />
                         {coGiverSearch.trim() && (
-                            <div className="-mt-3 mb-4 max-h-32 overflow-y-auto border border-gray-200 rounded-lg">
+                            <div className="-mt-3 mb-4 max-h-32 overflow-y-auto border border-gray-200 rounded-2xl">
                                 {donationPeople
                                     .filter(p => p.name.toLowerCase().includes(coGiverSearch.toLowerCase()))
                                     .slice(0, 8)
@@ -1287,14 +1287,14 @@ export default function RSVPDashboard() {
                             value={donationAmount}
                             onChange={e => setDonationAmount(e.target.value)}
                             placeholder="0"
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4"
+                            className="w-full border border-gray-200 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all mb-4"
                         />
 
                         <label className="block text-sm font-medium text-gray-700 mb-1">Fund</label>
                         <select
                             value={donationFundId}
                             onChange={e => setDonationFundId(e.target.value)}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4"
+                            className="w-full border border-gray-200 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all mb-4"
                         >
                             <option value="">Select a fund...</option>
                             {(config?.registry?.items || []).map((f: FundItem) => (
@@ -1306,7 +1306,7 @@ export default function RSVPDashboard() {
                         <select
                             value={donationEvent}
                             onChange={e => setDonationEvent(e.target.value)}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-3"
+                            className="w-full border border-gray-200 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all mb-3"
                         >
                             <option>Bridal Shower</option>
                             <option>Engagement Party</option>
@@ -1319,7 +1319,7 @@ export default function RSVPDashboard() {
                                 value={donationOtherEvent}
                                 onChange={e => setDonationOtherEvent(e.target.value)}
                                 placeholder="Name the event"
-                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4"
+                                className="w-full border border-gray-200 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all mb-4"
                             />
                         )}
 
@@ -1327,11 +1327,11 @@ export default function RSVPDashboard() {
                             <button
                                 onClick={saveDonation}
                                 disabled={savingDonation || !donationDonor || !donationAmount || !donationFundId}
-                                className="flex-1 bg-accent text-white py-2 rounded-lg text-sm font-medium disabled:opacity-40"
+                                className="flex-1 bg-accent text-white py-2.5 rounded-full text-sm font-medium disabled:opacity-40"
                             >
                                 {savingDonation ? 'Saving...' : 'Save'}
                             </button>
-                            <button onClick={resetDonationModal} className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg text-sm">
+                            <button onClick={resetDonationModal} className="flex-1 bg-gray-100 text-gray-700 py-2.5 rounded-full text-sm">
                                 Cancel
                             </button>
                         </div>
@@ -1342,18 +1342,18 @@ export default function RSVPDashboard() {
             {/* Delete Donation Modal */}
             {deletingDonation && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-black/40" onClick={() => setDeletingDonation(null)} />
-                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 z-10">
+                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setDeletingDonation(null)} />
+                    <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 z-10">
                         <h2 className="text-lg font-bold text-gray-900 mb-2">Delete donation?</h2>
                         <p className="text-sm text-gray-500 mb-4">
                             {deletingDonation.guest_name} — ${deletingDonation.amount.toLocaleString()} toward {deletingDonation.fund_item_title || 'a fund'}. This subtracts the amount from that fund&apos;s progress and cannot be undone.
                         </p>
                         <div className="flex gap-2">
                             <button onClick={confirmDeleteDonation} disabled={savingDonation}
-                                className="flex-1 bg-red-600 text-white py-2 rounded-lg text-sm font-medium disabled:opacity-40">
+                                className="flex-1 bg-red-600 text-white py-2.5 rounded-full text-sm font-medium disabled:opacity-40">
                                 {savingDonation ? 'Deleting...' : 'Delete'}
                             </button>
-                            <button onClick={() => setDeletingDonation(null)} className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg text-sm">
+                            <button onClick={() => setDeletingDonation(null)} className="flex-1 bg-gray-100 text-gray-700 py-2.5 rounded-full text-sm">
                                 Cancel
                             </button>
                         </div>
@@ -1363,8 +1363,8 @@ export default function RSVPDashboard() {
 
             {/* Delete RSVP Modal */}
             {deletingRsvp && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-                    <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl">
                         <h3 className="text-lg font-medium text-gray-900 mb-4">Confirm Deletion</h3>
                         <p className="text-sm text-gray-500 mb-4">
                             Are you sure you want to delete the RSVP for <strong>{deletingRsvp.guest_name}</strong>?
@@ -1377,20 +1377,20 @@ export default function RSVPDashboard() {
                             type="text"
                             value={confirmName}
                             onChange={(e) => setConfirmName(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm mb-6"
+                            className="w-full px-4 py-3 border border-gray-200 bg-gray-50 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-400/50 focus:border-red-400 sm:text-sm mb-6 transition-all"
                             placeholder="Type guest name here"
                         />
                         <div className="flex justify-end space-x-3">
                             <button
                                 onClick={() => setDeletingRsvp(null)}
-                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-all duration-300 shadow-md hover:shadow-lg"
+                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-full hover:bg-gray-50 transition-all duration-300 shadow-md hover:shadow-lg"
                             >
                                 Cancel
                             </button>
                             <button
                                 onClick={handleDeleteRsvp}
                                 disabled={confirmName !== deletingRsvp.guest_name}
-                                className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-xl hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-md hover:shadow-lg"
+                                className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-full hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-md hover:shadow-lg"
                             >
                                 Delete RSVP
                             </button>
@@ -1615,8 +1615,8 @@ export default function RSVPDashboard() {
 
             {/* CSV Import Modal */}
             {showImportModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full p-6">
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-6">
                         <h3 className="text-2xl font-bold text-gray-900 mb-4">Import Guests from CSV</h3>
 
                         {!importResults ? (
@@ -1625,7 +1625,7 @@ export default function RSVPDashboard() {
                                     <p className="text-sm text-gray-600 mb-4">
                                         Upload a CSV file with guest information. The CSV should have a header row with the following columns:
                                     </p>
-                                    <div className="bg-gray-50 p-4 rounded-md">
+                                    <div className="bg-gray-50 p-4 rounded-2xl">
                                         <code className="text-sm text-gray-800">
                                             name,email,phone,party_size,side,notes,plus_one_name,address
                                         </code>
@@ -1643,7 +1643,7 @@ export default function RSVPDashboard() {
                                         type="file"
                                         accept=".csv"
                                         onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                                        className="w-full text-sm text-gray-600 file:mr-3 file:px-4 file:py-2 file:rounded-full file:border-0 file:bg-accent file:text-white file:font-semibold file:cursor-pointer border border-gray-200 bg-gray-50 rounded-2xl px-3 py-2.5"
                                     />
                                 </div>
 
@@ -1654,14 +1654,14 @@ export default function RSVPDashboard() {
                                             setCsvFile(null);
                                             setImportResults(null);
                                         }}
-                                        className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-all duration-300 shadow-md hover:shadow-lg"
+                                        className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-full hover:bg-gray-50 transition-all duration-300 shadow-md hover:shadow-lg"
                                     >
                                         Cancel
                                     </button>
                                     <button
                                         onClick={handleImportCSV}
                                         disabled={!csvFile || importing}
-                                        className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-xl hover:bg-green-700 disabled:opacity-50 transition-all duration-300 shadow-md hover:shadow-lg"
+                                        className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-full hover:bg-green-700 disabled:opacity-50 transition-all duration-300 shadow-md hover:shadow-lg"
                                     >
                                         {importing ? 'Importing...' : 'Import'}
                                     </button>
@@ -1672,22 +1672,22 @@ export default function RSVPDashboard() {
                                 <div className="mb-6">
                                     <h4 className="text-lg font-semibold text-gray-900 mb-3">Import Results</h4>
                                     <div className="grid grid-cols-3 gap-4 mb-4">
-                                        <div className="bg-green-50 p-4 rounded-md">
+                                        <div className="bg-green-50 p-4 rounded-2xl">
                                             <p className="text-sm text-gray-600">Added</p>
                                             <p className="text-2xl font-bold text-green-600">{importResults.added}</p>
                                         </div>
-                                        <div className="bg-blue-50 p-4 rounded-md">
+                                        <div className="bg-blue-50 p-4 rounded-2xl">
                                             <p className="text-sm text-gray-600">Updated</p>
                                             <p className="text-2xl font-bold text-blue-600">{importResults.updated}</p>
                                         </div>
-                                        <div className="bg-red-50 p-4 rounded-md">
+                                        <div className="bg-red-50 p-4 rounded-2xl">
                                             <p className="text-sm text-gray-600">Failed</p>
                                             <p className="text-2xl font-bold text-red-600">{importResults.failed}</p>
                                         </div>
                                     </div>
 
                                     {importResults.errors.length > 0 && (
-                                        <div className="bg-red-50 p-4 rounded-md max-h-48 overflow-y-auto">
+                                        <div className="bg-red-50 p-4 rounded-2xl max-h-48 overflow-y-auto">
                                             <p className="text-sm font-semibold text-red-800 mb-2">Errors:</p>
                                             <ul className="text-xs text-red-700 space-y-1">
                                                 {importResults.errors.map((error, idx) => (
@@ -1705,7 +1705,7 @@ export default function RSVPDashboard() {
                                             setCsvFile(null);
                                             setImportResults(null);
                                         }}
-                                        className="px-4 py-2 text-sm font-medium text-white bg-accent rounded-xl hover:bg-accent/90 transition-all duration-300 shadow-md hover:shadow-lg"
+                                        className="px-4 py-2 text-sm font-medium text-white bg-accent rounded-full hover:bg-accent/90 transition-all duration-300 shadow-md hover:shadow-lg"
                                     >
                                         Close
                                     </button>
