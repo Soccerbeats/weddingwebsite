@@ -993,11 +993,11 @@ export default function RSVPDashboard() {
 
                     {/* Guest List Table */}
                     <div className="bg-white shadow-lg border border-gray-200 rounded-2xl overflow-hidden">
-                        <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-gray-200">
+                        <div className="w-full">
+                            <table className="w-full table-fixed divide-y divide-gray-200">
                                 <thead className="bg-gray-50">
                                     <tr>
-                                        <th className="hidden lg:table-cell px-3 sm:px-6 py-3 text-left">
+                                        <th className="hidden lg:table-cell w-10 px-2 sm:px-4 lg:px-6 py-3 text-left">
                                             <input
                                                 type="checkbox"
                                                 checked={filteredGuests.length > 0 && filteredGuests.every(g => selectedGuests.includes(g.id))}
@@ -1005,16 +1005,16 @@ export default function RSVPDashboard() {
                                                 className="rounded border-gray-300 text-accent focus:ring-accent"
                                             />
                                         </th>
-                                        <th className="sticky left-0 lg:static z-20 bg-gray-50 px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                                        <th className="hidden lg:table-cell px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contact</th>
-                                        <th className="hidden md:table-cell px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Relation</th>
-                                        <th className="hidden md:table-cell px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Party Size</th>
-                                        <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">RSVP Status</th>
-                                        <th className="hidden md:table-cell px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Notes</th>
-                                        <th className="hidden xl:table-cell px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Address</th>
-                                        <th className="hidden lg:table-cell px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Donated</th>
-                                        <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Invited</th>
-                                        <th className="sticky right-0 z-20 bg-gray-50 px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                        <th className="min-w-[64px] px-2 sm:px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                                        <th className="hidden xl:table-cell w-[15%] px-2 sm:px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contact</th>
+                                        <th className="hidden lg:table-cell w-[12%] px-2 sm:px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Relation</th>
+                                        <th className="w-10 sm:w-16 px-2 sm:px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Party</th>
+                                        <th className="w-14 sm:w-24 px-2 sm:px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Invited</th>
+                                        <th className="w-20 sm:w-32 px-2 sm:px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">RSVP</th>
+                                        <th className="hidden xl:table-cell w-[15%] px-2 sm:px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Notes</th>
+                                        <th className="hidden xl:table-cell w-[16%] px-2 sm:px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Address</th>
+                                        <th className="hidden xl:table-cell w-20 px-2 sm:px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Donated</th>
+                                        <th className="w-[92px] sm:w-[150px] px-2 sm:px-4 lg:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
@@ -1040,8 +1040,8 @@ export default function RSVPDashboard() {
                                         };
                                         return (
                                         <React.Fragment key={guest.id}>
-                                        <tr className={`bg-white hover:bg-gray-50 ${isLikelyNotComing ? '!bg-red-50' : ''}`}>
-                                            <td className="hidden lg:table-cell px-3 sm:px-6 py-4 whitespace-nowrap">
+                                        <tr className={`align-top bg-white hover:bg-gray-50 ${isLikelyNotComing ? '!bg-red-50' : ''}`}>
+                                            <td className="hidden lg:table-cell px-2 sm:px-4 lg:px-6 py-4">
                                                 <input
                                                     type="checkbox"
                                                     checked={selectedGuests.includes(guest.id)}
@@ -1049,8 +1049,8 @@ export default function RSVPDashboard() {
                                                     className="rounded border-gray-300 text-accent focus:ring-accent"
                                                 />
                                             </td>
-                                            <td className="sticky left-0 lg:static z-10 bg-inherit px-3 sm:px-6 py-4 whitespace-nowrap">
-                                                <div className={`text-sm font-semibold ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-900'}`}>{guest.guest_name}</div>
+                                            <td className="px-2 sm:px-4 lg:px-6 py-4 overflow-hidden">
+                                                <div className={`text-sm font-semibold truncate ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-900'}`} title={guest.guest_name}>{guest.guest_name}</div>
                                                 {(guest.flag || (guest.notes && guest.notes.trim())) && (
                                                     <div className="flex flex-wrap items-center gap-1 mt-1">
                                                         {guest.flag === 'issue' && (
@@ -1065,45 +1065,45 @@ export default function RSVPDashboard() {
                                                     </div>
                                                 )}
                                             </td>
-                                            <td className="hidden lg:table-cell px-3 sm:px-6 py-4 whitespace-nowrap">
-                                                <div className={`text-sm ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-500'}`}>{guest.email || '-'}</div>
-                                                <div className={`text-sm ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-500'}`}>{guest.phone || '-'}</div>
+                                            <td className="hidden xl:table-cell px-2 sm:px-4 lg:px-6 py-4 overflow-hidden">
+                                                <div className={`text-sm truncate ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-500'}`} title={guest.email || ''}>{guest.email || '-'}</div>
+                                                <div className={`text-sm truncate ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-500'}`} title={guest.phone || ''}>{guest.phone || '-'}</div>
                                             </td>
-                                            <td className={`hidden md:table-cell px-3 sm:px-6 py-4 whitespace-nowrap text-sm ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-500'}`}>
+                                            <td className={`hidden lg:table-cell px-2 sm:px-4 lg:px-6 py-4 text-sm truncate ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-500'}`} title={guest.relationship || ''}>
                                                 {guest.relationship || '-'}
                                             </td>
-                                            <td className={`hidden md:table-cell px-3 sm:px-6 py-4 whitespace-nowrap text-sm ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-500'}`}>
+                                            <td className={`px-2 sm:px-4 lg:px-6 py-4 text-sm ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-500'}`}>
                                                 {guest.party_size}
                                             </td>
-                                            <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
-                                                {guest.rsvp_status === 'attending' ? (
-                                                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Attending</span>
-                                                ) : guest.rsvp_status === 'declined' ? (
-                                                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Declined</span>
-                                                ) : guest.rsvp_status === 'likely_not_coming' ? (
-                                                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-orange-100 text-orange-700">Likely Not Coming</span>
-                                                ) : (
-                                                    <span className="text-sm text-gray-400">No Response</span>
-                                                )}
-                                            </td>
-                                            <td className={`hidden md:table-cell px-3 sm:px-6 py-4 text-sm max-w-xs truncate ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-500'}`}>
-                                                {guest.notes || '-'}
-                                            </td>
-                                            <td className={`hidden xl:table-cell px-3 sm:px-6 py-4 text-sm max-w-xs truncate ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-500'}`}>
-                                                {guest.address || '-'}
-                                            </td>
-                                            <td className="hidden lg:table-cell px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                                                {donationTotalByGuestId[guest.id] ? `$${donationTotalByGuestId[guest.id].toLocaleString()}` : '-'}
-                                            </td>
-                                            <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
-                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                            <td className="px-2 sm:px-4 lg:px-6 py-4">
+                                                <span className={`inline-block text-center px-2 py-0.5 text-xs font-semibold rounded-full ${
                                                     guest.invited ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
                                                 }`}>
                                                     {guest.invited ? 'Invited' : 'Not Invited'}
                                                 </span>
                                             </td>
-                                            <td className="sticky right-0 z-10 bg-inherit px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                <div className="inline-flex items-center gap-2 justify-end">
+                                            <td className="px-2 sm:px-4 lg:px-6 py-4">
+                                                {guest.rsvp_status === 'attending' ? (
+                                                    <span className="inline-block text-center px-2 py-0.5 text-xs font-semibold rounded-full bg-green-100 text-green-800">Attending</span>
+                                                ) : guest.rsvp_status === 'declined' ? (
+                                                    <span className="inline-block text-center px-2 py-0.5 text-xs font-semibold rounded-full bg-red-100 text-red-800">Declined</span>
+                                                ) : guest.rsvp_status === 'likely_not_coming' ? (
+                                                    <span className="inline-block text-center px-2 py-0.5 text-xs font-semibold rounded-full bg-orange-100 text-orange-700">Likely Not Coming</span>
+                                                ) : (
+                                                    <span className="text-sm text-gray-400">No Response</span>
+                                                )}
+                                            </td>
+                                            <td className={`hidden xl:table-cell px-2 sm:px-4 lg:px-6 py-4 text-sm truncate ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-500'}`} title={guest.notes || ''}>
+                                                {guest.notes || '-'}
+                                            </td>
+                                            <td className={`hidden xl:table-cell px-2 sm:px-4 lg:px-6 py-4 text-sm truncate ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-500'}`} title={guest.address || ''}>
+                                                {guest.address || '-'}
+                                            </td>
+                                            <td className="hidden xl:table-cell px-2 sm:px-4 lg:px-6 py-4 text-sm text-gray-700 truncate">
+                                                {donationTotalByGuestId[guest.id] ? `$${donationTotalByGuestId[guest.id].toLocaleString()}` : '-'}
+                                            </td>
+                                            <td className="px-2 sm:px-4 lg:px-6 py-4 text-right text-sm font-medium">
+                                                <div className="flex flex-wrap items-center gap-1.5 justify-end">
                                                     <button
                                                         onClick={() => handleMarkLikelyNotComing(guest)}
                                                         title={isLikelyNotComing ? 'Clear likely not coming' : 'Mark as likely not coming'}
@@ -1132,31 +1132,33 @@ export default function RSVPDashboard() {
                                             const mAttending = !!mDietary;
                                             const flags = dietaryFlags(mDietary);
                                             return (
-                                                <tr key={`${guest.id}-m${mi}`} className="bg-gray-50">
-                                                    <td className="hidden lg:table-cell px-3 sm:px-6 py-1.5" />
-                                                    <td className="sticky left-0 lg:static z-10 bg-inherit pl-6 sm:pl-10 pr-3 sm:pr-6 py-1.5 whitespace-nowrap border-l-2 border-gray-200">
-                                                        <span className="text-gray-300 mr-1.5 text-xs">└</span>
-                                                        <span className="text-sm text-gray-500 italic">
-                                                            {member.name || `Unknown Guest ${mi + 2}`}
-                                                        </span>
+                                                <tr key={`${guest.id}-m${mi}`} className="align-top bg-gray-50">
+                                                    <td className="hidden lg:table-cell px-2 sm:px-4 lg:px-6 py-1.5" />
+                                                    <td className="px-2 sm:px-4 lg:px-6 py-1.5 border-l-2 border-gray-200 overflow-hidden">
+                                                        <div className="flex items-center gap-1 min-w-0">
+                                                            <span className="text-gray-300 text-xs shrink-0">└</span>
+                                                            <span className="text-sm text-gray-500 italic truncate" title={member.name || `Unknown Guest ${mi + 2}`}>
+                                                                {member.name || `Unknown Guest ${mi + 2}`}
+                                                            </span>
+                                                        </div>
                                                     </td>
-                                                    <td className="hidden lg:table-cell px-3 sm:px-6 py-1.5 text-xs text-gray-300">—</td>
-                                                    <td className="hidden md:table-cell px-3 sm:px-6 py-1.5 text-xs text-gray-300">—</td>
-                                                    <td className="hidden md:table-cell px-3 sm:px-6 py-1.5 text-xs text-gray-300">—</td>
-                                                    <td className="px-3 sm:px-6 py-1.5 whitespace-nowrap">
+                                                    <td className="hidden xl:table-cell px-2 sm:px-4 lg:px-6 py-1.5 text-xs text-gray-300">—</td>
+                                                    <td className="hidden lg:table-cell px-2 sm:px-4 lg:px-6 py-1.5 text-xs text-gray-300">—</td>
+                                                    <td className="px-2 sm:px-4 lg:px-6 py-1.5 text-xs text-gray-300">—</td>
+                                                    <td className="px-2 sm:px-4 lg:px-6 py-1.5 text-xs text-gray-300">—</td>
+                                                    <td className="px-2 sm:px-4 lg:px-6 py-1.5">
                                                         {mAttending ? (
-                                                            <span className="px-2 inline-flex text-xs leading-5 font-medium rounded-full bg-gray-100 text-gray-500">Attending</span>
+                                                            <span className="inline-block px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-500">Attending</span>
                                                         ) : (
                                                             <span className="text-xs text-gray-300">—</span>
                                                         )}
                                                     </td>
-                                                    <td className="hidden md:table-cell px-3 sm:px-6 py-1.5 text-xs text-gray-400">
+                                                    <td className="hidden xl:table-cell px-2 sm:px-4 lg:px-6 py-1.5 text-xs text-gray-400 truncate" title={flags || ''}>
                                                         {flags || '—'}
                                                     </td>
-                                                    <td className="hidden xl:table-cell px-3 sm:px-6 py-1.5 text-xs text-gray-300">—</td>
-                                                    <td className="hidden lg:table-cell px-3 sm:px-6 py-1.5 text-xs text-gray-300">—</td>
-                                                    <td className="px-3 sm:px-6 py-1.5 text-xs text-gray-300">—</td>
-                                                    <td className="sticky right-0 z-10 bg-inherit px-3 sm:px-6 py-1.5" />
+                                                    <td className="hidden xl:table-cell px-2 sm:px-4 lg:px-6 py-1.5 text-xs text-gray-300">—</td>
+                                                    <td className="hidden xl:table-cell px-2 sm:px-4 lg:px-6 py-1.5 text-xs text-gray-300">—</td>
+                                                    <td className="px-2 sm:px-4 lg:px-6 py-1.5" />
                                                 </tr>
                                             );
                                         })}
