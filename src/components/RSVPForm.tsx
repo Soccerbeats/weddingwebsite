@@ -24,7 +24,7 @@ interface MemberCard {
     other_text: string;
 }
 
-function buildCards(primaryName: string, partyMembers: PartyMember[], existingDietary: any[], isReturning: boolean): MemberCard[] {
+function buildCards(primaryName: string, partyMembers: PartyMember[], existingDietary: any[]): MemberCard[] {
     const totalSlots = 1 + partyMembers.length;
     return Array.from({ length: totalSlots }, (_, i) => {
         const isFirst = i === 0;
@@ -37,11 +37,11 @@ function buildCards(primaryName: string, partyMembers: PartyMember[], existingDi
         return {
             name: resolvedName,
             nameEditable: !isFirst && !knownName && !existing?.name,
-            // Primary guest is covered by the "Will you be attending?" answer above.
-            // Members with a saved dietary entry were attending last time; on a returning
-            // RSVP the rest were declined, but a first-time RSVP starts unanswered so the
-            // guest has to make an explicit choice for each person.
-            attendance: isFirst ? 'yes' : (existing ? 'yes' : (isReturning ? 'no' : null)),
+            // Never pre-filled: every member starts unanswered so the person RSVPing has
+            // to tick Attending or Not attending themselves, even when editing an existing
+            // RSVP. Saved dietary choices are still restored once they tick Attending.
+            // (The primary guest is covered by the "Will you be attending?" answer above.)
+            attendance: isFirst ? 'yes' : null,
             vegetarian: existing?.vegetarian ?? false,
             vegan: existing?.vegan ?? false,
             gluten_free: existing?.gluten_free ?? false,
@@ -128,7 +128,7 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
                     ? data.existingRsvp.dietaryRestrictions
                     : [];
 
-                setCards(buildCards(data.guest.name, data.guest.party_members || [], existingDietary, !!data.existingRsvp));
+                setCards(buildCards(data.guest.name, data.guest.party_members || [], existingDietary));
 
                 setFormData({
                     guestName: data.guest.name,
