@@ -1005,14 +1005,14 @@ export default function RSVPDashboard() {
                                                 className="rounded border-gray-300 text-accent focus:ring-accent"
                                             />
                                         </th>
-                                        <th className="min-w-[64px] px-2 sm:px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                                        <th className="hidden xl:table-cell w-[15%] px-2 sm:px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contact</th>
-                                        <th className="hidden lg:table-cell w-[12%] px-2 sm:px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Relation</th>
+                                        <th className="w-auto sm:w-[200px] lg:w-[248px] min-w-[72px] px-2 sm:px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                                        <th className="hidden xl:table-cell px-2 sm:px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contact</th>
+                                        <th className="hidden lg:table-cell px-2 sm:px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Relation</th>
                                         <th className="w-10 sm:w-16 px-2 sm:px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Party</th>
                                         <th className="w-14 sm:w-24 px-2 sm:px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Invited</th>
                                         <th className="w-20 sm:w-32 px-2 sm:px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">RSVP</th>
-                                        <th className="hidden xl:table-cell w-[15%] px-2 sm:px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Notes</th>
-                                        <th className="hidden xl:table-cell w-[16%] px-2 sm:px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Address</th>
+                                        <th className="hidden xl:table-cell px-2 sm:px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Notes</th>
+                                        <th className="hidden xl:table-cell px-2 sm:px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Address</th>
                                         <th className="hidden xl:table-cell w-20 px-2 sm:px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Donated</th>
                                         <th className="w-[92px] sm:w-[150px] px-2 sm:px-4 lg:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
                                     </tr>
