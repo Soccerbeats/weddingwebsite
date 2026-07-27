@@ -45,6 +45,7 @@ interface Guest {
     party_members?: PartyMember[];
     plus_one_name?: string | null;
     address?: string;
+    flag?: string | null;
     created_at: string;
 }
 
@@ -61,7 +62,7 @@ interface Donation {
 }
 
 type Tab = 'rsvps' | 'guestlist' | 'donations';
-type GuestFilter = 'all' | 'no_response' | 'attending' | 'declined' | 'likely_not_coming' | 'invited' | 'not_invited' | 'bride' | 'groom';
+type GuestFilter = 'all' | 'no_response' | 'attending' | 'declined' | 'likely_not_coming' | 'invited' | 'not_invited' | 'bride' | 'groom' | 'noted' | 'issue' | 'need';
 
 export default function RSVPDashboard() {
     const [activeTab, setActiveTab] = useState<Tab>('rsvps');
@@ -108,6 +109,7 @@ export default function RSVPDashboard() {
         party_members: [] as PartyMember[],
         rsvp_status: '',
         address: '',
+        flag: '',
     });
 
     useEffect(() => {
@@ -349,6 +351,7 @@ export default function RSVPDashboard() {
                     party_members: [],
                     rsvp_status: '',
                     address: '',
+                    flag: '',
                 });
                 fetchGuests();
             }
@@ -393,6 +396,7 @@ export default function RSVPDashboard() {
             party_members: slots,
             rsvp_status: guest.rsvp_status || '',
             address: guest.address || '',
+            flag: guest.flag || '',
         });
     };
 
@@ -620,6 +624,9 @@ export default function RSVPDashboard() {
             case 'not_invited': return !g.invited;
             case 'bride': return g.side === 'bride';
             case 'groom': return g.side === 'groom';
+            case 'noted': return !!(g.notes && g.notes.trim());
+            case 'issue': return g.flag === 'issue';
+            case 'need': return g.flag === 'need';
             default: return true;
         }
     });
@@ -927,6 +934,7 @@ export default function RSVPDashboard() {
                                         party_members: [],
                                         rsvp_status: '',
                                         address: '',
+                                        flag: '',
                                     });
                                 }}
                                 className="bg-accent text-white px-4 py-2 rounded-xl hover:bg-accent/90 transition-all duration-300 shadow-md hover:shadow-lg"
@@ -956,6 +964,9 @@ export default function RSVPDashboard() {
                                 { key: 'not_invited', label: 'Not Invited', color: 'gray' },
                                 { key: 'bride', label: `${config?.brideName || 'Bride'}'s Side`, color: 'pink' },
                                 { key: 'groom', label: `${config?.groomName || 'Groom'}'s Side`, color: 'blue' },
+                                { key: 'noted', label: '📝 Noted', color: 'indigo' },
+                                { key: 'issue', label: '⚠️ Issue', color: 'red' },
+                                { key: 'need', label: '📌 Need', color: 'amber' },
                             ] as { key: GuestFilter; label: string; color: string }[]).map(f => (
                                 <button
                                     key={f.key}
@@ -1034,6 +1045,19 @@ export default function RSVPDashboard() {
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className={`text-sm font-semibold ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-900'}`}>{guest.guest_name}</div>
+                                                {(guest.flag || (guest.notes && guest.notes.trim())) && (
+                                                    <div className="flex flex-wrap items-center gap-1 mt-1">
+                                                        {guest.flag === 'issue' && (
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-100 text-red-700">⚠️ Issue</span>
+                                                        )}
+                                                        {guest.flag === 'need' && (
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-700">📌 Need</span>
+                                                        )}
+                                                        {guest.notes && guest.notes.trim() && (
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-100 text-indigo-700" title={guest.notes}>📝 Note</span>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className={`text-sm ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-500'}`}>{guest.email || '-'}</div>
@@ -1377,78 +1401,82 @@ export default function RSVPDashboard() {
 
             {/* Add/Edit Guest Modal */}
             {(isAddingGuest || editingGuest) && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-                    <div className="bg-white rounded-2xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto shadow-xl">
-                        <h3 className="text-lg font-medium text-gray-900 mb-4">
-                            {editingGuest ? 'Edit Guest' : 'Add Guest'}
-                        </h3>
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-3xl max-w-3xl w-full max-h-[92vh] overflow-y-auto shadow-2xl">
+                        {/* Header */}
+                        <div className="px-6 sm:px-8 pt-7 pb-5 border-b border-gray-100 sticky top-0 bg-white/95 backdrop-blur z-10 rounded-t-3xl">
+                            <h3 className="text-2xl font-bold text-gray-900">
+                                {editingGuest ? 'Edit Guest' : 'Add Guest'}
+                            </h3>
+                            <p className="text-sm text-gray-400 mt-1">
+                                {editingGuest
+                                    ? `Update details for ${guestForm.guest_name || 'this guest'}.`
+                                    : 'Add a new guest to your list.'}
+                            </p>
+                        </div>
 
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Guest Name *
-                                </label>
-                                <input
-                                    type="text"
-                                    value={guestForm.guest_name}
-                                    onChange={(e) => setGuestForm({ ...guestForm, guest_name: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                                    required
-                                />
-                            </div>
-
-                            {/* Party member name slots — party_size - 1 inputs */}
-                            {Array.from({ length: Math.max(0, guestForm.party_size - 1) }, (_, i) => (
-                                <div key={i}>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Guest {i + 2} Name <span className="text-gray-400 font-normal">(leave blank if unknown)</span>
+                        <div className="px-6 sm:px-8 py-6 space-y-6">
+                            {/* Guest + party names */}
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                                        Guest Name <span className="text-accent">*</span>
                                     </label>
                                     <input
                                         type="text"
-                                        value={guestForm.party_members[i]?.name ?? ''}
-                                        onChange={(e) => {
-                                            const updated = [...guestForm.party_members];
-                                            while (updated.length <= i) updated.push({ name: null });
-                                            updated[i] = { name: e.target.value || null };
-                                            setGuestForm({ ...guestForm, party_members: updated });
-                                        }}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                                        placeholder="Optional"
+                                        value={guestForm.guest_name}
+                                        onChange={(e) => setGuestForm({ ...guestForm, guest_name: e.target.value })}
+                                        className="w-full px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-gray-900 placeholder-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
+                                        placeholder="First Last"
+                                        required
                                     />
                                 </div>
-                            ))}
 
-                            <div className="grid grid-cols-2 gap-4">
+                                {Array.from({ length: Math.max(0, guestForm.party_size - 1) }, (_, i) => (
+                                    <div key={i}>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                                            Guest {i + 2} Name <span className="text-gray-400 font-normal">(leave blank if unknown)</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={guestForm.party_members[i]?.name ?? ''}
+                                            onChange={(e) => {
+                                                const updated = [...guestForm.party_members];
+                                                while (updated.length <= i) updated.push({ name: null });
+                                                updated[i] = { name: e.target.value || null };
+                                                setGuestForm({ ...guestForm, party_members: updated });
+                                            }}
+                                            className="w-full px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-gray-900 placeholder-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
+                                            placeholder="Optional"
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Contact + details */}
+                            <div className="grid sm:grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Email
-                                    </label>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Email</label>
                                     <input
                                         type="email"
                                         value={guestForm.email}
                                         onChange={(e) => setGuestForm({ ...guestForm, email: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                                        className="w-full px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-gray-900 placeholder-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
+                                        placeholder="name@example.com"
                                     />
                                 </div>
-
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Phone
-                                    </label>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Phone</label>
                                     <input
                                         type="tel"
                                         value={guestForm.phone}
                                         onChange={(e) => setGuestForm({ ...guestForm, phone: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                                        className="w-full px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-gray-900 placeholder-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
+                                        placeholder="(555) 555-5555"
                                     />
                                 </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Party Size
-                                    </label>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Party Size</label>
                                     <input
                                         type="number"
                                         min="1"
@@ -1460,18 +1488,15 @@ export default function RSVPDashboard() {
                                             }));
                                             setGuestForm({ ...guestForm, party_size: size, party_members: slots });
                                         }}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                                        className="w-full px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
                                     />
                                 </div>
-
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Side
-                                    </label>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Side</label>
                                     <select
                                         value={guestForm.side}
                                         onChange={(e) => setGuestForm({ ...guestForm, side: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                                        className="w-full px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
                                     >
                                         <option value="">Not Specified</option>
                                         <option value="bride">{config?.brideName || "Bride"}'s Side</option>
@@ -1480,77 +1505,97 @@ export default function RSVPDashboard() {
                                 </div>
                             </div>
 
+                            {/* Flag */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Notes
-                                </label>
+                                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Flag</label>
+                                <div className="flex flex-wrap gap-2">
+                                    {([
+                                        { v: '', l: 'None', on: 'bg-gray-800 text-white', off: 'bg-gray-100 text-gray-600 hover:bg-gray-200' },
+                                        { v: 'issue', l: '⚠️ Issue', on: 'bg-red-500 text-white', off: 'bg-red-50 text-red-600 hover:bg-red-100' },
+                                        { v: 'need', l: '📌 Need', on: 'bg-amber-500 text-white', off: 'bg-amber-50 text-amber-700 hover:bg-amber-100' },
+                                    ] as { v: string; l: string; on: string; off: string }[]).map(opt => (
+                                        <button
+                                            key={opt.v || 'none'}
+                                            type="button"
+                                            onClick={() => setGuestForm({ ...guestForm, flag: opt.v })}
+                                            className={`px-4 py-2 rounded-full text-sm font-semibold transition-all shadow-sm ${(guestForm.flag || '') === opt.v ? opt.on + ' shadow-md' : opt.off}`}
+                                        >
+                                            {opt.l}
+                                        </button>
+                                    ))}
+                                </div>
+                                <p className="text-xs text-gray-400 mt-1.5">Adds a colored pill to the guest&apos;s row so you can spot it at a glance.</p>
+                            </div>
+
+                            {/* Notes */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Notes</label>
                                 <textarea
                                     value={guestForm.notes}
                                     onChange={(e) => setGuestForm({ ...guestForm, notes: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-gray-900 placeholder-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all resize-y"
                                     rows={3}
+                                    placeholder="Anything worth remembering about this guest…"
                                 />
+                                <p className="text-xs text-gray-400 mt-1.5">Guests with a note get a 📝 pill and can be found via the &quot;Noted&quot; filter.</p>
                             </div>
 
+                            {/* Address */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Address
-                                </label>
+                                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Address</label>
                                 <textarea
                                     value={guestForm.address}
                                     onChange={(e) => setGuestForm({ ...guestForm, address: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-gray-900 placeholder-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all resize-y"
                                     rows={2}
                                     placeholder="123 Main St, City, ST 12345"
                                 />
                             </div>
 
-                            <div className="flex items-center">
+                            {/* Invited toggle */}
+                            <label className="flex items-center gap-3 cursor-pointer bg-gray-50 rounded-2xl px-4 py-3 border border-gray-200 hover:bg-gray-100 transition-colors">
                                 <input
                                     type="checkbox"
                                     checked={guestForm.invited}
                                     onChange={(e) => setGuestForm({ ...guestForm, invited: e.target.checked })}
-                                    className="h-4 w-4 text-accent border-gray-300 rounded"
+                                    className="h-5 w-5 text-accent border-gray-300 rounded-md focus:ring-accent"
                                 />
-                                <label className="ml-2 block text-sm text-gray-700">
-                                    Invited
-                                </label>
-                            </div>
+                                <span className="text-sm font-medium text-gray-700">Invited</span>
+                            </label>
 
                             {editingGuest && (
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        RSVP Status (Admin)
-                                    </label>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">RSVP Status (Admin)</label>
                                     <select
                                         value={guestForm.rsvp_status}
                                         onChange={(e) => setGuestForm({ ...guestForm, rsvp_status: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                                        className="w-full px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
                                     >
                                         <option value="">No Response</option>
                                         <option value="attending">Attending</option>
                                         <option value="declined">Declined</option>
                                         <option value="likely_not_coming">Likely Not Coming</option>
                                     </select>
-                                    <p className="text-xs text-gray-400 mt-1">Admin-only. &quot;Likely Not Coming&quot; excludes this guest from expected headcount and seating chart.</p>
+                                    <p className="text-xs text-gray-400 mt-1.5">Admin-only. &quot;Likely Not Coming&quot; excludes this guest from expected headcount and seating chart.</p>
                                 </div>
                             )}
                         </div>
 
-                        <div className="flex justify-end gap-3 mt-6">
+                        {/* Footer */}
+                        <div className="px-6 sm:px-8 py-5 border-t border-gray-100 flex justify-end gap-3 sticky bottom-0 bg-white/95 backdrop-blur rounded-b-3xl">
                             <button
                                 onClick={() => {
                                     setIsAddingGuest(false);
                                     setEditingGuest(null);
                                 }}
-                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-all duration-300 shadow-md hover:shadow-lg"
+                                className="px-6 py-2.5 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-full hover:bg-gray-50 transition-all duration-300 shadow-sm hover:shadow-md"
                             >
                                 Cancel
                             </button>
                             <button
                                 onClick={handleSaveGuest}
                                 disabled={!guestForm.guest_name}
-                                className="px-4 py-2 text-sm font-medium text-white bg-accent rounded-xl hover:bg-accent/90 disabled:opacity-50 transition-all duration-300 shadow-md hover:shadow-lg"
+                                className="px-7 py-2.5 text-sm font-semibold text-white bg-accent rounded-full hover:bg-accent/90 disabled:opacity-50 transition-all duration-300 shadow-md hover:shadow-lg"
                             >
                                 {editingGuest ? 'Update' : 'Add'} Guest
                             </button>
