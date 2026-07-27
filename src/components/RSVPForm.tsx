@@ -78,6 +78,8 @@ function renderRoomBlockMessage(message: string, names: string, hotel: string, b
 export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBlockUrl = '' }: RSVPFormProps = {}) {
     const [step, setStep] = useState<'verification' | 'form'>('verification');
     const [verifiedGuest, setVerifiedGuest] = useState<any>(null);
+    // Who typed their name in — may be a plus-one/party member rather than the primary guest.
+    const [matched, setMatched] = useState<{ name: string; isPrimary: boolean } | null>(null);
     const [existingRsvp, setExistingRsvp] = useState<any>(null);
     const [guestNameInput, setGuestNameInput] = useState('');
     const [verificationError, setVerificationError] = useState('');
@@ -119,6 +121,7 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
 
             if (data.verified) {
                 setVerifiedGuest(data.guest);
+                setMatched(data.matched || null);
                 setExistingRsvp(data.existingRsvp);
 
                 const existingDietary = Array.isArray(data.existingRsvp?.dietaryRestrictions)
@@ -332,7 +335,10 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
             <div className="bg-white p-8 rounded-3xl shadow-xl border-t-4 border-accent">
                 <div className="text-center mb-6">
                     <h2 className="text-2xl font-serif text-gray-900 mb-2">Welcome!</h2>
-                    <p className="text-gray-600">Please enter your name as it appears on your invitation to begin.</p>
+                    <p className="text-gray-600">
+                        Please enter your name to begin. Anyone in your party can use their own
+                        name — you&apos;ll be able to RSVP for everyone together.
+                    </p>
                 </div>
 
                 <form onSubmit={handleVerification} className="space-y-6">
@@ -390,8 +396,13 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
                     </svg>
                     <div>
                         <p className={`text-sm font-medium ${existingRsvp ? 'text-blue-800' : 'text-green-800'}`}>
-                            Welcome{existingRsvp ? ' back' : ''}, {verifiedGuest?.name}{partyNames ? ` & party` : ''}!
+                            Welcome{existingRsvp ? ' back' : ''}, {matched?.name || verifiedGuest?.name}{partyNames ? ` & party` : ''}!
                         </p>
+                        {matched && !matched.isPrimary && (
+                            <p className={`text-sm mt-1 ${existingRsvp ? 'text-blue-700' : 'text-green-700'}`}>
+                                You&apos;re part of {verifiedGuest?.name}&apos;s party — this RSVP covers everyone below.
+                            </p>
+                        )}
                         <p className={`text-sm mt-1 ${existingRsvp ? 'text-blue-700' : 'text-green-700'}`}>
                             {existingRsvp ? 'You can update your RSVP below.' : 'Please complete your RSVP below.'}
                         </p>
