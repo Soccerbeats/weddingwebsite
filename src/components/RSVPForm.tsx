@@ -7,10 +7,15 @@ interface PartyMember {
     name: string | null;
 }
 
+// Attendance is a tri-state on purpose: null means "not answered yet", which is
+// distinct from an explicit 'no'. A plain boolean silently counted anyone the guest
+// forgot to tick as declined, so parties got under-counted with no warning.
+type Attendance = 'yes' | 'no' | null;
+
 interface MemberCard {
     name: string;           // resolved display name (may be empty string for unknowns the guest must fill in)
     nameEditable: boolean;  // true when admin left this slot unnamed
-    attending: boolean;
+    attendance: Attendance;
     vegetarian: boolean;
     vegan: boolean;
     gluten_free: boolean;
@@ -19,7 +24,7 @@ interface MemberCard {
     other_text: string;
 }
 
-function buildCards(primaryName: string, partyMembers: PartyMember[], existingDietary: any[]): MemberCard[] {
+function buildCards(primaryName: string, partyMembers: PartyMember[], existingDietary: any[], isReturning: boolean): MemberCard[] {
     const totalSlots = 1 + partyMembers.length;
     return Array.from({ length: totalSlots }, (_, i) => {
         const isFirst = i === 0;
@@ -32,7 +37,11 @@ function buildCards(primaryName: string, partyMembers: PartyMember[], existingDi
         return {
             name: resolvedName,
             nameEditable: !isFirst && !knownName && !existing?.name,
-            attending: isFirst ? true : (existing ? true : false),
+            // Primary guest is covered by the "Will you be attending?" answer above.
+            // Members with a saved dietary entry were attending last time; on a returning
+            // RSVP the rest were declined, but a first-time RSVP starts unanswered so the
+            // guest has to make an explicit choice for each person.
+            attendance: isFirst ? 'yes' : (existing ? 'yes' : (isReturning ? 'no' : null)),
             vegetarian: existing?.vegetarian ?? false,
             vegan: existing?.vegan ?? false,
             gluten_free: existing?.gluten_free ?? false,
@@ -116,7 +125,7 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
                     ? data.existingRsvp.dietaryRestrictions
                     : [];
 
-                setCards(buildCards(data.guest.name, data.guest.party_members || [], existingDietary));
+                setCards(buildCards(data.guest.name, data.guest.party_members || [], existingDietary, !!data.existingRsvp));
 
                 setFormData({
                     guestName: data.guest.name,
@@ -153,13 +162,21 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
         // Validate: unnamed attending guests must have a name filled in
         // Also validate: "Other" dietary requires text
         if (formData.attending === 'yes') {
+            // Every guest must be explicitly marked attending or not attending first.
+            const unanswered = cards.findIndex(c => c.attendance === null);
+            if (unanswered !== -1) {
+                const who = cards[unanswered].name.trim() || `Guest ${unanswered + 1}`;
+                setErrorMessage(`Please mark ${who} as attending or not attending before submitting.`);
+                setStatus('error');
+                return;
+            }
             for (let i = 0; i < cards.length; i++) {
-                if (cards[i].attending && cards[i].nameEditable && !cards[i].name.trim()) {
+                if (cards[i].attendance === 'yes' && cards[i].nameEditable && !cards[i].name.trim()) {
                     setErrorMessage(`Please enter a name for Guest ${i + 1} before submitting.`);
                     setStatus('error');
                     return;
                 }
-                if (cards[i].attending && cards[i].other && !cards[i].other_text.trim()) {
+                if (cards[i].attendance === 'yes' && cards[i].other && !cards[i].other_text.trim()) {
                     setErrorMessage(`Please describe the dietary restriction for ${cards[i].name || `Guest ${i + 1}`}.`);
                     setStatus('error');
                     return;
@@ -170,7 +187,7 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
         setStatus('submitting');
         setErrorMessage('');
 
-        const attendingCards = formData.attending === 'yes' ? cards.filter(c => c.attending) : [];
+        const attendingCards = formData.attending === 'yes' ? cards.filter(c => c.attendance === 'yes') : [];
         const guestCount = attendingCards.length;
         // Send resolved names for all additional members back so guest_list.party_members stays up to date
         const resolvedMembers = cards.slice(1).map(c => ({ name: c.name || null }));
@@ -223,7 +240,7 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
         const roomMessage = (config?.roomBlockMessage?.trim()) || DEFAULT_ROOM_BLOCK_MESSAGE;
         // Receipt summary of who's attending
         const isAttending = formData.attending === 'yes';
-        const attendees = isAttending ? cards.filter(c => c.attending && c.name?.trim()) : [];
+        const attendees = isAttending ? cards.filter(c => c.attendance === 'yes' && c.name?.trim()) : [];
         const numberWords = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
         const partyWord = numberWords[attendees.length] ?? String(attendees.length);
         const partyLabel = `Party of ${partyWord}`;
@@ -357,6 +374,12 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
 
     const partyNames = verifiedGuest?.party_members?.map((m: PartyMember, i: number) => m.name || `Guest ${i + 2}`).join(', ');
 
+    // Guests still needing an explicit attending / not-attending choice. Only applies
+    // when the party is coming at all — declining covers everyone in one go.
+    const unansweredCount = formData.attending === 'yes'
+        ? cards.filter(c => c.attendance === null).length
+        : 0;
+
     return (
         <form onSubmit={handleSubmit} className="space-y-6 bg-white p-8 rounded-3xl shadow-xl border-t-4 border-accent">
             {/* Welcome banner */}
@@ -372,6 +395,12 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
                         <p className={`text-sm mt-1 ${existingRsvp ? 'text-blue-700' : 'text-green-700'}`}>
                             {existingRsvp ? 'You can update your RSVP below.' : 'Please complete your RSVP below.'}
                         </p>
+                        {formData.attending === 'yes' && cards.length > 1 && (
+                            <p className={`text-sm mt-2 font-semibold ${existingRsvp ? 'text-blue-800' : 'text-green-800'}`}>
+                                Please mark all guests as attending or not attending — you&apos;ll need to
+                                choose one for every person before you can send your RSVP.
+                            </p>
+                        )}
                     </div>
                 </div>
             </div>
@@ -418,9 +447,11 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
                                 <div
                                     key={i}
                                     className={`border rounded-2xl p-4 transition-colors ${
-                                        card.attending
+                                        card.attendance === 'yes'
                                             ? 'bg-white border-gray-200'
-                                            : 'bg-gray-50 border-gray-100 opacity-60'
+                                            : card.attendance === 'no'
+                                                ? 'bg-gray-50 border-gray-100 opacity-60'
+                                                : 'bg-amber-50 border-amber-300'
                                     }`}
                                 >
                                     {/* Card header: name + attending toggle */}
@@ -443,24 +474,37 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
                                                 <p className="text-sm font-semibold text-gray-800">{card.name}</p>
                                             )}
                                         </div>
-                                        {/* Attending toggle — primary guest is locked on */}
+                                        {/* Attending / Not attending — mutually exclusive, and the
+                                            primary guest is locked on by the answer above. Clicking a
+                                            ticked box clears it back to unanswered. */}
                                         {isFirst ? (
                                             <span className="text-xs font-medium text-green-700 bg-green-100 px-2 py-1 rounded-full whitespace-nowrap">Attending</span>
                                         ) : (
-                                            <label className="flex items-center gap-2 cursor-pointer whitespace-nowrap">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={card.attending}
-                                                    onChange={(e) => updateCard(i, { attending: e.target.checked })}
-                                                    className="h-4 w-4 rounded border-gray-300 text-accent focus:ring-accent"
-                                                />
-                                                <span className="text-sm text-gray-600">Attending</span>
-                                            </label>
+                                            <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-4 whitespace-nowrap">
+                                                <label className="flex items-center gap-2 cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={card.attendance === 'yes'}
+                                                        onChange={() => updateCard(i, { attendance: card.attendance === 'yes' ? null : 'yes' })}
+                                                        className="h-4 w-4 rounded border-gray-300 text-accent focus:ring-accent"
+                                                    />
+                                                    <span className="text-sm text-gray-600">Attending</span>
+                                                </label>
+                                                <label className="flex items-center gap-2 cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={card.attendance === 'no'}
+                                                        onChange={() => updateCard(i, { attendance: card.attendance === 'no' ? null : 'no' })}
+                                                        className="h-4 w-4 rounded border-gray-300 text-accent focus:ring-accent"
+                                                    />
+                                                    <span className="text-sm text-gray-600">Not attending</span>
+                                                </label>
+                                            </div>
                                         )}
                                     </div>
 
                                     {/* Dietary checkboxes — only when attending */}
-                                    {card.attending && (
+                                    {card.attendance === 'yes' && (
                                         <div>
                                             <p className="text-xs text-gray-500 mb-2">Dietary restrictions</p>
                                             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -518,6 +562,14 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
                 </div>
             )}
 
+            {unansweredCount > 0 && (
+                <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-2xl p-3">
+                    {unansweredCount === 1
+                        ? '1 guest still needs to be marked attending or not attending.'
+                        : `${unansweredCount} guests still need to be marked attending or not attending.`}
+                </p>
+            )}
+
             <div className="flex gap-4">
                 <button
                     type="button"
@@ -528,7 +580,7 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
                 </button>
                 <button
                     type="submit"
-                    disabled={status === 'submitting'}
+                    disabled={status === 'submitting' || unansweredCount > 0}
                     className="flex-1 flex justify-center py-3 px-6 border border-transparent rounded-full shadow-md text-base font-medium text-white bg-accent hover:bg-accent-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 transition-all transform hover:-translate-y-0.5"
                 >
                     {status === 'submitting'
