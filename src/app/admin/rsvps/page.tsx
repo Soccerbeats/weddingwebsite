@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import type { FundItem } from '@/lib/config';
+import AddressReconcileModal from '@/components/admin/AddressReconcileModal';
 
 interface DietaryEntry {
     name: string;
@@ -92,6 +93,7 @@ export default function RSVPDashboard() {
     const [rsvpSubtitle, setRsvpSubtitle] = useState('');
     const [subtitleSaving, setSubtitleSaving] = useState(false);
     const [showImportModal, setShowImportModal] = useState(false);
+    const [showReconcileModal, setShowReconcileModal] = useState(false);
     const [csvFile, setCsvFile] = useState<File | null>(null);
     const [importing, setImporting] = useState(false);
     const [importResults, setImportResults] = useState<{ added: number; updated: number; failed: number; errors: string[] } | null>(null);
@@ -105,6 +107,7 @@ export default function RSVPDashboard() {
         invited: false,
         party_members: [] as PartyMember[],
         rsvp_status: '',
+        address: '',
     });
 
     useEffect(() => {
@@ -345,6 +348,7 @@ export default function RSVPDashboard() {
                     invited: false,
                     party_members: [],
                     rsvp_status: '',
+                    address: '',
                 });
                 fetchGuests();
             }
@@ -388,6 +392,7 @@ export default function RSVPDashboard() {
             invited: guest.invited,
             party_members: slots,
             rsvp_status: guest.rsvp_status || '',
+            address: guest.address || '',
         });
     };
 
@@ -900,6 +905,15 @@ export default function RSVPDashboard() {
                                 Import CSV
                             </button>
                             <button
+                                onClick={() => setShowReconcileModal(true)}
+                                className="bg-amber-500 text-white px-4 py-2 rounded-xl hover:bg-amber-600 flex items-center gap-2 transition-all duration-300 shadow-md hover:shadow-lg"
+                            >
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                                </svg>
+                                Compare Addresses
+                            </button>
+                            <button
                                 onClick={() => {
                                     setIsAddingGuest(true);
                                     setGuestForm({
@@ -912,6 +926,7 @@ export default function RSVPDashboard() {
                                         invited: false,
                                         party_members: [],
                                         rsvp_status: '',
+                                        address: '',
                                     });
                                 }}
                                 className="bg-accent text-white px-4 py-2 rounded-xl hover:bg-accent/90 transition-all duration-300 shadow-md hover:shadow-lg"
@@ -1477,6 +1492,19 @@ export default function RSVPDashboard() {
                                 />
                             </div>
 
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Address
+                                </label>
+                                <textarea
+                                    value={guestForm.address}
+                                    onChange={(e) => setGuestForm({ ...guestForm, address: e.target.value })}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                                    rows={2}
+                                    placeholder="123 Main St, City, ST 12345"
+                                />
+                            </div>
+
                             <div className="flex items-center">
                                 <input
                                     type="checkbox"
@@ -1529,6 +1557,15 @@ export default function RSVPDashboard() {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Address Reconcile Modal */}
+            {showReconcileModal && (
+                <AddressReconcileModal
+                    guests={guests}
+                    onClose={() => setShowReconcileModal(false)}
+                    onApplied={fetchGuests}
+                />
             )}
 
             {/* CSV Import Modal */}

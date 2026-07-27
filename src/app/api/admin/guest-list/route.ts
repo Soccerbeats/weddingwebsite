@@ -72,6 +72,31 @@ export async function PUT(request: Request) {
   }
 }
 
+// PATCH - update only the address for a guest (used by the CSV address reconcile tool)
+export async function PATCH(request: Request) {
+  try {
+    const { id, address } = await request.json();
+
+    if (!id) {
+      return NextResponse.json({ error: 'Missing id' }, { status: 400 });
+    }
+
+    const result = await pool.query(
+      `UPDATE guest_list SET address = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+      [address ?? '', id]
+    );
+
+    if (result.rowCount === 0) {
+      return NextResponse.json({ error: 'Guest not found' }, { status: 404 });
+    }
+
+    return NextResponse.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating guest address:', error);
+    return NextResponse.json({ error: 'Failed to update address' }, { status: 500 });
+  }
+}
+
 export async function DELETE(request: Request) {
   try {
     const { id } = await request.json();
