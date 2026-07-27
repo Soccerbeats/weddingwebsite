@@ -97,6 +97,9 @@ export default function RSVPDashboard() {
     const [editingGuest, setEditingGuest] = useState<Guest | null>(null);
     const [isAddingGuest, setIsAddingGuest] = useState(false);
     const [selectedGuests, setSelectedGuests] = useState<number[]>([]);
+    // Feedback for the type-a-name-then-Enter rapid check-off flow.
+    const guestSearchRef = useRef<HTMLInputElement | null>(null);
+    const [quickPick, setQuickPick] = useState<{ text: string; ok: boolean } | null>(null);
     const [config, setConfig] = useState<any>(null);
     const [rsvpSubtitle, setRsvpSubtitle] = useState('');
     const [subtitleSaving, setSubtitleSaving] = useState(false);
@@ -734,6 +737,30 @@ export default function RSVPDashboard() {
         return acc;
     }, {});
 
+    // Rapid check-off: type a name, hit Enter to tick the top match, box clears and
+    // keeps focus so the next name can be typed straight away. Enter is additive (never
+    // unticks) so re-entering the same name can't silently undo a tick.
+    const handleGuestSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        const query = guestSearch.trim();
+        if (!query) return;
+        const match = filteredGuests[0];
+        if (!match) {
+            // Keep the text so a typo can be corrected rather than retyped.
+            setQuickPick({ text: `No guest matches “${query}”`, ok: false });
+            return;
+        }
+        const already = selectedGuests.includes(match.id);
+        if (!already) setSelectedGuests(prev => [...prev, match.id]);
+        setQuickPick({
+            text: already ? `${match.guest_name} was already checked` : `Checked ${match.guest_name}`,
+            ok: true,
+        });
+        setGuestSearch('');
+        guestSearchRef.current?.focus();
+    };
+
     // Returns 'hidden' for a guest-table column the measurer has dropped, else ''.
     const H = (c: string) => (hiddenGuestCols.includes(c) ? 'hidden' : '');
 
@@ -1030,10 +1057,12 @@ export default function RSVPDashboard() {
                     {/* Filters & Search */}
                     <div className="mb-4 flex flex-col sm:flex-row gap-3">
                         <input
+                            ref={guestSearchRef}
                             type="text"
-                            placeholder="Search guests..."
+                            placeholder="Search guests… (Enter to check off)"
                             value={guestSearch}
-                            onChange={e => setGuestSearch(e.target.value)}
+                            onChange={e => { setGuestSearch(e.target.value); if (quickPick) setQuickPick(null); }}
+                            onKeyDown={handleGuestSearchKeyDown}
                             className="px-3 py-2 border border-gray-300 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 w-full sm:w-56"
                         />
                         <div className="flex flex-wrap gap-2">
@@ -1065,9 +1094,21 @@ export default function RSVPDashboard() {
                             ))}
                         </div>
                     </div>
-                    <p className="text-sm text-gray-500 mb-3">
-                        Showing {filteredGuests.length} of {guests.length} guests
-                    </p>
+                    <div className="mb-3 flex flex-wrap items-center gap-2">
+                        <p className="text-sm text-gray-500">
+                            Showing {filteredGuests.length} of {guests.length} guests
+                        </p>
+                        {quickPick && (
+                            <span
+                                aria-live="polite"
+                                className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${
+                                    quickPick.ok ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                                }`}
+                            >
+                                {quickPick.ok ? '✓' : '⚠️'} {quickPick.text}
+                            </span>
+                        )}
+                    </div>
 
                     {/* Guest List Table */}
                     <div className="bg-white shadow-lg border border-gray-200 rounded-2xl overflow-hidden">
