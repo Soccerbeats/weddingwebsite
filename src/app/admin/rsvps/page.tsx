@@ -6,7 +6,7 @@ import AddressReconcileModal from '@/components/admin/AddressReconcileModal';
 
 // Guest-table columns to drop as horizontal space runs out, in order (first dropped → last).
 // Name + Party/Invited/RSVP/Actions are never in this list, so they always stay.
-const GUEST_COL_HIDE_ORDER = ['select', 'contact', 'notes', 'address', 'donated', 'relation'];
+const GUEST_COL_HIDE_ORDER = ['contact', 'notes', 'address', 'donated', 'relation', 'select'];
 // Use layout effect on the client (avoids a flash) but fall back to useEffect during SSR.
 const useIsoEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
@@ -145,10 +145,14 @@ export default function RSVPDashboard() {
         let raf = 0;
         let lastW = -1;
 
+        // Border-box width, so a scrollbar appearing/disappearing can't feed back into
+        // another hide/show cycle (clientWidth would shrink and cause oscillation).
+        const availWidth = () => wrap.getBoundingClientRect().width;
+
         const measure = () => {
             const table = wrap.querySelector('table');
             if (!table) return;
-            const container = wrap.clientWidth;
+            const container = availWidth();
             // Measure natural column widths on an off-screen clone with every column shown.
             const clone = table.cloneNode(true) as HTMLTableElement;
             clone.querySelectorAll('[data-col]').forEach((el) => (el as HTMLElement).classList.remove('hidden'));
@@ -180,7 +184,7 @@ export default function RSVPDashboard() {
         const schedule = () => {
             cancelAnimationFrame(raf);
             raf = requestAnimationFrame(() => {
-                const w = wrap.clientWidth;
+                const w = availWidth();
                 if (w === lastW) return;
                 lastW = w;
                 measure();
@@ -189,11 +193,13 @@ export default function RSVPDashboard() {
 
         // Initial measure (force, ignoring the width guard).
         measure();
-        lastW = wrap.clientWidth;
+        lastW = availWidth();
         const ro = new ResizeObserver(schedule);
         ro.observe(wrap);
         return () => { cancelAnimationFrame(raf); ro.disconnect(); };
-    }, [guests, guestFilter, guestSearch]);
+        // activeTab matters: the table only exists on the guestlist tab, so without it
+        // the effect would early-return on mount (null ref) and never re-run on tab switch.
+    }, [activeTab, guests, guestFilter, guestSearch]);
 
     const handleSaveSubtitle = async () => {
         setSubtitleSaving(true);
@@ -1065,7 +1071,10 @@ export default function RSVPDashboard() {
 
                     {/* Guest List Table */}
                     <div className="bg-white shadow-lg border border-gray-200 rounded-2xl overflow-hidden">
-                        <div className="w-full" ref={guestTableWrapRef}>
+                        {/* overflow-x-auto is the last-resort floor: below ~640px the five
+                            mandatory columns physically cannot fit, and the rounded parent is
+                            overflow-hidden, so without this the Actions pills get clipped away. */}
+                        <div className="w-full overflow-x-auto" ref={guestTableWrapRef}>
                             <table className="w-full table-auto divide-y divide-gray-200">
                                 <thead className="bg-gray-50">
                                     <tr>
@@ -1077,7 +1086,7 @@ export default function RSVPDashboard() {
                                                 className="rounded border-gray-300 text-accent focus:ring-accent"
                                             />
                                         </th>
-                                        <th data-col="name" className="w-full min-w-[72px] px-2 sm:px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Name</th>
+                                        <th data-col="name" className="w-full max-w-0 min-w-[72px] px-2 sm:px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Name</th>
                                         <th data-col="contact" className={`${H('contact')} px-2 sm:px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap`}>Contact</th>
                                         <th data-col="relation" className={`${H('relation')} px-2 sm:px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap`}>Relation</th>
                                         <th data-col="party" className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Party</th>
@@ -1121,18 +1130,20 @@ export default function RSVPDashboard() {
                                                     className="rounded border-gray-300 text-accent focus:ring-accent"
                                                 />
                                             </td>
-                                            <td data-col="name" className="px-2 sm:px-4 lg:px-6 py-4 overflow-hidden">
+                                            <td data-col="name" className="w-full max-w-0 px-2 sm:px-4 lg:px-6 py-4 overflow-hidden">
                                                 <div className={`text-sm font-semibold truncate ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-900'}`} title={guest.guest_name}>{guest.guest_name}</div>
                                                 {(guest.flag || (guest.notes && guest.notes.trim())) && (
-                                                    <div className="flex flex-wrap items-center gap-1 mt-1">
+                                                    // nowrap + clip: when Name is squeezed these badges would otherwise
+                                                    // wrap one-per-line and balloon the row height.
+                                                    <div className="flex flex-nowrap items-center gap-1 mt-1 overflow-hidden">
                                                         {guest.flag === 'issue' && (
-                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-100 text-red-700">⚠️ Issue</span>
+                                                            <span className="inline-flex shrink-0 whitespace-nowrap items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-100 text-red-700">⚠️ Issue</span>
                                                         )}
                                                         {guest.flag === 'need' && (
-                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-700">📌 Need</span>
+                                                            <span className="inline-flex shrink-0 whitespace-nowrap items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-700">📌 Need</span>
                                                         )}
                                                         {guest.notes && guest.notes.trim() && (
-                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-100 text-indigo-700" title={guest.notes}>📝 Note</span>
+                                                            <span className="inline-flex shrink-0 whitespace-nowrap items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-100 text-indigo-700" title={guest.notes}>📝 Note</span>
                                                         )}
                                                     </div>
                                                 )}
@@ -1147,14 +1158,14 @@ export default function RSVPDashboard() {
                                             <td data-col="party" className={`px-2 sm:px-4 lg:px-6 py-4 text-sm ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-500'}`}>
                                                 {guest.party_size}
                                             </td>
-                                            <td data-col="invited" className="px-2 sm:px-4 lg:px-6 py-4">
+                                            <td data-col="invited" className="px-2 sm:px-4 lg:px-6 py-4 whitespace-nowrap">
                                                 <span className={`inline-block text-center px-2 py-0.5 text-xs font-semibold rounded-full ${
                                                     guest.invited ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
                                                 }`}>
                                                     {guest.invited ? 'Invited' : 'Not Invited'}
                                                 </span>
                                             </td>
-                                            <td data-col="rsvp" className="px-2 sm:px-4 lg:px-6 py-4">
+                                            <td data-col="rsvp" className="px-2 sm:px-4 lg:px-6 py-4 whitespace-nowrap">
                                                 {guest.rsvp_status === 'attending' ? (
                                                     <span className="inline-block text-center px-2 py-0.5 text-xs font-semibold rounded-full bg-green-100 text-green-800">Attending</span>
                                                 ) : guest.rsvp_status === 'declined' ? (
@@ -1175,7 +1186,7 @@ export default function RSVPDashboard() {
                                                 {donationTotalByGuestId[guest.id] ? `$${donationTotalByGuestId[guest.id].toLocaleString()}` : '-'}
                                             </td>
                                             <td data-col="actions" className="px-2 sm:px-4 lg:px-6 py-4 text-right text-sm font-medium">
-                                                <div className="flex flex-wrap items-center gap-1.5 justify-end">
+                                                <div className="flex flex-nowrap items-center gap-1.5 justify-end whitespace-nowrap">
                                                     <button
                                                         onClick={() => handleMarkLikelyNotComing(guest)}
                                                         title={isLikelyNotComing ? 'Clear likely not coming' : 'Mark as likely not coming'}
@@ -1206,7 +1217,7 @@ export default function RSVPDashboard() {
                                             return (
                                                 <tr key={`${guest.id}-m${mi}`} className="align-top bg-gray-50">
                                                     <td data-col="select" className={`${H('select')} px-2 sm:px-4 lg:px-6 py-1.5`} />
-                                                    <td data-col="name" className="px-2 sm:px-4 lg:px-6 py-1.5 border-l-2 border-gray-200 overflow-hidden">
+                                                    <td data-col="name" className="w-full max-w-0 px-2 sm:px-4 lg:px-6 py-1.5 border-l-2 border-gray-200 overflow-hidden">
                                                         <div className="flex items-center gap-1 min-w-0">
                                                             <span className="text-gray-300 text-xs shrink-0">└</span>
                                                             <span className="text-sm text-gray-500 italic truncate" title={member.name || `Unknown Guest ${mi + 2}`}>
