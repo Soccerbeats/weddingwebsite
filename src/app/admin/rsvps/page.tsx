@@ -46,6 +46,7 @@ interface Guest {
     plus_one_name?: string | null;
     address?: string;
     flag?: string | null;
+    relationship?: string;
     created_at: string;
 }
 
@@ -110,6 +111,7 @@ export default function RSVPDashboard() {
         rsvp_status: '',
         address: '',
         flag: '',
+        relationship: '',
     });
 
     useEffect(() => {
@@ -352,6 +354,7 @@ export default function RSVPDashboard() {
                     rsvp_status: '',
                     address: '',
                     flag: '',
+                    relationship: '',
                 });
                 fetchGuests();
             }
@@ -397,6 +400,7 @@ export default function RSVPDashboard() {
             rsvp_status: guest.rsvp_status || '',
             address: guest.address || '',
             flag: guest.flag || '',
+            relationship: guest.relationship || '',
         });
     };
 
@@ -935,6 +939,7 @@ export default function RSVPDashboard() {
                                         rsvp_status: '',
                                         address: '',
                                         flag: '',
+                                        relationship: '',
                                     });
                                 }}
                                 className="bg-accent text-white px-4 py-2 rounded-full hover:bg-accent/90 transition-all duration-300 shadow-md hover:shadow-lg"
@@ -1002,6 +1007,7 @@ export default function RSVPDashboard() {
                                         </th>
                                         <th className="sticky left-0 lg:static z-20 bg-gray-50 px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
                                         <th className="hidden lg:table-cell px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contact</th>
+                                        <th className="hidden md:table-cell px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Relation</th>
                                         <th className="hidden md:table-cell px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Party Size</th>
                                         <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">RSVP Status</th>
                                         <th className="hidden md:table-cell px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Notes</th>
@@ -1062,6 +1068,9 @@ export default function RSVPDashboard() {
                                             <td className="hidden lg:table-cell px-3 sm:px-6 py-4 whitespace-nowrap">
                                                 <div className={`text-sm ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-500'}`}>{guest.email || '-'}</div>
                                                 <div className={`text-sm ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-500'}`}>{guest.phone || '-'}</div>
+                                            </td>
+                                            <td className={`hidden md:table-cell px-3 sm:px-6 py-4 whitespace-nowrap text-sm ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-500'}`}>
+                                                {guest.relationship || '-'}
                                             </td>
                                             <td className={`hidden md:table-cell px-3 sm:px-6 py-4 whitespace-nowrap text-sm ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-500'}`}>
                                                 {guest.party_size}
@@ -1132,6 +1141,7 @@ export default function RSVPDashboard() {
                                                         </span>
                                                     </td>
                                                     <td className="hidden lg:table-cell px-3 sm:px-6 py-1.5 text-xs text-gray-300">—</td>
+                                                    <td className="hidden md:table-cell px-3 sm:px-6 py-1.5 text-xs text-gray-300">—</td>
                                                     <td className="hidden md:table-cell px-3 sm:px-6 py-1.5 text-xs text-gray-300">—</td>
                                                     <td className="px-3 sm:px-6 py-1.5 whitespace-nowrap">
                                                         {mAttending ? (
@@ -1507,6 +1517,18 @@ export default function RSVPDashboard() {
                                         <option value="groom">{config?.groomName || "Groom"}'s Side</option>
                                     </select>
                                 </div>
+                            </div>
+
+                            {/* Relationship */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Relationship</label>
+                                <input
+                                    type="text"
+                                    value={guestForm.relationship}
+                                    onChange={(e) => setGuestForm({ ...guestForm, relationship: e.target.value })}
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-gray-900 placeholder-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
+                                    placeholder="e.g. Family, Friend, Bride's cousin"
+                                />
                             </div>
 
                             {/* Flag */}
