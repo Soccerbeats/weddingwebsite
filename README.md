@@ -29,8 +29,9 @@ A beautiful, customizable wedding website built with Next.js 16. Features includ
 - **RSVP Management**:
   - Stats cards: Total RSVPs, Total Attending (individual guest count), Declined, Missing RSVPs (invited but no response)
   - Filter by: All, No Response, Attending, Declined, Not Invited, Bride's Side, Groom's Side
-  - Name search
+  - Name search — **type a name and press Enter to check that guest off**; the box clears and keeps focus so names can be worked through rapidly (see *Guest List — Rapid Check-Off*)
   - Party sub-rows: additional party members appear as soft gray sub-rows under the head guest row, with their dietary data
+  - Responsive guest table: columns are measured and dropped by priority as the window narrows (Contact → Notes → Address → Donated → Relation → checkbox), so Name/Party/Invited/RSVP/Actions always stay readable and Edit/Delete are never cut off or stacked
 - **Guest List**:
   - Import from CSV (handles quoted fields, commas in addresses)
   - Manual add/edit/delete
@@ -170,6 +171,66 @@ docker push ghcr.io/soccerbeats/weddingwebsite:latest
 > ⚠️ Always use image name `ghcr.io/soccerbeats/weddingwebsite:latest` — do not change it.
 > The Dockerfile runs `npm run build` internally — no need to run it locally before `docker build`.
 
+### If Portainer's "Pull and redeploy" returns 500
+
+The stack's compose file pins `container_name: wedding-web-prod`, so compose must claim that exact name. `wedding-web-prod` has historically been recreated by hand with `docker run`, and a hand-made container carries only 3 compose labels — it is missing `com.docker.compose.oneoff=False` and `com.docker.compose.container-number`, which is what compose filters on to recognise its own containers. So compose doesn't see it, tries to create a fresh one, and collides on the pinned name:
+
+```
+Stack pull successful
+Container wedding-web-prod  Error response from daemon: Conflict.
+The container name "/wedding-web-prod" is already in use by container "..."
+```
+
+**The image pull itself succeeds** — only the container swap fails. Two side effects:
+
+- The web container keeps running the **old** image, so it looks like the deploy silently did nothing.
+- A failed redeploy can leave `wedding-db-prod` created-but-stopped, i.e. **the database down**. Always check after a failed attempt:
+  ```bash
+  docker ps -a | grep wedding-db-prod   # start it if it isn't running
+  ```
+
+Recreating the container now applies the full compose label set, so Portainer should be able to adopt it. If it still 500s, remove the container and let Portainer create it (that is the guaranteed fix — compose then owns it and labels it correctly).
+
+Portainer-EE itself runs in **Proxmox LXC 210**, not on docker-server (which only runs `portainer_agent`). Direct SSH to `10.0.0.210` fails; reach it via `ssh root@10.0.0.100` then `pct exec 210 -- ...`. Stack id is `146`; its compose file lives inside that container at `/var/lib/docker/volumes/portainer_data/_data/compose/146/v1/docker-compose.yml`, and the stack's env vars (`DATABASE_URL`, `POSTGRES_USER`, `POSTGRES_DB`) live in Portainer's own database, not in that file.
+
+### Manual deploy (bypassing Portainer)
+
+Reliable fallback that keeps a rollback container. Env is carried straight from the running container so secrets never leave the host:
+
+```bash
+ssh root@10.0.0.188
+IMG=ghcr.io/soccerbeats/weddingwebsite:latest
+docker pull "$IMG"
+
+ENVARGS=()
+while IFS= read -r e; do
+  case "$e" in ADMIN_PASSWORD=*|NODE_ENV=*|DATABASE_URL=*|PORT=*|HOSTNAME=*) ENVARGS+=(-e "$e");; esac
+done < <(docker inspect wedding-web-prod --format '{{range .Config.Env}}{{println .}}{{end}}')
+
+docker stop wedding-web-prod && docker rename wedding-web-prod wedding-web-prod-old
+docker run -d --name wedding-web-prod --restart always \
+  --network weddingwebsite_default --network-alias web -p 3000:3000 \
+  -v weddingwebsite_photos_data:/app/public/photos \
+  -v weddingwebsite_config_data:/app/public/config \
+  --label com.docker.compose.project=weddingwebsite \
+  --label com.docker.compose.service=web \
+  --label com.docker.compose.container-number=1 \
+  --label com.docker.compose.oneoff=False \
+  --label com.docker.compose.project.config_files=/data/compose/146/v1/docker-compose.yml \
+  --label com.docker.compose.project.working_dir=/data/compose/146/v1 \
+  "${ENVARGS[@]}" "$IMG"
+```
+
+The image's own entrypoint/cmd are correct (`docker-entrypoint.sh` + `sh -c "/app/init-db.sh && node server.js"`) — do not override them. Verify with:
+
+```bash
+curl -o /dev/null -w '%{http_code}\n' http://localhost:3000/          # 200
+curl -o /dev/null -w '%{http_code}\n' http://localhost:3000/admin/rsvps  # 307 (login redirect)
+docker exec wedding-web-prod grep -rho "<a string from your change>" /app/.next | head -1
+```
+
+Once verified, `docker rm wedding-web-prod-old`.
+
 ## Admin Panel Guide
 
 ### Registry — Honeymoon Fund
@@ -207,6 +268,21 @@ Target doesn't offer a native CSV export, so a one-click bookmarklet handles it:
 4. Click **Save Item** — it appears on the public Registry tab immediately
 5. Items are grouped by store on both admin and public pages
 
+### Guest List — Rapid Check-Off
+
+In **Admin → RSVPs & Guests → Guest List**, use the search box to tick guests off a list quickly (handy when working through replies by phone or paper):
+
+1. Type part of a guest's name
+2. Press **Enter** — the top match is ticked, the box clears, and the cursor stays put
+3. Type the next name and repeat
+
+Details:
+- Enter is **additive and never unticks**. Entering a name twice reports "*X was already checked*" rather than silently toggling it back off.
+- **Party members match too.** Typing a member's name ticks their parent guest, and the confirmation names whoever was actually ticked, so it is never silent when the row checked isn't the name typed.
+- **No match keeps the typed text** so a typo can be corrected instead of retyped, and warns in amber.
+- The top match is taken **within the active filter tab** — with *Attending* selected, Enter picks from that subset only.
+- A confirmation pill appears next to the "Showing N of M guests" line; the existing "{n} selected" bar tracks the running total for bulk actions.
+
 ### Guest List CSV Format
 
 ```csv
@@ -219,13 +295,38 @@ John Doe,john@email.com,555-1234,2,groom,Vegan meal,Jane Doe,"123 Main St, Milwa
 - Duplicate names are upserted (not duplicated)
 - For families of 4+, set `party_size` accordingly; add known names via the admin edit modal after import using the party members slots
 
+### RSVP — Who Can Log In
+
+Guests reach their RSVP by typing their **own** name — the lookup matches the primary guest name, `plus_one_name`, **or** any named entry in `party_members`. So if the invitation is filed under *Max Kulik* and his plus-one is *Kenzie Miller*, Kenzie can enter "Kenzie Miller" and pull up the party's RSVP for both of them. Matching ignores case and surrounding whitespace.
+
+The form greets whoever signed in and, when that person isn't the primary guest, notes whose party they belong to. The RSVP itself is always filed under the primary guest, so everyone in a party edits the same submission rather than creating duplicates.
+
+If a name were ever listed in two places, an exact primary-guest match wins over being listed inside someone else's party (then lowest guest id), so the result is deterministic.
+
+### RSVP — Marking Each Guest Attending or Not Attending
+
+Every party member has **two checkboxes — Attending / Not attending** — and they are mutually exclusive (ticking one clears the other; clicking a ticked box clears it back to unanswered).
+
+**The RSVP cannot be sent until every guest has one of the two ticked.** While anyone is unanswered:
+- their card is highlighted **amber**
+- a line above the buttons reads "*N guests still need to be marked attending or not attending*"
+- **Send RSVP is disabled** (with a server-side check behind it that names the specific person)
+
+Pre-fill behaviour:
+- **A brand-new RSVP starts completely blank** — nothing is guessed on the guest's behalf.
+- **Re-opening an RSVP that was already sent restores what was chosen**, so it never looks like their answers were lost.
+
+The primary guest shows a fixed green **Attending** pill rather than checkboxes, because they have already answered via the "Will you be attending?" dropdown above — picking *Regretfully Declines* there declines the whole party.
+
+> **Note:** attendance is not stored per member. A submitted RSVP lists exactly its attendees in `dietary_restrictions` (the admin view reads that array as "who's coming"), so "absent from that list" means *not attending*. That is exact for RSVPs sent through this form, since submitting requires answering everyone.
+
 ### RSVP — Per-Guest Dietary Restrictions
 
 Each party member gets their own card on the RSVP form with checkboxes:
 - Vegetarian, Vegan, Gluten Free, Nut Allergy
 - **Other** — checking this reveals a required text input; the form cannot be submitted until it is filled in
 
-Party members can be toggled attending/not attending individually. Unnamed guest slots require the submitter to enter a name before marking them as attending.
+Dietary checkboxes appear once a member is marked **Attending**. Saved dietary choices are restored when re-opening a submitted RSVP. Unnamed guest slots require the submitter to enter a name before marking them as attending.
 
 ### Nav Cards — Setting Images
 
