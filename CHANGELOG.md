@@ -4,6 +4,14 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Added
+- **Gift field on donations** — a donation can now record money, a physical gift, or both. `amount` is optional as long as a gift is named (new `gift` column); the **Fund** selector is disabled for gift-only entries since there is no money to allocate against a fund's progress. New Gift column in the donations table, and the guest list's Donated column now reads `Gift` / `$X + Gift` instead of `-` for gift givers.
+- **Thank-you tracking on donations** — row checkboxes and a select-all header checkbox (matching the guest list), with bulk **Mark Thank You Sent** / **Unmark** actions, plus a per-row pill (`✓ Thank you sent`, hover shows the date, or `Not sent`). Header summary gained `X/Y thanked`. Backed by a new `PATCH /api/admin/donations` taking `{ ids, thank_you_sent }` which stamps `thank_you_sent_at`.
+
+### Fixed
+- **Portainer "Pull and redeploy" 500 — actually diagnosed and fixed.** Docker Compose discovers a project's containers by filtering on the *presence* of the `com.docker.compose.config-hash` label, which compose writes **only on containers it creates itself**. `wedding-web-prod` had been recreated by hand with `docker run`, so it could never carry that label — compose saw **zero** containers for service `web`, tried to create a fresh one, and collided with the pinned `container_name`. The pull always succeeded, so the site silently kept serving the old image. The 2026-07-27 diagnosis (missing `oneoff`/`container-number`) was wrong and its fix never worked; labels are immutable on an existing container, so **no `docker run` recipe can fix this** — the container must be created by compose. Recreated it via `docker compose … up -d --no-deps web` against a mirror of the stack files at Portainer's own paths; `up -d --dry-run` now reports both containers as `Running` instead of `Creating`. The README's manual-deploy recipe was rewritten to use `docker compose` (the old `docker run` recipe was the cause, not the workaround).
+- **Database left down by the failed redeploy** — a failed swap leaves `wedding-db-prod` created-but-never-started, so the web container fails DNS on `db` (`EAI_AGAIN`) while still returning 200 on pages that don't touch the DB. Started it; all data intact (90 guests, 9 RSVPs, 16 donations).
+
 ## [2026-07-27] — RSVP attendance choice, party-member login, guest table repair, rapid check-off
 
 ### Added

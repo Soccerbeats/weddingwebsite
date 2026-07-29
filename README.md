@@ -173,7 +173,7 @@ docker push ghcr.io/soccerbeats/weddingwebsite:latest
 
 ### If Portainer's "Pull and redeploy" returns 500
 
-The stack's compose file pins `container_name: wedding-web-prod`, so compose must claim that exact name. `wedding-web-prod` has historically been recreated by hand with `docker run`, and a hand-made container carries only 3 compose labels — it is missing `com.docker.compose.oneoff=False` and `com.docker.compose.container-number`, which is what compose filters on to recognise its own containers. So compose doesn't see it, tries to create a fresh one, and collides on the pinned name:
+**Root cause (confirmed 2026-07-29):** Docker Compose discovers a project's containers by filtering on the *presence* of the `com.docker.compose.config-hash` label — a label compose writes **only on containers it creates itself**. A container made by hand with `docker run` can never have it (you cannot add a label to an existing container). So compose sees **zero** containers for service `web`, tries to create a fresh one, and collides with the name that is already taken:
 
 ```
 Stack pull successful
@@ -189,47 +189,52 @@ The container name "/wedding-web-prod" is already in use by container "..."
   docker ps -a | grep wedding-db-prod   # start it if it isn't running
   ```
 
-Recreating the container now applies the full compose label set, so Portainer should be able to adopt it. If it still 500s, remove the container and let Portainer create it (that is the guaranteed fix — compose then owns it and labels it correctly).
+Diagnose in one command — if `wedding-web-prod` is missing from this list, that is the bug:
+
+```bash
+docker ps -a --filter label=com.docker.compose.project=weddingwebsite \
+             --filter label=com.docker.compose.config-hash --format '{{.Names}}'
+```
+
+**Fix:** the container must be *created by compose*. Adding labels by hand cannot work — see *Manual deploy* below, which uses `docker compose` for exactly this reason. After the fix, `docker compose ... up -d --dry-run` reports both containers as `Running` instead of `Creating`, and Portainer's button works again.
+
+> ⚠️ **Never recreate `wedding-web-prod` with `docker run`.** It produces a container with no `config-hash`, which silently re-breaks Portainer's "Pull and redeploy" until someone recreates it with compose again.
 
 Portainer-EE itself runs in **Proxmox LXC 210**, not on docker-server (which only runs `portainer_agent`). Direct SSH to `10.0.0.210` fails; reach it via `ssh root@10.0.0.100` then `pct exec 210 -- ...`. Stack id is `146`; its compose file lives inside that container at `/var/lib/docker/volumes/portainer_data/_data/compose/146/v1/docker-compose.yml`, and the stack's env vars (`DATABASE_URL`, `POSTGRES_USER`, `POSTGRES_DB`) live in Portainer's own database, not in that file.
 
 ### Manual deploy (bypassing Portainer)
 
-Reliable fallback that keeps a rollback container. Env is carried straight from the running container so secrets never leave the host:
+Use **`docker compose`**, never `docker run` — this is what keeps the `config-hash` label intact so Portainer can still manage the stack afterwards.
+
+A mirror of the Portainer stack lives on docker-server at `/data/compose/146/v1/` (`docker-compose.yml` + `stack.env`, mode 600 — it holds the DB password and `ADMIN_PASSWORD`). The paths deliberately match the ones inside the Portainer container so the resulting labels line up.
 
 ```bash
 ssh root@10.0.0.188
-IMG=ghcr.io/soccerbeats/weddingwebsite:latest
-docker pull "$IMG"
+cd /data/compose/146/v1
+docker pull ghcr.io/soccerbeats/weddingwebsite:latest
 
-ENVARGS=()
-while IFS= read -r e; do
-  case "$e" in ADMIN_PASSWORD=*|NODE_ENV=*|DATABASE_URL=*|PORT=*|HOSTNAME=*) ENVARGS+=(-e "$e");; esac
-done < <(docker inspect wedding-web-prod --format '{{range .Config.Env}}{{println .}}{{end}}')
-
-docker stop wedding-web-prod && docker rename wedding-web-prod wedding-web-prod-old
-docker run -d --name wedding-web-prod --restart always \
-  --network weddingwebsite_default --network-alias web -p 3000:3000 \
-  -v weddingwebsite_photos_data:/app/public/photos \
-  -v weddingwebsite_config_data:/app/public/config \
-  --label com.docker.compose.project=weddingwebsite \
-  --label com.docker.compose.service=web \
-  --label com.docker.compose.container-number=1 \
-  --label com.docker.compose.oneoff=False \
-  --label com.docker.compose.project.config_files=/data/compose/146/v1/docker-compose.yml \
-  --label com.docker.compose.project.working_dir=/data/compose/146/v1 \
-  "${ENVARGS[@]}" "$IMG"
+# --no-deps so the database is left running untouched
+docker compose -p weddingwebsite --env-file stack.env -f docker-compose.yml \
+  up -d --no-deps --force-recreate web
 ```
 
-The image's own entrypoint/cmd are correct (`docker-entrypoint.sh` + `sh -c "/app/init-db.sh && node server.js"`) — do not override them. Verify with:
+If the stack files are ever missing, re-copy them from Portainer:
 
 ```bash
-curl -o /dev/null -w '%{http_code}\n' http://localhost:3000/          # 200
-curl -o /dev/null -w '%{http_code}\n' http://localhost:3000/admin/rsvps  # 307 (login redirect)
-docker exec wedding-web-prod grep -rho "<a string from your change>" /app/.next | head -1
+ssh root@10.0.0.100 'pct exec 210 -- cat /var/lib/docker/volumes/portainer_data/_data/compose/146/v1/docker-compose.yml'
+ssh root@10.0.0.100 'pct exec 210 -- cat /var/lib/docker/volumes/portainer_data/_data/compose/146/v1/stack.env'
 ```
 
-Once verified, `docker rm wedding-web-prod-old`.
+Verify:
+
+```bash
+docker inspect wedding-web-prod --format '{{.Config.Labels}}' | grep -o 'config-hash:[^ ]*'  # must be present
+curl -o /dev/null -w '%{http_code}\n' http://localhost:3000/             # 200
+curl -o /dev/null -w '%{http_code}\n' http://localhost:3000/admin/rsvps  # 307 (login redirect)
+docker compose -p weddingwebsite --env-file stack.env -f docker-compose.yml ps
+```
+
+The image's own entrypoint/cmd are correct (`docker-entrypoint.sh` + `sh -c "/app/init-db.sh && node server.js"`) — do not override them.
 
 ## Admin Panel Guide
 
