@@ -61,10 +61,13 @@ interface Donation {
     guest_id: number | null;
     guest_name: string;
     amount: number;
+    gift?: string | null;
     fund_item_id: string | null;
     fund_item_title: string | null;
     event: string | null;
     created_at: string;
+    thank_you_sent?: boolean;
+    thank_you_sent_at?: string | null;
     co_donors?: { id: number | null; name: string }[];
 }
 
@@ -82,7 +85,10 @@ export default function RSVPDashboard() {
     const [donationDonorSearch, setDonationDonorSearch] = useState('');
     const [donationDonor, setDonationDonor] = useState<{ id: number; guest_name: string } | null>(null);
     const [donationAmount, setDonationAmount] = useState('');
+    const [donationGift, setDonationGift] = useState('');
     const [donationFundId, setDonationFundId] = useState('');
+    const [selectedDonations, setSelectedDonations] = useState<number[]>([]);
+    const [markingThanks, setMarkingThanks] = useState(false);
     const [donationEvent, setDonationEvent] = useState('Wedding Day');
     const [donationOtherEvent, setDonationOtherEvent] = useState('');
     const [savingDonation, setSavingDonation] = useState(false);
@@ -263,6 +269,7 @@ export default function RSVPDashboard() {
         setDonationDonorSearch('');
         setDonationDonor(null);
         setDonationAmount('');
+        setDonationGift('');
         setDonationFundId('');
         setDonationEvent('Wedding Day');
         setDonationOtherEvent('');
@@ -285,7 +292,8 @@ export default function RSVPDashboard() {
         setEditingDonationId(d.id);
         setOrigDonation({ amount: d.amount, fund_item_id: d.fund_item_id });
         setDonationDonor(d.guest_id != null ? { id: d.guest_id, guest_name: d.guest_name } : { id: 0, guest_name: d.guest_name });
-        setDonationAmount(String(d.amount));
+        setDonationAmount(d.amount ? String(d.amount) : '');
+        setDonationGift(d.gift || '');
         setDonationFundId(d.fund_item_id || '');
         const presets = ['Bridal Shower', 'Engagement Party', 'Wedding Day'];
         if (d.event && presets.includes(d.event)) { setDonationEvent(d.event); setDonationOtherEvent(''); }
@@ -296,11 +304,16 @@ export default function RSVPDashboard() {
     };
 
     const saveDonation = async () => {
-        const amount = parseFloat(donationAmount);
-        if (!donationDonor || !amount || isNaN(amount) || !donationFundId) return;
+        // A donation can be money, a physical gift, or both — but not nothing.
+        const amount = donationAmount.trim() ? parseFloat(donationAmount) : 0;
+        const gift = donationGift.trim();
+        if (!donationDonor || isNaN(amount) || amount < 0) return;
+        if (!amount && !gift) return;
+        // A fund only matters for money — a gift-only entry needs no fund.
+        if (amount && !donationFundId) return;
         const funds: FundItem[] = config?.registry?.items || [];
-        const fund = funds.find(f => f.id === donationFundId);
-        if (!fund) return;
+        const fund = amount ? funds.find(f => f.id === donationFundId) : null;
+        if (amount && !fund) return;
         const eventValue = donationEvent === 'Other' ? (donationOtherEvent.trim() || 'Other') : donationEvent;
         setSavingDonation(true);
         try {
@@ -309,15 +322,16 @@ export default function RSVPDashboard() {
             if (editingDonationId && origDonation?.fund_item_id) {
                 delta[origDonation.fund_item_id] = (delta[origDonation.fund_item_id] || 0) - origDonation.amount;
             }
-            delta[donationFundId] = (delta[donationFundId] || 0) + amount;
+            if (fund) delta[fund.id] = (delta[fund.id] || 0) + amount;
             await applyFundDeltas(delta);
             // Write the donation row
             const body = {
                 guest_id: donationDonor.id || null,
                 guest_name: donationDonor.guest_name,
                 amount,
-                fund_item_id: fund.id,
-                fund_item_title: fund.title,
+                gift: gift || null,
+                fund_item_id: fund?.id ?? null,
+                fund_item_title: fund?.title ?? null,
                 event: eventValue,
                 co_donors: coGivers,
             };
@@ -361,6 +375,38 @@ export default function RSVPDashboard() {
         });
     };
 
+    const toggleDonationSelection = (id: number) => {
+        setSelectedDonations(prev =>
+            prev.includes(id) ? prev.filter(dId => dId !== id) : [...prev, id]
+        );
+    };
+
+    const toggleSelectAllDonations = () => {
+        if (donations.length > 0 && selectedDonations.length === donations.length) {
+            setSelectedDonations([]);
+        } else {
+            setSelectedDonations(donations.map(d => d.id));
+        }
+    };
+
+    const setThankYouSent = async (sent: boolean) => {
+        if (selectedDonations.length === 0) return;
+        setMarkingThanks(true);
+        try {
+            await fetch('/api/admin/donations', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids: selectedDonations, thank_you_sent: sent }),
+            });
+            await fetchDonations();
+            setSelectedDonations([]);
+        } catch (e) {
+            console.error('Failed to update thank-you status:', e);
+        } finally {
+            setMarkingThanks(false);
+        }
+    };
+
     const confirmDeleteDonation = async () => {
         if (!deletingDonation) return;
         setSavingDonation(true);
@@ -373,6 +419,7 @@ export default function RSVPDashboard() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id: deletingDonation.id }),
             });
+            setSelectedDonations(prev => prev.filter(id => id !== deletingDonation.id));
             await fetchDonations();
             await fetchConfig();
             setDeletingDonation(null);
@@ -736,6 +783,11 @@ export default function RSVPDashboard() {
         if (d.guest_id != null) acc[d.guest_id] = (acc[d.guest_id] || 0) + d.amount;
         return acc;
     }, {});
+
+    // Guests who gave a physical gift — so the Donated column isn't blank for gift-only givers.
+    const giftGuestIds = new Set(
+        donations.filter(d => d.gift && d.guest_id != null).map(d => d.guest_id as number)
+    );
 
     // Rapid check-off: type a name, hit Enter to tick the top match, box clears and
     // keeps focus so the next name can be typed straight away. Enter is additive (never
@@ -1224,7 +1276,10 @@ export default function RSVPDashboard() {
                                                 {guest.address || '-'}
                                             </td>
                                             <td data-col="donated" className={`${H('donated')} px-2 sm:px-4 lg:px-6 py-4 text-sm text-gray-700 whitespace-nowrap`}>
-                                                {donationTotalByGuestId[guest.id] ? `$${donationTotalByGuestId[guest.id].toLocaleString()}` : '-'}
+                                                {[
+                                                    donationTotalByGuestId[guest.id] ? `$${donationTotalByGuestId[guest.id].toLocaleString()}` : null,
+                                                    giftGuestIds.has(guest.id) ? 'Gift' : null,
+                                                ].filter(Boolean).join(' + ') || '-'}
                                             </td>
                                             <td data-col="actions" className="px-2 sm:px-4 lg:px-6 py-4 text-right text-sm font-medium">
                                                 <div className="flex flex-nowrap items-center gap-1.5 justify-end whitespace-nowrap">
@@ -1298,38 +1353,96 @@ export default function RSVPDashboard() {
 
             {activeTab === 'donations' && (
                 <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
-                    <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-                        <p className="text-sm text-gray-500">{donations.length} donation{donations.length === 1 ? '' : 's'} · Total ${donations.reduce((s, d) => s + d.amount, 0).toLocaleString()}</p>
-                        <button
-                            onClick={() => setShowDonationModal(true)}
-                            className="bg-accent text-white px-4 py-2.5 rounded-full text-sm font-medium hover:opacity-90"
-                        >
-                            + Log Donation
-                        </button>
+                    <div className="px-6 py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3">
+                        <p className="text-sm text-gray-500">
+                            {donations.length} donation{donations.length === 1 ? '' : 's'} · Total ${donations.reduce((s, d) => s + d.amount, 0).toLocaleString()}
+                            {donations.filter(d => d.gift).length > 0 && ` · ${donations.filter(d => d.gift).length} gift${donations.filter(d => d.gift).length === 1 ? '' : 's'}`}
+                            {' · '}{donations.filter(d => d.thank_you_sent).length}/{donations.length} thanked
+                        </p>
+                        <div className="flex flex-wrap items-center gap-2">
+                            {selectedDonations.length > 0 && (
+                                <>
+                                    <span className="text-sm text-gray-600">{selectedDonations.length} selected</span>
+                                    <button
+                                        onClick={() => setThankYouSent(true)}
+                                        disabled={markingThanks}
+                                        className="bg-green-600 text-white px-4 py-2 rounded-full text-sm hover:bg-green-700 disabled:opacity-40 transition-all duration-300 shadow-md hover:shadow-lg"
+                                    >
+                                        {markingThanks ? 'Saving...' : 'Mark Thank You Sent'}
+                                    </button>
+                                    <button
+                                        onClick={() => setThankYouSent(false)}
+                                        disabled={markingThanks}
+                                        className="bg-gray-500 text-white px-4 py-2 rounded-full text-sm hover:bg-gray-600 disabled:opacity-40 transition-all duration-300 shadow-md hover:shadow-lg"
+                                    >
+                                        Unmark
+                                    </button>
+                                </>
+                            )}
+                            <button
+                                onClick={() => setShowDonationModal(true)}
+                                className="bg-accent text-white px-4 py-2.5 rounded-full text-sm font-medium hover:opacity-90"
+                            >
+                                + Log Donation
+                            </button>
+                        </div>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-50">
                                 <tr>
+                                    <th className="w-10 px-6 py-3 text-left">
+                                        <input
+                                            type="checkbox"
+                                            checked={donations.length > 0 && selectedDonations.length === donations.length}
+                                            onChange={toggleSelectAllDonations}
+                                            className="rounded border-gray-300 text-accent focus:ring-accent"
+                                        />
+                                    </th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Guest</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Gift</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fund</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Event</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Thank You</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
                                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
                                 {donations.length === 0 ? (
-                                    <tr><td colSpan={6} className="px-6 py-8 text-center text-sm text-gray-400">No donations recorded yet.</td></tr>
+                                    <tr><td colSpan={9} className="px-6 py-8 text-center text-sm text-gray-400">No donations recorded yet.</td></tr>
                                 ) : donations.map(d => (
                                     <tr key={d.id} className="hover:bg-gray-50">
+                                        <td className="px-6 py-4">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedDonations.includes(d.id)}
+                                                onChange={() => toggleDonationSelection(d.id)}
+                                                className="rounded border-gray-300 text-accent focus:ring-accent"
+                                            />
+                                        </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
                                             {[d.guest_name, ...((d.co_donors || []).map(c => c.name))].join(', ')}
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${d.amount.toLocaleString()}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{d.amount ? `$${d.amount.toLocaleString()}` : '-'}</td>
+                                        <td className="px-6 py-4 text-sm text-gray-500 max-w-[220px] truncate" title={d.gift || ''}>{d.gift || '-'}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{d.fund_item_title || '-'}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{d.event || '-'}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                            {d.thank_you_sent ? (
+                                                <span
+                                                    className="inline-flex items-center gap-1 bg-green-100 text-green-700 text-xs font-medium px-2.5 py-1 rounded-full"
+                                                    title={d.thank_you_sent_at ? `Sent ${new Date(d.thank_you_sent_at).toLocaleDateString()}` : undefined}
+                                                >
+                                                    ✓ Thank you sent
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex items-center bg-gray-100 text-gray-500 text-xs font-medium px-2.5 py-1 rounded-full">
+                                                    Not sent
+                                                </span>
+                                            )}
+                                        </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(d.created_at).toLocaleDateString()}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
                                             <button onClick={() => openEditDonation(d)} className="text-accent hover:text-accent-dark mr-3">Edit</button>
@@ -1421,20 +1534,35 @@ export default function RSVPDashboard() {
                             </div>
                         )}
 
+                        <p className="text-xs text-gray-400 mb-3">Log money, a gift, or both — at least one is required.</p>
+
                         <label className="block text-sm font-medium text-gray-700 mb-1">Amount received ($)</label>
                         <input
                             type="number"
                             value={donationAmount}
                             onChange={e => setDonationAmount(e.target.value)}
-                            placeholder="0"
+                            placeholder="Leave blank for a gift only"
                             className="w-full border border-gray-200 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all mb-4"
                         />
 
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Fund</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Gift</label>
+                        <input
+                            type="text"
+                            value={donationGift}
+                            onChange={e => setDonationGift(e.target.value)}
+                            placeholder="e.g. Stand mixer, hand-made quilt"
+                            className="w-full border border-gray-200 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all mb-4"
+                        />
+
+                        {/* A fund only applies to money — a gift-only entry has nothing to allocate. */}
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Fund {donationAmount.trim() ? '' : <span className="text-gray-400 font-normal">(money only)</span>}
+                        </label>
                         <select
                             value={donationFundId}
                             onChange={e => setDonationFundId(e.target.value)}
-                            className="w-full border border-gray-200 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all mb-4"
+                            disabled={!donationAmount.trim()}
+                            className="w-full border border-gray-200 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all mb-4 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <option value="">Select a fund...</option>
                             {(config?.registry?.items || []).map((f: FundItem) => (
@@ -1466,7 +1594,11 @@ export default function RSVPDashboard() {
                         <div className="flex gap-2 mt-2">
                             <button
                                 onClick={saveDonation}
-                                disabled={savingDonation || !donationDonor || !donationAmount || !donationFundId}
+                                disabled={
+                                    savingDonation || !donationDonor ||
+                                    (!donationAmount.trim() && !donationGift.trim()) ||
+                                    (!!donationAmount.trim() && !donationFundId)
+                                }
                                 className="flex-1 bg-accent text-white py-2.5 rounded-full text-sm font-medium disabled:opacity-40"
                             >
                                 {savingDonation ? 'Saving...' : 'Save'}
@@ -1486,7 +1618,11 @@ export default function RSVPDashboard() {
                     <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 z-10">
                         <h2 className="text-lg font-bold text-gray-900 mb-2">Delete donation?</h2>
                         <p className="text-sm text-gray-500 mb-4">
-                            {deletingDonation.guest_name} — ${deletingDonation.amount.toLocaleString()} toward {deletingDonation.fund_item_title || 'a fund'}. This subtracts the amount from that fund&apos;s progress and cannot be undone.
+                            {deletingDonation.guest_name} — {[
+                                deletingDonation.amount ? `$${deletingDonation.amount.toLocaleString()} toward ${deletingDonation.fund_item_title || 'a fund'}` : null,
+                                deletingDonation.gift ? `gift: ${deletingDonation.gift}` : null,
+                            ].filter(Boolean).join(' · ')}
+                            . {deletingDonation.amount ? 'This subtracts the amount from that fund’s progress and ' : 'This '}cannot be undone.
                         </p>
                         <div className="flex gap-2">
                             <button onClick={confirmDeleteDonation} disabled={savingDonation}
