@@ -57,7 +57,7 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   try {
-    const { id, guest_name, email, phone, party_size, notes, invited, party_members, address, rsvp_status, flag, relationship } = await request.json();
+    const { id, guest_name, email, phone, party_size, notes, invited, party_members, address, rsvp_status, flag, relationship, side } = await request.json();
 
     await pool.query(`ALTER TABLE guest_list ADD COLUMN IF NOT EXISTS flag VARCHAR(20)`);
     await pool.query(`ALTER TABLE guest_list ADD COLUMN IF NOT EXISTS relationship VARCHAR(255)`);
@@ -68,10 +68,10 @@ export async function PUT(request: Request) {
       `UPDATE guest_list
        SET guest_name = $1, email = $2, phone = $3, party_size = $4, notes = $5, invited = $6,
            party_members = $7, address = COALESCE($8, address), rsvp_status = $9, flag = $10,
-           relationship = $11, updated_at = NOW()
-       WHERE id = $12
+           relationship = $11, side = $12, updated_at = NOW()
+       WHERE id = $13
        RETURNING *`,
-      [guest_name, email, phone, party_size, notes, invited, membersJson, address, rsvp_status || null, flag ?? null, relationship ?? null, id]
+      [guest_name, email, phone, party_size, notes, invited, membersJson, address, rsvp_status || null, flag ?? null, relationship ?? null, side ?? null, id]
     );
 
     return NextResponse.json(result.rows[0]);
@@ -81,28 +81,81 @@ export async function PUT(request: Request) {
   }
 }
 
-// PATCH - update only the address for a guest (used by the CSV address reconcile tool)
+// PATCH - two shapes:
+//   { id, address }                  single-guest address update (CSV address reconcile tool)
+//   { ids: [...], ...fields }        bulk field update from the guest list's Bulk Edit
+//
+// The bulk form only touches the fields it was given, so "leave unchanged" is the
+// default for everything and one selection can't quietly reset unrelated columns.
 export async function PATCH(request: Request) {
   try {
-    const { id, address } = await request.json();
+    const body = await request.json();
+    const { id, ids, address, flag, side, invited, rsvp_status, notes, noteMode } = body;
 
-    if (!id) {
-      return NextResponse.json({ error: 'Missing id' }, { status: 400 });
+    // Single-address update — the original behaviour, kept intact.
+    if (ids === undefined) {
+      if (!id) {
+        return NextResponse.json({ error: 'Missing id' }, { status: 400 });
+      }
+
+      const result = await pool.query(
+        `UPDATE guest_list SET address = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+        [address ?? '', id]
+      );
+
+      if (result.rowCount === 0) {
+        return NextResponse.json({ error: 'Guest not found' }, { status: 404 });
+      }
+
+      return NextResponse.json(result.rows[0]);
+    }
+
+    const targets = (Array.isArray(ids) ? ids : []).filter(n => Number.isInteger(n));
+    if (targets.length === 0) {
+      return NextResponse.json({ error: 'No guest ids given' }, { status: 400 });
+    }
+
+    await pool.query(`ALTER TABLE guest_list ADD COLUMN IF NOT EXISTS flag VARCHAR(20)`);
+
+    const sets: string[] = [];
+    const params: unknown[] = [];
+    const push = (value: unknown) => {
+      params.push(value);
+      return `$${params.length}`;
+    };
+
+    // '' means "clear the column" — the caller omits the key entirely to leave it alone.
+    if (flag !== undefined) sets.push(`flag = ${push(flag || null)}`);
+    if (side !== undefined) sets.push(`side = ${push(side || null)}`);
+    if (invited !== undefined) sets.push(`invited = ${push(!!invited)}`);
+    if (rsvp_status !== undefined) sets.push(`rsvp_status = ${push(rsvp_status || null)}`);
+
+    if (noteMode === 'replace') {
+      sets.push(`notes = ${push(notes ?? '')}`);
+    } else if (noteMode === 'clear') {
+      sets.push(`notes = ''`);
+    } else if (noteMode === 'append' && (notes || '').trim()) {
+      // Append on its own line, but don't leave a leading blank line on guests
+      // who had no note yet.
+      const p = push((notes as string).trim());
+      sets.push(`notes = CASE WHEN COALESCE(NULLIF(TRIM(notes), ''), '') = '' THEN ${p} ELSE notes || E'\\n' || ${p} END`);
+    }
+
+    if (sets.length === 0) {
+      return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
     }
 
     const result = await pool.query(
-      `UPDATE guest_list SET address = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
-      [address ?? '', id]
+      `UPDATE guest_list SET ${sets.join(', ')}, updated_at = NOW()
+       WHERE id = ANY(${push(targets)})
+       RETURNING id`,
+      params
     );
 
-    if (result.rowCount === 0) {
-      return NextResponse.json({ error: 'Guest not found' }, { status: 404 });
-    }
-
-    return NextResponse.json(result.rows[0]);
+    return NextResponse.json({ success: true, updated: result.rowCount });
   } catch (error) {
-    console.error('Error updating guest address:', error);
-    return NextResponse.json({ error: 'Failed to update address' }, { status: 500 });
+    console.error('Error updating guests:', error);
+    return NextResponse.json({ error: 'Failed to update guests' }, { status: 500 });
   }
 }
 

@@ -111,6 +111,16 @@ export default function RSVPDashboard() {
     const [rsvpSubtitle, setRsvpSubtitle] = useState('');
     const [subtitleSaving, setSubtitleSaving] = useState(false);
     const [showImportModal, setShowImportModal] = useState(false);
+    // Bulk edit of the selected guests. Every field defaults to '' = leave unchanged,
+    // with an explicit "Clear" option where clearing makes sense.
+    const [showBulkModal, setShowBulkModal] = useState(false);
+    const [bulkFlag, setBulkFlag] = useState('');
+    const [bulkSide, setBulkSide] = useState('');
+    const [bulkRsvp, setBulkRsvp] = useState('');
+    const [bulkNote, setBulkNote] = useState('');
+    const [bulkNoteMode, setBulkNoteMode] = useState<'append' | 'replace' | 'clear'>('append');
+    const [bulkSaving, setBulkSaving] = useState(false);
+    const [bulkResult, setBulkResult] = useState<string | null>(null);
     const [showReconcileModal, setShowReconcileModal] = useState(false);
     const [csvFile, setCsvFile] = useState<File | null>(null);
     const [importing, setImporting] = useState(false);
@@ -545,17 +555,24 @@ export default function RSVPDashboard() {
     };
 
     const toggleGuestSelection = (id: number) => {
+        setBulkResult(null);
         setSelectedGuests(prev =>
             prev.includes(id) ? prev.filter(gId => gId !== id) : [...prev, id]
         );
     };
 
+    // Select-all works on the *visible* rows only. The header checkbox already
+    // reflected filteredGuests, so selecting every guest in the table (including
+    // ones the filter hides) would silently widen a bulk edit or delete.
     const toggleSelectAll = () => {
-        if (selectedGuests.length === guests.length) {
-            setSelectedGuests([]);
-        } else {
-            setSelectedGuests(guests.map(g => g.id));
-        }
+        setBulkResult(null);
+        const visibleIds = filteredGuests.map(g => g.id);
+        const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => selectedGuests.includes(id));
+        setSelectedGuests(prev =>
+            allVisibleSelected
+                ? prev.filter(id => !visibleIds.includes(id))
+                : Array.from(new Set([...prev, ...visibleIds]))
+        );
     };
 
     const handleBulkMarkInvited = async () => {
@@ -604,6 +621,78 @@ export default function RSVPDashboard() {
             fetchGuests();
         } catch (error) {
             console.error('Error unmarking guests as invited:', error);
+        }
+    };
+
+    // Shared bulk-field update. Only the keys passed in are touched server-side.
+    const patchSelectedGuests = async (fields: Record<string, unknown>) => {
+        if (selectedGuests.length === 0) return 0;
+        const res = await fetch('/api/admin/guest-list', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids: selectedGuests, ...fields }),
+        });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Update failed');
+        const data = await res.json();
+        return data.updated ?? selectedGuests.length;
+    };
+
+    // One-click flag for the whole selection. Clicking the flag the selection already
+    // has clears it, matching the per-row 🙁 toggle.
+    const handleBulkFlag = async (flag: 'issue' | 'need') => {
+        if (selectedGuests.length === 0) return;
+        const chosen = guests.filter(g => selectedGuests.includes(g.id));
+        const allHaveIt = chosen.length > 0 && chosen.every(g => g.flag === flag);
+        try {
+            const n = await patchSelectedGuests({ flag: allHaveIt ? '' : flag });
+            const label = flag === 'issue' ? '⚠️ Issue' : '📌 Need';
+            setBulkResult(allHaveIt ? `Cleared ${label} on ${n} guest${n === 1 ? '' : 's'}` : `Marked ${n} guest${n === 1 ? '' : 's'} as ${label}`);
+            fetchGuests();
+        } catch (error) {
+            console.error('Error flagging guests:', error);
+            setBulkResult('Could not update the selected guests');
+        }
+    };
+
+    const openBulkModal = () => {
+        setBulkFlag('');
+        setBulkSide('');
+        setBulkRsvp('');
+        setBulkNote('');
+        setBulkNoteMode('append');
+        setBulkResult(null);
+        setShowBulkModal(true);
+    };
+
+    const handleBulkEdit = async () => {
+        if (selectedGuests.length === 0) return;
+        const fields: Record<string, unknown> = {};
+        if (bulkFlag) fields.flag = bulkFlag === 'clear' ? '' : bulkFlag;
+        if (bulkSide) fields.side = bulkSide === 'clear' ? '' : bulkSide;
+        if (bulkRsvp) fields.rsvp_status = bulkRsvp === 'clear' ? '' : bulkRsvp;
+        if (bulkNoteMode === 'clear') {
+            fields.noteMode = 'clear';
+        } else if (bulkNote.trim()) {
+            fields.noteMode = bulkNoteMode;
+            fields.notes = bulkNote;
+        }
+        if (Object.keys(fields).length === 0) {
+            setBulkResult('Nothing to change — pick a field first');
+            return;
+        }
+
+        setBulkSaving(true);
+        try {
+            const n = await patchSelectedGuests(fields);
+            setShowBulkModal(false);
+            setSelectedGuests([]);
+            setBulkResult(`Updated ${n} guest${n === 1 ? '' : 's'}`);
+            fetchGuests();
+        } catch (error) {
+            console.error('Error bulk editing guests:', error);
+            setBulkResult(error instanceof Error ? error.message : 'Could not update the selected guests');
+        } finally {
+            setBulkSaving(false);
         }
     };
 
@@ -1053,11 +1142,11 @@ export default function RSVPDashboard() {
                     </div>
 
                     {/* Bulk Actions and Add Guest Button */}
-                    <div className="mb-4 flex justify-between items-center">
-                        <div className="flex gap-2">
+                    <div className="mb-4 flex flex-col lg:flex-row lg:justify-between lg:items-center gap-3">
+                        <div className="flex flex-wrap gap-2 items-center">
                             {selectedGuests.length > 0 && (
                                 <>
-                                    <span className="text-sm text-gray-600 self-center">
+                                    <span className="text-sm font-semibold text-gray-700 self-center">
                                         {selectedGuests.length} selected
                                     </span>
                                     <button
@@ -1073,6 +1162,27 @@ export default function RSVPDashboard() {
                                         Mark as Not Invited
                                     </button>
                                     <button
+                                        onClick={() => handleBulkFlag('issue')}
+                                        title="Flag every selected guest as an issue (click again to clear)"
+                                        className="bg-red-100 text-red-700 px-4 py-2 rounded-full hover:bg-red-200 text-sm font-semibold transition-all duration-300 shadow-sm hover:shadow-md"
+                                    >
+                                        ⚠️ Issue
+                                    </button>
+                                    <button
+                                        onClick={() => handleBulkFlag('need')}
+                                        title="Flag every selected guest as a need (click again to clear)"
+                                        className="bg-amber-100 text-amber-700 px-4 py-2 rounded-full hover:bg-amber-200 text-sm font-semibold transition-all duration-300 shadow-sm hover:shadow-md"
+                                    >
+                                        📌 Need
+                                    </button>
+                                    <button
+                                        onClick={openBulkModal}
+                                        title="Add a note, set a flag, side or RSVP status on every selected guest"
+                                        className="bg-accent text-white px-4 py-2 rounded-full hover:bg-accent/90 text-sm font-semibold transition-all duration-300 shadow-md hover:shadow-lg"
+                                    >
+                                        ✏️ Edit Selected…
+                                    </button>
+                                    <button
                                         onClick={handleBulkDelete}
                                         className="bg-red-600 text-white px-4 py-2 rounded-full hover:bg-red-700 text-sm transition-all duration-300 shadow-md hover:shadow-lg"
                                     >
@@ -1080,8 +1190,13 @@ export default function RSVPDashboard() {
                                     </button>
                                 </>
                             )}
+                            {bulkResult && (
+                                <span className="text-xs font-semibold px-3 py-1.5 rounded-full bg-green-50 text-green-700 border border-green-200">
+                                    {bulkResult}
+                                </span>
+                            )}
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2">
                             <button
                                 onClick={() => setShowImportModal(true)}
                                 className="bg-green-600 text-white px-4 py-2 rounded-full hover:bg-green-700 flex items-center gap-2 transition-all duration-300 shadow-md hover:shadow-lg"
@@ -1916,6 +2031,135 @@ export default function RSVPDashboard() {
                                 className="px-7 py-2.5 text-sm font-semibold text-white bg-accent rounded-full hover:bg-accent/90 disabled:opacity-50 transition-all duration-300 shadow-md hover:shadow-lg"
                             >
                                 {editingGuest ? 'Update' : 'Add'} Guest
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Bulk Edit Modal — applies only the fields that were actually set */}
+            {showBulkModal && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+                        <div className="px-6 sm:px-8 pt-6 pb-4 border-b border-gray-100 sticky top-0 bg-white/95 backdrop-blur rounded-t-3xl">
+                            <h3 className="text-2xl font-bold text-gray-900">Edit {selectedGuests.length} Guest{selectedGuests.length === 1 ? '' : 's'}</h3>
+                            <p className="text-sm text-gray-500 mt-1">Anything left on <span className="font-semibold">Leave unchanged</span> is not touched.</p>
+                        </div>
+
+                        <div className="px-6 sm:px-8 py-6 space-y-6">
+                            {/* Flag */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Flag</label>
+                                <div className="flex flex-wrap gap-2">
+                                    {([
+                                        { v: '', l: 'Leave unchanged', on: 'bg-gray-800 text-white', off: 'bg-gray-100 text-gray-600 hover:bg-gray-200' },
+                                        { v: 'issue', l: '⚠️ Issue', on: 'bg-red-600 text-white', off: 'bg-red-50 text-red-700 hover:bg-red-100' },
+                                        { v: 'need', l: '📌 Need', on: 'bg-amber-500 text-white', off: 'bg-amber-50 text-amber-700 hover:bg-amber-100' },
+                                        { v: 'clear', l: 'Clear flag', on: 'bg-gray-600 text-white', off: 'bg-gray-100 text-gray-600 hover:bg-gray-200' },
+                                    ]).map(opt => (
+                                        <button
+                                            key={opt.v || 'none'}
+                                            type="button"
+                                            onClick={() => setBulkFlag(opt.v)}
+                                            className={`px-4 py-2 rounded-full text-sm font-semibold transition-all shadow-sm ${bulkFlag === opt.v ? opt.on + ' shadow-md' : opt.off}`}
+                                        >
+                                            {opt.l}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Note */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Note</label>
+                                <div className="flex flex-wrap gap-2 mb-2">
+                                    {([
+                                        { v: 'append', l: 'Add to existing' },
+                                        { v: 'replace', l: 'Replace' },
+                                        { v: 'clear', l: 'Clear notes' },
+                                    ] as { v: 'append' | 'replace' | 'clear'; l: string }[]).map(opt => (
+                                        <button
+                                            key={opt.v}
+                                            type="button"
+                                            onClick={() => setBulkNoteMode(opt.v)}
+                                            className={`px-4 py-2 rounded-full text-sm font-semibold transition-all shadow-sm ${
+                                                bulkNoteMode === opt.v ? 'bg-accent text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                            }`}
+                                        >
+                                            {opt.l}
+                                        </button>
+                                    ))}
+                                </div>
+                                {bulkNoteMode !== 'clear' ? (
+                                    <>
+                                        <textarea
+                                            value={bulkNote}
+                                            onChange={(e) => setBulkNote(e.target.value)}
+                                            className="w-full px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-gray-900 placeholder-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all resize-y"
+                                            rows={3}
+                                            placeholder={bulkNoteMode === 'append' ? 'Added on its own line to every selected guest…' : 'Overwrites the note on every selected guest…'}
+                                        />
+                                        <p className="text-xs text-gray-400 mt-1.5">
+                                            {bulkNoteMode === 'append'
+                                                ? 'Existing notes are kept — this goes on a new line underneath. Leave blank to skip.'
+                                                : '⚠️ Replaces whatever note each selected guest already has. Leave blank to skip.'}
+                                        </p>
+                                    </>
+                                ) : (
+                                    <p className="text-xs text-red-600 font-semibold">⚠️ Wipes the note on all {selectedGuests.length} selected guest{selectedGuests.length === 1 ? '' : 's'}.</p>
+                                )}
+                            </div>
+
+                            {/* Side */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Side</label>
+                                <select
+                                    value={bulkSide}
+                                    onChange={(e) => setBulkSide(e.target.value)}
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
+                                >
+                                    <option value="">Leave unchanged</option>
+                                    <option value="bride">{config?.brideName || 'Bride'}&apos;s Side</option>
+                                    <option value="groom">{config?.groomName || 'Groom'}&apos;s Side</option>
+                                    <option value="clear">Clear side</option>
+                                </select>
+                            </div>
+
+                            {/* RSVP Status */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-1.5">RSVP Status</label>
+                                <select
+                                    value={bulkRsvp}
+                                    onChange={(e) => setBulkRsvp(e.target.value)}
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
+                                >
+                                    <option value="">Leave unchanged</option>
+                                    <option value="likely_not_coming">Likely Not Coming</option>
+                                    <option value="attending">Attending</option>
+                                    <option value="declined">Declined</option>
+                                    <option value="clear">Clear to No Response</option>
+                                </select>
+                                <p className="text-xs text-gray-400 mt-1.5">Admin-only override. This is what guests actually replied, so change it in bulk with care.</p>
+                            </div>
+
+                            {bulkResult && (
+                                <p className="text-sm font-semibold text-red-600">{bulkResult}</p>
+                            )}
+                        </div>
+
+                        <div className="px-6 sm:px-8 py-5 border-t border-gray-100 flex justify-end gap-3 sticky bottom-0 bg-white/95 backdrop-blur rounded-b-3xl">
+                            <button
+                                onClick={() => setShowBulkModal(false)}
+                                className="px-6 py-2.5 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-full hover:bg-gray-50 transition-all duration-300 shadow-sm hover:shadow-md"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleBulkEdit}
+                                disabled={bulkSaving}
+                                className="px-6 py-2.5 text-sm font-semibold text-white bg-accent rounded-full hover:bg-accent/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-300 shadow-md hover:shadow-lg"
+                            >
+                                {bulkSaving ? 'Applying…' : `Apply to ${selectedGuests.length}`}
                             </button>
                         </div>
                     </div>

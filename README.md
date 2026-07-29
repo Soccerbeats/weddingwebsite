@@ -35,6 +35,7 @@ A beautiful, customizable wedding website built with Next.js 16. Features includ
 - **Guest List**:
   - Import from CSV (handles quoted fields, commas in addresses)
   - **Export CSV** — downloads whatever the filter/search is currently showing as a mailing-list-ready CSV (see *Guest List — Mailing List Export*)
+  - **Bulk editing** — tick guests to flag them ⚠️ Issue / 📌 Need in one click, or open **Edit Selected…** to add a note, set the flag, side or RSVP status across the whole selection (see *Guest List — Bulk Editing*)
   - Manual add/edit/delete
   - Fields: name, email, phone, party_size, side, notes, party_members (JSONB), address
   - Supports families of 4+ with named/unnamed party member slots
@@ -288,6 +289,34 @@ Details:
 - **No match keeps the typed text** so a typo can be corrected instead of retyped, and warns in amber.
 - The top match is taken **within the active filter tab** — with *Attending* selected, Enter picks from that subset only.
 - A confirmation pill appears next to the "Showing N of M guests" line; the existing "{n} selected" bar tracks the running total for bulk actions.
+
+### Guest List — Bulk Editing
+
+Tick guests with the row checkboxes (or the header checkbox to take everything currently visible), then use the bar above the table:
+
+| Button | What it does |
+| --- | --- |
+| **Mark as Invited** / **Mark as Not Invited** | Sets the invited flag across the selection |
+| **⚠️ Issue** | Flags every selected guest as an issue. **Click again to clear it** — if all selected guests already have the flag, the button removes it |
+| **📌 Need** | Same, for the need flag |
+| **✏️ Edit Selected…** | Opens the bulk edit modal below |
+| **Delete Selected** | Deletes the selection (confirms first) |
+
+A green pill next to the buttons confirms what happened (e.g. *Marked 6 guests as 📌 Need*).
+
+**The Edit Selected… modal** applies only the fields you actually set — everything defaults to **Leave unchanged**, so a bulk edit can't quietly reset a column you didn't touch:
+
+- **Flag** — Issue, Need, or Clear flag
+- **Note** — three modes:
+  - *Add to existing* (default) — appends on a new line and **keeps whatever note each guest already had**. This is the safe one.
+  - *Replace* — overwrites the note on every selected guest
+  - *Clear notes* — wipes them
+- **Side** — bride's / groom's side, or clear
+- **RSVP Status** — Likely Not Coming, Attending, Declined, or clear to No Response. This is what guests actually replied, so it's labelled as an admin override
+
+Leaving the note box blank skips the note entirely, so you can use the modal purely to set a flag or side.
+
+> **Select-all takes the visible rows only.** With a filter active (say *⚠️ Issue*), the header checkbox selects just those rows, and clicking it again deselects just those rows — guests hidden by the filter are never silently swept into a bulk edit or delete.
 
 ### Guest List — Mailing List Export
 
