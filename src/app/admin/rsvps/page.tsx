@@ -3,6 +3,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { FundItem } from '@/lib/config';
 import AddressReconcileModal from '@/components/admin/AddressReconcileModal';
+import { MAILING_HEADERS, mailingRows, toCsv } from '@/lib/mailing';
 
 // Guest-table columns to drop as horizontal space runs out, in order (first dropped → last).
 // Name + Party/Invited/RSVP/Actions are never in this list, so they always stay.
@@ -760,6 +761,24 @@ export default function RSVPDashboard() {
         }
     });
 
+    // Export exactly what's on screen (current filter + search) as a mail-merge
+    // ready CSV: envelope name, address split into label lines, and the rest of
+    // the guest record for reference.
+    const handleExportGuests = () => {
+        if (!filteredGuests.length) return;
+        const csv = toCsv(MAILING_HEADERS, mailingRows(filteredGuests));
+        const stamp = new Date().toISOString().slice(0, 10);
+        const scope = guestSearch.trim() ? 'search' : guestFilter;
+        const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `guest-list-${scope}-${stamp}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
     // People selectable as a donor / co-giver: every primary guest PLUS their
     // plus-ones and party members (which are names nested on the guest row, not
     // their own guest-list entries). id is null for non-primary people.
@@ -1071,6 +1090,17 @@ export default function RSVPDashboard() {
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                                 </svg>
                                 Import CSV
+                            </button>
+                            <button
+                                onClick={handleExportGuests}
+                                disabled={filteredGuests.length === 0}
+                                title={`Download the ${filteredGuests.length} guest${filteredGuests.length === 1 ? '' : 's'} currently shown as a mailing-list CSV`}
+                                className="bg-blue-600 text-white px-4 py-2 rounded-full hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 transition-all duration-300 shadow-md hover:shadow-lg"
+                            >
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 9l-3 3m0 0l-3-3m3 3V3" />
+                                </svg>
+                                Export CSV ({filteredGuests.length})
                             </button>
                             <button
                                 onClick={() => setShowReconcileModal(true)}

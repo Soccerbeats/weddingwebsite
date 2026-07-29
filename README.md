@@ -34,6 +34,7 @@ A beautiful, customizable wedding website built with Next.js 16. Features includ
   - Responsive guest table: columns are measured and dropped by priority as the window narrows (Contact → Notes → Address → Donated → Relation → checkbox), so Name/Party/Invited/RSVP/Actions always stay readable and Edit/Delete are never cut off or stacked
 - **Guest List**:
   - Import from CSV (handles quoted fields, commas in addresses)
+  - **Export CSV** — downloads whatever the filter/search is currently showing as a mailing-list-ready CSV (see *Guest List — Mailing List Export*)
   - Manual add/edit/delete
   - Fields: name, email, phone, party_size, side, notes, party_members (JSONB), address
   - Supports families of 4+ with named/unnamed party member slots
@@ -287,6 +288,40 @@ Details:
 - **No match keeps the typed text** so a typo can be corrected instead of retyped, and warns in amber.
 - The top match is taken **within the active filter tab** — with *Attending* selected, Enter picks from that subset only.
 - A confirmation pill appears next to the "Showing N of M guests" line; the existing "{n} selected" bar tracks the running total for bulk actions.
+
+### Guest List — Mailing List Export
+
+In **Admin → RSVPs & Guests → Guest List**, the blue **Export CSV (n)** button sits to the right of *Import CSV* and downloads the guest list as a CSV built for addressing envelopes and mail merges.
+
+**What gets exported:** exactly the rows on screen. The button label shows the count, and the active filter tab **and** the search box both narrow the export — filter to *Invited*, and only invited households are in the file. Filename is `guest-list-<filter>-<YYYY-MM-DD>.csv` (`guest-list-search-…` when a search term is active).
+
+**Columns:**
+
+| Column | What it holds |
+| --- | --- |
+| `Mail Name` | Envelope name for the household — see the rules below |
+| `Street` | Street line, with any apartment/unit kept on it |
+| `City State Zip` | Ready-made second label line, e.g. `Racine, WI 53402` |
+| `City`, `State`, `Zip` | The same, split out for sorting or a mail merge |
+| `Address Issue` | Blank when the address parsed cleanly; otherwise `No address`, `missing state`, `Could not split city / state / zip`, etc. **Sort by this column to find addresses that need fixing before printing labels.** |
+| `Shares Address With` | Other guests on the export at the same address — catches two invitations headed to one house (e.g. parents and an adult child) |
+| `Full Address` | The raw address exactly as stored, on one line |
+| `Party Size`, `Guest Name`, `Party Members` | Household size, the head guest, and the other members (unnamed slots show as `Guest`) |
+| `Email`, `Phone`, `Side`, `Relationship`, `Invited`, `RSVP Status`, `Flag`, `Notes` | The rest of the guest record |
+
+**Mail Name rules:**
+
+| Household | Result |
+| --- | --- |
+| 1 person | `John Smith` |
+| 2 people, same surname | `John & Jane Smith` |
+| 2 people, different surnames | `John & Jane` (first names only) |
+| 2 people, second person unnamed | `John Smith & Guest` |
+| 3 or more | `Smith Family` — the most common surname in the party, ties going to the head guest, so a mixed household still gets the name the mail belongs to |
+
+Names are cleaned first: parenthetical notes are dropped (`Natalie Williams (Zack's Girlfriend)` → `Natalie Williams`, and a plus-one recorded as only `(Collin's Date)` counts as unnamed), and suffixes are ignored when comparing surnames so `Nick Lucas Jr.` + `Nicole Lucas` still reads `Nick & Nicole Lucas`. `Party Size` — not the number of names on file — decides which rule applies.
+
+**Address parsing** handles the shapes actually present in the list: line breaks used instead of commas, an apartment comma-separated (`…, Apt 208, Middleton, WI 53562`) *or* glued onto the city (`…, Apt. 5 Pewaukee, WI 53072` — the unit is moved back onto the street line), a state riding along with the city (`Muskego WI, 53150`), and `ZIP+4`. Anything it can't split is flagged in `Address Issue` rather than silently mangled. The file is written with a UTF-8 BOM so Excel opens accented names and curly apostrophes correctly, and every field is quoted so leading zeros in ZIPs survive.
 
 ### Guest List CSV Format
 
