@@ -35,7 +35,7 @@ A beautiful, customizable wedding website built with Next.js 16. Features includ
 - **Guest List**:
   - Import from CSV (handles quoted fields, commas in addresses)
   - **Export CSV** — downloads whatever the filter/search is currently showing as a mailing-list-ready CSV (see *Guest List — Mailing List Export*)
-  - **Bulk editing** — tick guests to flag them ⚠️ Issue / 📌 Need in one click, or open **Edit Selected…** to add a note, set the flag, side or RSVP status across the whole selection (see *Guest List — Bulk Editing*)
+  - **Bulk editing** — tick guests, then *Mark as Invited* / *Delete Selected* inline, with a **⋯** overflow menu for Mark as Not Invited, ⚠️ Issue / 📌 Need flagging, and **Edit Selected…** (note, flag, side, RSVP status across the selection) — see *Guest List — Bulk Editing*
   - Manual add/edit/delete
   - Fields: name, email, phone, party_size, side, notes, party_members (JSONB), address
   - Supports families of 4+ with named/unnamed party member slots
@@ -296,11 +296,18 @@ Tick guests with the row checkboxes (or the header checkbox to take everything c
 
 | Button | What it does |
 | --- | --- |
-| **Mark as Invited** / **Mark as Not Invited** | Sets the invited flag across the selection |
-| **⚠️ Issue** | Flags every selected guest as an issue. **Click again to clear it** — if all selected guests already have the flag, the button removes it |
-| **📌 Need** | Same, for the need flag |
-| **✏️ Edit Selected…** | Opens the bulk edit modal below |
+| **Mark as Invited** | Marks the whole selection invited |
 | **Delete Selected** | Deletes the selection (confirms first) |
+| **⋯** | Overflow menu holding the rest of the bulk actions (below) |
+
+The **⋯** menu — sits to the right of *Delete Selected*, closes on outside click or `Esc`:
+
+| Menu item | What it does |
+| --- | --- |
+| **Mark as Not Invited** | Clears the invited flag across the selection |
+| **⚠️ Flag as Issue** | Flags every selected guest as an issue. **Pick it again later to clear** — if all selected guests already have the flag, it removes it |
+| **📌 Flag as Need** | Same, for the need flag |
+| **✏️ Edit Selected…** | Opens the bulk edit modal below |
 
 A green pill next to the buttons confirms what happened (e.g. *Marked 6 guests as 📌 Need*).
 

@@ -114,6 +114,8 @@ export default function RSVPDashboard() {
     // Bulk edit of the selected guests. Every field defaults to '' = leave unchanged,
     // with an explicit "Clear" option where clearing makes sense.
     const [showBulkModal, setShowBulkModal] = useState(false);
+    const [showBulkMenu, setShowBulkMenu] = useState(false);
+    const bulkMenuRef = useRef<HTMLDivElement | null>(null);
     const [bulkFlag, setBulkFlag] = useState('');
     const [bulkSide, setBulkSide] = useState('');
     const [bulkRsvp, setBulkRsvp] = useState('');
@@ -156,6 +158,30 @@ export default function RSVPDashboard() {
             setActiveTab(tab as Tab);
         }
     }, []);
+
+    // Close the bulk overflow menu on an outside click or Escape. Also closes when
+    // the selection empties, since the trigger unmounts with the rest of the bar.
+    useEffect(() => {
+        if (!showBulkMenu) return;
+        const onPointerDown = (e: MouseEvent | TouchEvent) => {
+            if (!bulkMenuRef.current?.contains(e.target as Node)) setShowBulkMenu(false);
+        };
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') setShowBulkMenu(false);
+        };
+        document.addEventListener('mousedown', onPointerDown);
+        document.addEventListener('touchstart', onPointerDown);
+        document.addEventListener('keydown', onKeyDown);
+        return () => {
+            document.removeEventListener('mousedown', onPointerDown);
+            document.removeEventListener('touchstart', onPointerDown);
+            document.removeEventListener('keydown', onKeyDown);
+        };
+    }, [showBulkMenu]);
+
+    useEffect(() => {
+        if (selectedGuests.length === 0) setShowBulkMenu(false);
+    }, [selectedGuests.length]);
 
     useIsoEffect(() => {
         const wrap = guestTableWrapRef.current;
@@ -1156,38 +1182,73 @@ export default function RSVPDashboard() {
                                         Mark as Invited
                                     </button>
                                     <button
-                                        onClick={handleBulkUnmarkInvited}
-                                        className="bg-gray-500 text-white px-4 py-2 rounded-full hover:bg-gray-600 text-sm transition-all duration-300 shadow-md hover:shadow-lg"
-                                    >
-                                        Mark as Not Invited
-                                    </button>
-                                    <button
-                                        onClick={() => handleBulkFlag('issue')}
-                                        title="Flag every selected guest as an issue (click again to clear)"
-                                        className="bg-red-100 text-red-700 px-4 py-2 rounded-full hover:bg-red-200 text-sm font-semibold transition-all duration-300 shadow-sm hover:shadow-md"
-                                    >
-                                        ⚠️ Issue
-                                    </button>
-                                    <button
-                                        onClick={() => handleBulkFlag('need')}
-                                        title="Flag every selected guest as a need (click again to clear)"
-                                        className="bg-amber-100 text-amber-700 px-4 py-2 rounded-full hover:bg-amber-200 text-sm font-semibold transition-all duration-300 shadow-sm hover:shadow-md"
-                                    >
-                                        📌 Need
-                                    </button>
-                                    <button
-                                        onClick={openBulkModal}
-                                        title="Add a note, set a flag, side or RSVP status on every selected guest"
-                                        className="bg-accent text-white px-4 py-2 rounded-full hover:bg-accent/90 text-sm font-semibold transition-all duration-300 shadow-md hover:shadow-lg"
-                                    >
-                                        ✏️ Edit Selected…
-                                    </button>
-                                    <button
                                         onClick={handleBulkDelete}
                                         className="bg-red-600 text-white px-4 py-2 rounded-full hover:bg-red-700 text-sm transition-all duration-300 shadow-md hover:shadow-lg"
                                     >
                                         Delete Selected
                                     </button>
+
+                                    {/* Overflow menu for the less-used bulk actions */}
+                                    <div className="relative" ref={bulkMenuRef}>
+                                        <button
+                                            onClick={() => setShowBulkMenu(v => !v)}
+                                            title="More actions for the selected guests"
+                                            aria-haspopup="menu"
+                                            aria-expanded={showBulkMenu}
+                                            aria-label="More actions"
+                                            className={`w-9 h-9 flex items-center justify-center rounded-full text-sm transition-all duration-300 shadow-sm hover:shadow-md ${
+                                                showBulkMenu ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                            }`}
+                                        >
+                                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                                <circle cx="4" cy="10" r="1.6" />
+                                                <circle cx="10" cy="10" r="1.6" />
+                                                <circle cx="16" cy="10" r="1.6" />
+                                            </svg>
+                                        </button>
+                                        {showBulkMenu && (
+                                            <div
+                                                role="menu"
+                                                className="absolute left-0 mt-2 w-64 bg-white/95 backdrop-blur rounded-2xl shadow-2xl border border-gray-200 py-2 z-40"
+                                            >
+                                                <p className="px-4 pb-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                                                    {selectedGuests.length} selected
+                                                </p>
+                                                <button
+                                                    role="menuitem"
+                                                    onClick={() => { setShowBulkMenu(false); handleBulkUnmarkInvited(); }}
+                                                    className="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                                                >
+                                                    Mark as Not Invited
+                                                </button>
+                                                <button
+                                                    role="menuitem"
+                                                    onClick={() => { setShowBulkMenu(false); handleBulkFlag('issue'); }}
+                                                    title="Click again later to clear the flag"
+                                                    className="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-red-50 transition-colors"
+                                                >
+                                                    ⚠️ Flag as Issue
+                                                </button>
+                                                <button
+                                                    role="menuitem"
+                                                    onClick={() => { setShowBulkMenu(false); handleBulkFlag('need'); }}
+                                                    title="Click again later to clear the flag"
+                                                    className="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-amber-50 transition-colors"
+                                                >
+                                                    📌 Flag as Need
+                                                </button>
+                                                <div className="my-1.5 border-t border-gray-100" />
+                                                <button
+                                                    role="menuitem"
+                                                    onClick={() => { setShowBulkMenu(false); openBulkModal(); }}
+                                                    className="w-full text-left px-4 py-2.5 text-sm font-semibold text-gray-900 hover:bg-gray-50 transition-colors"
+                                                >
+                                                    ✏️ Edit Selected…
+                                                    <span className="block text-xs font-normal text-gray-400 mt-0.5">Note, flag, side or RSVP status</span>
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
                                 </>
                             )}
                             {bulkResult && (
