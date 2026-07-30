@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "check:photos": "npx --yes tsx scripts/check-photo-route.mts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

@@ -10,10 +10,21 @@ export async function GET(
     try {
         const { filepath } = await params;
         const photosDir = path.join(process.cwd(), 'public/photos');
-        const filePath = path.join(photosDir, ...filepath);
+
+        // A trailing "thumb" segment asks for a resized thumbnail, so the file on
+        // disk is the path *without* it. This has to be resolved before the
+        // existence check below — checking the raw request path would stat
+        // "<file>/thumb", which never exists, and 404 every thumbnail.
+        const isThumb = filepath[filepath.length - 1] === 'thumb';
+        const segments = isThumb ? filepath.slice(0, -1) : filepath;
+        if (segments.length === 0) {
+            return new NextResponse('File not found', { status: 404 });
+        }
+
+        const filePath = path.join(photosDir, ...segments);
 
         // Security: ensure resolved path stays within photos dir
-        if (!filePath.startsWith(photosDir + path.sep) && filePath !== photosDir) {
+        if (!filePath.startsWith(photosDir + path.sep)) {
             return new NextResponse('Forbidden', { status: 403 });
         }
 
@@ -21,17 +32,9 @@ export async function GET(
             return new NextResponse('File not found', { status: 404 });
         }
 
-        // Thumb mode: last segment is literally "thumb"
-        if (filepath[filepath.length - 1] === 'thumb') {
-            const thumbPath = path.join(photosDir, ...filepath.slice(0, -1));
-            if (!thumbPath.startsWith(photosDir + path.sep)) {
-                return new NextResponse('Forbidden', { status: 403 });
-            }
-            if (!fs.existsSync(thumbPath)) {
-                return new NextResponse('Not found', { status: 404 });
-            }
+        if (isThumb) {
             try {
-                const thumb = await sharp(thumbPath)
+                const thumb = await sharp(filePath)
                     .resize(300, 200, { fit: 'cover', position: 'centre' })
                     .jpeg({ quality: 70 })
                     .toBuffer();
@@ -42,7 +45,8 @@ export async function GET(
                     },
                 });
             } catch {
-                const original = fs.readFileSync(thumbPath);
+                // sharp can't handle it (e.g. an SVG) — serve the original.
+                const original = fs.readFileSync(filePath);
                 return new NextResponse(new Uint8Array(original), {
                     headers: { 'Content-Type': 'image/jpeg' },
                 });

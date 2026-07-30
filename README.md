@@ -466,6 +466,7 @@ docker cp <container>:/app/public/config ./backup/config
 | Problem | Fix |
 |---------|-----|
 | Photos not showing | Must use `/api/photos/[filename]` path, not `/photos/[filename]` |
+| Thumbnails show broken-image icons | `/api/photos/<file>/thumb` is 404ing. Run `npm run check:photos` — it exercises thumbs, full-size, `?w=` resize and the traversal guard against the route handler directly. In `src/app/api/photos/[...filepath]/route.ts` the trailing `thumb` segment must be stripped **before** the `fs.existsSync()` check, or it stats `<file>/thumb` and 404s everything |
 | Can't log in | Verify `ADMIN_PASSWORD` env var; try incognito |
 | RSVP not found | Guest name must match guest_list exactly (case-insensitive) |
 | Registry fetch blank | Amazon blocks scrapes — fill in manually after fetch attempt |
