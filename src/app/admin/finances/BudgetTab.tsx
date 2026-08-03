@@ -196,7 +196,27 @@ function SectionPayments({ category, data, api }: {
     const stats = data.summary.categories.find((c) => c.id === category.id);
     if (!stats) return null;
 
-    const installments = data.purchases.filter((p) => p.category_id === category.id);
+    // Own-pocket installments and earmarked gift payments both paid this bill, so
+    // both belong in the list. Gift rows are badged and edit via the receipts API.
+    const installments = [
+        ...data.purchases
+            .filter((p) => p.category_id === category.id)
+            .map((p) => ({
+                key: `p${p.id}`, id: p.id, kind: 'purchase' as const,
+                label: p.description, date: p.purchased_on, amount: p.amount,
+                payerId: p.payer_id, who: null as string | null,
+            })),
+        ...data.contributors.flatMap((c) =>
+            (c.receipts || [])
+                .filter((r) => r.category_id === category.id)
+                .map((r) => ({
+                    key: `r${r.id}`, id: r.id, kind: 'gift' as const,
+                    label: r.note ?? '', date: r.received_on, amount: r.amount,
+                    payerId: null as number | null, who: c.name,
+                }))),
+    ].sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
+    // Summed from the displayed rows so the subtotal can never disagree with them.
+    const installmentSubtotal = installments.reduce((sum, r) => sum + r.amount, 0);
     const overpaid = stats.remaining < 0;
 
     const addInstallment = () =>
@@ -214,15 +234,15 @@ function SectionPayments({ category, data, api }: {
                 <h4 className="text-sm font-semibold text-gray-800">Paid toward this section</h4>
                 <span className="text-xs text-gray-400">
                     {installments.length
-                        ? `${installments.length} installment${installments.length === 1 ? '' : 's'}`
-                        : 'no installments yet'}
+                        ? `${installments.length} payment${installments.length === 1 ? '' : 's'}`
+                        : 'no payments yet'}
                     {stats.itemSpent > 0 && ` · ${formatMoney(stats.itemSpent)} tagged to single lines`}
                 </span>
             </div>
 
             <div className="grid grid-cols-3 gap-2 mb-3">
                 <Figure label="budgeted" value={stats.total} />
-                <Figure label="paid so far" value={stats.spent} tone="good" />
+                <Figure label="paid so far" value={stats.paid} tone="good" />
                 <Figure
                     label={overpaid ? 'overpaid by' : 'still owed'}
                     value={Math.abs(stats.remaining)}
@@ -233,63 +253,84 @@ function SectionPayments({ category, data, api }: {
             <Bar pct={stats.paidPct} tone={overpaid ? 'rose' : 'accent'} />
             <div className="flex justify-between text-[11px] text-gray-400 mt-1 mb-3">
                 <span>{stats.paidPct.toFixed(1)}% paid</span>
-                {stats.earmarked > 0 && (
-                    <span>{formatMoney(stats.earmarked)} of that came from gift money</span>
+                {stats.giftApplied > 0 && (
+                    <span>
+                        {formatMoney(stats.ownSpent)} yours + {formatMoney(stats.giftApplied)} gift money
+                    </span>
                 )}
             </div>
 
             {installments.length > 0 && (
                 <div className="space-y-1 mb-2">
-                    {installments.map((p) => (
-                        <div key={p.id}
-                            className="grid grid-cols-[1fr_7rem_1.2fr_5.5rem_1.5rem] gap-2 items-center
-                                bg-white rounded-xl border border-gray-100 px-2 py-1.5">
-                            <InlineText
-                                value={p.description}
-                                placeholder="e.g. Venue 3/4"
-                                onCommit={(description) => api.update('purchases', { id: p.id, description })}
-                                className="text-xs"
-                            />
-                            <input
-                                type="date"
-                                value={(p.purchased_on ?? '').slice(0, 10)}
-                                onChange={(e) => api.update('purchases', {
-                                    id: p.id, purchased_on: e.target.value,
-                                })}
-                                className="bg-transparent text-[11px] text-gray-500 rounded-lg px-1 py-0.5
-                                    focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/30"
-                            />
-                            <select
-                                value={p.payer_id ?? ''}
-                                onChange={(e) => api.update('purchases', {
-                                    id: p.id, payer_id: e.target.value || null,
-                                })}
-                                className="bg-transparent text-[11px] text-gray-600 rounded-lg px-1 py-0.5
-                                    focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/30"
-                            >
-                                <option value="">Unassigned</option>
-                                {data.payers.map((payer) => (
-                                    <option key={payer.id} value={payer.id}>{payer.name}</option>
-                                ))}
-                            </select>
-                            <InlineNumber
-                                value={p.amount} prefix="$"
-                                onCommit={(amount) => api.update('purchases', { id: p.id, amount })}
-                            />
-                            <button
-                                onClick={() => {
-                                    if (confirm(`Delete "${p.description}"?`)) api.remove('purchases', p.id);
-                                }}
-                                aria-label={`Delete ${p.description}`}
-                                className="text-gray-300 hover:text-rose-500 transition-colors"
-                            >
-                                &times;
-                            </button>
-                        </div>
-                    ))}
+                    {installments.map((row) => {
+                        const resource = row.kind === 'gift' ? 'receipts' as const : 'purchases' as const;
+                        const labelField = row.kind === 'gift' ? 'note' : 'description';
+                        const dateField = row.kind === 'gift' ? 'received_on' : 'purchased_on';
+                        return (
+                            <div key={row.key}
+                                className={`grid grid-cols-[1fr_7rem_1.2fr_5.5rem_1.5rem] gap-2 items-center
+                                    rounded-xl border px-2 py-1.5
+                                    ${row.kind === 'gift'
+                                        ? 'bg-emerald-50/60 border-emerald-100'
+                                        : 'bg-white border-gray-100'}`}>
+                                <InlineText
+                                    value={row.label}
+                                    placeholder="e.g. Venue 3/4"
+                                    onCommit={(v) => api.update(resource, { id: row.id, [labelField]: v })}
+                                    className="text-xs"
+                                />
+                                <input
+                                    type="date"
+                                    value={(row.date ?? '').slice(0, 10)}
+                                    onChange={(e) => api.update(resource, {
+                                        id: row.id, [dateField]: e.target.value,
+                                    })}
+                                    className="bg-transparent text-[11px] text-gray-500 rounded-lg px-1 py-0.5
+                                        focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/30"
+                                />
+                                {row.kind === 'gift' ? (
+                                    <span className="text-[11px] text-emerald-700 truncate px-1">
+                                        🎁 {row.who}
+                                    </span>
+                                ) : (
+                                    <select
+                                        value={row.payerId ?? ''}
+                                        onChange={(e) => api.update('purchases', {
+                                            id: row.id, payer_id: e.target.value || null,
+                                        })}
+                                        className="bg-transparent text-[11px] text-gray-600 rounded-lg px-1 py-0.5
+                                            focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/30"
+                                    >
+                                        <option value="">Unassigned</option>
+                                        {data.payers.map((payer) => (
+                                            <option key={payer.id} value={payer.id}>{payer.name}</option>
+                                        ))}
+                                    </select>
+                                )}
+                                <InlineNumber
+                                    value={row.amount} prefix="$"
+                                    onCommit={(amount) => api.update(resource, { id: row.id, amount })}
+                                />
+                                <button
+                                    onClick={() => {
+                                        const what = row.kind === 'gift'
+                                            ? `${row.who}'s gift payment "${row.label}"`
+                                            : `"${row.label}"`;
+                                        if (confirm(`Delete ${what}?`)) api.remove(resource, row.id);
+                                    }}
+                                    aria-label={`Delete ${row.label}`}
+                                    className="text-gray-300 hover:text-rose-500 transition-colors"
+                                >
+                                    &times;
+                                </button>
+                            </div>
+                        );
+                    })}
                     <div className="flex justify-between px-2 pt-1 text-[11px] text-gray-500">
-                        <span>Installments subtotal</span>
-                        <span className="font-semibold tabular-nums">{formatMoney(stats.directSpent)}</span>
+                        <span>Payments subtotal</span>
+                        <span className="font-semibold tabular-nums">
+                            {formatMoney(installmentSubtotal)}
+                        </span>
                     </div>
                 </div>
             )}
@@ -341,9 +382,10 @@ function ItemRow({ item, data, api, expanded, onToggleExpanded }: {
     const { settings, summary } = data;
     const stats = summary.items.find((i) => i.id === item.id);
     const total = itemTotal(item, settings);
-    const spent = stats?.spent ?? 0;
+    const paid = stats?.paid ?? 0;
+    const ownSpent = stats?.ownSpent ?? 0;
+    const giftApplied = stats?.giftApplied ?? 0;
     const variance = stats?.variance ?? 0;
-    const earmarked = stats?.earmarked ?? 0;
     const derivedQty = item.qty_source !== 'manual';
 
     const patch = (fields: Record<string, unknown>) => api.update('items', { id: item.id, ...fields });
@@ -427,14 +469,15 @@ function ItemRow({ item, data, api, expanded, onToggleExpanded }: {
                 </button>
             </div>
 
-            {(spent > 0 || earmarked > 0) && (
+            {paid > 0 && (
                 <div className="px-4 pb-2 -mt-1 md:pl-9 flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
                     <span className="text-gray-400">
-                        Paid so far <Money value={spent} className="font-medium" />
+                        Paid so far <Money value={paid} className="font-medium" />
                     </span>
-                    {earmarked > 0 && (
+                    {giftApplied > 0 && (
                         <span className="text-gray-400">
-                            Gift money earmarked <Money value={earmarked} className="font-medium" />
+                            {ownSpent > 0 ? `${formatMoney(ownSpent)} yours + ` : ''}
+                            <span className="font-medium">{formatMoney(giftApplied)} gift money</span>
                         </span>
                     )}
                     {variance > 0 && (
@@ -442,7 +485,7 @@ function ItemRow({ item, data, api, expanded, onToggleExpanded }: {
                             Over budget by {formatMoney(variance)}
                         </span>
                     )}
-                    {variance < 0 && spent > 0 && (
+                    {variance < 0 && (
                         <span className="text-gray-400">
                             {formatMoney(-variance)} left on this line
                         </span>

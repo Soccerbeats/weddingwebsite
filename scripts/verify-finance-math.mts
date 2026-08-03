@@ -89,7 +89,7 @@ console.log('\n--- Purchases (vs spreadsheet column totals) ---');
 const s = buildSummary({ categories, payers, purchases, contributors, settings, weddingDate: 'October 16, 2026', now: new Date('2026-08-03') });
 check('Austin spent', s.payers[0].spent, 5756);
 check('Heaven spent', s.payers[1].spent, 10894);
-check('total spent', s.spentTotal, 16650);
+check('out-of-pocket total', s.outOfPocketTotal, 16650);
 
 console.log('\n--- Sheet parity: original (uncorrected) receipts ---');
 // The sheet's own contributions block claimed $6,200 received; reproduce its
@@ -119,17 +119,36 @@ console.log('\n--- Section-level (lump-sum) payments ---');
 // installments must land on the section, not on the single Venue line.
 const venueSection = s.categories.find(c => c.name === 'Venue Cost')!;
 check('section budgeted', venueSection.total, 18358.9);
-check('installments on section', venueSection.directSpent, 9680);
-check('installment count', venueSection.installmentCount, 2);
-check('section paid total', venueSection.spent, 9680);
-check('section still owed', venueSection.remaining, 8678.9);
-check('section paid %', venueSection.paidPct, 52.73);
-check('gift money earmarked to section', venueSection.earmarked, 5000);
+check('own-pocket installments', venueSection.directSpent, 9680);
+// Rob's $5,000 went to the venue, so the bill is that much further down.
+check('gift money applied to section', venueSection.giftApplied, 5000);
+check('section PAID includes gift money', venueSection.paid, 14680);
+check('section own-pocket only', venueSection.ownSpent, 9680);
+check('payment count includes the gift', venueSection.installmentCount, 3);
+check('section still owed', venueSection.remaining, 3678.9);
+check('section paid %', venueSection.paidPct, 79.96);
 
 const venue = s.items.find(i => i.name === 'Venue')!;
 check('venue LINE no longer overruns', venue.variance, -4500);
-check('venue line spend is zero', venue.spent, 0);
+check('venue line spend is zero', venue.paid, 0);
 check('venue % of budget', venue.pct, 13.62);
+
+console.log('\n--- Gift money counts toward bills, not out-of-pocket ---');
+check('out-of-pocket excludes gift money', s.outOfPocketTotal, 16650);
+check('gift applied (Rob venue + Kim dress)', s.giftAppliedTotal, 6200);
+check('gift held but unapplied (Kim veil)', s.giftUnapplied, 680);
+check('total paid to vendors', s.paidTotal, 22850);
+check('bill still owed', s.billRemaining, 10196.26);
+// Crucially, the couple's remaining is unchanged — the deficit already netted off
+// contributions, so counting them as spend too would double-count.
+check('still-to-spend unaffected by gift accounting', s.stillToSpendCash, 9516.26);
+check('Austin spend still own-pocket only', s.payers[0].spent, 5756);
+check('Heaven spend still own-pocket only', s.payers[1].spent, 10894);
+
+const dress = s.items.find(i => i.name === 'Dress')!;
+check('dress paid entirely by gift money', dress.paid, 1200);
+check('dress own-pocket is zero', dress.ownSpent, 0);
+check('dress fully covered', dress.variance, 0);
 
 console.log('\n--- Line-level tracking still works ---');
 const tux = s.items.find(i => i.name === 'Tux')!;
@@ -138,8 +157,9 @@ const other = s.categories.find(c => c.name === 'Other')!;
 // 70 stamps + 250 + 136 decor + 300 + 300 suits + 20 vases + 53 invites + 1284 ring
 check('other section rolls up line spend', other.itemSpent, 2413);
 check('other section has no installments', other.directSpent, 0);
+check('other section gift money (dress)', other.giftApplied, 1200);
+check('other section paid total', other.paid, 3613);
 check('unlinked spend (AirBnb)', s.unlinkedSpend, 1957);
-check('total spend unchanged by re-pointing', s.spentTotal, 16650);
 
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);

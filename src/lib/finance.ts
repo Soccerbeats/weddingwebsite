@@ -194,11 +194,15 @@ export interface ItemSummary {
     total: number;
     /** share of the grand total, matching the spreadsheet's % column */
     pct: number;
-    spent: number;
-    /** spent − budgeted; positive is an overrun */
+    /** paid from a payer's own pocket */
+    ownSpent: number;
+    /** gift money earmarked here — it paid this bill just the same */
+    giftApplied: number;
+    /** ownSpent + giftApplied: everything that has gone to this line */
+    paid: number;
+    /** paid − budgeted; positive is an overrun */
     variance: number;
     isPaid: boolean;
-    earmarked: number;
 }
 
 export interface CategorySummary {
@@ -206,25 +210,43 @@ export interface CategorySummary {
     name: string;
     total: number;
     pct: number;
-    /** everything paid toward this section: lump-sum installments + line-level */
-    spent: number;
-    /** installments paid against the section as a whole */
+    /**
+     * Everything that has gone to this section's bill, whoever's money it was:
+     * lump-sum installments + line-level payments + earmarked gift money.
+     */
+    paid: number;
+    /** paid out of a payer's own pocket (installments + line-level) */
+    ownSpent: number;
+    /** own-pocket installments against the section as a whole */
     directSpent: number;
-    /** payments tagged to individual lines within the section */
+    /** own-pocket payments tagged to individual lines */
     itemSpent: number;
-    /** budget − spent; negative means the section is overpaid */
+    /** gift money earmarked to this section or its lines */
+    giftApplied: number;
+    /** budget − paid; negative means the section is overpaid */
     remaining: number;
     /** how far through the section's budget the payments have got */
     paidPct: number;
-    /** number of lump-sum installments logged against the section */
+    /** lump-sum payments against the section: own installments + earmarked gifts */
     installmentCount: number;
-    /** gift money earmarked to this section or its lines */
-    earmarked: number;
 }
 
 export interface FinanceSummary {
     budgetTotal: number;
-    spentTotal: number;
+    /**
+     * Paid by the payers themselves. Deliberately excludes gift money, because
+     * the deficit has already subtracted contributions — counting them here too
+     * would double-count and understate what's left to pay.
+     */
+    outOfPocketTotal: number;
+    /** received gift money that has been earmarked to a section or line */
+    giftAppliedTotal: number;
+    /** everything paid to vendors so far, from any source */
+    paidTotal: number;
+    /** received gift money not yet earmarked anywhere — cash still in hand */
+    giftUnapplied: number;
+    /** budget − paidTotal: what the vendors are still owed */
+    billRemaining: number;
     pledgedTotal: number;
     receivedTotal: number;
     outstandingPledges: number;
@@ -232,7 +254,7 @@ export interface FinanceSummary {
     deficitPledged: number;
     /** budget − cash received, the conservative figure */
     deficitCash: number;
-    /** deficit minus what has already been paid out of pocket */
+    /** deficit minus what the payers have already paid out of pocket */
     stillToSpendPledged: number;
     stillToSpendCash: number;
     categories: CategorySummary[];
@@ -307,10 +329,10 @@ export function buildSummary(input: SummaryInput): FinanceSummary {
     const spentByCategory = new Map<number, number>();
     const installmentsByCategory = new Map<number, number>();
     let unlinkedSpend = 0;
-    let spentTotal = 0;
+    let outOfPocketTotal = 0;
     for (const p of purchases) {
         const amount = num(p.amount);
-        spentTotal += amount;
+        outOfPocketTotal += amount;
         // item_id wins over category_id so a payment is never counted twice.
         if (p.item_id != null) {
             spentByItem.set(p.item_id, (spentByItem.get(p.item_id) ?? 0) + amount);
@@ -321,19 +343,32 @@ export function buildSummary(input: SummaryInput): FinanceSummary {
             unlinkedSpend += amount;
         }
     }
-    spentTotal = money(spentTotal);
+    outOfPocketTotal = money(outOfPocketTotal);
 
-    const earmarkedByItem = new Map<number, number>();
-    const earmarkedByCategory = new Map<number, number>();
+    // Earmarked gift money paid a vendor bill exactly like an own-pocket payment
+    // did — Rob's $5,000 went to the venue. It counts toward the bill, but never
+    // toward a payer's out-of-pocket total.
+    const giftByItem = new Map<number, number>();
+    const giftByCategory = new Map<number, number>();
+    let giftAppliedTotal = 0;
+    let giftUnapplied = 0;
     for (const c of contributors) {
         for (const r of c.receipts || []) {
+            const amount = num(r.amount);
             if (r.item_id != null) {
-                earmarkedByItem.set(r.item_id, (earmarkedByItem.get(r.item_id) ?? 0) + num(r.amount));
+                giftByItem.set(r.item_id, (giftByItem.get(r.item_id) ?? 0) + amount);
+                giftAppliedTotal += amount;
             } else if (r.category_id != null) {
-                earmarkedByCategory.set(r.category_id, (earmarkedByCategory.get(r.category_id) ?? 0) + num(r.amount));
+                giftByCategory.set(r.category_id, (giftByCategory.get(r.category_id) ?? 0) + amount);
+                installmentsByCategory.set(r.category_id, (installmentsByCategory.get(r.category_id) ?? 0) + 1);
+                giftAppliedTotal += amount;
+            } else {
+                giftUnapplied += amount;
             }
         }
     }
+    giftAppliedTotal = money(giftAppliedTotal);
+    giftUnapplied = money(giftUnapplied);
 
     const pct = (value: number) => (total > 0 ? money((value / total) * 100) : 0);
 
@@ -344,13 +379,14 @@ export function buildSummary(input: SummaryInput): FinanceSummary {
 
     for (const category of categories) {
         let itemSpent = 0;
-        let itemEarmarked = 0;
+        let itemGift = 0;
         for (const item of category.items || []) {
             const lineTotal = itemTotal(item, settings);
-            const spent = money(spentByItem.get(item.id) ?? 0);
-            const earmarked = money(earmarkedByItem.get(item.id) ?? 0);
-            itemSpent += spent;
-            itemEarmarked += earmarked;
+            const ownSpent = money(spentByItem.get(item.id) ?? 0);
+            const giftApplied = money(giftByItem.get(item.id) ?? 0);
+            const paid = money(ownSpent + giftApplied);
+            itemSpent += ownSpent;
+            itemGift += giftApplied;
             itemCount += 1;
             if (item.is_paid) paidItemCount += 1;
             items.push({
@@ -360,27 +396,32 @@ export function buildSummary(input: SummaryInput): FinanceSummary {
                 categoryName: category.name,
                 total: lineTotal,
                 pct: pct(lineTotal),
-                spent,
-                variance: money(spent - lineTotal),
+                ownSpent,
+                giftApplied,
+                paid,
+                variance: money(paid - lineTotal),
                 isPaid: item.is_paid,
-                earmarked,
             });
         }
         const catTotal = categoryTotal(category, settings);
         const directSpent = money(spentByCategory.get(category.id) ?? 0);
-        const totalSpent = money(directSpent + itemSpent);
+        const directGift = money(giftByCategory.get(category.id) ?? 0);
+        const ownSpent = money(directSpent + itemSpent);
+        const giftApplied = money(directGift + itemGift);
+        const paid = money(ownSpent + giftApplied);
         categorySummaries.push({
             id: category.id,
             name: category.name,
             total: catTotal,
             pct: pct(catTotal),
-            spent: totalSpent,
+            paid,
+            ownSpent,
             directSpent,
             itemSpent: money(itemSpent),
-            remaining: money(catTotal - totalSpent),
-            paidPct: catTotal > 0 ? money((totalSpent / catTotal) * 100) : 0,
+            giftApplied,
+            remaining: money(catTotal - paid),
+            paidPct: catTotal > 0 ? money((paid / catTotal) * 100) : 0,
             installmentCount: installmentsByCategory.get(category.id) ?? 0,
-            earmarked: money(itemEarmarked + (earmarkedByCategory.get(category.id) ?? 0)),
         });
     }
 
@@ -425,14 +466,18 @@ export function buildSummary(input: SummaryInput): FinanceSummary {
 
     return {
         budgetTotal: total,
-        spentTotal,
+        outOfPocketTotal,
+        giftAppliedTotal,
+        paidTotal: money(outOfPocketTotal + giftAppliedTotal),
+        giftUnapplied,
+        billRemaining: money(total - outOfPocketTotal - giftAppliedTotal),
         pledgedTotal,
         receivedTotal,
         outstandingPledges: money(pledgedTotal - receivedTotal),
         deficitPledged,
         deficitCash,
-        stillToSpendPledged: money(deficitPledged - spentTotal),
-        stillToSpendCash: money(deficitCash - spentTotal),
+        stillToSpendPledged: money(deficitPledged - outOfPocketTotal),
+        stillToSpendCash: money(deficitCash - outOfPocketTotal),
         categories: categorySummaries,
         items,
         payers: payerSummaries,

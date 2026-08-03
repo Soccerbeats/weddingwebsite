@@ -68,7 +68,8 @@ check('appetizers flagged use_subitems', sub?.use_subitems === true);
 
 const s1 = buildSummary({ ...first, weddingDate: 'October 16, 2026' });
 near('budget total from DB', s1.budgetTotal, 33046.26);
-near('spent total from DB', s1.spentTotal, 16650);
+near('out-of-pocket from DB', s1.outOfPocketTotal, 16650);
+near('paid to vendors from DB', s1.paidTotal, 22850);
 near('received from DB', s1.receivedTotal, 6880);
 
 console.log('\n--- Seed is idempotent across a cold restart ---');
@@ -149,9 +150,10 @@ const venueCat = sectionData.categories.find(c => c.name === 'Venue Cost')!;
 const sSec = buildSummary({ ...sectionData, weddingDate: null });
 const venueStats = sSec.categories.find(c => c.id === venueCat.id)!;
 near('installments landed on section', venueStats.directSpent, 9680);
-check('installment count is 2', venueStats.installmentCount === 2, `${venueStats.installmentCount}`);
-near('section remaining', venueStats.remaining, 8678.9);
-near('gift earmarked to section', venueStats.earmarked, 5000);
+check('payment count is 3 (2 own + 1 gift)', venueStats.installmentCount === 3, `${venueStats.installmentCount}`);
+near('section remaining', venueStats.remaining, 3678.9);
+near('gift applied to section', venueStats.giftApplied, 5000);
+near('section paid incl. gift', venueStats.paid, 14680);
 
 // item_id and category_id must never both be set on one row.
 const excl = await PATCH(req({ id: sectionData.purchases.find(p => p.category_id === venueCat.id)!.id,

@@ -64,8 +64,8 @@ export default function AdminFinancesPage() {
                     <h1 className="text-2xl font-semibold text-gray-900">Finances</h1>
                     <p className="text-sm text-gray-400 mt-0.5">
                         {formatMoney(summary.budgetTotal)} budgeted ·{' '}
-                        {formatMoney(summary.spentTotal)} paid ·{' '}
-                        {formatMoney(leftToPay)} left to cover
+                        {formatMoney(summary.paidTotal)} paid ·{' '}
+                        {formatMoney(leftToPay)} left for you two to cover
                     </p>
                 </div>
                 <div className="h-5 flex items-center">

@@ -34,14 +34,14 @@ export default function OverviewTab({ data }: { data: FinancePayload }) {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <StatTile label="Total budget" value={formatMoney(summary.budgetTotal)}
                     hint={`${summary.itemCount} line items`} />
-                <StatTile label="Spent so far" value={formatMoney(summary.spentTotal)}
-                    hint={summary.budgetTotal > 0
-                        ? `${((summary.spentTotal / summary.budgetTotal) * 100).toFixed(0)}% of budget`
-                        : undefined} />
+                <StatTile label="Paid to vendors" value={formatMoney(summary.paidTotal)}
+                    hint={summary.giftAppliedTotal > 0
+                        ? `${formatMoney(summary.outOfPocketTotal)} yours + ${formatMoney(summary.giftAppliedTotal)} gift`
+                        : 'all from your own pocket'} />
                 <StatTile label="Gift money received" value={formatMoney(summary.receivedTotal)} tone="good"
-                    hint={summary.outstandingPledges > 0
-                        ? `+${formatMoney(summary.outstandingPledges)} pledged`
-                        : 'all pledges collected'} />
+                    hint={summary.giftUnapplied > 0
+                        ? `${formatMoney(summary.giftUnapplied)} not yet applied`
+                        : 'all applied to a bill'} />
                 <StatTile
                     label="Left to pay"
                     value={formatMoney(Math.max(0, stillToSpend))}
@@ -69,6 +69,24 @@ export default function OverviewTab({ data }: { data: FinancePayload }) {
                         </ScenarioPill>
                     </div>
                 </div>
+            </Card>
+
+            <Card className="p-4">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 text-sm">
+                    <span className="font-semibold text-gray-800">Vendor bills</span>
+                    <span className="text-gray-500">
+                        {formatMoney(summary.paidTotal)} paid of {formatMoney(summary.budgetTotal)}
+                        {' — '}
+                        <strong className="text-gray-800">{formatMoney(summary.billRemaining)} still owed</strong>
+                    </span>
+                </div>
+                {summary.giftUnapplied > 0 && (
+                    <p className="text-[11px] text-gray-400 mt-2">
+                        You also hold {formatMoney(summary.giftUnapplied)} of gift money that isn&apos;t
+                        earmarked to anything yet — earmark it on the Gift Money tab and it will count
+                        toward a bill.
+                    </p>
+                )}
             </Card>
 
             <Card className="p-5">
@@ -166,10 +184,15 @@ export default function OverviewTab({ data }: { data: FinancePayload }) {
                                                 {category.installmentCount === 1 ? '' : 's'}
                                             </span>
                                         )}
+                                        {category.giftApplied > 0 && (
+                                            <span className="text-[11px] text-emerald-600 ml-2">
+                                                🎁 {formatMoney(category.giftApplied)}
+                                            </span>
+                                        )}
                                     </span>
                                     <span className="text-xs text-gray-400">
                                         <span className="tabular-nums font-medium text-gray-700">
-                                            {formatMoney(category.spent)}
+                                            {formatMoney(category.paid)}
                                         </span>
                                         {' of '}
                                         <span className="tabular-nums">{formatMoney(category.total)}</span>
@@ -194,7 +217,7 @@ export default function OverviewTab({ data }: { data: FinancePayload }) {
 
             <Card className="p-5">
                 <h3 className="font-semibold text-gray-900 mb-1">Biggest line items</h3>
-                <p className="text-xs text-gray-400 mb-4">Top 10 by cost, with what&apos;s been paid against each.</p>
+                <p className="text-xs text-gray-400 mb-4">Top 10 by cost.</p>
                 <div className="space-y-2">
                     {[...summary.items]
                         .sort((a, b) => b.total - a.total)
@@ -235,7 +258,7 @@ export default function OverviewTab({ data }: { data: FinancePayload }) {
                                     {category.name} <span className="text-gray-400 text-xs">(whole section)</span>
                                 </span>
                                 <span className="text-[11px] text-gray-400">
-                                    budget {formatMoney(category.total)} · paid {formatMoney(category.spent)}
+                                    budget {formatMoney(category.total)} · paid {formatMoney(category.paid)}
                                 </span>
                                 <span className="text-rose-600 font-semibold tabular-nums text-xs">
                                     +{formatMoney(-category.remaining)}
@@ -247,7 +270,7 @@ export default function OverviewTab({ data }: { data: FinancePayload }) {
                                 border border-amber-100 px-3 py-2">
                                 <span className="flex-1 truncate text-gray-700">{item.name}</span>
                                 <span className="text-[11px] text-gray-400">
-                                    budget {formatMoney(item.total)} · paid {formatMoney(item.spent)}
+                                    budget {formatMoney(item.total)} · paid {formatMoney(item.paid)}
                                 </span>
                                 <span className="text-rose-600 font-semibold tabular-nums text-xs">
                                     +{formatMoney(item.variance)}
