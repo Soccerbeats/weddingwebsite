@@ -49,4 +49,8 @@ public/config/site.json
 
 # Claude Code
 .claude/settings.local.json
+
+# Scratch space for dropping files for Claude (spreadsheets, exports, screenshots)
+/dropbox/*
+!/dropbox/README.md
 Heav & Aust Wedding Spreadsheet.xlsx - Guest List.csv
