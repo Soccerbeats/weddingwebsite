@@ -428,6 +428,41 @@ In **Admin → Work in Progress**:
 - **Hidden**: Removes the page from the nav entirely for non-admins
 - **Basic Mode**: Hides most pages for a pre-launch look
 
+### Finances
+
+**Admin → Finances.** Five tabs. Every field edits in place — type, then click away or press Enter; `Esc` cancels. Nothing needs a Save button, and totals recalculate as soon as an edit lands.
+
+On first run the suite imports the original *Heav & Aust Wedding Spreadsheet — Budget* tab: 3 sections, 27 line items, 2 payers, 14 purchases and 4 contributors. It only seeds when the tables are empty, so it never duplicates or overwrites later edits. Two things it can't bring over: the **paid** flags (the spreadsheet stored those as bold text, which CSV export drops — tick them yourself), and the sheet's own $680 rounding gap (see *Gift Money* below).
+
+**Overview** — the report. Budget total, spent to date, gift money received, and what's left to cover, then the per-person split and payment plan. The **planning scenario** toggle switches every figure between:
+- *Cash in hand* — counts only money actually received. The safe number.
+- *If pledges land* — counts every pledge as money you'll get.
+
+Below that: where the money goes by section, your ten biggest line items, and a **Worth a look** panel listing lines where spending has passed the budget plus any purchase with no budget line attached.
+
+**Budget** — sections and line items. Each line is `Unit cost × Qty`, and **Qty from** decides where the quantity comes from: *Fixed* (you type it), or *Adults* / *Minors* / *All guests* (driven by the headcount in Settings, so a headcount change ripples through dinner, kids' meals and the bar at once). The **Paid** toggle replaces the spreadsheet's bold convention.
+
+Click the ▶ on any line to expand it for notes, a list of payments made against it, and **Break into parts** — build a line from components that sum into it, the way Appetizers reaches $1,700 from six dishes. A line using parts ignores its own cost and quantity.
+
+**Purchases** — the spend log. Each entry records what, when, who paid, and which budget line it counts against. Filter by payer or search; the footer totals whatever is on screen. Leaving the budget line as *— no line —* is fine, but that spend won't count against any line and gets flagged on the Overview.
+
+**Gift Money** — money toward the wedding bill: parents, family, anyone chipping in. Each contributor has a **pledge**, then you log each payment as it actually arrives. Totals are always derived from the logged payments, which is what stops the drift the spreadsheet had (its receipt log said $6,880 received while its summary said $6,200 — the $680 was never rolled up). Give more than pledged and the extra is kept, not discarded. Each payment can be earmarked to a budget line.
+
+> Wedding and shower **gifts from guests** are a different thing and stay on the **Registry** page, where they remain tied to a guest for thank-you notes.
+
+**Settings** — headcount, payers and the payment plan.
+- *Headcount*: adult and minor counts. Your guest list is shown alongside as a reference with a one-click **Use** button, but it is never read automatically — a late RSVP shouldn't quietly move a $33k total, and the guest list has no adult/minor marker anyway.
+- *Who pays*: an editable list with a share percentage each, 50/50 by default. Shares split whatever the contributions don't cover. Someone who buys things but owes nothing — a parent picking up the decor — gets **0%**; their spending still shows, as a credit. Shares that don't total 100% still work; each person is charged their slice of the total.
+- *Payment plan*: leave the horizon blank to count down to your wedding date automatically, or set a fixed number of months. Days-between-paychecks drives the per-paycheck figure (14 for every other week).
+
+Verification scripts, all runnable independently:
+
+```bash
+npx tsx scripts/verify-finance-math.mts     # engine vs. the original spreadsheet, to the penny
+DATABASE_URL=... npx tsx scripts/verify-finance-db.mts    # schema, seed, CRUD, injection safety
+BASE=... ADMIN_PASSWORD=... npx tsx scripts/verify-finance-ui.mts   # real browser, all five tabs
+```
+
 ## File Storage
 
 | Data | Location | Persisted via |
@@ -449,6 +484,12 @@ In **Admin → Work in Progress**:
 | `guest_list` | Pre-populated guest list with contact info |
 | `wip_toggles` | Per-page WIP/Hidden toggle state |
 | `seating_*` | Seating chart room/table/assignment data |
+| `donations` | Wedding/shower gifts from guests (Registry page) |
+| `finance_settings` | Headcount and payment-plan config (single row) |
+| `finance_categories` / `finance_items` / `finance_subitems` | Budget sections, line items, and component parts |
+| `finance_payers` | Who pays, with share percentages |
+| `finance_purchases` | Spend log, linked to a payer and a budget line |
+| `finance_contributors` / `finance_receipts` | Gift-money pledges and the payments actually received |
 
 ## Backup
 

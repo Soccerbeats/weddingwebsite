@@ -1,0 +1,234 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { formatMoney } from '@/lib/finance';
+
+export { formatMoney };
+
+/** Cents-accurate display that dims true zeroes so real numbers stand out. */
+export function Money({ value, className = '' }: { value: number; className?: string }) {
+    const negative = value < 0;
+    return (
+        <span className={`tabular-nums ${negative ? 'text-rose-600' : ''} ${value === 0 ? 'text-gray-300' : ''} ${className}`}>
+            {formatMoney(value)}
+        </span>
+    );
+}
+
+export function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+    return (
+        <div className={`bg-white rounded-2xl shadow-sm border border-gray-100 ${className}`}>
+            {children}
+        </div>
+    );
+}
+
+export function StatTile({ label, value, hint, tone = 'default' }: {
+    label: string;
+    value: string;
+    hint?: string;
+    tone?: 'default' | 'good' | 'warn' | 'bad';
+}) {
+    const toneClass = {
+        default: 'text-gray-900',
+        good: 'text-emerald-600',
+        warn: 'text-amber-600',
+        bad: 'text-rose-600',
+    }[tone];
+    return (
+        <Card className="p-4">
+            <div className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold">{label}</div>
+            <div className={`text-xl font-semibold tabular-nums mt-1 ${toneClass}`}>{value}</div>
+            {hint && <div className="text-xs text-gray-400 mt-1">{hint}</div>}
+        </Card>
+    );
+}
+
+const FIELD = 'w-full bg-gray-50 border border-gray-200 rounded-2xl px-3 py-2 text-sm ' +
+    'focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent/40 transition';
+
+export function TextField(props: React.InputHTMLAttributes<HTMLInputElement>) {
+    return <input {...props} className={`${FIELD} ${props.className ?? ''}`} />;
+}
+
+export function SelectField(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
+    return <select {...props} className={`${FIELD} ${props.className ?? ''}`} />;
+}
+
+/**
+ * Text input that commits on blur or Enter and reverts on Escape.
+ *
+ * Committing on blur rather than per-keystroke is what makes the whole suite
+ * feel like a spreadsheet: type, tab away, the totals move. It also means one
+ * PATCH per edit instead of one per character.
+ */
+export function InlineText({ value, onCommit, placeholder, className = '', align = 'left' }: {
+    value: string;
+    onCommit: (next: string) => void;
+    placeholder?: string;
+    className?: string;
+    align?: 'left' | 'right';
+}) {
+    // Re-sync the draft when the committed value changes underneath us (a refetch
+    // after saving, or an edit elsewhere). Adjusting state during render is
+    // React's recommended alternative to a setState-in-effect here.
+    const [draft, setDraft] = useState(value);
+    const [seen, setSeen] = useState(value);
+    if (value !== seen) { setSeen(value); setDraft(value); }
+
+    const commit = () => { if (draft !== value) onCommit(draft); };
+
+    return (
+        <input
+            value={draft}
+            placeholder={placeholder}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.currentTarget.blur(); }
+                if (e.key === 'Escape') { setDraft(value); e.currentTarget.blur(); }
+            }}
+            className={`bg-transparent rounded-lg px-2 py-1 text-sm w-full hover:bg-gray-50
+                focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/30 transition
+                ${align === 'right' ? 'text-right tabular-nums' : ''} ${className}`}
+        />
+    );
+}
+
+/** Same commit-on-blur behaviour, but tolerant of "$1,200.50" style input. */
+export function InlineNumber({ value, onCommit, placeholder, prefix, className = '' }: {
+    value: number;
+    onCommit: (next: number) => void;
+    placeholder?: string;
+    prefix?: string;
+    className?: string;
+}) {
+    const [draft, setDraft] = useState(String(value ?? 0));
+    const [seen, setSeen] = useState(value);
+    if (value !== seen) { setSeen(value); setDraft(String(value ?? 0)); }
+
+    const commit = () => {
+        const cleaned = draft.replace(/[$,\s]/g, '');
+        const parsed = cleaned === '' ? 0 : Number(cleaned);
+        const next = Number.isFinite(parsed) ? parsed : value;
+        if (next !== value) onCommit(next);
+        setDraft(String(next));
+    };
+
+    return (
+        <div className="relative">
+            {prefix && (
+                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">
+                    {prefix}
+                </span>
+            )}
+            <input
+                value={draft}
+                placeholder={placeholder}
+                inputMode="decimal"
+                onChange={(e) => setDraft(e.target.value)}
+                onBlur={commit}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter') { e.currentTarget.blur(); }
+                    if (e.key === 'Escape') { setDraft(String(value)); e.currentTarget.blur(); }
+                }}
+                className={`bg-transparent rounded-lg py-1 text-sm w-full text-right tabular-nums
+                    hover:bg-gray-50 focus:bg-white focus:outline-none focus:ring-2
+                    focus:ring-accent/30 transition ${prefix ? 'pl-6 pr-2' : 'px-2'} ${className}`}
+            />
+        </div>
+    );
+}
+
+export function Toggle({ checked, onChange, label }: {
+    checked: boolean;
+    onChange: (next: boolean) => void;
+    label?: string;
+}) {
+    return (
+        <button
+            type="button"
+            onClick={() => onChange(!checked)}
+            aria-label={label}
+            aria-pressed={checked}
+            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors
+                ${checked ? 'bg-accent' : 'bg-gray-300'}`}
+        >
+            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform
+                ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
+        </button>
+    );
+}
+
+export function PillButton({ children, onClick, tone = 'default', type = 'button', disabled }: {
+    children: React.ReactNode;
+    onClick?: () => void;
+    tone?: 'default' | 'accent' | 'danger' | 'ghost';
+    type?: 'button' | 'submit';
+    disabled?: boolean;
+}) {
+    const tones = {
+        default: 'bg-gray-50 text-gray-700 border border-gray-200 hover:bg-gray-100',
+        accent: 'bg-accent text-white hover:opacity-90 border border-transparent',
+        danger: 'bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100',
+        ghost: 'bg-transparent text-gray-400 border border-transparent hover:text-gray-600 hover:bg-gray-50',
+    }[tone];
+    return (
+        <button
+            type={type}
+            onClick={onClick}
+            disabled={disabled}
+            className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors
+                disabled:opacity-50 disabled:cursor-not-allowed ${tones}`}
+        >
+            {children}
+        </button>
+    );
+}
+
+export function Modal({ title, onClose, children }: {
+    title: string;
+    onClose: () => void;
+    children: React.ReactNode;
+}) {
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [onClose]);
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-gray-900/20 backdrop-blur-sm" onClick={onClose} />
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 z-10">
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-semibold text-gray-900">{title}</h3>
+                    <button onClick={onClose} aria-label="Close"
+                        className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+                </div>
+                {children}
+            </div>
+        </div>
+    );
+}
+
+export function EmptyState({ children }: { children: React.ReactNode }) {
+    return (
+        <div className="text-center text-sm text-gray-400 py-8">{children}</div>
+    );
+}
+
+/** Horizontal share-of-total bar used in the category breakdown. */
+export function Bar({ pct, tone = 'accent' }: { pct: number; tone?: 'accent' | 'rose' }) {
+    return (
+        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+            <div
+                className="h-full rounded-full transition-all"
+                style={{
+                    width: `${Math.min(100, Math.max(0, pct))}%`,
+                    backgroundColor: tone === 'rose' ? '#e11d48' : 'var(--accent)',
+                }}
+            />
+        </div>
+    );
+}

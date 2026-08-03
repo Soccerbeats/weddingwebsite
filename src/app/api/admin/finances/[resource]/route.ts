@@ -1,0 +1,280 @@
+import { NextResponse } from 'next/server';
+import pool from '@/lib/db';
+import { ensureFinanceTables } from '@/lib/financeDb';
+
+/**
+ * Generic CRUD for the finance tables.
+ *
+ * Every table and column is whitelisted below and all values go through
+ * parameterised queries — no caller-supplied string ever reaches the SQL text.
+ * One endpoint keeps eight near-identical route files from existing.
+ */
+
+type FieldKind = 'text' | 'number' | 'int' | 'bool' | 'date' | 'ref' | 'enum';
+
+interface Field {
+    kind: FieldKind;
+    /** allowed values for 'enum' */
+    values?: string[];
+}
+
+interface ResourceDef {
+    table: string;
+    fields: Record<string, Field>;
+    /** required on create */
+    required: string[];
+}
+
+const RESOURCES: Record<string, ResourceDef> = {
+    categories: {
+        table: 'finance_categories',
+        fields: { name: { kind: 'text' }, sort_order: { kind: 'int' } },
+        required: ['name'],
+    },
+    items: {
+        table: 'finance_items',
+        fields: {
+            category_id: { kind: 'ref' },
+            name: { kind: 'text' },
+            unit_cost: { kind: 'number' },
+            quantity: { kind: 'number' },
+            qty_source: { kind: 'enum', values: ['manual', 'adults', 'minors', 'total'] },
+            use_subitems: { kind: 'bool' },
+            is_paid: { kind: 'bool' },
+            notes: { kind: 'text' },
+            sort_order: { kind: 'int' },
+        },
+        required: ['category_id', 'name'],
+    },
+    subitems: {
+        table: 'finance_subitems',
+        fields: {
+            item_id: { kind: 'ref' },
+            name: { kind: 'text' },
+            unit_cost: { kind: 'number' },
+            quantity: { kind: 'number' },
+            sort_order: { kind: 'int' },
+        },
+        required: ['item_id', 'name'],
+    },
+    payers: {
+        table: 'finance_payers',
+        fields: { name: { kind: 'text' }, share_pct: { kind: 'number' }, sort_order: { kind: 'int' } },
+        required: ['name'],
+    },
+    purchases: {
+        table: 'finance_purchases',
+        fields: {
+            payer_id: { kind: 'ref' },
+            item_id: { kind: 'ref' },
+            description: { kind: 'text' },
+            amount: { kind: 'number' },
+            purchased_on: { kind: 'date' },
+            notes: { kind: 'text' },
+        },
+        required: ['description'],
+    },
+    contributors: {
+        table: 'finance_contributors',
+        fields: {
+            name: { kind: 'text' },
+            pledged: { kind: 'number' },
+            notes: { kind: 'text' },
+            sort_order: { kind: 'int' },
+        },
+        required: ['name'],
+    },
+    receipts: {
+        table: 'finance_receipts',
+        fields: {
+            contributor_id: { kind: 'ref' },
+            item_id: { kind: 'ref' },
+            amount: { kind: 'number' },
+            received_on: { kind: 'date' },
+            note: { kind: 'text' },
+        },
+        required: ['contributor_id'],
+    },
+};
+
+/**
+ * Parse a money-ish value. Strips currency formatting so "$1,234.56" survives a
+ * paste or a direct API call — plain Number() yields NaN there, and silently
+ * writing 0 over a real amount is the worst possible failure for a ledger.
+ */
+function parseAmount(raw: unknown): number | null {
+    if (typeof raw === 'number') return Number.isFinite(raw) ? raw : null;
+    if (raw == null) return null;
+    const cleaned = String(raw).replace(/[$,\s]/g, '');
+    if (cleaned === '') return null;
+    const n = Number(cleaned);
+    return Number.isFinite(n) ? n : null;
+}
+
+function coerce(field: Field, raw: unknown): unknown {
+    switch (field.kind) {
+        case 'text':
+            return raw == null ? null : String(raw);
+        case 'number':
+            return parseAmount(raw) ?? 0;
+        case 'int': {
+            const n = parseAmount(raw);
+            return n == null ? 0 : Math.trunc(n);
+        }
+        case 'bool':
+            return raw === true || raw === 'true' || raw === 1 || raw === '1';
+        case 'date':
+            return raw === '' || raw == null ? null : String(raw);
+        case 'ref': {
+            const n = parseAmount(raw);
+            return n != null && n > 0 ? Math.trunc(n) : null;
+        }
+        case 'enum':
+            return field.values?.includes(String(raw)) ? String(raw) : field.values?.[0] ?? null;
+    }
+}
+
+/** Pick out only whitelisted keys the caller actually sent. */
+function collect(def: ResourceDef, body: Record<string, unknown>) {
+    const columns: string[] = [];
+    const values: unknown[] = [];
+    for (const [key, field] of Object.entries(def.fields)) {
+        if (key in body) {
+            columns.push(key);
+            values.push(coerce(field, body[key]));
+        }
+    }
+    return { columns, values };
+}
+
+function resolve(resource: string): ResourceDef | null {
+    return Object.prototype.hasOwnProperty.call(RESOURCES, resource) ? RESOURCES[resource] : null;
+}
+
+const SETTINGS_FIELDS: Record<string, Field> = {
+    adult_count: { kind: 'int' },
+    minor_count: { kind: 'int' },
+    plan_horizon_months: { kind: 'ref' }, // nullable positive int, or null to auto-derive
+    paycheck_interval_days: { kind: 'int' },
+};
+
+type Params = { params: Promise<{ resource: string }> };
+
+export async function POST(request: Request, { params }: Params) {
+    const { resource } = await params;
+    try {
+        await ensureFinanceTables();
+        const body = await request.json();
+
+        // Settings is a singleton: POST updates row 1 rather than inserting.
+        if (resource === 'settings') {
+            const columns: string[] = [];
+            const values: unknown[] = [];
+            for (const [key, field] of Object.entries(SETTINGS_FIELDS)) {
+                if (key in body) { columns.push(key); values.push(coerce(field, body[key])); }
+            }
+            if (!columns.length) return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
+            const sets = columns.map((c, i) => `${c} = $${i + 1}`).join(', ');
+            const result = await pool.query(
+                `UPDATE finance_settings SET ${sets} WHERE id = 1 RETURNING *`, values,
+            );
+            return NextResponse.json(result.rows[0]);
+        }
+
+        const def = resolve(resource);
+        if (!def) return NextResponse.json({ error: 'Unknown resource' }, { status: 404 });
+
+        for (const key of def.required) {
+            const value = body[key];
+            if (value == null || value === '') {
+                return NextResponse.json({ error: `${key} is required` }, { status: 400 });
+            }
+        }
+
+        const { columns, values } = collect(def, body);
+        if (!columns.length) return NextResponse.json({ error: 'No fields provided' }, { status: 400 });
+
+        const placeholders = columns.map((_, i) => `$${i + 1}`).join(', ');
+        const result = await pool.query(
+            `INSERT INTO ${def.table} (${columns.join(', ')}) VALUES (${placeholders}) RETURNING *`,
+            values,
+        );
+        return NextResponse.json(result.rows[0]);
+    } catch (error) {
+        console.error(`Error creating ${resource}:`, error);
+        return NextResponse.json({ error: `Failed to create ${resource}` }, { status: 500 });
+    }
+}
+
+export async function PATCH(request: Request, { params }: Params) {
+    const { resource } = await params;
+    try {
+        await ensureFinanceTables();
+        const def = resolve(resource);
+        if (!def) return NextResponse.json({ error: 'Unknown resource' }, { status: 404 });
+
+        const body = await request.json();
+
+        // A bare array of {id, sort_order} reorders in one transaction.
+        if (Array.isArray(body)) {
+            const client = await pool.connect();
+            try {
+                await client.query('BEGIN');
+                for (const [index, row] of body.entries()) {
+                    const id = Math.trunc(Number((row as { id: unknown }).id));
+                    if (!Number.isFinite(id) || id <= 0) continue;
+                    await client.query(
+                        `UPDATE ${def.table} SET sort_order = $1 WHERE id = $2`, [index, id],
+                    );
+                }
+                await client.query('COMMIT');
+            } catch (error) {
+                await client.query('ROLLBACK');
+                throw error;
+            } finally {
+                client.release();
+            }
+            return NextResponse.json({ success: true });
+        }
+
+        const id = Math.trunc(Number(body.id));
+        if (!Number.isFinite(id) || id <= 0) {
+            return NextResponse.json({ error: 'Valid id required' }, { status: 400 });
+        }
+
+        const { columns, values } = collect(def, body);
+        if (!columns.length) return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
+
+        const sets = columns.map((c, i) => `${c} = $${i + 1}`).join(', ');
+        const result = await pool.query(
+            `UPDATE ${def.table} SET ${sets} WHERE id = $${columns.length + 1} RETURNING *`,
+            [...values, id],
+        );
+        if (!result.rowCount) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+        return NextResponse.json(result.rows[0]);
+    } catch (error) {
+        console.error(`Error updating ${resource}:`, error);
+        return NextResponse.json({ error: `Failed to update ${resource}` }, { status: 500 });
+    }
+}
+
+export async function DELETE(request: Request, { params }: Params) {
+    const { resource } = await params;
+    try {
+        await ensureFinanceTables();
+        const def = resolve(resource);
+        if (!def) return NextResponse.json({ error: 'Unknown resource' }, { status: 404 });
+
+        const id = Math.trunc(Number(new URL(request.url).searchParams.get('id')));
+        if (!Number.isFinite(id) || id <= 0) {
+            return NextResponse.json({ error: 'Valid id required' }, { status: 400 });
+        }
+
+        const result = await pool.query(`DELETE FROM ${def.table} WHERE id = $1`, [id]);
+        if (!result.rowCount) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+        return NextResponse.json({ success: true });
+    } catch (error) {
+        console.error(`Error deleting ${resource}:`, error);
+        return NextResponse.json({ error: `Failed to delete ${resource}` }, { status: 500 });
+    }
+}

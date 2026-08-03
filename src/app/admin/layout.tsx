@@ -45,6 +45,7 @@ export default function AdminLayout({
         { href: '/admin/faqs', label: 'Q&A' },
         { href: '/admin/schedule', label: 'Schedule' },
         { href: '/admin/registry', label: 'Registry' },
+        { href: '/admin/finances', label: 'Finances' },
         { href: '/admin/settings', label: 'General Settings' },
         { href: '/admin/color', label: 'Color' },
         { href: '/admin/seating', label: 'Seating Chart' },
