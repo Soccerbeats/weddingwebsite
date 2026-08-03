@@ -48,9 +48,11 @@ const rowFor = (name: string) =>
 console.log('\n--- Overview ---');
 let text = await body();
 check('budget total shown', text.includes('$33,046.26'), 'expected seeded total');
-check('paid-to-vendors shown', text.includes('$22,850.00'), 'own 16,650 + gift 6,200');
-check('own-pocket split shown', text.includes('$16,650.00'));
-check('bill still owed shown', text.includes('$10,196.26'));
+check('paid-toward-budget shown', text.includes('$20,893.00'), 'budgeted 14,693 + gift 6,200');
+check('own budgeted spend shown', text.includes('$14,693.00'));
+check('bill still owed shown', text.includes('$12,153.26'),
+    'must equal the sum of the section remainders');
+check('off-budget spending called out', text.includes("isn't attached to any"));
 check('gift money shown', text.includes('$6,880.00'));
 check('both payers listed', text.includes('Austin') && text.includes('Heaven'));
 check('category breakdown', text.includes('Venue Cost') && text.includes('Staff And Extras'));
@@ -163,7 +165,8 @@ const options = await page.locator('select option').evaluateAll(
 check('section option offered in dropdown',
     options.some((o) => o.includes('Venue Cost — whole section')),
     options.filter((o) => o.includes('whole section')).join(' | '));
-check('per-payer totals stay own-pocket', text.includes('$5,756.00') && text.includes('$10,894.00'));
+check('per-payer cash totals shown', text.includes('$5,756.00') && text.includes('$10,894.00'));
+check('off-budget flagged as not in the budget', text.includes('Not in the budget'));
 
 // Filter by payer.
 await page.click('button:has-text("Austin")');

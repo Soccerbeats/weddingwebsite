@@ -89,15 +89,22 @@ console.log('\n--- Purchases (vs spreadsheet column totals) ---');
 const s = buildSummary({ categories, payers, purchases, contributors, settings, weddingDate: 'October 16, 2026', now: new Date('2026-08-03') });
 check('Austin spent', s.payers[0].spent, 5756);
 check('Heaven spent', s.payers[1].spent, 10894);
-check('out-of-pocket total', s.outOfPocketTotal, 16650);
+check('out-of-pocket total (all cash)', s.outOfPocketTotal, 16650);
 
-console.log('\n--- Sheet parity: original (uncorrected) receipts ---');
-// The sheet's own contributions block claimed $6,200 received; reproduce its
-// exact arithmetic by dropping the $680 receipt it failed to roll up.
+console.log('\n--- Sheet parity: reproduce the spreadsheet exactly ---');
+// Two things must be undone to compare like with like:
+//  1. the sheet's contributions block claimed $6,200 received, missing the $680
+//     Veil receipt it never rolled up;
+//  2. the sheet counted every dollar in Heaven's column against her share,
+//     including the AirBnb, which has no budget line. Attribute it here so the
+//     arithmetic is comparable — the divergence is asserted separately below.
 const sheetContributors = contributors.map(c => ({
     ...c, receipts: c.receipts.filter(r => r.note !== 'Veil'),
 }));
-const sheet = buildSummary({ categories, payers, purchases, contributors: sheetContributors, settings, weddingDate: 'October 16, 2026', now: new Date('2026-08-03') });
+const sheetPurchases = purchases.map(p => p.description.startsWith('AirBnb')
+    ? { ...p, item_id: nameToId.get('Rehearsal Dinner')! }
+    : p);
+const sheet = buildSummary({ categories, payers, purchases: sheetPurchases, contributors: sheetContributors, settings, weddingDate: 'October 16, 2026', now: new Date('2026-08-03') });
 check('pledged total', sheet.pledgedTotal, 17200);
 check('received total', sheet.receivedTotal, 6200);
 check('deficit if pledges land', sheet.deficitPledged, 15846.26);
@@ -110,9 +117,25 @@ check('Heaven remaining (pledged)', sheet.payers[1].remainingPledged, -2970.87);
 check('Austin remaining (cash)', sheet.payers[0].remainingCash, 7667.13);
 check('Heaven remaining (cash)', sheet.payers[1].remainingCash, 2529.13);
 
-console.log('\n--- Drift correction ---');
+console.log('\n--- Deliberate divergences from the sheet ---');
 check('corrected received (incl. Kim veil)', s.receivedTotal, 6880);
 check('corrected pledged (Kim over-delivered)', s.pledgedTotal, 17880);
+check('Heaven remaining, sheet method', sheet.payers[1].remainingCash, 2529.13);
+check('Heaven remaining, corrected', s.payers[1].remainingCash, 4146.13);
+// The gap between those two is a mix of both corrections, so isolate the AirBnb
+// by re-attributing it against the corrected receipts and nothing else.
+const airbnbAttributed = buildSummary({
+    categories, payers, contributors, settings,
+    purchases: purchases.map(p => p.description.startsWith('AirBnb')
+        ? { ...p, item_id: nameToId.get('Rehearsal Dinner')! } : p),
+    weddingDate: 'October 16, 2026', now: new Date('2026-08-03'),
+});
+check('AirBnb alone moves Heaven by its full amount',
+    s.payers[1].remainingCash - airbnbAttributed.payers[1].remainingCash, 1957);
+// And the Veil receipt accounts for the rest: it shrinks the deficit by $680,
+// so each 50% share drops $340.
+check('Veil receipt alone moves each share by half of it',
+    sheet.payers[1].shareCash - s.payers[1].shareCash, 340);
 
 console.log('\n--- Section-level (lump-sum) payments ---');
 // The venue bill covers the whole section and is paid in installments, so the
@@ -137,13 +160,23 @@ console.log('\n--- Gift money counts toward bills, not out-of-pocket ---');
 check('out-of-pocket excludes gift money', s.outOfPocketTotal, 16650);
 check('gift applied (Rob venue + Kim dress)', s.giftAppliedTotal, 6200);
 check('gift held but unapplied (Kim veil)', s.giftUnapplied, 680);
-check('total paid to vendors', s.paidTotal, 22850);
-check('bill still owed', s.billRemaining, 10196.26);
-// Crucially, the couple's remaining is unchanged — the deficit already netted off
-// contributions, so counting them as spend too would double-count.
-check('still-to-spend unaffected by gift accounting', s.stillToSpendCash, 9516.26);
-check('Austin spend still own-pocket only', s.payers[0].spent, 5756);
-check('Heaven spend still own-pocket only', s.payers[1].spent, 10894);
+check('all cash out', s.cashOutTotal, 22850);
+check('Austin cash out', s.payers[0].spent, 5756);
+check('Heaven cash out', s.payers[1].spent, 10894);
+
+console.log('\n--- Spending outside the budget must not flatter the budget ---');
+// The AirBnb has no budget line, so it can't discharge a budget obligation.
+// Counting it made the headline "still owed" disagree with the sum of sections.
+check('budgeted out-of-pocket excludes AirBnb', s.budgetedOutOfPocket, 14693);
+check('paid toward budget', s.paidTotal, 20893);
+check('bill still owed', s.billRemaining, 12153.26);
+check('sections sum to the headline',
+    s.categories.reduce((a, c) => a + c.remaining, 0), s.billRemaining);
+check('Heaven budgeted spend excludes AirBnb', s.payers[1].spentOnBudget, 8937);
+check('Austin has no off-budget spend', s.payers[0].spentOnBudget, 5756);
+check('still-to-spend uses budgeted spend only', s.stillToSpendCash, 11473.26);
+check('payer remainders sum to still-to-spend',
+    s.payers.reduce((a, p) => a + p.remainingCash, 0), s.stillToSpendCash);
 
 const dress = s.items.find(i => i.name === 'Dress')!;
 check('dress paid entirely by gift money', dress.paid, 1200);

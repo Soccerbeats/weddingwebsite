@@ -174,11 +174,20 @@ export interface PayerSummary {
     id: number;
     name: string;
     sharePct: number;
+    /** true when this payer funds none of the deficit — a helper, not a debtor */
+    isContributorOnly: boolean;
     /** share of the deficit if every pledge lands */
     sharePledged: number;
     /** share of the deficit counting only cash in hand */
     shareCash: number;
+    /** every dollar this payer has laid out, budgeted or not */
     spent: number;
+    /**
+     * The part of `spent` attached to a budget line or section. Only this counts
+     * against their share: buying something that isn't in the budget doesn't
+     * discharge a budget obligation.
+     */
+    spentOnBudget: number;
     /** negative means this payer is ahead of their share */
     remainingPledged: number;
     remainingCash: number;
@@ -239,14 +248,29 @@ export interface FinanceSummary {
      * would double-count and understate what's left to pay.
      */
     outOfPocketTotal: number;
+    /**
+     * The part of `outOfPocketTotal` attached to a budget line or section.
+     *
+     * Budget-progress figures use this, never the raw total. Spending on
+     * something that isn't in the budget can't reduce what the budget still
+     * owes — counting it made the headline "still owed" disagree with the sum of
+     * its own sections by exactly the untracked amount.
+     */
+    budgetedOutOfPocket: number;
     /** received gift money that has been earmarked to a section or line */
     giftAppliedTotal: number;
-    /** everything paid to vendors so far, from any source */
+    /** everything paid toward the budget so far, from any source */
     paidTotal: number;
+    /** all cash out, including spending that isn't in the budget */
+    cashOutTotal: number;
     /** received gift money not yet earmarked anywhere — cash still in hand */
     giftUnapplied: number;
     /** budget − paidTotal: what the vendors are still owed */
     billRemaining: number;
+    /** true when contributions already exceed the whole budget */
+    isOverFunded: boolean;
+    /** shares don't add up, so part of the deficit is assigned to nobody */
+    unallocatedDeficitCash: number;
     pledgedTotal: number;
     receivedTotal: number;
     outstandingPledges: number;
@@ -330,9 +354,20 @@ export function buildSummary(input: SummaryInput): FinanceSummary {
     const installmentsByCategory = new Map<number, number>();
     let unlinkedSpend = 0;
     let outOfPocketTotal = 0;
+    let budgetedOutOfPocket = 0;
+    const spentByPayer = new Map<number, number>();
+    const budgetedByPayer = new Map<number, number>();
     for (const p of purchases) {
         const amount = num(p.amount);
         outOfPocketTotal += amount;
+        const attributed = p.item_id != null || p.category_id != null;
+        if (attributed) budgetedOutOfPocket += amount;
+        if (p.payer_id != null) {
+            spentByPayer.set(p.payer_id, (spentByPayer.get(p.payer_id) ?? 0) + amount);
+            if (attributed) {
+                budgetedByPayer.set(p.payer_id, (budgetedByPayer.get(p.payer_id) ?? 0) + amount);
+            }
+        }
         // item_id wins over category_id so a payment is never counted twice.
         if (p.item_id != null) {
             spentByItem.set(p.item_id, (spentByItem.get(p.item_id) ?? 0) + amount);
@@ -344,6 +379,7 @@ export function buildSummary(input: SummaryInput): FinanceSummary {
         }
     }
     outOfPocketTotal = money(outOfPocketTotal);
+    budgetedOutOfPocket = money(budgetedOutOfPocket);
 
     // Earmarked gift money paid a vendor bill exactly like an own-pocket payment
     // did — Rob's $5,000 went to the venue. It counts toward the bill, but never
@@ -433,13 +469,6 @@ export function buildSummary(input: SummaryInput): FinanceSummary {
 
     const horizon = computeHorizon(settings, input.weddingDate, now);
 
-    const spentByPayer = new Map<number, number>();
-    for (const p of purchases) {
-        if (p.payer_id != null) {
-            spentByPayer.set(p.payer_id, (spentByPayer.get(p.payer_id) ?? 0) + num(p.amount));
-        }
-    }
-
     // Shares are normalised so the split always accounts for the whole deficit,
     // even if the percentages the user typed don't add up to exactly 100.
     const shareSum = payers.reduce((sum, p) => sum + num(p.share_pct), 0);
@@ -448,15 +477,18 @@ export function buildSummary(input: SummaryInput): FinanceSummary {
         const sharePledged = money(deficitPledged * weight);
         const shareCash = money(deficitCash * weight);
         const spent = money(spentByPayer.get(payer.id) ?? 0);
-        const remainingPledged = money(sharePledged - spent);
-        const remainingCash = money(shareCash - spent);
+        const spentOnBudget = money(budgetedByPayer.get(payer.id) ?? 0);
+        const remainingPledged = money(sharePledged - spentOnBudget);
+        const remainingCash = money(shareCash - spentOnBudget);
         return {
             id: payer.id,
             name: payer.name,
             sharePct: num(payer.share_pct),
+            isContributorOnly: num(payer.share_pct) <= 0,
             sharePledged,
             shareCash,
             spent,
+            spentOnBudget,
             remainingPledged,
             remainingCash,
             planPledged: buildPlan(remainingPledged, horizon),
@@ -464,20 +496,27 @@ export function buildSummary(input: SummaryInput): FinanceSummary {
         };
     });
 
+    const paidTotal = money(budgetedOutOfPocket + giftAppliedTotal);
+    const allocated = money(payerSummaries.reduce((sum, p) => sum + p.shareCash, 0));
+
     return {
         budgetTotal: total,
         outOfPocketTotal,
+        budgetedOutOfPocket,
         giftAppliedTotal,
-        paidTotal: money(outOfPocketTotal + giftAppliedTotal),
+        paidTotal,
+        cashOutTotal: money(outOfPocketTotal + giftAppliedTotal),
         giftUnapplied,
-        billRemaining: money(total - outOfPocketTotal - giftAppliedTotal),
+        billRemaining: money(total - paidTotal),
+        isOverFunded: deficitCash < 0,
+        unallocatedDeficitCash: money(deficitCash - allocated),
         pledgedTotal,
         receivedTotal,
         outstandingPledges: money(pledgedTotal - receivedTotal),
         deficitPledged,
         deficitCash,
-        stillToSpendPledged: money(deficitPledged - outOfPocketTotal),
-        stillToSpendCash: money(deficitCash - outOfPocketTotal),
+        stillToSpendPledged: money(deficitPledged - budgetedOutOfPocket),
+        stillToSpendCash: money(deficitCash - budgetedOutOfPocket),
         categories: categorySummaries,
         items,
         payers: payerSummaries,

@@ -34,9 +34,9 @@ export default function OverviewTab({ data }: { data: FinancePayload }) {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <StatTile label="Total budget" value={formatMoney(summary.budgetTotal)}
                     hint={`${summary.itemCount} line items`} />
-                <StatTile label="Paid to vendors" value={formatMoney(summary.paidTotal)}
+                <StatTile label="Paid toward budget" value={formatMoney(summary.paidTotal)}
                     hint={summary.giftAppliedTotal > 0
-                        ? `${formatMoney(summary.outOfPocketTotal)} yours + ${formatMoney(summary.giftAppliedTotal)} gift`
+                        ? `${formatMoney(summary.budgetedOutOfPocket)} yours + ${formatMoney(summary.giftAppliedTotal)} gift`
                         : 'all from your own pocket'} />
                 <StatTile label="Gift money received" value={formatMoney(summary.receivedTotal)} tone="good"
                     hint={summary.giftUnapplied > 0
@@ -87,6 +87,13 @@ export default function OverviewTab({ data }: { data: FinancePayload }) {
                         toward a bill.
                     </p>
                 )}
+                {summary.unlinkedSpend > 0 && (
+                    <p className="text-[11px] text-gray-400 mt-1">
+                        And {formatMoney(summary.unlinkedSpend)} of spending isn&apos;t attached to any
+                        budget line, so it doesn&apos;t count here. Give it a home on the Purchases tab —
+                        or add a budget line for it — and these figures will pick it up.
+                    </p>
+                )}
             </Card>
 
             <Card className="p-5">
@@ -98,6 +105,21 @@ export default function OverviewTab({ data }: { data: FinancePayload }) {
                     {' = '}
                     <strong className="text-gray-700">{formatMoney(deficit)}</strong>, split by share below.
                 </p>
+
+                {summary.isOverFunded && (
+                    <p className="mb-3 rounded-xl bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+                        Contributions already cover the whole budget, with{' '}
+                        <strong>{formatMoney(-deficit)}</strong> to spare — nothing left for you two to fund
+                        under this scenario.
+                    </p>
+                )}
+                {!summary.isOverFunded && Math.abs(summary.unallocatedDeficitCash) > 0.5 && (
+                    <p className="mb-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                        <strong>{formatMoney(summary.unallocatedDeficitCash)}</strong> of the deficit
+                        isn&apos;t assigned to anyone. Give at least one payer a share above 0% in
+                        Settings so the split adds up.
+                    </p>
+                )}
 
                 {summary.payers.length ? (
                     <div className="space-y-3">
@@ -111,22 +133,35 @@ export default function OverviewTab({ data }: { data: FinancePayload }) {
                                         <div>
                                             <span className="font-semibold text-gray-900">{payer.name}</span>
                                             <span className="text-xs text-gray-400 ml-2">
-                                                {payer.sharePct}% share
+                                                {payer.isContributorOnly
+                                                    ? 'helping out — owes nothing'
+                                                    : `${payer.sharePct}% share`}
                                             </span>
                                         </div>
                                         <div className="text-right">
                                             <div className={`font-semibold tabular-nums ${ahead ? 'text-emerald-600' : 'text-gray-900'}`}>
-                                                {ahead
-                                                    ? `${formatMoney(-owed)} ahead`
-                                                    : `${formatMoney(owed)} to go`}
+                                                {payer.isContributorOnly
+                                                    ? `${formatMoney(payer.spentOnBudget)} contributed`
+                                                    : ahead
+                                                        ? `${formatMoney(-owed)} ahead`
+                                                        : `${formatMoney(owed)} to go`}
                                             </div>
                                             <div className="text-[11px] text-gray-400">
-                                                share {formatMoney(share(payer))} · paid {formatMoney(payer.spent)}
+                                                {!payer.isContributorOnly && `share ${formatMoney(share(payer))} · `}
+                                                paid {formatMoney(payer.spentOnBudget)}
+                                                {payer.spent !== payer.spentOnBudget && (
+                                                    <> · {formatMoney(payer.spent - payer.spentOnBudget)} off-budget</>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
 
-                                    {ahead ? (
+                                    {payer.isContributorOnly ? (
+                                        <p className="text-xs text-gray-500 bg-gray-50 rounded-xl px-3 py-2">
+                                            {payer.name} has no share of the budget — everything they pay for
+                                            simply reduces what the two of you owe.
+                                        </p>
+                                    ) : ahead ? (
                                         <p className="text-xs text-emerald-700 bg-emerald-50 rounded-xl px-3 py-2">
                                             {payer.name} has already paid more than their share — the next
                                             expenses should come from someone else to even things out.

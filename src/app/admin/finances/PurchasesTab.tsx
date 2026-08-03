@@ -107,8 +107,8 @@ export default function PurchasesTab({ data, api }: { data: FinancePayload; api:
     return (
         <div className="space-y-6">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                <StatTile label="Paid to vendors" value={formatMoney(summary.paidTotal)}
-                    hint={`${rows.length} payment${rows.length === 1 ? '' : 's'}`} />
+                <StatTile label="Counted toward budget" value={formatMoney(summary.paidTotal)}
+                    hint={`${rows.length} payment${rows.length === 1 ? '' : 's'} logged`} />
                 {summary.payers.map((p) => (
                     <StatTile key={p.id} label={`${p.name} paid`} value={formatMoney(p.spent)} />
                 ))}
@@ -117,8 +117,8 @@ export default function PurchasesTab({ data, api }: { data: FinancePayload; api:
                         ? `${formatMoney(summary.giftUnapplied)} received, not applied`
                         : undefined} />
                 {summary.unlinkedSpend > 0 && (
-                    <StatTile label="Untracked" value={formatMoney(summary.unlinkedSpend)}
-                        tone="warn" hint="Not counted toward any section or line" />
+                    <StatTile label="Not in the budget" value={formatMoney(summary.unlinkedSpend)}
+                        tone="warn" hint="Set 'counts toward' to include it" />
                 )}
             </div>
 

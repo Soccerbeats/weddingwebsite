@@ -69,7 +69,9 @@ check('appetizers flagged use_subitems', sub?.use_subitems === true);
 const s1 = buildSummary({ ...first, weddingDate: 'October 16, 2026' });
 near('budget total from DB', s1.budgetTotal, 33046.26);
 near('out-of-pocket from DB', s1.outOfPocketTotal, 16650);
-near('paid to vendors from DB', s1.paidTotal, 22850);
+near('paid toward budget from DB', s1.paidTotal, 20893);
+near('bill remaining reconciles to sections',
+    s1.categories.reduce((a, c) => a + c.remaining, 0), s1.billRemaining);
 near('received from DB', s1.receivedTotal, 6880);
 
 console.log('\n--- Seed is idempotent across a cold restart ---');
