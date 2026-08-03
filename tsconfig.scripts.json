@@ -1,0 +1,12 @@
+{
+  "//": "Type-checks the dev-only verification scripts. They are excluded from the app's tsconfig so `next build` never tries to compile test tooling (and never needs playwright installed).",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true
+  },
+  "include": ["scripts/**/*.mts", "scripts/**/*.ts", "src/**/*.ts", "src/**/*.tsx"],
+  "exclude": ["node_modules"]
+}

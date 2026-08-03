@@ -10,7 +10,8 @@
     "check:photos": "npx --yes tsx scripts/check-photo-route.mts",
     "check:finance": "npx --yes tsx scripts/verify-finance-math.mts",
     "check:finance:db": "npx --yes tsx scripts/verify-finance-db.mts",
-    "check:finance:ui": "npx --yes tsx scripts/verify-finance-ui.mts"
+    "check:finance:ui": "npx --yes tsx scripts/verify-finance-ui.mts",
+    "check:types": "tsc --noEmit && tsc --noEmit -p tsconfig.scripts.json"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
