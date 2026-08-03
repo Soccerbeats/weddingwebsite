@@ -61,6 +61,8 @@ check('receipts seeded', first.contributors.flatMap(c => c.receipts).length === 
 check('headcount seeded', first.settings.adult_count === 124 && first.settings.minor_count === 11);
 
 const sub = first.categories[0].items.find(i => i.name === 'Appetizers');
+check('section renamed to Venue Cost', first.categories.some(c => c.name === 'Venue Cost'),
+    first.categories.map(c => c.name).join(', '));
 check('appetizers has sub-items', (sub?.subitems.length ?? 0) === 6);
 check('appetizers flagged use_subitems', sub?.use_subitems === true);
 
@@ -141,17 +143,60 @@ check('DELETE 200', del.status === 200);
 const afterDelete = await loadFinanceData();
 near('total back to original', buildSummary({ ...afterDelete, weddingDate: null }).budgetTotal, 33046.26);
 
+console.log('\n--- Section-level payments ---');
+const sectionData = await loadFinanceData();
+const venueCat = sectionData.categories.find(c => c.name === 'Venue Cost')!;
+const sSec = buildSummary({ ...sectionData, weddingDate: null });
+const venueStats = sSec.categories.find(c => c.id === venueCat.id)!;
+near('installments landed on section', venueStats.directSpent, 9680);
+check('installment count is 2', venueStats.installmentCount === 2, `${venueStats.installmentCount}`);
+near('section remaining', venueStats.remaining, 8678.9);
+near('gift earmarked to section', venueStats.earmarked, 5000);
+
+// item_id and category_id must never both be set on one row.
+const excl = await PATCH(req({ id: sectionData.purchases.find(p => p.category_id === venueCat.id)!.id,
+    item_id: venueCat.items[0].id }), params('purchases'));
+const exclRow = await (excl as Response).json();
+check('setting a line clears the section', exclRow.category_id === null, String(exclRow.category_id));
+const excl2 = await PATCH(req({ id: exclRow.id, category_id: venueCat.id }), params('purchases'));
+const exclRow2 = await (excl2 as Response).json();
+check('setting a section clears the line', exclRow2.item_id === null, String(exclRow2.item_id));
+const both = await PATCH(req({ id: exclRow.id, item_id: venueCat.items[0].id, category_id: venueCat.id }),
+    params('purchases'));
+const bothRow = await (both as Response).json();
+check('both at once resolves to one target',
+    (bothRow.item_id === null) !== (bothRow.category_id === null),
+    `item=${bothRow.item_id} category=${bothRow.category_id}`);
+// restore
+await PATCH(req({ id: exclRow.id, category_id: venueCat.id }), params('purchases'));
+
 console.log('\n--- Referential behaviour ---');
-// Deleting a budget line must keep its purchases, just unlinked.
+// The venue installments target the section, so the Venue *line* carries none.
 const venue = afterDelete.categories.flatMap(c => c.items).find(i => i.name === 'Venue')!;
-const venuePurchases = afterDelete.purchases.filter(p => p.item_id === venue.id).length;
-check('venue has 2 linked payments', venuePurchases === 2);
-await DELETE(new Request(`http://x/?id=${venue.id}`, { method: 'DELETE' }), params('items'));
+check('venue line has no line-level payments',
+    afterDelete.purchases.filter(p => p.item_id === venue.id).length === 0);
+
+// Deleting a budget line must keep its purchases, just unlinked. Decor has three.
+const decor = afterDelete.categories.flatMap(c => c.items).find(i => i.name === 'Decor')!;
+check('decor has 3 linked payments',
+    afterDelete.purchases.filter(p => p.item_id === decor.id).length === 3);
+await DELETE(new Request(`http://x/?id=${decor.id}`, { method: 'DELETE' }), params('items'));
 const afterVenueDelete = await loadFinanceData();
 check('purchases survived line deletion', afterVenueDelete.purchases.length === 14,
     `${afterVenueDelete.purchases.length} purchases`);
+// AirBnb was already untracked; Decor's three join it.
 check('orphaned purchases went unlinked',
-    afterVenueDelete.purchases.filter(p => p.item_id === null).length === 3);
+    afterVenueDelete.purchases.filter(p => p.item_id === null && p.category_id === null).length === 4,
+    `${afterVenueDelete.purchases.filter(p => p.item_id === null && p.category_id === null).length}`);
+
+// Deleting a section must not destroy its installments either.
+const venueCatId = afterVenueDelete.categories.find(c => c.name === 'Venue Cost')!.id;
+await DELETE(new Request(`http://x/?id=${venueCatId}`, { method: 'DELETE' }), params('categories'));
+const afterCatDelete = await loadFinanceData();
+check('installments survived section deletion', afterCatDelete.purchases.length === 14,
+    `${afterCatDelete.purchases.length}`);
+check('installments went unlinked, not deleted',
+    afterCatDelete.purchases.filter(p => p.category_id === null && p.item_id === null).length === 6);
 // Deleting a contributor must cascade their receipts.
 const kim = afterVenueDelete.contributors.find(c => c.name === 'Kim')!;
 await DELETE(new Request(`http://x/?id=${kim.id}`, { method: 'DELETE' }), params('contributors'));

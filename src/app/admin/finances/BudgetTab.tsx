@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { itemTotal, subItemTotal, effectiveQuantity, type BudgetItem, type Category } from '@/lib/finance';
 import type { FinanceApi, FinancePayload } from './useFinances';
 import {
-    Card, EmptyState, InlineNumber, InlineText, Money, PillButton, Toggle, formatMoney,
+    Bar, Card, EmptyState, InlineNumber, InlineText, Money, PillButton, Toggle, formatMoney,
 } from './ui';
 
 const QTY_LABELS: Record<string, string> = {
@@ -175,7 +175,159 @@ function CategoryBlock({ category, data, api, expanded, onToggleExpanded }: {
                     + Add line item
                 </button>
             </div>
+
+            <SectionPayments category={category} data={data} api={api} />
         </Card>
+    );
+}
+
+/**
+ * Paid-vs-budgeted for a whole section, plus its installment log.
+ *
+ * Bills like the venue arrive as one number covering every line in the section
+ * and get paid down in chunks, so tagging each installment to a single line
+ * would both misattribute it and fire a bogus overrun warning.
+ */
+function SectionPayments({ category, data, api }: {
+    category: Category;
+    data: FinancePayload;
+    api: FinanceApi;
+}) {
+    const stats = data.summary.categories.find((c) => c.id === category.id);
+    if (!stats) return null;
+
+    const installments = data.purchases.filter((p) => p.category_id === category.id);
+    const overpaid = stats.remaining < 0;
+
+    const addInstallment = () =>
+        api.create('purchases', {
+            category_id: category.id,
+            description: `${category.name} payment`,
+            amount: 0,
+            payer_id: data.payers[0]?.id ?? null,
+            purchased_on: new Date().toISOString().slice(0, 10),
+        });
+
+    return (
+        <div className="border-t border-gray-100 bg-gray-50/60 px-4 py-4">
+            <div className="flex flex-wrap items-baseline justify-between gap-2 mb-2">
+                <h4 className="text-sm font-semibold text-gray-800">Paid toward this section</h4>
+                <span className="text-xs text-gray-400">
+                    {installments.length
+                        ? `${installments.length} installment${installments.length === 1 ? '' : 's'}`
+                        : 'no installments yet'}
+                    {stats.itemSpent > 0 && ` · ${formatMoney(stats.itemSpent)} tagged to single lines`}
+                </span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 mb-3">
+                <Figure label="budgeted" value={stats.total} />
+                <Figure label="paid so far" value={stats.spent} tone="good" />
+                <Figure
+                    label={overpaid ? 'overpaid by' : 'still owed'}
+                    value={Math.abs(stats.remaining)}
+                    tone={overpaid ? 'bad' : 'warn'}
+                />
+            </div>
+
+            <Bar pct={stats.paidPct} tone={overpaid ? 'rose' : 'accent'} />
+            <div className="flex justify-between text-[11px] text-gray-400 mt-1 mb-3">
+                <span>{stats.paidPct.toFixed(1)}% paid</span>
+                {stats.earmarked > 0 && (
+                    <span>{formatMoney(stats.earmarked)} of that came from gift money</span>
+                )}
+            </div>
+
+            {installments.length > 0 && (
+                <div className="space-y-1 mb-2">
+                    {installments.map((p) => (
+                        <div key={p.id}
+                            className="grid grid-cols-[1fr_7rem_1.2fr_5.5rem_1.5rem] gap-2 items-center
+                                bg-white rounded-xl border border-gray-100 px-2 py-1.5">
+                            <InlineText
+                                value={p.description}
+                                placeholder="e.g. Venue 3/4"
+                                onCommit={(description) => api.update('purchases', { id: p.id, description })}
+                                className="text-xs"
+                            />
+                            <input
+                                type="date"
+                                value={(p.purchased_on ?? '').slice(0, 10)}
+                                onChange={(e) => api.update('purchases', {
+                                    id: p.id, purchased_on: e.target.value,
+                                })}
+                                className="bg-transparent text-[11px] text-gray-500 rounded-lg px-1 py-0.5
+                                    focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/30"
+                            />
+                            <select
+                                value={p.payer_id ?? ''}
+                                onChange={(e) => api.update('purchases', {
+                                    id: p.id, payer_id: e.target.value || null,
+                                })}
+                                className="bg-transparent text-[11px] text-gray-600 rounded-lg px-1 py-0.5
+                                    focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/30"
+                            >
+                                <option value="">Unassigned</option>
+                                {data.payers.map((payer) => (
+                                    <option key={payer.id} value={payer.id}>{payer.name}</option>
+                                ))}
+                            </select>
+                            <InlineNumber
+                                value={p.amount} prefix="$"
+                                onCommit={(amount) => api.update('purchases', { id: p.id, amount })}
+                            />
+                            <button
+                                onClick={() => {
+                                    if (confirm(`Delete "${p.description}"?`)) api.remove('purchases', p.id);
+                                }}
+                                aria-label={`Delete ${p.description}`}
+                                className="text-gray-300 hover:text-rose-500 transition-colors"
+                            >
+                                &times;
+                            </button>
+                        </div>
+                    ))}
+                    <div className="flex justify-between px-2 pt-1 text-[11px] text-gray-500">
+                        <span>Installments subtotal</span>
+                        <span className="font-semibold tabular-nums">{formatMoney(stats.directSpent)}</span>
+                    </div>
+                </div>
+            )}
+
+            <button
+                onClick={addInstallment}
+                className="text-xs font-medium text-gray-500 hover:text-gray-800 transition-colors"
+            >
+                + Log an installment
+            </button>
+            {installments.length === 0 && (
+                <p className="text-[11px] text-gray-400 mt-1">
+                    Use this for payments covering the whole section, like a venue deposit — not tied to
+                    any single line.
+                </p>
+            )}
+        </div>
+    );
+}
+
+function Figure({ label, value, tone = 'default' }: {
+    label: string;
+    value: number;
+    tone?: 'default' | 'good' | 'warn' | 'bad';
+}) {
+    const toneClass = {
+        default: 'text-gray-900',
+        good: 'text-emerald-600',
+        warn: 'text-amber-600',
+        bad: 'text-rose-600',
+    }[tone];
+    return (
+        <div className="bg-white rounded-xl border border-gray-100 px-3 py-2">
+            <div className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">{label}</div>
+            <div className={`text-sm font-semibold tabular-nums mt-0.5 ${toneClass}`}>
+                {formatMoney(value)}
+            </div>
+        </div>
     );
 }
 

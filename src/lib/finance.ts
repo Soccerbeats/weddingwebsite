@@ -62,6 +62,12 @@ export interface Purchase {
     id: number;
     payer_id: number | null;
     item_id: number | null;
+    /**
+     * Set instead of `item_id` when a payment covers a whole section rather than
+     * one line — a venue installment paying down venue + catering + bar + tax at
+     * once. Mutually exclusive with `item_id`, enforced by the API.
+     */
+    category_id: number | null;
     description: string;
     amount: number;
     purchased_on: string | null;
@@ -73,8 +79,10 @@ export interface Receipt {
     contributor_id: number;
     amount: number;
     received_on: string | null;
-    /** optional earmark to a budget line, e.g. Rob's $5,000 → Venue */
+    /** optional earmark to a budget line, e.g. Kim's $1,200 → Dress */
     item_id: number | null;
+    /** or to a whole section, e.g. Rob's $5,000 → the venue bill */
+    category_id: number | null;
     note: string | null;
 }
 
@@ -198,7 +206,20 @@ export interface CategorySummary {
     name: string;
     total: number;
     pct: number;
+    /** everything paid toward this section: lump-sum installments + line-level */
     spent: number;
+    /** installments paid against the section as a whole */
+    directSpent: number;
+    /** payments tagged to individual lines within the section */
+    itemSpent: number;
+    /** budget − spent; negative means the section is overpaid */
+    remaining: number;
+    /** how far through the section's budget the payments have got */
+    paidPct: number;
+    /** number of lump-sum installments logged against the section */
+    installmentCount: number;
+    /** gift money earmarked to this section or its lines */
+    earmarked: number;
 }
 
 export interface FinanceSummary {
@@ -283,21 +304,33 @@ export function buildSummary(input: SummaryInput): FinanceSummary {
     const total = budgetTotal(categories, settings);
 
     const spentByItem = new Map<number, number>();
+    const spentByCategory = new Map<number, number>();
+    const installmentsByCategory = new Map<number, number>();
     let unlinkedSpend = 0;
     let spentTotal = 0;
     for (const p of purchases) {
         const amount = num(p.amount);
         spentTotal += amount;
-        if (p.item_id == null) unlinkedSpend += amount;
-        else spentByItem.set(p.item_id, (spentByItem.get(p.item_id) ?? 0) + amount);
+        // item_id wins over category_id so a payment is never counted twice.
+        if (p.item_id != null) {
+            spentByItem.set(p.item_id, (spentByItem.get(p.item_id) ?? 0) + amount);
+        } else if (p.category_id != null) {
+            spentByCategory.set(p.category_id, (spentByCategory.get(p.category_id) ?? 0) + amount);
+            installmentsByCategory.set(p.category_id, (installmentsByCategory.get(p.category_id) ?? 0) + 1);
+        } else {
+            unlinkedSpend += amount;
+        }
     }
     spentTotal = money(spentTotal);
 
     const earmarkedByItem = new Map<number, number>();
+    const earmarkedByCategory = new Map<number, number>();
     for (const c of contributors) {
         for (const r of c.receipts || []) {
             if (r.item_id != null) {
                 earmarkedByItem.set(r.item_id, (earmarkedByItem.get(r.item_id) ?? 0) + num(r.amount));
+            } else if (r.category_id != null) {
+                earmarkedByCategory.set(r.category_id, (earmarkedByCategory.get(r.category_id) ?? 0) + num(r.amount));
             }
         }
     }
@@ -310,11 +343,14 @@ export function buildSummary(input: SummaryInput): FinanceSummary {
     let itemCount = 0;
 
     for (const category of categories) {
-        let categorySpent = 0;
+        let itemSpent = 0;
+        let itemEarmarked = 0;
         for (const item of category.items || []) {
             const lineTotal = itemTotal(item, settings);
             const spent = money(spentByItem.get(item.id) ?? 0);
-            categorySpent += spent;
+            const earmarked = money(earmarkedByItem.get(item.id) ?? 0);
+            itemSpent += spent;
+            itemEarmarked += earmarked;
             itemCount += 1;
             if (item.is_paid) paidItemCount += 1;
             items.push({
@@ -327,16 +363,24 @@ export function buildSummary(input: SummaryInput): FinanceSummary {
                 spent,
                 variance: money(spent - lineTotal),
                 isPaid: item.is_paid,
-                earmarked: money(earmarkedByItem.get(item.id) ?? 0),
+                earmarked,
             });
         }
         const catTotal = categoryTotal(category, settings);
+        const directSpent = money(spentByCategory.get(category.id) ?? 0);
+        const totalSpent = money(directSpent + itemSpent);
         categorySummaries.push({
             id: category.id,
             name: category.name,
             total: catTotal,
             pct: pct(catTotal),
-            spent: money(categorySpent),
+            spent: totalSpent,
+            directSpent,
+            itemSpent: money(itemSpent),
+            remaining: money(catTotal - totalSpent),
+            paidPct: catTotal > 0 ? money((totalSpent / catTotal) * 100) : 0,
+            installmentCount: installmentsByCategory.get(category.id) ?? 0,
+            earmarked: money(itemEarmarked + (earmarkedByCategory.get(category.id) ?? 0)),
         });
     }
 

@@ -43,10 +43,13 @@ const settings: FinanceSettings = { ...DEFAULT_SETTINGS, ...SEED_SETTINGS };
 const payers: Payer[] = SEED_PAYERS.map((p, i) => ({ id: i + 1, name: p.name, share_pct: p.share_pct, sort_order: i }));
 const payerId = new Map(payers.map(p => [p.name, p.id]));
 
+const catId = new Map(SEED_CATEGORIES.map((c, i) => [c.name, i + 1]));
+
 const purchases: Purchase[] = SEED_PURCHASES.map((p, i) => ({
     id: i + 1,
     payer_id: payerId.get(p.payer) ?? null,
     item_id: p.item ? nameToId.get(p.item) ?? null : null,
+    category_id: p.section ? catId.get(p.section) ?? null : null,
     description: p.description,
     amount: p.amount,
     purchased_on: null,
@@ -57,8 +60,10 @@ let receiptId = 0;
 const contributors: Contributor[] = SEED_CONTRIBUTORS.map((c, i) => ({
     id: i + 1, name: c.name, pledged: c.pledged, notes: null, sort_order: i,
     receipts: c.receipts.map(r => ({
-        id: ++receiptId, contributor_id: i + 1, amount: r.amount,
-        received_on: null, item_id: r.item ? nameToId.get(r.item) ?? null : null, note: r.note,
+        id: ++receiptId, contributor_id: i + 1, amount: r.amount, received_on: null,
+        item_id: r.item ? nameToId.get(r.item) ?? null : null,
+        category_id: r.section ? catId.get(r.section) ?? null : null,
+        note: r.note,
     })),
 }));
 
@@ -109,16 +114,32 @@ console.log('\n--- Drift correction ---');
 check('corrected received (incl. Kim veil)', s.receivedTotal, 6880);
 check('corrected pledged (Kim over-delivered)', s.pledgedTotal, 17880);
 
-console.log('\n--- Budget vs actual ---');
+console.log('\n--- Section-level (lump-sum) payments ---');
+// The venue bill covers the whole section and is paid in installments, so the
+// installments must land on the section, not on the single Venue line.
+const venueSection = s.categories.find(c => c.name === 'Venue Cost')!;
+check('section budgeted', venueSection.total, 18358.9);
+check('installments on section', venueSection.directSpent, 9680);
+check('installment count', venueSection.installmentCount, 2);
+check('section paid total', venueSection.spent, 9680);
+check('section still owed', venueSection.remaining, 8678.9);
+check('section paid %', venueSection.paidPct, 52.73);
+check('gift money earmarked to section', venueSection.earmarked, 5000);
+
 const venue = s.items.find(i => i.name === 'Venue')!;
-check('venue budgeted', venue.total, 4500);
-check('venue spent (2 payments)', venue.spent, 9680);
-check('venue overrun', venue.variance, 5180);
-check('venue earmarked (Rob)', venue.earmarked, 5000);
+check('venue LINE no longer overruns', venue.variance, -4500);
+check('venue line spend is zero', venue.spent, 0);
+check('venue % of budget', venue.pct, 13.62);
+
+console.log('\n--- Line-level tracking still works ---');
 const tux = s.items.find(i => i.name === 'Tux')!;
 check('tux double-paid overrun', tux.variance, 300);
+const other = s.categories.find(c => c.name === 'Other')!;
+// 70 stamps + 250 + 136 decor + 300 + 300 suits + 20 vases + 53 invites + 1284 ring
+check('other section rolls up line spend', other.itemSpent, 2413);
+check('other section has no installments', other.directSpent, 0);
 check('unlinked spend (AirBnb)', s.unlinkedSpend, 1957);
-check('venue % of budget', venue.pct, 13.62);
+check('total spend unchanged by re-pointing', s.spentTotal, 16650);
 
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);

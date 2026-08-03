@@ -67,6 +67,7 @@ const RESOURCES: Record<string, ResourceDef> = {
         fields: {
             payer_id: { kind: 'ref' },
             item_id: { kind: 'ref' },
+            category_id: { kind: 'ref' },
             description: { kind: 'text' },
             amount: { kind: 'number' },
             purchased_on: { kind: 'date' },
@@ -89,6 +90,7 @@ const RESOURCES: Record<string, ResourceDef> = {
         fields: {
             contributor_id: { kind: 'ref' },
             item_id: { kind: 'ref' },
+            category_id: { kind: 'ref' },
             amount: { kind: 'number' },
             received_on: { kind: 'date' },
             note: { kind: 'text' },
@@ -96,6 +98,26 @@ const RESOURCES: Record<string, ResourceDef> = {
         required: ['contributor_id'],
     },
 };
+
+/**
+ * A payment targets one budget line OR one whole section, never both — double
+ * counting would silently inflate a section's paid total. Whichever the caller
+ * just set wins, and the other is cleared in the same statement.
+ */
+function applyTargetExclusivity(def: ResourceDef, columns: string[], values: unknown[]) {
+    if (!('item_id' in def.fields) || !('category_id' in def.fields)) return;
+
+    const setItem = columns.includes('item_id') && values[columns.indexOf('item_id')] != null;
+    const setCategory = columns.includes('category_id') && values[columns.indexOf('category_id')] != null;
+    if (!setItem && !setCategory) return;
+
+    // If the request set both, the section link is dropped — a line is the more
+    // specific target and is what the UI sends for a line selection.
+    const clear = setItem ? 'category_id' : 'item_id';
+    const at = columns.indexOf(clear);
+    if (at >= 0) values[at] = null;
+    else { columns.push(clear); values.push(null); }
+}
 
 /**
  * Parse a money-ish value. Strips currency formatting so "$1,234.56" survives a
@@ -193,6 +215,7 @@ export async function POST(request: Request, { params }: Params) {
 
         const { columns, values } = collect(def, body);
         if (!columns.length) return NextResponse.json({ error: 'No fields provided' }, { status: 400 });
+        applyTargetExclusivity(def, columns, values);
 
         const placeholders = columns.map((_, i) => `$${i + 1}`).join(', ');
         const result = await pool.query(
@@ -244,6 +267,7 @@ export async function PATCH(request: Request, { params }: Params) {
 
         const { columns, values } = collect(def, body);
         if (!columns.length) return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
+        applyTargetExclusivity(def, columns, values);
 
         const sets = columns.map((c, i) => `${c} = $${i + 1}`).join(', ');
         const result = await pool.query(

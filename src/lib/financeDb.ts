@@ -101,7 +101,15 @@ async function createTables() {
             created_at TIMESTAMP DEFAULT NOW()
         )
     `);
+    // Lump-sum payments: a venue installment pays down a whole section at once
+    // rather than any single line, so purchases and receipts can target either.
+    await pool.query(`ALTER TABLE finance_purchases ADD COLUMN IF NOT EXISTS category_id INTEGER
+                      REFERENCES finance_categories(id) ON DELETE SET NULL`);
+    await pool.query(`ALTER TABLE finance_receipts ADD COLUMN IF NOT EXISTS category_id INTEGER
+                      REFERENCES finance_categories(id) ON DELETE SET NULL`);
+
     await pool.query(`CREATE INDEX IF NOT EXISTS finance_items_category_idx ON finance_items(category_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS finance_purchases_category_idx ON finance_purchases(category_id)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS finance_subitems_item_idx ON finance_subitems(item_id)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS finance_receipts_contributor_idx ON finance_receipts(contributor_id)`);
     await pool.query(`INSERT INTO finance_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING`);
@@ -131,12 +139,14 @@ async function seedIfEmpty() {
         );
 
         const itemIds = new Map<string, number>();
+        const categoryIds = new Map<string, number>();
         for (const [ci, cat] of SEED_CATEGORIES.entries()) {
             const catRow = await client.query(
                 'INSERT INTO finance_categories (name, sort_order) VALUES ($1, $2) RETURNING id',
                 [cat.name, ci],
             );
             const categoryId = catRow.rows[0].id;
+            categoryIds.set(cat.name, categoryId);
             for (const [ii, item] of cat.items.entries()) {
                 const itemRow = await client.query(
                     `INSERT INTO finance_items
@@ -168,9 +178,11 @@ async function seedIfEmpty() {
 
         for (const p of SEED_PURCHASES) {
             await client.query(
-                `INSERT INTO finance_purchases (payer_id, item_id, description, amount)
-                 VALUES ($1, $2, $3, $4)`,
-                [payerIds.get(p.payer) ?? null, p.item ? itemIds.get(p.item) ?? null : null,
+                `INSERT INTO finance_purchases (payer_id, item_id, category_id, description, amount)
+                 VALUES ($1, $2, $3, $4, $5)`,
+                [payerIds.get(p.payer) ?? null,
+                 p.item ? itemIds.get(p.item) ?? null : null,
+                 p.section ? categoryIds.get(p.section) ?? null : null,
                  p.description, p.amount],
             );
         }
@@ -183,9 +195,12 @@ async function seedIfEmpty() {
             const contributorId = row.rows[0].id;
             for (const r of c.receipts) {
                 await client.query(
-                    `INSERT INTO finance_receipts (contributor_id, item_id, amount, note)
-                     VALUES ($1, $2, $3, $4)`,
-                    [contributorId, r.item ? itemIds.get(r.item) ?? null : null, r.amount, r.note],
+                    `INSERT INTO finance_receipts (contributor_id, item_id, category_id, amount, note)
+                     VALUES ($1, $2, $3, $4, $5)`,
+                    [contributorId,
+                     r.item ? itemIds.get(r.item) ?? null : null,
+                     r.section ? categoryIds.get(r.section) ?? null : null,
+                     r.amount, r.note],
                 );
             }
         }
@@ -255,14 +270,14 @@ async function queryFinanceData(): Promise<FinanceData> {
                           FROM finance_subitems ORDER BY sort_order, id`),
             pool.query(`SELECT id, name, share_pct::float8 AS share_pct, sort_order
                           FROM finance_payers ORDER BY sort_order, id`),
-            pool.query(`SELECT id, payer_id, item_id, description, amount::float8 AS amount,
-                               purchased_on, notes
+            pool.query(`SELECT id, payer_id, item_id, category_id, description,
+                               amount::float8 AS amount, purchased_on, notes
                           FROM finance_purchases
                          ORDER BY purchased_on DESC NULLS LAST, id DESC`),
             pool.query(`SELECT id, name, pledged::float8 AS pledged, notes, sort_order
                           FROM finance_contributors ORDER BY sort_order, id`),
-            pool.query(`SELECT id, contributor_id, item_id, amount::float8 AS amount,
-                               received_on, note
+            pool.query(`SELECT id, contributor_id, item_id, category_id,
+                               amount::float8 AS amount, received_on, note
                           FROM finance_receipts
                          ORDER BY received_on DESC NULLS LAST, id DESC`),
         ]);

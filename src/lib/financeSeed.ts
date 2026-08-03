@@ -45,7 +45,9 @@ export const SEED_SETTINGS = {
 
 export const SEED_CATEGORIES: SeedCategory[] = [
     {
-        name: 'Main Cost',
+        // One bill from the venue covers all of these, paid in installments —
+        // hence the section-level payment tracking rather than per-line.
+        name: 'Venue Cost',
         items: [
             { name: 'Venue', unit_cost: 4500, quantity: 1, qty_source: 'manual' },
             {
@@ -107,15 +109,21 @@ export const SEED_PAYERS = [
     { name: 'Heaven', share_pct: 50 },
 ];
 
-/** `item` matches a budget line by name; null means the spend has no budget line. */
+/**
+ * `item` matches a budget line by name. `section` instead targets a whole
+ * category — used for the venue installments, which pay down the entire venue
+ * bill (venue, catering, bar, service charge, tax) rather than one line.
+ * Only one of the two is ever set; null on both means the spend is untracked.
+ */
 export const SEED_PURCHASES: {
     payer: string;
-    item: string | null;
+    item?: string | null;
+    section?: string | null;
     description: string;
     amount: number;
 }[] = [
         { payer: 'Austin', item: 'Stamps for Save the Date', description: 'Stamps', amount: 70 },
-        { payer: 'Austin', item: 'Venue', description: 'Venue 2/4', amount: 5000 },
+        { payer: 'Austin', section: 'Venue Cost', description: 'Venue 2/4', amount: 5000 },
         { payer: 'Austin', item: 'Decor', description: 'Decor (from Amy)', amount: 250 },
         { payer: 'Austin', item: 'Decor', description: 'Candle Beads', amount: 136 },
         { payer: 'Austin', item: 'Tux', description: 'Suit', amount: 300 },
@@ -127,13 +135,13 @@ export const SEED_PURCHASES: {
         { payer: 'Heaven', item: 'Decor', description: 'Dollar Tree Bouquet Vases', amount: 20 },
         { payer: 'Heaven', item: 'Invitations', description: 'Invites', amount: 53 },
         { payer: 'Heaven', item: "Austin's Ring", description: 'Aust Ring', amount: 1284 },
-        { payer: 'Heaven', item: 'Venue', description: 'Venue Payment', amount: 4680 },
+        { payer: 'Heaven', section: 'Venue Cost', description: 'Venue Payment', amount: 4680 },
     ];
 
 export const SEED_CONTRIBUTORS: {
     name: string;
     pledged: number;
-    receipts: { amount: number; item: string | null; note: string | null }[];
+    receipts: { amount: number; item?: string | null; section?: string | null; note: string | null }[];
 }[] = [
         { name: 'Karie & Dave', pledged: 5000, receipts: [] },
         { name: 'Kim', pledged: 1200, receipts: [
@@ -142,7 +150,8 @@ export const SEED_CONTRIBUTORS: {
             { amount: 680, item: null, note: 'Veil' },
         ] },
         { name: 'Rob', pledged: 10000, receipts: [
-            { amount: 5000, item: 'Venue', note: 'Venue 1/4' },
+            // An installment on the venue bill, not the single Venue line.
+            { amount: 5000, section: 'Venue Cost', note: 'Venue 1/4' },
         ] },
         { name: 'A Gram', pledged: 1000, receipts: [] },
     ];

@@ -22,9 +22,12 @@ export default function OverviewTab({ data }: { data: FinancePayload }) {
     // per-month figure would be meaningless.
     const noHorizon = summary.horizon.days <= 0;
 
+    // Only line-level overruns; a section paid in installments is tracked against
+    // the section total, so its lines legitimately show no spend of their own.
     const overruns = summary.items
         .filter((i) => i.variance > 0)
         .sort((a, b) => b.variance - a.variance);
+    const overpaidSections = summary.categories.filter((c) => c.remaining < 0);
 
     return (
         <div className="space-y-6">
@@ -144,27 +147,47 @@ export default function OverviewTab({ data }: { data: FinancePayload }) {
             </Card>
 
             <Card className="p-5">
-                <h3 className="font-semibold text-gray-900 mb-4">Where the money goes</h3>
-                <div className="space-y-3">
-                    {summary.categories.map((category) => (
-                        <div key={category.id}>
-                            <div className="flex justify-between items-baseline text-sm mb-1">
-                                <span className="font-medium text-gray-700">{category.name}</span>
-                                <span className="text-gray-400 text-xs">
-                                    <span className="tabular-nums font-medium text-gray-700">
-                                        {formatMoney(category.total)}
+                <h3 className="font-semibold text-gray-900 mb-1">Section progress</h3>
+                <p className="text-xs text-gray-400 mb-4">
+                    How far each section&apos;s bill has been paid down, counting installments and
+                    line-level payments together.
+                </p>
+                <div className="space-y-4">
+                    {summary.categories.map((category) => {
+                        const overpaid = category.remaining < 0;
+                        return (
+                            <div key={category.id}>
+                                <div className="flex justify-between items-baseline text-sm mb-1">
+                                    <span className="font-medium text-gray-700">
+                                        {category.name}
+                                        {category.installmentCount > 0 && (
+                                            <span className="text-[11px] text-gray-400 ml-2">
+                                                {category.installmentCount} installment
+                                                {category.installmentCount === 1 ? '' : 's'}
+                                            </span>
+                                        )}
                                     </span>
-                                    {' · '}{category.pct.toFixed(1)}%
-                                </span>
-                            </div>
-                            <Bar pct={category.pct} />
-                            {category.spent > 0 && (
-                                <div className="text-[11px] text-gray-400 mt-1">
-                                    {formatMoney(category.spent)} paid
+                                    <span className="text-xs text-gray-400">
+                                        <span className="tabular-nums font-medium text-gray-700">
+                                            {formatMoney(category.spent)}
+                                        </span>
+                                        {' of '}
+                                        <span className="tabular-nums">{formatMoney(category.total)}</span>
+                                    </span>
                                 </div>
-                            )}
-                        </div>
-                    ))}
+                                <Bar pct={category.paidPct} tone={overpaid ? 'rose' : 'accent'} />
+                                <div className="flex justify-between text-[11px] text-gray-400 mt-1">
+                                    <span>{category.paidPct.toFixed(0)}% paid</span>
+                                    <span className={overpaid ? 'text-rose-600 font-medium' : ''}>
+                                        {overpaid
+                                            ? `overpaid by ${formatMoney(-category.remaining)}`
+                                            : `${formatMoney(category.remaining)} still owed`}
+                                        {' · '}{category.pct.toFixed(1)}% of budget
+                                    </span>
+                                </div>
+                            </div>
+                        );
+                    })}
                     {!summary.categories.length && <EmptyState>No budget sections yet.</EmptyState>}
                 </div>
             </Card>
@@ -197,14 +220,28 @@ export default function OverviewTab({ data }: { data: FinancePayload }) {
                 </div>
             </Card>
 
-            {(overruns.length > 0 || summary.unlinkedSpend > 0) && (
+            {(overruns.length > 0 || overpaidSections.length > 0 || summary.unlinkedSpend > 0) && (
                 <Card className="p-5 border-amber-200 bg-amber-50/40">
                     <h3 className="font-semibold text-amber-900 mb-1">Worth a look</h3>
                     <p className="text-xs text-amber-700 mb-3">
-                        Lines where spending has passed the budgeted amount, or money that isn&apos;t
-                        counted against any line.
+                        Places where payments have passed the budgeted amount, or money that isn&apos;t
+                        counted anywhere.
                     </p>
                     <div className="space-y-1.5">
+                        {overpaidSections.map((category) => (
+                            <div key={`c${category.id}`} className="flex items-center gap-2 text-sm bg-white
+                                rounded-xl border border-amber-100 px-3 py-2">
+                                <span className="flex-1 truncate text-gray-700">
+                                    {category.name} <span className="text-gray-400 text-xs">(whole section)</span>
+                                </span>
+                                <span className="text-[11px] text-gray-400">
+                                    budget {formatMoney(category.total)} · paid {formatMoney(category.spent)}
+                                </span>
+                                <span className="text-rose-600 font-semibold tabular-nums text-xs">
+                                    +{formatMoney(-category.remaining)}
+                                </span>
+                            </div>
+                        ))}
                         {overruns.map((item) => (
                             <div key={item.id} className="flex items-center gap-2 text-sm bg-white rounded-xl
                                 border border-amber-100 px-3 py-2">
@@ -220,7 +257,7 @@ export default function OverviewTab({ data }: { data: FinancePayload }) {
                         {summary.unlinkedSpend > 0 && (
                             <div className="flex items-center gap-2 text-sm bg-white rounded-xl
                                 border border-amber-100 px-3 py-2">
-                                <span className="flex-1 text-gray-700">Purchases with no budget line</span>
+                                <span className="flex-1 text-gray-700">Purchases counted toward nothing</span>
                                 <span className="font-semibold tabular-nums text-xs text-amber-700">
                                     {formatMoney(summary.unlinkedSpend)}
                                 </span>

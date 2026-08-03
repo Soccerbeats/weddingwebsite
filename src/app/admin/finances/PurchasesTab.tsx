@@ -11,11 +11,28 @@ export default function PurchasesTab({ data, api }: { data: FinancePayload; api:
     const [payerFilter, setPayerFilter] = useState<'all' | number>('all');
     const [search, setSearch] = useState('');
 
-    /** Flat list of budget lines for the link dropdown, grouped by section. */
-    const itemGroups = useMemo(
-        () => categories.map((c) => ({ name: c.name, items: c.items.map((i) => ({ id: i.id, name: i.name })) })),
+    /**
+     * One dropdown covers both targets: a whole section (for lump-sum bills paid
+     * in installments) or a single line. Encoded as `c:<id>` / `i:<id>` so the
+     * two can never both be set.
+     */
+    const targetGroups = useMemo(
+        () => categories.map((c) => ({
+            name: c.name,
+            sectionValue: `c:${c.id}`,
+            items: c.items.map((i) => ({ value: `i:${i.id}`, name: i.name })),
+        })),
         [categories],
     );
+    const targetValue = (p: { item_id: number | null; category_id: number | null }) =>
+        p.item_id != null ? `i:${p.item_id}` : p.category_id != null ? `c:${p.category_id}` : '';
+    const targetPatch = (raw: string) => {
+        if (!raw) return { item_id: null, category_id: null };
+        const id = Number(raw.slice(2));
+        return raw.startsWith('c:')
+            ? { category_id: id, item_id: null }
+            : { item_id: id, category_id: null };
+    };
 
     const visible = useMemo(() => {
         const term = search.trim().toLowerCase();
@@ -46,8 +63,8 @@ export default function PurchasesTab({ data, api }: { data: FinancePayload; api:
                     <StatTile key={p.id} label={`${p.name} paid`} value={formatMoney(p.spent)} />
                 ))}
                 {summary.unlinkedSpend > 0 && (
-                    <StatTile label="No budget line" value={formatMoney(summary.unlinkedSpend)}
-                        tone="warn" hint="Not counted against any line" />
+                    <StatTile label="Untracked" value={formatMoney(summary.unlinkedSpend)}
+                        tone="warn" hint="Not counted toward any section or line" />
                 )}
             </div>
 
@@ -80,7 +97,7 @@ export default function PurchasesTab({ data, api }: { data: FinancePayload; api:
                     <div>What</div>
                     <div>Date</div>
                     <div>Paid by</div>
-                    <div>Budget line</div>
+                    <div>Counts toward</div>
                     <div className="text-right">Amount</div>
                     <div />
                 </div>
@@ -116,16 +133,19 @@ export default function PurchasesTab({ data, api }: { data: FinancePayload; api:
                                 {payers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                             </select>
                             <select
-                                value={purchase.item_id ?? ''}
-                                onChange={(e) => patch({ item_id: e.target.value || null })}
+                                value={targetValue(purchase)}
+                                onChange={(e) => patch(targetPatch(e.target.value))}
                                 className="bg-transparent text-xs text-gray-600 rounded-lg px-1 py-1
                                     hover:bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/30"
                             >
-                                <option value="">— no line —</option>
-                                {itemGroups.map((group) => (
+                                <option value="">— nothing —</option>
+                                {targetGroups.map((group) => (
                                     <optgroup key={group.name} label={group.name}>
+                                        <option value={group.sectionValue}>
+                                            {group.name} — whole section
+                                        </option>
                                         {group.items.map((i) => (
-                                            <option key={i.id} value={i.id}>{i.name}</option>
+                                            <option key={i.value} value={i.value}>{i.name}</option>
                                         ))}
                                     </optgroup>
                                 ))}

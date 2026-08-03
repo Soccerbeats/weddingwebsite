@@ -432,21 +432,23 @@ In **Admin → Work in Progress**:
 
 **Admin → Finances.** Five tabs. Every field edits in place — type, then click away or press Enter; `Esc` cancels. Nothing needs a Save button, and totals recalculate as soon as an edit lands.
 
-On first run the suite imports the original *Heav & Aust Wedding Spreadsheet — Budget* tab: 3 sections, 27 line items, 2 payers, 14 purchases and 4 contributors. It only seeds when the tables are empty, so it never duplicates or overwrites later edits. Two things it can't bring over: the **paid** flags (the spreadsheet stored those as bold text, which CSV export drops — tick them yourself), and the sheet's own $680 rounding gap (see *Gift Money* below).
+On first run the suite imports the original *Heav & Aust Wedding Spreadsheet — Budget* tab: 3 sections (*Venue Cost*, *Staff And Extras*, *Other*), 27 line items, 2 payers, 14 purchases and 4 contributors. The two venue payments and Rob's $5,000 are attached to the **Venue Cost section**, not the Venue line, because that is how the bill is actually paid. It only seeds when the tables are empty, so it never duplicates or overwrites later edits. Two things it can't bring over: the **paid** flags (the spreadsheet stored those as bold text, which CSV export drops — tick them yourself), and the sheet's own $680 rounding gap (see *Gift Money* below).
 
 **Overview** — the report. Budget total, spent to date, gift money received, and what's left to cover, then the per-person split and payment plan. The **planning scenario** toggle switches every figure between:
 - *Cash in hand* — counts only money actually received. The safe number.
 - *If pledges land* — counts every pledge as money you'll get.
 
-Below that: where the money goes by section, your ten biggest line items, and a **Worth a look** panel listing lines where spending has passed the budget plus any purchase with no budget line attached.
+Below that: **Section progress** — how far each section's bill has been paid down, with installment counts and what's still owed — then your ten biggest line items, and a **Worth a look** panel listing sections or lines where payments have passed the budget, plus any purchase counted toward nothing.
 
 **Budget** — sections and line items. Each line is `Unit cost × Qty`, and **Qty from** decides where the quantity comes from: *Fixed* (you type it), or *Adults* / *Minors* / *All guests* (driven by the headcount in Settings, so a headcount change ripples through dinner, kids' meals and the bar at once). The **Paid** toggle replaces the spreadsheet's bold convention.
 
 Click the ▶ on any line to expand it for notes, a list of payments made against it, and **Break into parts** — build a line from components that sum into it, the way Appetizers reaches $1,700 from six dishes. A line using parts ignores its own cost and quantity.
 
-**Purchases** — the spend log. Each entry records what, when, who paid, and which budget line it counts against. Filter by payer or search; the footer totals whatever is on screen. Leaving the budget line as *— no line —* is fine, but that spend won't count against any line and gets flagged on the Overview.
+Every section ends with a **Paid toward this section** panel — *budgeted*, *paid so far*, *still owed*, a progress bar, and an installment log with **+ Log an installment**. Use it for a bill that covers the whole section and gets paid down in chunks, which is how the venue works: one invoice spanning venue, catering, bar, service charge and tax. Tagging those installments to a single line would misattribute them *and* raise a false overrun on that line, so they attach to the section instead. Line-level payments and section installments are added together for the section's paid total, and the panel shows how much of it came from gift money.
 
-**Gift Money** — money toward the wedding bill: parents, family, anyone chipping in. Each contributor has a **pledge**, then you log each payment as it actually arrives. Totals are always derived from the logged payments, which is what stops the drift the spreadsheet had (its receipt log said $6,880 received while its summary said $6,200 — the $680 was never rolled up). Give more than pledged and the extra is kept, not discarded. Each payment can be earmarked to a budget line.
+**Purchases** — the spend log. Each entry records what, when, who paid, and what it **counts toward**: a whole section (for lump-sum bills) or a single line. A payment can only ever target one of the two — picking one clears the other, so nothing is double counted. Filter by payer or search; the footer totals whatever is on screen. Leaving it as *— nothing —* is fine, but that spend counts nowhere and gets flagged on the Overview.
+
+**Gift Money** — money toward the wedding bill: parents, family, anyone chipping in. Each contributor has a **pledge**, then you log each payment as it actually arrives. Totals are always derived from the logged payments, which is what stops the drift the spreadsheet had (its receipt log said $6,880 received while its summary said $6,200 — the $680 was never rolled up). Give more than pledged and the extra is kept, not discarded. Each payment can be earmarked to a whole section or a single line — Rob's $5,000 against the venue bill, Kim's $1,200 against the dress.
 
 > Wedding and shower **gifts from guests** are a different thing and stay on the **Registry** page, where they remain tied to a guest for thank-you notes.
 
@@ -488,8 +490,8 @@ BASE=... ADMIN_PASSWORD=... npx tsx scripts/verify-finance-ui.mts   # real brows
 | `finance_settings` | Headcount and payment-plan config (single row) |
 | `finance_categories` / `finance_items` / `finance_subitems` | Budget sections, line items, and component parts |
 | `finance_payers` | Who pays, with share percentages |
-| `finance_purchases` | Spend log, linked to a payer and a budget line |
-| `finance_contributors` / `finance_receipts` | Gift-money pledges and the payments actually received |
+| `finance_purchases` | Spend log, linked to a payer and either a budget line or a whole section |
+| `finance_contributors` / `finance_receipts` | Gift-money pledges and the payments actually received, earmarkable to a line or section |
 
 ## Backup
 

@@ -24,6 +24,9 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 1400 } });
 const consoleErrors: string[] = [];
 page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(m.text()); });
 page.on('pageerror', (e) => consoleErrors.push(`pageerror: ${e.message}`));
+// Deletes go through window.confirm; Playwright dismisses dialogs by default,
+// which would silently turn every delete into a no-op.
+page.on('dialog', (d) => d.accept());
 
 // --- log in ---
 await page.goto(`${BASE}/admin/login`, { waitUntil: 'domcontentloaded' });
@@ -48,9 +51,11 @@ check('budget total shown', text.includes('$33,046.26'), 'expected seeded total'
 check('spent total shown', text.includes('$16,650.00'));
 check('gift money shown', text.includes('$6,880.00'));
 check('both payers listed', text.includes('Austin') && text.includes('Heaven'));
-check('category breakdown', text.includes('Main Cost') && text.includes('Staff And Extras'));
-check('overruns surfaced', text.includes('Worth a look') && text.includes('Over budget') === false);
-check('venue overrun flagged', /Venue/.test(text) && text.includes('+$5,180.00'));
+check('category breakdown', text.includes('Venue Cost') && text.includes('Staff And Extras'));
+check('section progress shown', text.includes('Section progress') && text.includes('% paid'));
+check('venue section installments counted', text.includes('2 installments'));
+check('no bogus venue line overrun', !text.includes('+$5,180.00'),
+    'installments belong to the section, not the $4,500 line');
 
 // Scenario toggle must change the figures.
 await page.click('text=If pledges land');
@@ -65,14 +70,41 @@ await page.waitForSelector('text=Add line item', { timeout: 10_000 });
 text = await body();
 let values = await inputValues();
 check('all three sections render',
-    ['Main Cost', 'Staff And Extras', 'Other'].every((s) => values.includes(s)),
-    `sections found: ${values.filter((v) => ['Main Cost', 'Staff And Extras', 'Other'].includes(v)).join(', ')}`);
+    ['Venue Cost', 'Staff And Extras', 'Other'].every((s) => values.includes(s)),
+    `sections found: ${values.filter((v) => ['Venue Cost', 'Staff And Extras', 'Other'].includes(v)).join(', ')}`);
 check('line item names render',
     ['Venue', 'Appetizers', 'Dinner', 'Photographer', 'Rehearsal Dinner'].every((n) => values.includes(n)));
 check('27 line items present', (await page.locator('button[aria-label^="Delete "]').count()) >= 27,
     `${await page.locator('button[aria-label^="Delete "]').count()} delete buttons`);
 check('appetizers shows "from parts"', text.includes('from parts'));
 check('derived qty renders 124', text.includes('124'));
+
+// Section-level paid-vs-budgeted controls.
+check('section footer present', text.includes('Paid toward this section'));
+check('section budgeted figure', text.includes('$18,358.90'));
+check('section paid figure', text.includes('$9,680.00'));
+check('section still owed', text.includes('$8,678.90'));
+check('installments listed', values.includes('Venue 2/4') && values.includes('Venue Payment'));
+check('installments subtotal', text.includes('Installments subtotal'));
+check('log installment control', text.includes('Log an installment'));
+
+// A new installment must move the section's paid total.
+const beforeInstall = await page.locator('button:has-text("+ Log an installment")').count();
+check('an installment control per section', beforeInstall === 3, `${beforeInstall} controls`);
+await page.locator('button:has-text("+ Log an installment")').first().click();
+await page.waitForTimeout(1400);
+const newRow = rowFor('Venue Cost payment');
+check('new installment row appeared', await newRow.count() > 0);
+const newAmt = newRow.locator('input[inputmode="decimal"]').first();
+await newAmt.fill('1320');
+await newAmt.blur();
+await page.waitForTimeout(1400);
+text = await body();
+check('section paid total moved', text.includes('$11,000.00'), '9,680 + 1,320');
+check('section still owed moved', text.includes('$7,358.90'));
+await page.locator('button[aria-label="Delete Venue Cost payment"]').first().click();
+await page.waitForTimeout(1400);
+check('removing installment restored total', (await body()).includes('$9,680.00'));
 
 // Inline edit: change Dessert's unit cost and confirm the grand total moves.
 const dessertRow = rowFor('Dessert');
@@ -106,7 +138,12 @@ await page.waitForSelector('text=Log purchase', { timeout: 10_000 });
 text = await body();
 values = await inputValues();
 check('purchases listed', values.includes('Venue Payment') && values.includes('Aust Ring'));
-check('unlinked spend flagged', text.includes('$1,957.00'));
+check('untracked spend flagged', text.includes('$1,957.00'));
+const options = await page.locator('select option').evaluateAll(
+    (els) => els.map((e) => (e as HTMLOptionElement).textContent ?? ''));
+check('section option offered in dropdown',
+    options.some((o) => o.includes('Venue Cost — whole section')),
+    options.filter((o) => o.includes('whole section')).join(' | '));
 check('per-payer totals', text.includes('$5,756.00') && text.includes('$10,894.00'));
 
 // Filter by payer.

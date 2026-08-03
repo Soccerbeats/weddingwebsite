@@ -18,8 +18,14 @@ export default function ContributionsTab({ data, api }: { data: FinancePayload; 
     const { contributors, summary, categories } = data;
     const [newName, setNewName] = useState('');
 
-    const itemGroups = useMemo(
-        () => categories.map((c) => ({ name: c.name, items: c.items.map((i) => ({ id: i.id, name: i.name })) })),
+    // Gift money can be earmarked to a whole section (Rob's $5,000 against the
+    // venue bill) or a single line (Kim's $1,200 against the dress).
+    const targetGroups = useMemo(
+        () => categories.map((c) => ({
+            name: c.name,
+            sectionValue: `c:${c.id}`,
+            items: c.items.map((i) => ({ value: `i:${i.id}`, name: i.name })),
+        })),
         [categories],
     );
 
@@ -60,7 +66,7 @@ export default function ContributionsTab({ data, api }: { data: FinancePayload; 
                     <ContributorCard
                         key={contributor.id}
                         contributor={contributor}
-                        itemGroups={itemGroups}
+                        targetGroups={targetGroups}
                         api={api}
                     />
                 ))}
@@ -89,11 +95,20 @@ export default function ContributionsTab({ data, api }: { data: FinancePayload; 
     );
 }
 
-function ContributorCard({ contributor, itemGroups, api }: {
+function ContributorCard({ contributor, targetGroups, api }: {
     contributor: Contributor;
-    itemGroups: { name: string; items: { id: number; name: string }[] }[];
+    targetGroups: { name: string; sectionValue: string; items: { value: string; name: string }[] }[];
     api: FinanceApi;
 }) {
+    const targetValue = (r: { item_id: number | null; category_id: number | null }) =>
+        r.item_id != null ? `i:${r.item_id}` : r.category_id != null ? `c:${r.category_id}` : '';
+    const targetPatch = (raw: string) => {
+        if (!raw) return { item_id: null, category_id: null };
+        const id = Number(raw.slice(2));
+        return raw.startsWith('c:')
+            ? { category_id: id, item_id: null }
+            : { item_id: id, category_id: null };
+    };
     const received = contributorReceived(contributor);
     const expected = contributorExpected(contributor);
     const outstanding = Math.max(0, expected - received);
@@ -188,18 +203,21 @@ function ContributorCard({ contributor, itemGroups, api }: {
                                         focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/30"
                                 />
                                 <select
-                                    value={receipt.item_id ?? ''}
+                                    value={targetValue(receipt)}
                                     onChange={(e) => api.update('receipts', {
-                                        id: receipt.id, item_id: e.target.value || null,
+                                        id: receipt.id, ...targetPatch(e.target.value),
                                     })}
                                     className="bg-transparent text-[11px] text-gray-600 rounded-lg px-1 py-0.5
                                         focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/30"
                                 >
                                     <option value="">— not earmarked —</option>
-                                    {itemGroups.map((group) => (
+                                    {targetGroups.map((group) => (
                                         <optgroup key={group.name} label={group.name}>
+                                            <option value={group.sectionValue}>
+                                                {group.name} — whole section
+                                            </option>
                                             {group.items.map((i) => (
-                                                <option key={i.id} value={i.id}>{i.name}</option>
+                                                <option key={i.value} value={i.value}>{i.name}</option>
                                             ))}
                                         </optgroup>
                                     ))}
