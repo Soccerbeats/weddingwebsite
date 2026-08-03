@@ -3,7 +3,8 @@
 import { useMemo, useState } from 'react';
 import type { FinanceApi, FinancePayload } from './useFinances';
 import {
-    Card, EmptyState, InlineNumber, InlineText, PillButton, StatTile, formatMoney,
+    Card, DeleteButton, EmptyState, GlyphButton, InlineNumber, InlineText, PillButton,
+    RowDate, RowField, RowSelect, StatTile, formatMoney,
 } from './ui';
 
 /**
@@ -33,6 +34,13 @@ export default function PurchasesTab({ data, api }: { data: FinancePayload; api:
     const { purchases, contributors, payers, categories, summary } = data;
     const [payerFilter, setPayerFilter] = useState<'all' | 'gift' | number>('all');
     const [search, setSearch] = useState('');
+    // Mobile collapses each payment to what you scan for; the rest is a tap away.
+    const [expanded, setExpanded] = useState<Set<string>>(new Set());
+    const toggleExpanded = (key: string) => setExpanded((prev) => {
+        const next = new Set(prev);
+        if (next.has(key)) next.delete(key); else next.add(key);
+        return next;
+    });
 
     /**
      * One dropdown covers both targets: a whole section (for lump-sum bills paid
@@ -133,8 +141,9 @@ export default function PurchasesTab({ data, api }: { data: FinancePayload; api:
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         placeholder="Search payments…"
-                        className="flex-1 min-w-[10rem] bg-gray-50 border border-gray-200 rounded-2xl px-3 py-1.5
-                            text-sm focus:outline-none focus:ring-2 focus:ring-accent/30"
+                        className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-3 py-2
+                            text-base md:w-auto md:flex-1 md:min-w-[10rem] md:py-1.5 md:text-sm
+                            focus:outline-none focus:ring-2 focus:ring-accent/30"
                     />
                     <PillButton tone="accent" onClick={addPurchase}>+ Log purchase</PillButton>
                 </div>
@@ -157,76 +166,96 @@ export default function PurchasesTab({ data, api }: { data: FinancePayload; api:
                     const dateField = row.kind === 'gift' ? 'received_on' : 'purchased_on';
                     const patch = (fields: Record<string, unknown>) =>
                         api.update(resource, { id: row.id, ...fields });
+                    const isOpen = expanded.has(row.key);
                     return (
                         <div key={row.key}
-                            className={`grid grid-cols-2 md:grid-cols-[1.7fr_7rem_1.3fr_1.3fr_6rem_1.5rem] gap-2
-                                px-4 py-2 items-center border-b border-gray-50 last:border-0
+                            className={`grid grid-cols-1 gap-2 px-4 py-2 border-b border-gray-50 last:border-0
+                                md:grid-cols-[1.7fr_7rem_1.3fr_1.3fr_6rem_1.5rem] md:items-center
                                 ${row.kind === 'gift' ? 'bg-emerald-50/40' : ''}`}>
-                            <div className="col-span-2 md:col-span-1">
+                            <div className="flex items-center gap-1 min-w-0 md:contents">
+                                <GlyphButton
+                                    onClick={() => toggleExpanded(row.key)}
+                                    label={`${isOpen ? 'Collapse' : 'Expand'} ${row.label}`}
+                                    className={`text-xs text-gray-400 transition-transform md:hidden
+                                        ${isOpen ? 'rotate-90' : ''}`}
+                                >
+                                    ▶
+                                </GlyphButton>
                                 <InlineText
                                     value={row.label}
                                     placeholder={row.kind === 'gift' ? "What it's for…" : 'What was bought'}
                                     onCommit={(v) => patch({ [labelField]: v })}
                                     className="text-gray-800"
                                 />
+                                {/* Amount stays on the collapsed line — it's the other half of a glance. */}
+                                <div className="w-24 shrink-0 md:hidden">
+                                    <InlineNumber
+                                        value={row.amount} prefix="$"
+                                        onCommit={(amount) => patch({ amount })}
+                                    />
+                                </div>
                             </div>
-                            <input
-                                type="date"
-                                value={(row.date ?? '').slice(0, 10)}
-                                onChange={(e) => patch({ [dateField]: e.target.value })}
-                                className="bg-transparent text-xs text-gray-500 rounded-lg px-1 py-1
-                                    hover:bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/30"
-                            />
-                            {row.kind === 'gift' ? (
-                                <span className="text-xs text-emerald-700 font-medium truncate px-1"
-                                    title={`Gift money from ${row.who}`}>
-                                    🎁 {row.who}
-                                </span>
-                            ) : (
-                                <select
-                                    value={row.payerId ?? ''}
-                                    onChange={(e) => patch({ payer_id: e.target.value || null })}
-                                    className="bg-transparent text-xs text-gray-600 rounded-lg px-1 py-1
-                                        hover:bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/30"
+                            <div className={`${isOpen ? 'grid grid-cols-1 gap-2 pb-1 pl-7' : 'hidden'} md:contents`}>
+                            <RowField label="Date">
+                                <RowDate
+                                    value={(row.date ?? '').slice(0, 10)}
+                                    aria-label={`Date for ${row.label}`}
+                                    onChange={(e) => patch({ [dateField]: e.target.value })}
+                                />
+                            </RowField>
+                            <RowField label={row.kind === 'gift' ? 'Gift from' : 'Paid by'}>
+                                {row.kind === 'gift' ? (
+                                    <span className="block truncate px-1 text-right text-xs font-medium
+                                        text-emerald-700 md:text-left"
+                                        title={`Gift money from ${row.who}`}>
+                                        🎁 {row.who}
+                                    </span>
+                                ) : (
+                                    <RowSelect
+                                        value={row.payerId ?? ''}
+                                        aria-label={`Who paid for ${row.label}`}
+                                        onChange={(e) => patch({ payer_id: e.target.value || null })}
+                                    >
+                                        <option value="">Unassigned</option>
+                                        {payers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                    </RowSelect>
+                                )}
+                            </RowField>
+                            <RowField label="Counts toward">
+                                <RowSelect
+                                    value={targetValue(row)}
+                                    aria-label={`What ${row.label} counts toward`}
+                                    onChange={(e) => patch(targetPatch(e.target.value))}
                                 >
-                                    <option value="">Unassigned</option>
-                                    {payers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                                </select>
-                            )}
-                            <select
-                                value={targetValue(row)}
-                                onChange={(e) => patch(targetPatch(e.target.value))}
-                                className="bg-transparent text-xs text-gray-600 rounded-lg px-1 py-1
-                                    hover:bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/30"
-                            >
-                                <option value="">— nothing —</option>
-                                {targetGroups.map((group) => (
-                                    <optgroup key={group.name} label={group.name}>
-                                        <option value={group.sectionValue}>
-                                            {group.name} — whole section
-                                        </option>
-                                        {group.items.map((i) => (
-                                            <option key={i.value} value={i.value}>{i.name}</option>
-                                        ))}
-                                    </optgroup>
-                                ))}
-                            </select>
-                            <InlineNumber
-                                value={row.amount} prefix="$"
-                                onCommit={(amount) => patch({ amount })}
-                            />
-                            <button
+                                    <option value="">— nothing —</option>
+                                    {targetGroups.map((group) => (
+                                        <optgroup key={group.name} label={group.name}>
+                                            <option value={group.sectionValue}>
+                                                {group.name} — whole section
+                                            </option>
+                                            {group.items.map((i) => (
+                                                <option key={i.value} value={i.value}>{i.name}</option>
+                                            ))}
+                                        </optgroup>
+                                    ))}
+                                </RowSelect>
+                            </RowField>
+                            <RowField label="Amount" className="hidden md:flex">
+                                <InlineNumber
+                                    value={row.amount} prefix="$"
+                                    onCommit={(amount) => patch({ amount })}
+                                />
+                            </RowField>
+                            <DeleteButton
+                                label={`Delete ${row.label}`}
                                 onClick={() => {
                                     const what = row.kind === 'gift'
                                         ? `${row.who}'s gift payment "${row.label}"`
                                         : `"${row.label}"`;
                                     if (confirm(`Delete ${what}?`)) api.remove(resource, row.id);
                                 }}
-                                aria-label={`Delete ${row.label}`}
-                                className="text-gray-300 hover:text-rose-500 transition-colors text-right"
-                            >
-                                &times;
-                            </button>
+                            />
+                            </div>
                         </div>
                     );
                 })}
@@ -265,7 +294,8 @@ function FilterPill({ active, onClick, children }: {
     return (
         <button
             onClick={onClick}
-            className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors border
+            className={`inline-flex h-9 items-center rounded-full border px-3.5 text-xs font-medium
+                transition-colors md:h-auto md:py-1.5
                 ${active
                     ? 'bg-accent text-white border-transparent'
                     : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'}`}

@@ -35,16 +35,24 @@ export function StatTile({ label, value, hint, tone = 'default' }: {
         warn: 'text-amber-600',
         bad: 'text-rose-600',
     }[tone];
+    // Compact on mobile: a stack of five full-size tiles pushed the actual data
+    // most of a screen down on every tab.
     return (
-        <Card className="p-4">
-            <div className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold">{label}</div>
-            <div className={`text-xl font-semibold tabular-nums mt-1 ${toneClass}`}>{value}</div>
-            {hint && <div className="text-xs text-gray-400 mt-1">{hint}</div>}
+        <Card className="p-3 md:p-4">
+            <div className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold md:text-[11px]">
+                {label}
+            </div>
+            <div className={`mt-0.5 text-base font-semibold tabular-nums md:mt-1 md:text-xl ${toneClass}`}>
+                {value}
+            </div>
+            {hint && <div className="mt-0.5 text-[11px] text-gray-400 md:mt-1 md:text-xs">{hint}</div>}
         </Card>
     );
 }
 
-const FIELD = 'w-full bg-gray-50 border border-gray-200 rounded-2xl px-3 py-2 text-sm ' +
+// text-base on mobile: iOS Safari zooms the viewport when focusing an input
+// under 16px, which makes every edit a pinch-to-recover.
+const FIELD = 'w-full bg-gray-50 border border-gray-200 rounded-2xl px-3 py-2 text-base md:text-sm ' +
     'focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent/40 transition';
 
 export function TextField(props: React.InputHTMLAttributes<HTMLInputElement>) {
@@ -88,8 +96,9 @@ export function InlineText({ value, onCommit, placeholder, className = '', align
                 if (e.key === 'Enter') { e.currentTarget.blur(); }
                 if (e.key === 'Escape') { setDraft(value); e.currentTarget.blur(); }
             }}
-            className={`bg-transparent rounded-lg px-2 py-1 text-sm w-full hover:bg-gray-50
-                focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/30 transition
+            className={`bg-transparent rounded-lg px-2 py-2 md:py-1 text-base md:text-sm w-full
+                hover:bg-gray-50 focus:bg-white focus:outline-none focus:ring-2
+                focus:ring-accent/30 transition
                 ${align === 'right' ? 'text-right tabular-nums' : ''} ${className}`}
         />
     );
@@ -132,9 +141,10 @@ export function InlineNumber({ value, onCommit, placeholder, prefix, className =
                     if (e.key === 'Enter') { e.currentTarget.blur(); }
                     if (e.key === 'Escape') { setDraft(String(value)); e.currentTarget.blur(); }
                 }}
-                className={`bg-transparent rounded-lg py-1 text-sm w-full text-right tabular-nums
-                    hover:bg-gray-50 focus:bg-white focus:outline-none focus:ring-2
-                    focus:ring-accent/30 transition ${prefix ? 'pl-6 pr-2' : 'px-2'} ${className}`}
+                className={`bg-transparent rounded-lg py-2 md:py-1 text-base md:text-sm w-full
+                    text-right tabular-nums hover:bg-gray-50 focus:bg-white focus:outline-none
+                    focus:ring-2 focus:ring-accent/30 transition
+                    ${prefix ? 'pl-6 pr-2' : 'px-2'} ${className}`}
             />
         </div>
     );
@@ -151,11 +161,12 @@ export function Toggle({ checked, onChange, label }: {
             onClick={() => onChange(!checked)}
             aria-label={label}
             aria-pressed={checked}
-            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors
-                ${checked ? 'bg-accent' : 'bg-gray-300'}`}
+            className={`relative inline-flex h-7 w-12 md:h-6 md:w-11 shrink-0 items-center
+                rounded-full transition-colors ${checked ? 'bg-accent' : 'bg-gray-300'}`}
         >
-            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform
-                ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
+            <span className={`inline-block h-5 w-5 md:h-4 md:w-4 transform rounded-full bg-white
+                shadow-sm transition-transform
+                ${checked ? 'translate-x-6 md:translate-x-6' : 'translate-x-1'}`} />
         </button>
     );
 }
@@ -186,6 +197,98 @@ export function PillButton({ children, onClick, tone = 'default', type = 'button
     );
 }
 
+/**
+ * One cell of an editable row.
+ *
+ * Below `md` the grid collapses to a single column, so each cell becomes its own
+ * full-width line and needs its own label — the desktop header row is hidden
+ * there, and an unlabelled "839.3" next to an unlabelled "1" is unreadable.
+ */
+export function RowField({ label, children, className = '' }: {
+    label: string;
+    children: React.ReactNode;
+    className?: string;
+}) {
+    return (
+        <div className={`flex items-center justify-between gap-3 md:justify-start md:gap-0 ${className}`}>
+            <span className="shrink-0 text-[10px] uppercase tracking-wide text-gray-400 font-semibold md:hidden">
+                {label}
+            </span>
+            <div className="min-w-0 flex-1">{children}</div>
+        </div>
+    );
+}
+
+/**
+ * Delete control: a comfortable labelled button on touch, a bare × on desktop.
+ * The old version was a 21x24px target — far under the 44px touch guidance, and
+ * sized so a mistap was as likely as a hit.
+ */
+export function DeleteButton({ onClick, label }: { onClick: () => void; label: string }) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            aria-label={label}
+            className="inline-flex h-9 items-center justify-center gap-1 justify-self-start rounded-full
+                border border-rose-100 px-4 text-xs font-medium text-rose-500 transition-colors
+                hover:bg-rose-50 md:h-auto md:justify-self-auto md:rounded-none md:border-0 md:px-0
+                md:text-lg md:leading-none md:text-gray-300 md:hover:bg-transparent
+                md:hover:text-rose-500"
+        >
+            <span className="md:hidden">Delete</span>
+            <span aria-hidden className="hidden md:inline">&times;</span>
+        </button>
+    );
+}
+
+/** Small glyph button with a touch-sized hit area that doesn't disturb layout. */
+export function GlyphButton({ onClick, label, children, className = '' }: {
+    onClick: () => void;
+    label: string;
+    children: React.ReactNode;
+    className?: string;
+}) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            aria-label={label}
+            className={`-m-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-gray-300
+                transition-colors hover:text-gray-600 md:-m-1 md:h-6 md:w-6 ${className}`}
+        >
+            {children}
+        </button>
+    );
+}
+
+/** Native select sized so iOS doesn't zoom when it opens. */
+export function RowSelect(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
+    const { className = '', ...rest } = props;
+    return (
+        <select
+            {...rest}
+            className={`w-full rounded-lg bg-transparent px-1 py-2 text-base text-gray-600
+                hover:bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/30
+                md:py-1 md:text-xs ${className}`}
+        />
+    );
+}
+
+/** Native date input sized so iOS doesn't zoom when it opens. */
+export function RowDate(props: React.InputHTMLAttributes<HTMLInputElement>) {
+    const { className = '', ...rest } = props;
+    return (
+        <input
+            {...rest}
+            type="date"
+            className={`w-full rounded-lg bg-transparent px-1 py-2 text-base text-gray-500
+                hover:bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/30
+                md:py-1 md:text-xs ${className}`}
+        />
+    );
+}
+
 export function Modal({ title, onClose, children }: {
     title: string;
     onClose: () => void;
@@ -209,6 +312,21 @@ export function Modal({ title, onClose, children }: {
                 {children}
             </div>
         </div>
+    );
+}
+
+/** Low-emphasis "+ add" action, sized as a real touch target on mobile. */
+export function AddButton({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className="flex h-10 items-center rounded-xl px-3 -mx-3 text-xs font-medium text-gray-500
+                transition-colors hover:text-gray-800 active:bg-gray-100 md:h-auto md:px-0 md:mx-0
+                md:active:bg-transparent"
+        >
+            {children}
+        </button>
     );
 }
 

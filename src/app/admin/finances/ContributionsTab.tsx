@@ -4,7 +4,8 @@ import { useMemo, useState } from 'react';
 import { contributorExpected, contributorReceived, type Contributor } from '@/lib/finance';
 import type { FinanceApi, FinancePayload } from './useFinances';
 import {
-    Bar, Card, EmptyState, InlineNumber, InlineText, Money, PillButton, StatTile, formatMoney,
+    AddButton, Bar, Card, DeleteButton, EmptyState, GlyphButton, InlineNumber, InlineText,
+    Money, PillButton, RowDate, RowField, RowSelect, StatTile, formatMoney,
 } from './ui';
 
 /**
@@ -83,7 +84,7 @@ export default function ContributionsTab({ data, api }: { data: FinancePayload; 
                         onChange={(e) => setNewName(e.target.value)}
                         onKeyDown={(e) => { if (e.key === 'Enter') addContributor(); }}
                         placeholder="Who's contributing? (e.g. Karie & Dave)"
-                        className="flex-1 bg-gray-50 border border-gray-200 rounded-2xl px-3 py-2 text-sm
+                        className="flex-1 bg-gray-50 border border-gray-200 rounded-2xl px-3 py-2 text-base md:text-sm
                             focus:outline-none focus:ring-2 focus:ring-accent/30"
                     />
                     <PillButton tone="accent" onClick={addContributor} disabled={!newName.trim()}>
@@ -124,8 +125,8 @@ function ContributorCard({ contributor, targetGroups, api }: {
 
     return (
         <Card className="overflow-hidden">
-            <div className="px-4 py-3 flex flex-wrap items-center gap-3 border-b border-gray-100">
-                <div className="flex-1 min-w-[8rem]">
+            <div className="px-4 py-3 flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-gray-100">
+                <div className="flex-1 min-w-[8rem] basis-full sm:basis-auto">
                     <InlineText
                         value={contributor.name}
                         onCommit={(name) => api.update('contributors', { id: contributor.id, name })}
@@ -149,7 +150,9 @@ function ContributorCard({ contributor, targetGroups, api }: {
                         </div>
                     </div>
                 </div>
-                <button
+                <GlyphButton
+                    label={`Delete ${contributor.name}`}
+                    className="text-lg leading-none hover:text-rose-500"
                     onClick={() => {
                         const count = contributor.receipts.length;
                         const message = count
@@ -157,11 +160,9 @@ function ContributorCard({ contributor, targetGroups, api }: {
                             : `Delete ${contributor.name}?`;
                         if (confirm(message)) api.remove('contributors', contributor.id);
                     }}
-                    aria-label={`Delete ${contributor.name}`}
-                    className="text-gray-300 hover:text-rose-500 transition-colors"
                 >
                     &times;
-                </button>
+                </GlyphButton>
             </div>
 
             <div className="px-4 py-2">
@@ -185,64 +186,62 @@ function ContributorCard({ contributor, targetGroups, api }: {
                     <div className="space-y-1 mb-2">
                         {contributor.receipts.map((receipt) => (
                             <div key={receipt.id}
-                                className="grid grid-cols-[1fr_7rem_1.4fr_5.5rem_1.5rem] gap-2 items-center
-                                    bg-gray-50 rounded-xl px-2 py-1.5">
+                                className="grid grid-cols-1 gap-2 rounded-xl bg-gray-50 px-3 py-3
+                                    md:grid-cols-[1fr_7rem_1.4fr_5.5rem_1.5rem] md:items-center
+                                    md:px-2 md:py-1.5">
                                 <InlineText
                                     value={receipt.note ?? ''}
                                     placeholder="What it's for…"
                                     onCommit={(note) => api.update('receipts', { id: receipt.id, note })}
-                                    className="text-xs"
+                                    className="md:text-xs"
                                 />
-                                <input
-                                    type="date"
-                                    value={(receipt.received_on ?? '').slice(0, 10)}
-                                    onChange={(e) => api.update('receipts', {
-                                        id: receipt.id, received_on: e.target.value,
-                                    })}
-                                    className="bg-transparent text-[11px] text-gray-500 rounded-lg px-1 py-0.5
-                                        focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/30"
-                                />
-                                <select
-                                    value={targetValue(receipt)}
-                                    onChange={(e) => api.update('receipts', {
-                                        id: receipt.id, ...targetPatch(e.target.value),
-                                    })}
-                                    className="bg-transparent text-[11px] text-gray-600 rounded-lg px-1 py-0.5
-                                        focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/30"
-                                >
-                                    <option value="">— not earmarked —</option>
-                                    {targetGroups.map((group) => (
-                                        <optgroup key={group.name} label={group.name}>
-                                            <option value={group.sectionValue}>
-                                                {group.name} — whole section
-                                            </option>
-                                            {group.items.map((i) => (
-                                                <option key={i.value} value={i.value}>{i.name}</option>
-                                            ))}
-                                        </optgroup>
-                                    ))}
-                                </select>
-                                <InlineNumber
-                                    value={receipt.amount} prefix="$"
-                                    onCommit={(amount) => api.update('receipts', { id: receipt.id, amount })}
-                                />
-                                <button
+                                <RowField label="Received">
+                                    <RowDate
+                                        value={(receipt.received_on ?? '').slice(0, 10)}
+                                        aria-label="Date received"
+                                        onChange={(e) => api.update('receipts', {
+                                            id: receipt.id, received_on: e.target.value,
+                                        })}
+                                        className="md:text-[11px]"
+                                    />
+                                </RowField>
+                                <RowField label="Earmarked to">
+                                    <RowSelect
+                                        value={targetValue(receipt)}
+                                        aria-label="What this payment is earmarked to"
+                                        onChange={(e) => api.update('receipts', {
+                                            id: receipt.id, ...targetPatch(e.target.value),
+                                        })}
+                                        className="md:text-[11px]"
+                                    >
+                                        <option value="">— not earmarked —</option>
+                                        {targetGroups.map((group) => (
+                                            <optgroup key={group.name} label={group.name}>
+                                                <option value={group.sectionValue}>
+                                                    {group.name} — whole section
+                                                </option>
+                                                {group.items.map((i) => (
+                                                    <option key={i.value} value={i.value}>{i.name}</option>
+                                                ))}
+                                            </optgroup>
+                                        ))}
+                                    </RowSelect>
+                                </RowField>
+                                <RowField label="Amount">
+                                    <InlineNumber
+                                        value={receipt.amount} prefix="$"
+                                        onCommit={(amount) => api.update('receipts', { id: receipt.id, amount })}
+                                    />
+                                </RowField>
+                                <DeleteButton
+                                    label={`Delete payment ${receipt.note ?? ''}`.trim()}
                                     onClick={() => api.remove('receipts', receipt.id)}
-                                    aria-label="Delete payment"
-                                    className="text-gray-300 hover:text-rose-500 transition-colors"
-                                >
-                                    &times;
-                                </button>
+                                />
                             </div>
                         ))}
                     </div>
                 )}
-                <button
-                    onClick={addReceipt}
-                    className="text-xs font-medium text-gray-500 hover:text-gray-800 transition-colors"
-                >
-                    + Log a payment received
-                </button>
+                <AddButton onClick={addReceipt}>+ Log a payment received</AddButton>
             </div>
         </Card>
     );

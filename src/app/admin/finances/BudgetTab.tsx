@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { itemTotal, subItemTotal, effectiveQuantity, type BudgetItem, type Category } from '@/lib/finance';
 import type { FinanceApi, FinancePayload } from './useFinances';
 import {
-    Bar, Card, EmptyState, InlineNumber, InlineText, Money, PillButton, Toggle, formatMoney,
+    AddButton, Bar, Card, DeleteButton, EmptyState, GlyphButton, InlineNumber, InlineText,
+    Money, PillButton, RowDate, RowField, RowSelect, Toggle, formatMoney,
 } from './ui';
 
 const QTY_LABELS: Record<string, string> = {
@@ -80,7 +81,7 @@ export default function BudgetTab({ data, api }: { data: FinancePayload; api: Fi
                         onChange={(e) => setNewCategory(e.target.value)}
                         onKeyDown={(e) => { if (e.key === 'Enter') addCategory(); }}
                         placeholder="New section name (e.g. Honeymoon)"
-                        className="flex-1 bg-gray-50 border border-gray-200 rounded-2xl px-3 py-2 text-sm
+                        className="flex-1 bg-gray-50 border border-gray-200 rounded-2xl px-3 py-2 text-base md:text-sm
                             focus:outline-none focus:ring-2 focus:ring-accent/30"
                     />
                     <PillButton tone="accent" onClick={addCategory} disabled={!newCategory.trim()}>
@@ -133,13 +134,10 @@ function CategoryBlock({ category, data, api, expanded, onToggleExpanded }: {
                     <div className="font-semibold tabular-nums text-sm">{formatMoney(stats?.total ?? 0)}</div>
                     <div className="text-[11px] text-gray-400">{(stats?.pct ?? 0).toFixed(1)}% of budget</div>
                 </div>
-                <button
-                    onClick={deleteCategory}
-                    aria-label={`Delete ${category.name}`}
-                    className="text-gray-300 hover:text-rose-500 transition-colors px-1"
-                >
+                <GlyphButton onClick={deleteCategory} label={`Delete ${category.name}`}
+                    className="text-lg leading-none hover:text-rose-500">
                     &times;
-                </button>
+                </GlyphButton>
             </div>
 
             <div className="hidden md:grid grid-cols-[1.6fr_5.5rem_5rem_6rem_5rem_4.5rem_1.5rem] gap-2 px-4 py-2
@@ -268,8 +266,9 @@ function SectionPayments({ category, data, api }: {
                         const dateField = row.kind === 'gift' ? 'received_on' : 'purchased_on';
                         return (
                             <div key={row.key}
-                                className={`grid grid-cols-[1fr_7rem_1.2fr_5.5rem_1.5rem] gap-2 items-center
-                                    rounded-xl border px-2 py-1.5
+                                className={`grid grid-cols-1 gap-2 rounded-xl border px-3 py-3
+                                    md:grid-cols-[1fr_7rem_1.2fr_5.5rem_1.5rem] md:items-center
+                                    md:px-2 md:py-1.5
                                     ${row.kind === 'gift'
                                         ? 'bg-emerald-50/60 border-emerald-100'
                                         : 'bg-white border-gray-100'}`}>
@@ -277,52 +276,55 @@ function SectionPayments({ category, data, api }: {
                                     value={row.label}
                                     placeholder="e.g. Venue 3/4"
                                     onCommit={(v) => api.update(resource, { id: row.id, [labelField]: v })}
-                                    className="text-xs"
+                                    className="md:text-xs"
                                 />
-                                <input
-                                    type="date"
-                                    value={(row.date ?? '').slice(0, 10)}
-                                    onChange={(e) => api.update(resource, {
-                                        id: row.id, [dateField]: e.target.value,
-                                    })}
-                                    className="bg-transparent text-[11px] text-gray-500 rounded-lg px-1 py-0.5
-                                        focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/30"
-                                />
-                                {row.kind === 'gift' ? (
-                                    <span className="text-[11px] text-emerald-700 truncate px-1">
-                                        🎁 {row.who}
-                                    </span>
-                                ) : (
-                                    <select
-                                        value={row.payerId ?? ''}
-                                        onChange={(e) => api.update('purchases', {
-                                            id: row.id, payer_id: e.target.value || null,
+                                <RowField label="Date">
+                                    <RowDate
+                                        value={(row.date ?? '').slice(0, 10)}
+                                        aria-label={`Date for ${row.label}`}
+                                        onChange={(e) => api.update(resource, {
+                                            id: row.id, [dateField]: e.target.value,
                                         })}
-                                        className="bg-transparent text-[11px] text-gray-600 rounded-lg px-1 py-0.5
-                                            focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/30"
-                                    >
-                                        <option value="">Unassigned</option>
-                                        {data.payers.map((payer) => (
-                                            <option key={payer.id} value={payer.id}>{payer.name}</option>
-                                        ))}
-                                    </select>
-                                )}
-                                <InlineNumber
-                                    value={row.amount} prefix="$"
-                                    onCommit={(amount) => api.update(resource, { id: row.id, amount })}
-                                />
-                                <button
+                                        className="md:text-[11px]"
+                                    />
+                                </RowField>
+                                <RowField label={row.kind === 'gift' ? 'Gift from' : 'Paid by'}>
+                                    {row.kind === 'gift' ? (
+                                        <span className="block truncate px-1 text-right text-xs
+                                            font-medium text-emerald-700 md:text-left md:text-[11px]">
+                                            🎁 {row.who}
+                                        </span>
+                                    ) : (
+                                        <RowSelect
+                                            value={row.payerId ?? ''}
+                                            aria-label={`Who paid ${row.label}`}
+                                            onChange={(e) => api.update('purchases', {
+                                                id: row.id, payer_id: e.target.value || null,
+                                            })}
+                                            className="md:text-[11px]"
+                                        >
+                                            <option value="">Unassigned</option>
+                                            {data.payers.map((payer) => (
+                                                <option key={payer.id} value={payer.id}>{payer.name}</option>
+                                            ))}
+                                        </RowSelect>
+                                    )}
+                                </RowField>
+                                <RowField label="Amount">
+                                    <InlineNumber
+                                        value={row.amount} prefix="$"
+                                        onCommit={(amount) => api.update(resource, { id: row.id, amount })}
+                                    />
+                                </RowField>
+                                <DeleteButton
+                                    label={`Delete ${row.label}`}
                                     onClick={() => {
                                         const what = row.kind === 'gift'
                                             ? `${row.who}'s gift payment "${row.label}"`
                                             : `"${row.label}"`;
                                         if (confirm(`Delete ${what}?`)) api.remove(resource, row.id);
                                     }}
-                                    aria-label={`Delete ${row.label}`}
-                                    className="text-gray-300 hover:text-rose-500 transition-colors"
-                                >
-                                    &times;
-                                </button>
+                                />
                             </div>
                         );
                     })}
@@ -335,12 +337,7 @@ function SectionPayments({ category, data, api }: {
                 </div>
             )}
 
-            <button
-                onClick={addInstallment}
-                className="text-xs font-medium text-gray-500 hover:text-gray-800 transition-colors"
-            >
-                + Log an installment
-            </button>
+            <AddButton onClick={addInstallment}>+ Log an installment</AddButton>
             {installments.length === 0 && (
                 <p className="text-[11px] text-gray-400 mt-1">
                     Use this for payments covering the whole section, like a venue deposit — not tied to
@@ -392,33 +389,49 @@ function ItemRow({ item, data, api, expanded, onToggleExpanded }: {
 
     return (
         <div className={`border-b border-gray-50 last:border-0 ${item.is_paid ? 'bg-emerald-50/30' : ''}`}>
-            <div className="grid grid-cols-2 md:grid-cols-[1.6fr_5.5rem_5rem_6rem_5rem_4.5rem_1.5rem]
-                gap-2 px-4 py-2 items-center">
-                <div className="col-span-2 md:col-span-1 flex items-center gap-1 min-w-0">
-                    <button
+            <div className="grid grid-cols-1 gap-2 px-4 py-2
+                md:grid-cols-[1.6fr_5.5rem_5rem_6rem_5rem_4.5rem_1.5rem] md:items-center">
+                <div className="flex items-center gap-1 min-w-0">
+                    <GlyphButton
                         onClick={onToggleExpanded}
-                        aria-label={expanded ? 'Collapse' : 'Expand'}
-                        className={`text-gray-300 hover:text-gray-600 text-xs w-4 shrink-0 transition-transform
+                        label={`${expanded ? 'Collapse' : 'Expand'} ${item.name}`}
+                        className={`text-xs text-gray-400 transition-transform md:text-gray-300
                             ${expanded ? 'rotate-90' : ''}`}
                     >
                         ▶
-                    </button>
+                    </GlyphButton>
                     <InlineText
                         value={item.name}
                         onCommit={(name) => patch({ name })}
                         className={item.is_paid ? 'font-semibold text-gray-900' : 'text-gray-800'}
                     />
+                    {/* Collapsed mobile summary: the line total is what you scan for. */}
+                    <span className="shrink-0 pl-1 text-sm font-medium tabular-nums md:hidden">
+                        <Money value={total} />
+                    </span>
+                    {item.is_paid && (
+                        <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px]
+                            font-semibold text-emerald-700 md:hidden">
+                            PAID
+                        </span>
+                    )}
                 </div>
 
-                <div>
+                {/*
+                  On mobile the editable fields live behind the expander, so a
+                  27-line budget stays scannable instead of half a screen per row.
+                  `md:contents` puts them straight back into the desktop grid.
+                */}
+                <div className={`${expanded ? 'grid grid-cols-1 gap-2 pb-1 pl-7' : 'hidden'} md:contents`}>
+                <RowField label="Unit cost">
                     {item.use_subitems ? (
                         <div className="text-right text-xs text-gray-400 pr-2 italic">from parts</div>
                     ) : (
                         <InlineNumber value={item.unit_cost} prefix="$" onCommit={(unit_cost) => patch({ unit_cost })} />
                     )}
-                </div>
+                </RowField>
 
-                <div>
+                <RowField label="Qty">
                     {item.use_subitems ? (
                         <div className="text-right text-xs text-gray-300 pr-2">—</div>
                     ) : derivedQty ? (
@@ -429,44 +442,45 @@ function ItemRow({ item, data, api, expanded, onToggleExpanded }: {
                     ) : (
                         <InlineNumber value={item.quantity} onCommit={(quantity) => patch({ quantity })} />
                     )}
-                </div>
+                </RowField>
 
-                <div>
+                <RowField label="Qty from">
                     {item.use_subitems ? (
-                        <div className="text-xs text-gray-300 px-2">—</div>
+                        <div className="text-xs text-gray-300 px-2 text-right md:text-left">—</div>
                     ) : (
-                        <select
+                        <RowSelect
                             value={item.qty_source}
                             onChange={(e) => patch({ qty_source: e.target.value })}
-                            className="w-full bg-transparent text-xs text-gray-500 rounded-lg px-1 py-1
-                                hover:bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/30"
+                            aria-label={`Quantity source for ${item.name}`}
                         >
                             {Object.entries(QTY_LABELS).map(([value, label]) => (
                                 <option key={value} value={value}>{label}</option>
                             ))}
-                        </select>
+                        </RowSelect>
                     )}
-                </div>
+                </RowField>
 
-                <div className="text-right font-medium text-sm">
-                    <Money value={total} />
-                </div>
+                <RowField label="Line total" className="hidden md:flex">
+                    <div className="text-right font-medium text-sm">
+                        <Money value={total} />
+                    </div>
+                </RowField>
 
-                <div className="flex justify-center">
-                    <Toggle
-                        checked={item.is_paid}
-                        onChange={(is_paid) => patch({ is_paid })}
-                        label={`Mark ${item.name} paid`}
-                    />
-                </div>
+                <RowField label="Paid">
+                    <div className="flex justify-end md:justify-center">
+                        <Toggle
+                            checked={item.is_paid}
+                            onChange={(is_paid) => patch({ is_paid })}
+                            label={`Mark ${item.name} paid`}
+                        />
+                    </div>
+                </RowField>
 
-                <button
+                <DeleteButton
+                    label={`Delete ${item.name}`}
                     onClick={() => { if (confirm(`Delete "${item.name}"?`)) api.remove('items', item.id); }}
-                    aria-label={`Delete ${item.name}`}
-                    className="text-gray-300 hover:text-rose-500 transition-colors text-right"
-                >
-                    &times;
-                </button>
+                />
+                </div>
             </div>
 
             {paid > 0 && (
@@ -532,7 +546,7 @@ function ItemDetail({ item, data, api }: { item: BudgetItem; data: FinancePayloa
 
             {item.use_subitems && (
                 <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-                    <div className="grid grid-cols-[1fr_5.5rem_5rem_5rem_1.5rem] gap-2 px-3 py-2
+                    <div className="hidden md:grid grid-cols-[1fr_5.5rem_5rem_5rem_1.5rem] gap-2 px-3 py-2
                         text-[10px] uppercase tracking-wide text-gray-400 font-semibold border-b border-gray-50">
                         <div>Part</div>
                         <div className="text-right">Unit cost</div>
@@ -542,37 +556,36 @@ function ItemDetail({ item, data, api }: { item: BudgetItem; data: FinancePayloa
                     </div>
                     {item.subitems.map((sub) => (
                         <div key={sub.id}
-                            className="grid grid-cols-[1fr_5.5rem_5rem_5rem_1.5rem] gap-2 px-3 py-1.5
-                                items-center border-b border-gray-50 last:border-0">
+                            className="grid grid-cols-1 gap-2 px-3 py-2 border-b border-gray-50 last:border-0
+                                md:grid-cols-[1fr_5.5rem_5rem_5rem_1.5rem] md:items-center md:py-1.5">
                             <InlineText
                                 value={sub.name}
+                                placeholder="Part name"
                                 onCommit={(name) => api.update('subitems', { id: sub.id, name })}
                             />
-                            <InlineNumber
-                                value={sub.unit_cost} prefix="$"
-                                onCommit={(unit_cost) => api.update('subitems', { id: sub.id, unit_cost })}
-                            />
-                            <InlineNumber
-                                value={sub.quantity}
-                                onCommit={(quantity) => api.update('subitems', { id: sub.id, quantity })}
-                            />
-                            <div className="text-right text-sm"><Money value={subItemTotal(sub)} /></div>
-                            <button
+                            <RowField label="Unit cost">
+                                <InlineNumber
+                                    value={sub.unit_cost} prefix="$"
+                                    onCommit={(unit_cost) => api.update('subitems', { id: sub.id, unit_cost })}
+                                />
+                            </RowField>
+                            <RowField label="Qty">
+                                <InlineNumber
+                                    value={sub.quantity}
+                                    onCommit={(quantity) => api.update('subitems', { id: sub.id, quantity })}
+                                />
+                            </RowField>
+                            <RowField label="Total">
+                                <div className="text-right text-sm"><Money value={subItemTotal(sub)} /></div>
+                            </RowField>
+                            <DeleteButton
+                                label={`Delete ${sub.name}`}
                                 onClick={() => api.remove('subitems', sub.id)}
-                                aria-label={`Delete ${sub.name}`}
-                                className="text-gray-300 hover:text-rose-500 transition-colors"
-                            >
-                                &times;
-                            </button>
+                            />
                         </div>
                     ))}
                     <div className="flex items-center justify-between px-3 py-2 bg-gray-50/60">
-                        <button
-                            onClick={addSubItem}
-                            className="text-xs font-medium text-gray-500 hover:text-gray-800 transition-colors"
-                        >
-                            + Add part
-                        </button>
+                        <AddButton onClick={addSubItem}>+ Add part</AddButton>
                         <div className="text-sm font-semibold tabular-nums">
                             {formatMoney(itemTotal(item, settings))}
                         </div>

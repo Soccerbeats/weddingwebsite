@@ -211,13 +211,83 @@ await shareInputs.nth(2).fill('50');
 await shareInputs.nth(2).blur();
 await page.waitForTimeout(1200);
 
-console.log('\n--- Mobile layout ---');
+console.log('\n--- Mobile layout (390px) ---');
 await page.setViewportSize({ width: 390, height: 900 });
 await page.click('button:has-text("Budget")');
-await page.waitForTimeout(500);
+await page.waitForTimeout(700);
 const overflowX = await page.evaluate(() =>
     document.documentElement.scrollWidth - document.documentElement.clientWidth);
 check('no horizontal overflow at 390px', overflowX <= 1, `${overflowX}px overflow`);
+
+// Rows collapse to name + total so a 27-line budget stays scannable; the
+// editable fields are behind the expander.
+const collapsedText = await body();
+check('collapsed row shows the line total', collapsedText.includes('$4,500.00'));
+// textContent includes display:none nodes (the desktop header row), so this has
+// to test what is actually rendered.
+const visibleLabels = async (label: string) => page.evaluate((text) => {
+    const root = document.querySelector('[data-finance-suite]')!;
+    return [...root.querySelectorAll('span, div')]
+        .filter((el) => el.textContent?.trim() === text
+            && (el as HTMLElement).offsetParent !== null).length;
+}, label);
+check('collapsed rows hide the editing labels', (await visibleLabels('Unit cost')) === 0,
+    'unit cost should only be visible once a row is expanded');
+await page.locator('button[aria-label^="Expand Venue"]').first().click();
+await page.waitForTimeout(500);
+check('expanding reveals labelled fields', (await visibleLabels('Unit cost')) === 1,
+    'every field needs a label once the header row is hidden');
+check('expanded row labels the quantity source', (await visibleLabels('Qty from')) === 1);
+await page.locator('button[aria-label^="Collapse Venue"]').first().click();
+await page.waitForTimeout(400);
+
+// iOS Safari zooms the viewport on focusing any input under 16px.
+const tooSmallFont = await page.evaluate(() => {
+    const out: string[] = [];
+    const root = document.querySelector('[data-finance-suite]')!;
+    root.querySelectorAll('input, select, textarea').forEach((el) => {
+        const r = el.getBoundingClientRect();
+        if (r.width > 0 && parseFloat(getComputedStyle(el).fontSize) < 16) {
+            out.push((el as HTMLInputElement).placeholder
+                || el.getAttribute('aria-label') || el.tagName);
+        }
+    });
+    return out;
+});
+check('no sub-16px inputs (iOS would zoom)', tooSmallFont.length === 0, tooSmallFont.join(', '));
+
+// Touch targets, scoped to this feature — the site's own nav chrome predates it.
+const tinyTargets = await page.evaluate(() => {
+    const out: string[] = [];
+    const root = document.querySelector('[data-finance-suite]')!;
+    root.querySelectorAll('button, select, input, a').forEach((el) => {
+        const r = el.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0 && r.height < 32) {
+            out.push(`${el.getAttribute('aria-label') || el.textContent?.trim().slice(0, 16)} ${Math.round(r.width)}x${Math.round(r.height)}`);
+        }
+    });
+    return out;
+});
+check('no under-32px touch targets', tinyTargets.length === 0, tinyTargets.slice(0, 4).join(' | '));
+
+for (const tab of ['Purchases', 'Gift Money', 'Settings', 'Overview']) {
+    await page.click(`button:has-text("${tab}")`);
+    await page.waitForTimeout(600);
+    const ov = await page.evaluate(() =>
+        document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    check(`${tab} fits 390px`, ov <= 1, `${ov}px overflow`);
+}
+
+// A narrow Android viewport is the real floor, not the iPhone width.
+await page.setViewportSize({ width: 360, height: 800 });
+for (const tab of ['Budget', 'Purchases', 'Gift Money']) {
+    await page.click(`button:has-text("${tab}")`);
+    await page.waitForTimeout(600);
+    const ov = await page.evaluate(() =>
+        document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    check(`${tab} fits 360px`, ov <= 1, `${ov}px overflow`);
+}
+await page.setViewportSize({ width: 1280, height: 1400 });
 
 console.log('\n--- Console cleanliness ---');
 // Reloading mid-flight aborts pending fetches; that is an artifact of this

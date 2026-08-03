@@ -58,11 +58,11 @@ export default function AdminFinancesPage() {
     const leftToPay = Math.max(0, summary.stillToSpendCash);
 
     return (
-        <div className="max-w-5xl mx-auto">
+        <div className="max-w-5xl mx-auto" data-finance-suite>
             <div className="flex flex-wrap items-start justify-between gap-3 mb-1">
                 <div>
                     <h1 className="text-2xl font-semibold text-gray-900">Finances</h1>
-                    <p className="text-sm text-gray-400 mt-0.5">
+                    <p className="text-xs md:text-sm text-gray-400 mt-0.5">
                         {formatMoney(summary.budgetTotal)} budgeted ·{' '}
                         {formatMoney(summary.paidTotal)} paid ·{' '}
                         {formatMoney(leftToPay)} left for you two to cover
@@ -82,7 +82,7 @@ export default function AdminFinancesPage() {
                 </div>
             )}
 
-            <div className="flex gap-1.5 overflow-x-auto py-4 -mx-1 px-1">
+            <div className="flex gap-1.5 overflow-x-auto py-3 md:py-4 -mx-1 px-1">
                 {TABS.map((t) => (
                     <button
                         key={t.key}

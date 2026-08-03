@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import type { FinanceApi, FinancePayload } from './useFinances';
-import { Card, EmptyState, InlineNumber, InlineText, PillButton, formatMoney } from './ui';
+import { Card, EmptyState, GlyphButton, InlineNumber, InlineText, PillButton, formatMoney } from './ui';
 
 export default function SettingsTab({ data, api }: { data: FinancePayload; api: FinanceApi }) {
     const { settings, payers, summary, headcount, weddingDate } = data;
@@ -112,17 +112,17 @@ export default function SettingsTab({ data, api }: { data: FinancePayload; api: 
                                 <div className="text-[11px] text-gray-400 w-32 text-right tabular-nums">
                                     paid {formatMoney(stats?.spent ?? 0)}
                                 </div>
-                                <button
+                                <GlyphButton
+                                    label={`Remove ${payer.name}`}
+                                    className="text-lg leading-none hover:text-rose-500"
                                     onClick={() => {
                                         if (confirm(`Remove ${payer.name}? Their purchases stay but become unassigned.`)) {
                                             api.remove('payers', payer.id);
                                         }
                                     }}
-                                    aria-label={`Remove ${payer.name}`}
-                                    className="text-gray-300 hover:text-rose-500 transition-colors"
                                 >
                                     &times;
-                                </button>
+                                </GlyphButton>
                             </div>
                         );
                     })}
@@ -143,7 +143,7 @@ export default function SettingsTab({ data, api }: { data: FinancePayload; api: 
                         onChange={(e) => setNewPayer(e.target.value)}
                         onKeyDown={(e) => { if (e.key === 'Enter') addPayer(); }}
                         placeholder="Add someone who pays for things"
-                        className="flex-1 bg-gray-50 border border-gray-200 rounded-2xl px-3 py-2 text-sm
+                        className="flex-1 bg-gray-50 border border-gray-200 rounded-2xl px-3 py-2 text-base md:text-sm
                             focus:outline-none focus:ring-2 focus:ring-accent/30"
                     />
                     <PillButton tone="accent" onClick={addPayer} disabled={!newPayer.trim()}>Add payer</PillButton>
@@ -170,8 +170,8 @@ export default function SettingsTab({ data, api }: { data: FinancePayload; api: 
                             onChange={(e) => api.update('settings', {
                                 plan_horizon_months: e.target.value === '' ? null : e.target.value,
                             })}
-                            className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-3 py-2 text-sm
-                                focus:outline-none focus:ring-2 focus:ring-accent/30"
+                            className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-3 py-2
+                                text-base md:text-sm focus:outline-none focus:ring-2 focus:ring-accent/30"
                         />
                         <p className="text-[11px] text-gray-400 mt-1">
                             {summary.horizon.derived

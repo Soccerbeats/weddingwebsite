@@ -465,6 +465,13 @@ Filter by payer or search; the footer totals whatever is on screen. Leaving a pa
 - *Who pays*: an editable list with a share percentage each, 50/50 by default. Shares split whatever the contributions don't cover. Someone who buys things but owes nothing — a parent picking up the decor — gets **0%**; their spending still shows, as a credit. Shares that don't total 100% still work; each person is charged their slice of the total.
 - *Payment plan*: leave the horizon blank to count down to your wedding date automatically, or set a fixed number of months. Days-between-paychecks drives the per-paycheck figure (14 for every other week).
 
+**On a phone.** The suite is built for one-handed use, since most of this gets updated on the move:
+
+- Budget lines and payments **collapse to a summary** — name, amount, and a PAID badge — and expand on the ▶ for the editable fields. A 27-line budget stays one screen instead of twenty.
+- Every field carries its own label once the desktop header row drops away, so an amount is never an unlabelled number.
+- Inputs are 16px on mobile so iOS Safari doesn't zoom the page every time you tap one, and every control is at least a 32px touch target.
+- Layout is checked at 390px (iPhone) and 360px (narrow Android) with no horizontal scrolling.
+
 Verification scripts, all runnable independently:
 
 ```bash
