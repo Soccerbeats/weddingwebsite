@@ -11,7 +11,8 @@
     "check:finance": "npx --yes tsx scripts/verify-finance-math.mts",
     "check:finance:db": "npx --yes tsx scripts/verify-finance-db.mts",
     "check:finance:ui": "npx --yes tsx scripts/verify-finance-ui.mts",
-    "check:types": "tsc --noEmit && tsc --noEmit -p tsconfig.scripts.json"
+    "check:types": "tsc --noEmit && tsc --noEmit -p tsconfig.scripts.json",
+    "audit:finance": "npx --yes tsx scripts/audit-finance-logic.mts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

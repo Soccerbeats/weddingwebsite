@@ -20,6 +20,9 @@ function check(label: string, ok: boolean, detail = '') {
 
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1280, height: 1400 } });
+// A dev server compiles each route on first hit, which can take a while after an
+// edit. Generous default so the suite isn't flaky for a reason that isn't a bug.
+page.setDefaultTimeout(90_000);
 
 const consoleErrors: string[] = [];
 page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(m.text()); });
@@ -31,8 +34,13 @@ page.on('dialog', (d) => d.accept());
 // --- log in ---
 await page.goto(`${BASE}/admin/login`, { waitUntil: 'domcontentloaded' });
 await page.fill('input[type="password"]', PASSWORD);
-await page.click('button[type="submit"]');
-await page.waitForURL((u) => !u.pathname.includes('/login'), { timeout: 20_000 });
+// Wait on the auth response rather than the client-side redirect that follows
+// it — the redirect fires no `load` event, so waiting for navigation is flaky.
+await Promise.all([
+    page.waitForResponse((r) => r.url().includes('/api/auth/login') && r.status() === 200),
+    page.click('button[type="submit"]'),
+]);
+await page.waitForTimeout(500);
 
 // --- overview ---
 await page.goto(`${BASE}/admin/finances`, { waitUntil: 'domcontentloaded' });
@@ -214,6 +222,149 @@ await shareInputs.nth(2).fill('50');
 await shareInputs.nth(2).blur();
 await page.waitForTimeout(1200);
 
+console.log('\n--- Cost per guest + mistake detection ---');
+await page.click('button:has-text("Overview")');
+await page.waitForSelector('text=Total budget', { timeout: 20_000 });
+text = await body();
+check('per-guest cost shown', text.includes('$244.79'), '33,046.26 / 135');
+check('marginal guest cost shown', text.includes('$72.00'), 'dinner 35 + bar 37');
+check('table of ten shown', text.includes('$720.00'));
+check('duplicate suit flagged', text.includes('are both $300.00'));
+check('ring overrun flagged', /Austin.s Ring: \$1,284\.00 paid/.test(text));
+
+console.log('\n--- Trend + what-if ---');
+check('trend card present', text.includes('Trend'));
+check('what-if present', text.includes('What if'));
+const guestInput = page.locator('input[type="number"]').first();
+await guestInput.fill('160');
+await page.waitForTimeout(500);
+const whatIfText = await body();
+// 36 more adults x (35 dinner + 37 bar) = 2,592 on top of 33,046.26.
+check('what-if recomputes the budget', whatIfText.includes('$35,638.26'),
+    '160 adults instead of 124');
+check('what-if shows the delta', whatIfText.includes('+$2,592.00'));
+await guestInput.fill('124');
+await page.waitForTimeout(400);
+check('what-if never wrote to the database',
+    (await body()).includes('$33,046.26'), 'real total untouched');
+
+console.log('\n--- Derived paid state ---');
+await page.click('button:has-text("Budget")');
+await page.waitForSelector('text=Add line item', { timeout: 10_000 });
+text = await body();
+check('paid states rendered', text.includes('Part paid') && text.includes('Overpaid'));
+check('conflict hint shown', text.includes('Fully covered by payments'));
+check('fully-paid count shown', /\d+ fully paid/.test(text));
+
+console.log('\n--- Schedule: split a bill ---');
+await page.click('button:has-text("Schedule")');
+await page.waitForSelector('text=Split into payments', { timeout: 10_000 });
+check('empty schedule explains itself', (await body()).includes('Nothing scheduled yet'));
+await page.click('button:has-text("Split into payments")');
+await page.waitForSelector('text=Which bill', { timeout: 10_000 });
+const numbers = page.locator('input[type="number"]');
+await numbers.nth(0).fill('5000');   // deposit
+await numbers.nth(1).fill('3');      // instalments
+await page.waitForTimeout(300);
+const preview = await body();
+check('split preview totals the whole bill', preview.includes('Totals $18,358.90'),
+    'deposit + instalments must add back up');
+check('split preview absorbs rounding', preview.includes('to absorb the rounding'));
+await page.click('button:has-text("Create schedule")');
+await page.waitForTimeout(2500);
+text = await body();
+values = await inputValues();
+check('schedule rows created',
+    values.includes('Venue Cost deposit') && values.includes('Venue Cost 3/3'),
+    values.filter((v) => v.startsWith('Venue Cost')).join(', '));
+check('scheduled total matches the bill', text.includes('$18,358.90'),
+    'deposit + 3 instalments == the section budget');
+// The stat tile is always labelled "Overdue", so assert its value rather than
+// looking for the word anywhere on the page.
+const overdueBadges = await page.locator('span:text-is("Overdue")').count();
+check('nothing overdue yet', overdueBadges === 0, `${overdueBadges} overdue badges`);
+check('rounding lands on the final payment', values.includes('4452.98'),
+    values.filter((v) => v.startsWith('4452')).join(', '));
+
+console.log('\n--- Untracked spend can be adopted ---');
+await page.click('button:has-text("Purchases")');
+await page.waitForSelector('text=Log purchase', { timeout: 10_000 });
+check('untracked payment called out', (await body()).includes('not in the budget'));
+await page.click('button:has-text("+ Add to budget")');
+await page.waitForTimeout(3000);
+text = await body();
+check('adopting clears the untracked warning', !text.includes('1 payment not in the budget'),
+    'AirBnb should now have a line');
+check('budget grew by the adopted amount', text.includes('$35,003.26'),
+    '33,046.26 + 1,957');
+
+console.log('\n--- Bulk edit ---');
+// Bulk selection has to work on desktop too, not just the mobile layout.
+const rowBoxes = page.locator('input[type="checkbox"][aria-label^="Select "]');
+check('per-row checkboxes are reachable', await rowBoxes.first().isVisible(),
+    'they were md:hidden, making bulk edit desktop-only broken');
+await rowBoxes.first().check();
+await page.waitForTimeout(300);
+check('bulk bar appears on selection', (await body()).includes('1 selected'));
+await page.click('button:has-text("Edit selected")');
+await page.waitForSelector('text=Leave unchanged', { timeout: 10_000 });
+check('bulk modal defaults to leaving fields alone',
+    (await body()).includes('stays as it is'));
+await page.click('button:has-text("Cancel")');
+await page.waitForTimeout(300);
+
+console.log('\n--- Undo a delete, archive a contributor ---');
+await page.click('button:has-text("Gift Money")');
+await page.waitForSelector('text=Add contributor', { timeout: 10_000 });
+
+// A receipt is a leaf row, so deleting it can genuinely be undone.
+const beforeReceipts = (await inputValues()).filter((v) => v === 'Venue 1/4').length;
+check('receipt present before delete', beforeReceipts === 1);
+await page.locator('button[aria-label^="Delete payment Venue 1/4"]').first().click();
+await page.waitForTimeout(1800);
+check('undo bar offered after delete', (await body()).includes('Undo'));
+await page.click('button:has-text("Undo")');
+await page.waitForTimeout(2500);
+check('undo restored the receipt',
+    (await inputValues()).filter((v) => v === 'Venue 1/4').length === 1);
+
+// A contributor cascades its receipts, so it archives instead — undo couldn't
+// rebuild the history.
+await page.locator('button[aria-label="Archive A Gram"]').first().click();
+await page.waitForTimeout(2000);
+check('archived contributor leaves the list',
+    !(await inputValues()).includes('A Gram'));
+
+console.log('\n--- Thank-you tracking ---');
+text = await body();
+check('thank-you control present', text.includes('Thank you?'));
+check('thanked counter present', /\d+\/\d+/.test(text) && text.includes('thank-you notes sent'));
+await page.locator('button:has-text("Thank you?")').first().click();
+await page.waitForTimeout(1600);
+check('thank-you marks as sent', (await body()).includes('✓ Thanked'));
+
+console.log('\n--- Templates + archive ---');
+await page.click('button:has-text("Budget")');
+await page.waitForSelector('text=Add common line items', { timeout: 10_000 });
+await page.click('button:has-text("Add common line items")');
+await page.waitForSelector('text=Add to section', { timeout: 10_000 });
+check('template lists line items', (await body()).includes('Bridal bouquet')
+    || (await body()).includes('Venue hire'));
+await page.click('button:has-text("Cancel")');
+await page.waitForTimeout(400);
+await page.click('button:has-text("Settings")');
+await page.waitForSelector('text=Who pays', { timeout: 10_000 });
+check('archive count reported', (await body()).includes('archived row'));
+await page.click('button:has-text("Show archived")');
+await page.waitForTimeout(1200);
+check('archived contributor listed with a way back',
+    (await body()).includes('A Gram') && (await body()).includes('Restore'));
+await page.click('button:has-text("Restore")');
+await page.waitForTimeout(2000);
+await page.click('button:has-text("Gift Money")');
+await page.waitForSelector('text=Add contributor', { timeout: 10_000 });
+check('restored contributor is back', (await inputValues()).includes('A Gram'));
+
 console.log('\n--- Mobile layout (390px) ---');
 await page.setViewportSize({ width: 390, height: 900 });
 await page.click('button:has-text("Budget")');
@@ -273,7 +424,7 @@ const tinyTargets = await page.evaluate(() => {
 });
 check('no under-32px touch targets', tinyTargets.length === 0, tinyTargets.slice(0, 4).join(' | '));
 
-for (const tab of ['Purchases', 'Gift Money', 'Settings', 'Overview']) {
+for (const tab of ['Schedule', 'Purchases', 'Gift Money', 'Settings', 'Overview']) {
     await page.click(`button:has-text("${tab}")`);
     await page.waitForTimeout(600);
     const ov = await page.evaluate(() =>
@@ -283,7 +434,7 @@ for (const tab of ['Purchases', 'Gift Money', 'Settings', 'Overview']) {
 
 // A narrow Android viewport is the real floor, not the iPhone width.
 await page.setViewportSize({ width: 360, height: 800 });
-for (const tab of ['Budget', 'Purchases', 'Gift Money']) {
+for (const tab of ['Budget', 'Schedule', 'Purchases', 'Gift Money']) {
     await page.click(`button:has-text("${tab}")`);
     await page.waitForTimeout(600);
     const ov = await page.evaluate(() =>

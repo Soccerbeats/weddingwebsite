@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
     Category, Contributor, FinanceSettings, FinanceSummary, Payer, Purchase,
+    ScheduledPayment, Snapshot,
 } from '@/lib/finance';
 
 export type Resource =
     | 'categories' | 'items' | 'subitems' | 'payers'
-    | 'purchases' | 'contributors' | 'receipts' | 'settings';
+    | 'purchases' | 'contributors' | 'receipts' | 'schedule' | 'settings';
 
 export interface FinancePayload {
     settings: FinanceSettings;
@@ -15,9 +16,19 @@ export interface FinancePayload {
     payers: Payer[];
     purchases: Purchase[];
     contributors: Contributor[];
+    schedule: ScheduledPayment[];
+    snapshots: Snapshot[];
+    archived: { categories: number; items: number; purchases: number; contributors: number };
     summary: FinanceSummary;
     weddingDate: string | null;
+    today: string;
     headcount: { invited: number; attending: number } | null;
+}
+
+/** What was just deleted, so it can be put straight back. */
+export interface UndoEntry {
+    label: string;
+    restore: () => Promise<boolean>;
 }
 
 const BASE = '/api/admin/finances';
@@ -35,7 +46,9 @@ export function useFinances() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [busy, setBusy] = useState(0);
+    const [undo, setUndo] = useState<UndoEntry | null>(null);
     const inFlight = useRef(0);
+    const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const refresh = useCallback(async () => {
         try {
@@ -89,6 +102,51 @@ export function useFinances() {
     const remove = useCallback((resource: Resource, id: number) =>
         run(() => fetch(`${BASE}/${resource}?id=${id}`, { method: 'DELETE' })), [run]);
 
+    /**
+     * Delete with a way back. The row's own fields are captured first and
+     * re-created on undo — a new id, but the same content, which is what matters
+     * for a mis-tap. Offered instead of a confirm dialog on low-risk rows.
+     */
+    const removeWithUndo = useCallback(async (
+        resource: Resource, id: number, label: string, snapshot: Record<string, unknown>,
+    ) => {
+        const ok = await remove(resource, id);
+        if (!ok) return false;
+        if (undoTimer.current) clearTimeout(undoTimer.current);
+        setUndo({
+            label,
+            restore: async () => {
+                setUndo(null);
+                return create(resource, snapshot);
+            },
+        });
+        undoTimer.current = setTimeout(() => setUndo(null), 10_000);
+        return true;
+    }, [remove, create]);
+
+    const dismissUndo = useCallback(() => {
+        if (undoTimer.current) clearTimeout(undoTimer.current);
+        setUndo(null);
+    }, []);
+
+    /** Update many rows of one resource in a single statement. */
+    const updateMany = useCallback((resource: Resource, ids: number[], fields: Record<string, unknown>) =>
+        run(() => fetch(`${BASE}/${resource}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids, ...fields }),
+        })), [run]);
+
+    const uploadReceipt = useCallback((id: number, file: File) => {
+        const form = new FormData();
+        form.append('id', String(id));
+        form.append('file', file);
+        return run(() => fetch(`${BASE}/receipt`, { method: 'POST', body: form }));
+    }, [run]);
+
+    const removeReceipt = useCallback((id: number) =>
+        run(() => fetch(`${BASE}/receipt?id=${id}`, { method: 'DELETE' })), [run]);
+
     const reorder = useCallback((resource: Resource, ids: { id: number }[]) =>
         run(() => fetch(`${BASE}/${resource}`, {
             method: 'PATCH',
@@ -99,6 +157,8 @@ export function useFinances() {
     return {
         data, loading, error, saving: busy > 0,
         refresh, create, update, remove, reorder,
+        removeWithUndo, undo, dismissUndo,
+        updateMany, uploadReceipt, removeReceipt,
         clearError: () => setError(''),
     };
 }

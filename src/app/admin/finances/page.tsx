@@ -5,13 +5,16 @@ import BudgetTab from './BudgetTab';
 import ContributionsTab from './ContributionsTab';
 import OverviewTab from './OverviewTab';
 import PurchasesTab from './PurchasesTab';
+import ScheduleTab from './ScheduleTab';
 import SettingsTab from './SettingsTab';
+import { UndoBar } from './extras';
 import { useFinances } from './useFinances';
 import { formatMoney } from './ui';
 
 const TABS = [
     { key: 'overview', label: 'Overview' },
     { key: 'budget', label: 'Budget' },
+    { key: 'schedule', label: 'Schedule' },
     { key: 'purchases', label: 'Purchases' },
     { key: 'contributions', label: 'Gift Money' },
     { key: 'settings', label: 'Settings' },
@@ -82,7 +85,7 @@ export default function AdminFinancesPage() {
                 </div>
             )}
 
-            <div className="flex gap-1.5 overflow-x-auto py-3 md:py-4 -mx-1 px-1">
+            <div className="flex gap-1.5 overflow-x-auto py-3 md:py-4 -mx-1 px-1 print:hidden">
                 {TABS.map((t) => (
                     <button
                         key={t.key}
@@ -93,15 +96,24 @@ export default function AdminFinancesPage() {
                                 : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
                     >
                         {t.label}
+                        {t.key === 'schedule' && summary.overdueTotal > 0 && (
+                            <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold
+                                ${tab === t.key ? 'bg-white/25' : 'bg-rose-100 text-rose-700'}`}>
+                                !
+                            </span>
+                        )}
                     </button>
                 ))}
             </div>
 
             {tab === 'overview' && <OverviewTab data={data} />}
             {tab === 'budget' && <BudgetTab data={data} api={api} />}
+            {tab === 'schedule' && <ScheduleTab data={data} api={api} />}
             {tab === 'purchases' && <PurchasesTab data={data} api={api} />}
             {tab === 'contributions' && <ContributionsTab data={data} api={api} />}
             {tab === 'settings' && <SettingsTab data={data} api={api} />}
+
+            <UndoBar api={api} />
         </div>
     );
 }

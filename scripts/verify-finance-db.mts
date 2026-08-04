@@ -208,6 +208,59 @@ const afterKim = await loadFinanceData();
 check('contributor receipts cascaded',
     afterKim.contributors.flatMap(c => c.receipts).length === 1);
 
+console.log('\n--- Date columns must be strings, not Date objects ---');
+// node-pg parses DATE into a Date object, but every type declares `string | null`
+// and the engine does string work on them — this crashed buildSummary once.
+await POST(req({ label: 'Type check', amount: 10, due_on: '2026-09-01' }), params('schedule'));
+const typed = await loadFinanceData();
+const sched = typed.schedule.find((x) => x.label === 'Type check')!;
+check('schedule.due_on is a string', typeof sched.due_on === 'string', typeof sched.due_on);
+const datedPurchase = typed.purchases.find((p) => p.purchased_on != null);
+check('purchases.purchased_on is a string or null',
+    datedPurchase == null || typeof datedPurchase.purchased_on === 'string',
+    typeof datedPurchase?.purchased_on);
+check('snapshots.taken_on is a string',
+    typed.snapshots.length === 0 || typeof typed.snapshots[0].taken_on === 'string');
+// And the summary must build without throwing on them.
+const dateSummary = buildSummary({ ...typed, weddingDate: 'October 16, 2026' });
+check('summary builds with dated schedule rows', dateSummary.schedule.length > 0);
+check('due date produces a day count',
+    dateSummary.schedule.some((x) => x.daysUntilDue !== null));
+
+console.log('\n--- Archive keeps rows out of totals but recoverable ---');
+const beforeArchive = buildSummary({ ...typed, weddingDate: null }).budgetTotal;
+const victim = typed.categories.flatMap((c) => c.items).find((i) => i.name === 'Dj')!;
+await PATCH(req({ id: victim.id, archived: true }), params('items'));
+const afterArchive = await loadFinanceData();
+check('archived line left the working set',
+    !afterArchive.categories.flatMap((c) => c.items).some((i) => i.id === victim.id));
+near('archived line left the total',
+    buildSummary({ ...afterArchive, weddingDate: null }).budgetTotal, beforeArchive - 1850);
+check('archive count reported', afterArchive.archived.items === 1, `${afterArchive.archived.items}`);
+await PATCH(req({ id: victim.id, archived: false }), params('items'));
+const afterRestore = await loadFinanceData();
+near('restoring puts it back',
+    buildSummary({ ...afterRestore, weddingDate: null }).budgetTotal, beforeArchive);
+
+console.log('\n--- Bulk edit ---');
+const twoIds = afterRestore.purchases.slice(0, 2).map((p) => p.id);
+const bulk = await PATCH(req({ ids: twoIds, payer_id: afterRestore.payers[1].id }), params('purchases'));
+check('bulk patch 200', bulk.status === 200);
+const afterBulk = await loadFinanceData();
+check('both rows updated',
+    afterBulk.purchases.filter((p) => twoIds.includes(p.id))
+        .every((p) => p.payer_id === afterRestore.payers[1].id));
+
+console.log('\n--- Thank-you stamps a timestamp ---');
+const thanked = await PATCH(
+    req({ id: afterBulk.contributors[0].id, thank_you_sent: true }), params('contributors'));
+const thankedRow = await (thanked as Response).json();
+check('thank_you_sent_at set', thankedRow.thank_you_sent_at != null);
+const unthanked = await PATCH(
+    req({ id: afterBulk.contributors[0].id, thank_you_sent: false }), params('contributors'));
+check('unmarking clears the timestamp',
+    (await (unthanked as Response).json()).thank_you_sent_at == null);
+
 console.log('\n--- Settings singleton ---');
 const setRes = await POST(req({ adult_count: 130, minor_count: 9, plan_horizon_months: 18 }), params('settings'));
 check('settings POST 200', setRes.status === 200);

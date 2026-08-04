@@ -448,6 +448,8 @@ Every section ends with a **Paid toward this section** panel — *budgeted*, *pa
 
 *Paid so far* counts **every** payment against that bill regardless of whose money it was — your own installments, line-level payments, and any gift money earmarked there. Rob's $5,000 toward the venue makes the venue bill $5,000 more paid off, so it appears in the log as a green 🎁 row and the panel breaks the total down as *"$9,680.00 yours + $5,000.00 gift money"*. Gift rows edit in place here just like your own.
 
+**Schedule** — what you owe and when, the one thing a spreadsheet can't tell you. **Split into payments** turns a budget line or a whole section into a deposit plus instalments on a repeating interval; any rounding remainder lands on the final payment so the parts always add back to the whole bill exactly. Rows badge themselves *TODAY*, *30d* or *Overdue*, and the tab title carries a **!** while anything is late. Tick a payment off once you've logged the actual money on Purchases.
+
 **Purchases** — every payment that has gone out, from any source. Each entry records what, when, who paid, and what it **counts toward**: a whole section (for lump-sum bills) or a single line. A payment can only ever target one of the two — picking one clears the other, so nothing is double counted.
 
 Gift money that's been earmarked shows here too, as green 🎁 rows tagged with the contributor, editable in place; a **🎁 Gift money** filter pill isolates them. Unearmarked gift money is cash still in hand rather than a payment made, so it isn't listed — a tile tells you how much is sitting unapplied.
@@ -472,9 +474,26 @@ Filter by payer or search; the footer totals whatever is on screen. Leaving a pa
 - Inputs are 16px on mobile so iOS Safari doesn't zoom the page every time you tap one, and every control is at least a 32px touch target.
 - Layout is checked at 390px (iPhone) and 360px (narrow Android) with no horizontal scrolling.
 
+**Everything else on the page**
+
+- **Paid status is derived**, not remembered: *Not paid / Part paid / Paid / Overpaid* computed from real payments. The manual tick survives as an override, and the page tells you when the two disagree ("Ticked paid, but the payments don't cover it").
+- **Cost per guest** with the marginal cost of one more adult — every line whose quantity tracks the headcount, at its unit cost — plus what a table of ten adds. Useful while the invite list is still moving.
+- **Possible mistakes** flags payments with the same amount and overlapping wording (it finds the duplicate *Suit* / *Austin Suit* $300 entries) and lines paid at more than double their budget.
+- **What if…** re-runs the real engine against a different headcount, a contingency buffer, or pledges not arriving. Nothing is saved.
+- **Trend** — a reading is stored each day you open the page, so the budget's drift over time becomes visible.
+- **Add to budget** turns an untracked payment into a budget line and links it in one click.
+- **Bulk edit** — tick payments, then retag payer, target or date in one go; or archive them together.
+- **Receipt photos** — attach a photo or PDF per payment; on a phone the button opens the camera.
+- **Templates** — *Add common line items* drops in a ready-made set (venue & catering, photo & video, attire, flowers, stationery, music) wired to your headcount where it matters.
+- **Reorder** sections with ⌃⌄. **Undo** appears for ten seconds after deleting a payment or line. **Refunds** go in as a negative amount.
+- **Thank-you tracking** on gift money, with a sent count — the Registry already does this for guest gifts.
+- **Archive, not delete**: removing a section, line or contributor archives it. It stops counting toward every total and is restorable from **Settings → Archive**.
+- **Export CSV** or **Print / PDF** for a vendor meeting; print styles drop the site chrome and render inputs as plain text.
+
 Verification scripts, all runnable independently:
 
 ```bash
+npx tsx scripts/audit-finance-logic.mts    # invariants: every total must equal the sum of its parts
 npx tsx scripts/verify-finance-math.mts     # engine vs. the original spreadsheet, to the penny
 DATABASE_URL=... npx tsx scripts/verify-finance-db.mts    # schema, seed, CRUD, injection safety
 BASE=... ADMIN_PASSWORD=... npx tsx scripts/verify-finance-ui.mts   # real browser, all five tabs
@@ -507,6 +526,8 @@ BASE=... ADMIN_PASSWORD=... npx tsx scripts/verify-finance-ui.mts   # real brows
 | `finance_payers` | Who pays, with share percentages |
 | `finance_purchases` | Spend log, linked to a payer and either a budget line or a whole section |
 | `finance_contributors` / `finance_receipts` | Gift-money pledges and the payments actually received, earmarkable to a line or section |
+| `finance_schedule` | Scheduled payments — deposits, instalments, final balances, with due dates |
+| `finance_snapshots` | One row per day of headline figures, for the trend chart |
 
 ## Backup
 

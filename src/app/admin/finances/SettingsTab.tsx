@@ -1,8 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import type { FinanceApi, FinancePayload } from './useFinances';
 import { Card, EmptyState, GlyphButton, InlineNumber, InlineText, PillButton, formatMoney } from './ui';
+
+interface ArchivedRows {
+    categories: { id: number; name: string }[];
+    items: { id: number; name: string; category_name: string | null }[];
+    purchases: { id: number; description: string; amount: number; purchased_on: string | null }[];
+    contributors: { id: number; name: string; pledged: number }[];
+}
 
 export default function SettingsTab({ data, api }: { data: FinancePayload; api: FinanceApi }) {
     const { settings, payers, summary, headcount, weddingDate } = data;
@@ -197,6 +204,109 @@ export default function SettingsTab({ data, api }: { data: FinancePayload; api: 
                     </div>
                 </div>
             </Card>
+
+            <ArchiveCard data={data} api={api} />
+        </div>
+    );
+}
+
+/**
+ * The way back from an archive.
+ *
+ * Archived rows are filtered out of the working set so they can't skew a total,
+ * which means without this they'd be invisible and effectively lost.
+ */
+function ArchiveCard({ data, api }: { data: FinancePayload; api: FinanceApi }) {
+    const total = data.archived.categories + data.archived.items
+        + data.archived.purchases + data.archived.contributors;
+    const [open, setOpen] = useState(false);
+    const [rows, setRows] = useState<ArchivedRows | null>(null);
+
+    const load = useCallback(async () => {
+        const res = await fetch('/api/admin/finances/archived', { cache: 'no-store' });
+        if (res.ok) setRows(await res.json());
+    }, []);
+
+    const toggle = () => {
+        // Fetched on demand rather than in an effect: archived rows are only
+        // needed when someone actually asks to see them.
+        if (!open) load();
+        setOpen((v) => !v);
+    };
+
+    const restore = async (resource: 'categories' | 'items' | 'purchases' | 'contributors', id: number) => {
+        await api.update(resource, { id, archived: false });
+        load();
+    };
+
+    if (total === 0) {
+        return (
+            <Card className="p-5">
+                <h3 className="font-semibold text-gray-900 mb-1">Archive</h3>
+                <p className="text-xs text-gray-400">
+                    Nothing archived. Removing a section, line or payment archives it rather than
+                    deleting it, so it stops counting toward your totals but stays recoverable here.
+                </p>
+            </Card>
+        );
+    }
+
+    return (
+        <Card className="p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h3 className="font-semibold text-gray-900">Archive</h3>
+                    <p className="mt-0.5 text-xs text-gray-400">
+                        {total} archived row{total === 1 ? '' : 's'} — excluded from every total,
+                        still here if you need them.
+                    </p>
+                </div>
+                <PillButton onClick={toggle}>
+                    {open ? 'Hide' : 'Show archived'}
+                </PillButton>
+            </div>
+
+            {open && rows && (
+                <div className="mt-4 space-y-4">
+                    <ArchiveGroup title="Sections" items={rows.categories.map((c) => ({
+                        id: c.id, label: c.name,
+                    }))} onRestore={(id) => restore('categories', id)} />
+                    <ArchiveGroup title="Line items" items={rows.items.map((i) => ({
+                        id: i.id, label: i.category_name ? `${i.name} (${i.category_name})` : i.name,
+                    }))} onRestore={(id) => restore('items', id)} />
+                    <ArchiveGroup title="Payments" items={rows.purchases.map((p) => ({
+                        id: p.id, label: `${p.description} — ${formatMoney(p.amount)}`,
+                    }))} onRestore={(id) => restore('purchases', id)} />
+                    <ArchiveGroup title="Contributors" items={rows.contributors.map((c) => ({
+                        id: c.id, label: `${c.name} — ${formatMoney(c.pledged)} pledged`,
+                    }))} onRestore={(id) => restore('contributors', id)} />
+                </div>
+            )}
+        </Card>
+    );
+}
+
+function ArchiveGroup({ title, items, onRestore }: {
+    title: string;
+    items: { id: number; label: string }[];
+    onRestore: (id: number) => void;
+}) {
+    if (!items.length) return null;
+    return (
+        <div>
+            <div className="mb-1 text-xs font-semibold text-gray-500">{title}</div>
+            <div className="space-y-1">
+                {items.map((item) => (
+                    <div key={item.id}
+                        className="flex items-center gap-2 rounded-xl bg-gray-50 px-3 py-2 text-sm">
+                        <span className="min-w-0 flex-1 truncate text-gray-600">{item.label}</span>
+                        <button onClick={() => onRestore(item.id)}
+                            className="shrink-0 text-xs font-medium text-accent hover:underline">
+                            Restore
+                        </button>
+                    </div>
+                ))}
+            </div>
         </div>
     );
 }

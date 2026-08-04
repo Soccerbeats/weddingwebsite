@@ -59,6 +59,7 @@ const purchases: Purchase[] = SEED_PURCHASES.map((p, i) => ({
 let receiptId = 0;
 const contributors: Contributor[] = SEED_CONTRIBUTORS.map((c, i) => ({
     id: i + 1, name: c.name, pledged: c.pledged, notes: null, sort_order: i,
+    thank_you_sent: false, thank_you_sent_at: null,
     receipts: c.receipts.map(r => ({
         id: ++receiptId, contributor_id: i + 1, amount: r.amount, received_on: null,
         item_id: r.item ? nameToId.get(r.item) ?? null : null,

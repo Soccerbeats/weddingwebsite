@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
-import { loadFinanceData } from '@/lib/financeDb';
+import { loadFinanceData, recordSnapshot } from '@/lib/financeDb';
 import { buildSummary } from '@/lib/finance';
 import { getSiteConfig } from '@/lib/config';
 
@@ -33,7 +33,18 @@ export async function GET() {
         const weddingDate = getSiteConfig()?.weddingDate ?? null;
         const summary = buildSummary({ ...data, weddingDate });
         const headcount = await guestHeadcount();
-        return NextResponse.json({ ...data, summary, weddingDate, headcount });
+
+        // One snapshot per day, written on read. Cheap, and it means the trend
+        // exists without anyone remembering to record it.
+        const today = new Date().toISOString().slice(0, 10);
+        try {
+            await recordSnapshot(summary, today);
+        } catch (error) {
+            // A failed snapshot must never block the page.
+            console.error('Snapshot failed:', error);
+        }
+
+        return NextResponse.json({ ...data, summary, weddingDate, headcount, today });
     } catch (error) {
         console.error('Error loading finances:', error);
         return NextResponse.json({ error: 'Failed to load finances' }, { status: 500 });

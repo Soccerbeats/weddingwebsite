@@ -134,3 +134,33 @@ html {
     stroke-dashoffset: 0;
   }
 }
+
+/* Printing the finance suite: drop the site chrome so a budget fits a page. */
+@media print {
+  nav,
+  header,
+  aside,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  /* Keep a section and its payment panel together rather than splitting mid-table. */
+  main > div > div > div {
+    break-inside: avoid;
+  }
+
+  /* Inputs are the content on this page, so they have to read as plain text. */
+  input,
+  select,
+  textarea {
+    border: 0 !important;
+    background: transparent !important;
+    color: #111 !important;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+}

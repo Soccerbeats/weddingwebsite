@@ -9,7 +9,8 @@ import pool from './db';
 import {
     DEFAULT_SETTINGS,
     type Category, type BudgetItem, type Contributor, type FinanceSettings,
-    type Payer, type Purchase, type Receipt, type SubItem,
+    type Payer, type Purchase, type Receipt, type ScheduledPayment, type Snapshot,
+    type SubItem,
 } from './finance';
 import {
     SEED_CATEGORIES, SEED_CONTRIBUTORS, SEED_PAYERS, SEED_PURCHASES, SEED_SETTINGS,
@@ -101,6 +102,45 @@ async function createTables() {
             created_at TIMESTAMP DEFAULT NOW()
         )
     `);
+    // Scheduled payments: a venue bill taken in four installments, a deposit now
+    // and a balance later. Targets a line or a section, same as a payment does.
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS finance_schedule (
+            id SERIAL PRIMARY KEY,
+            item_id INTEGER REFERENCES finance_items(id) ON DELETE CASCADE,
+            category_id INTEGER REFERENCES finance_categories(id) ON DELETE CASCADE,
+            label TEXT NOT NULL,
+            kind TEXT NOT NULL DEFAULT 'installment',
+            amount NUMERIC NOT NULL DEFAULT 0,
+            due_on DATE,
+            settled BOOLEAN NOT NULL DEFAULT FALSE,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    `);
+    // Daily snapshot so the budget's drift over time is visible — the one thing
+    // the spreadsheet could never show.
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS finance_snapshots (
+            taken_on DATE PRIMARY KEY,
+            budget_total NUMERIC NOT NULL DEFAULT 0,
+            paid_total NUMERIC NOT NULL DEFAULT 0,
+            bill_remaining NUMERIC NOT NULL DEFAULT 0,
+            gift_received NUMERIC NOT NULL DEFAULT 0,
+            still_to_spend NUMERIC NOT NULL DEFAULT 0,
+            item_count INTEGER NOT NULL DEFAULT 0
+        )
+    `);
+
+    // Archive instead of delete: keeps a cancelled vendor's history without it
+    // skewing any total.
+    for (const table of ['finance_categories', 'finance_items', 'finance_purchases', 'finance_contributors']) {
+        await pool.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT FALSE`);
+    }
+    await pool.query(`ALTER TABLE finance_purchases ADD COLUMN IF NOT EXISTS receipt_path TEXT`);
+    await pool.query(`ALTER TABLE finance_contributors ADD COLUMN IF NOT EXISTS thank_you_sent BOOLEAN NOT NULL DEFAULT FALSE`);
+    await pool.query(`ALTER TABLE finance_contributors ADD COLUMN IF NOT EXISTS thank_you_sent_at TIMESTAMP`);
+
     // Lump-sum payments: a venue installment pays down a whole section at once
     // rather than any single line, so purchases and receipts can target either.
     await pool.query(`ALTER TABLE finance_purchases ADD COLUMN IF NOT EXISTS category_id INTEGER
@@ -110,6 +150,8 @@ async function createTables() {
 
     await pool.query(`CREATE INDEX IF NOT EXISTS finance_items_category_idx ON finance_items(category_id)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS finance_purchases_category_idx ON finance_purchases(category_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS finance_schedule_item_idx ON finance_schedule(item_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS finance_schedule_category_idx ON finance_schedule(category_id)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS finance_subitems_item_idx ON finance_subitems(item_id)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS finance_receipts_contributor_idx ON finance_receipts(contributor_id)`);
     await pool.query(`INSERT INTO finance_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING`);
@@ -234,6 +276,10 @@ export interface FinanceData {
     payers: Payer[];
     purchases: Purchase[];
     contributors: Contributor[];
+    schedule: ScheduledPayment[];
+    snapshots: Snapshot[];
+    /** counts of archived rows, so the UI can offer a way back to them */
+    archived: { categories: number; items: number; purchases: number; contributors: number };
 }
 
 /** Postgres "undefined_table" — the schema went missing under a running process. */
@@ -256,30 +302,48 @@ export async function loadFinanceData(): Promise<FinanceData> {
 }
 
 async function queryFinanceData(): Promise<FinanceData> {
-    const [settingsRes, catRes, itemRes, subRes, payerRes, purchaseRes, contribRes, receiptRes] =
+    const [settingsRes, catRes, itemRes, subRes, payerRes, purchaseRes, contribRes, receiptRes,
+           scheduleRes, snapshotRes, archivedRes] =
         await Promise.all([
             pool.query(`SELECT adult_count, minor_count, plan_horizon_months, paycheck_interval_days
                           FROM finance_settings WHERE id = 1`),
-            pool.query('SELECT id, name, sort_order FROM finance_categories ORDER BY sort_order, id'),
+            pool.query(`SELECT id, name, sort_order, archived FROM finance_categories
+                         WHERE NOT archived ORDER BY sort_order, id`),
             pool.query(`SELECT id, category_id, name, unit_cost::float8 AS unit_cost,
                                quantity::float8 AS quantity, qty_source, use_subitems,
-                               is_paid, notes, sort_order
-                          FROM finance_items ORDER BY sort_order, id`),
+                               is_paid, notes, sort_order, archived
+                          FROM finance_items WHERE NOT archived ORDER BY sort_order, id`),
             pool.query(`SELECT id, item_id, name, unit_cost::float8 AS unit_cost,
                                quantity::float8 AS quantity, sort_order
                           FROM finance_subitems ORDER BY sort_order, id`),
             pool.query(`SELECT id, name, share_pct::float8 AS share_pct, sort_order
                           FROM finance_payers ORDER BY sort_order, id`),
             pool.query(`SELECT id, payer_id, item_id, category_id, description,
-                               amount::float8 AS amount, purchased_on, notes
-                          FROM finance_purchases
+                               amount::float8 AS amount, purchased_on::text AS purchased_on,
+                               notes, receipt_path, archived
+                          FROM finance_purchases WHERE NOT archived
                          ORDER BY purchased_on DESC NULLS LAST, id DESC`),
-            pool.query(`SELECT id, name, pledged::float8 AS pledged, notes, sort_order
-                          FROM finance_contributors ORDER BY sort_order, id`),
+            pool.query(`SELECT id, name, pledged::float8 AS pledged, notes, sort_order,
+                               thank_you_sent, thank_you_sent_at::text AS thank_you_sent_at, archived
+                          FROM finance_contributors WHERE NOT archived ORDER BY sort_order, id`),
             pool.query(`SELECT id, contributor_id, item_id, category_id,
-                               amount::float8 AS amount, received_on, note
+                               amount::float8 AS amount, received_on::text AS received_on, note
                           FROM finance_receipts
                          ORDER BY received_on DESC NULLS LAST, id DESC`),
+            pool.query(`SELECT id, item_id, category_id, label, kind,
+                               amount::float8 AS amount, due_on::text AS due_on, settled, sort_order
+                          FROM finance_schedule ORDER BY due_on NULLS LAST, sort_order, id`),
+            pool.query(`SELECT taken_on::text AS taken_on, budget_total::float8 AS budget_total,
+                               paid_total::float8 AS paid_total,
+                               bill_remaining::float8 AS bill_remaining,
+                               gift_received::float8 AS gift_received,
+                               still_to_spend::float8 AS still_to_spend, item_count
+                          FROM finance_snapshots ORDER BY taken_on`),
+            pool.query(`SELECT
+                (SELECT COUNT(*) FROM finance_categories WHERE archived)::int AS categories,
+                (SELECT COUNT(*) FROM finance_items WHERE archived)::int AS items,
+                (SELECT COUNT(*) FROM finance_purchases WHERE archived)::int AS purchases,
+                (SELECT COUNT(*) FROM finance_contributors WHERE archived)::int AS contributors`),
         ]);
 
     const subsByItem = new Map<number, SubItem[]>();
@@ -312,5 +376,30 @@ async function queryFinanceData(): Promise<FinanceData> {
         contributors: contribRes.rows.map((c) => ({
             ...c, receipts: receiptsByContributor.get(c.id) ?? [],
         })) as Contributor[],
+        schedule: scheduleRes.rows as ScheduledPayment[],
+        snapshots: snapshotRes.rows as Snapshot[],
+        archived: archivedRes.rows[0] as FinanceData['archived'],
     };
+}
+
+/**
+ * Record today's headline figures, once per day. Upserts so repeated page loads
+ * keep the latest reading rather than piling up rows.
+ */
+export async function recordSnapshot(summary: {
+    budgetTotal: number; paidTotal: number; billRemaining: number;
+    receivedTotal: number; stillToSpendCash: number; itemCount: number;
+}, today: string) {
+    await pool.query(
+        `INSERT INTO finance_snapshots
+            (taken_on, budget_total, paid_total, bill_remaining, gift_received,
+             still_to_spend, item_count)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (taken_on) DO UPDATE SET
+            budget_total = EXCLUDED.budget_total, paid_total = EXCLUDED.paid_total,
+            bill_remaining = EXCLUDED.bill_remaining, gift_received = EXCLUDED.gift_received,
+            still_to_spend = EXCLUDED.still_to_spend, item_count = EXCLUDED.item_count`,
+        [today, summary.budgetTotal, summary.paidTotal, summary.billRemaining,
+         summary.receivedTotal, summary.stillToSpendCash, summary.itemCount],
+    );
 }

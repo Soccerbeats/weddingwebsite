@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import type { PayerSummary } from '@/lib/finance';
 import type { FinancePayload } from './useFinances';
+import { ExportButtons, TrendCard, WhatIf } from './extras';
 import { Bar, Card, EmptyState, StatTile, formatMoney } from './ui';
 
 type Scenario = 'pledged' | 'cash';
@@ -49,6 +50,24 @@ export default function OverviewTab({ data }: { data: FinancePayload }) {
                     hint={optimistic ? 'assuming pledges land' : 'cash in hand only'}
                 />
             </div>
+
+            {(summary.overdueTotal > 0 || summary.dueSoonTotal > 0) && (
+                <Card className={`p-4 ${summary.overdueTotal > 0
+                    ? 'border-rose-200 bg-rose-50/50' : 'border-amber-200 bg-amber-50/40'}`}>
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        <span className={`text-sm font-semibold ${summary.overdueTotal > 0
+                            ? 'text-rose-900' : 'text-amber-900'}`}>
+                            {summary.overdueTotal > 0
+                                ? `${formatMoney(summary.overdueTotal)} overdue`
+                                : `${formatMoney(summary.dueSoonTotal)} due within 30 days`}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                            {summary.schedule.filter((sp) => !sp.settled).slice(0, 2)
+                                .map((sp) => `${sp.label} ${sp.due_on ?? ''}`).join(' · ')}
+                        </span>
+                    </div>
+                </Card>
+            )}
 
             <Card className="p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -275,6 +294,87 @@ export default function OverviewTab({ data }: { data: FinancePayload }) {
                             </div>
                         ))}
                     {!summary.items.length && <EmptyState>No line items yet.</EmptyState>}
+                </div>
+            </Card>
+
+            <Card className="p-5">
+                <h3 className="mb-1 font-semibold text-gray-900">Cost per guest</h3>
+                <p className="mb-4 text-xs text-gray-400">
+                    Useful when the invite list is still moving.
+                </p>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    <div className="rounded-xl bg-gray-50 px-3 py-2">
+                        <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                            per guest
+                        </div>
+                        <div className="mt-0.5 text-sm font-semibold tabular-nums">
+                            {formatMoney(summary.guestCost.perGuest)}
+                        </div>
+                        <div className="text-[11px] text-gray-400">
+                            {summary.guestCost.guests} guests
+                        </div>
+                    </div>
+                    <div className="rounded-xl bg-gray-50 px-3 py-2">
+                        <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                            one more adult
+                        </div>
+                        <div className="mt-0.5 text-sm font-semibold tabular-nums text-amber-600">
+                            +{formatMoney(summary.guestCost.marginalPerAdult)}
+                        </div>
+                        <div className="text-[11px] text-gray-400">
+                            {summary.guestCost.marginalLines.length} per-guest line
+                            {summary.guestCost.marginalLines.length === 1 ? '' : 's'}
+                        </div>
+                    </div>
+                    <div className="rounded-xl bg-gray-50 px-3 py-2">
+                        <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                            a table of 10
+                        </div>
+                        <div className="mt-0.5 text-sm font-semibold tabular-nums text-amber-600">
+                            +{formatMoney(summary.guestCost.marginalPerAdult * 10)}
+                        </div>
+                    </div>
+                </div>
+                {summary.guestCost.marginalLines.length > 0 && (
+                    <p className="mt-3 text-[11px] text-gray-400">
+                        From{' '}
+                        {summary.guestCost.marginalLines
+                            .map((l) => `${l.name} ${formatMoney(l.unitCost)}`).join(' + ')}
+                    </p>
+                )}
+            </Card>
+
+            {summary.warnings.length > 0 && (
+                <Card className="border-amber-200 bg-amber-50/40 p-5">
+                    <h3 className="mb-1 font-semibold text-amber-900">Possible mistakes</h3>
+                    <p className="mb-3 text-xs text-amber-700">
+                        Things that look like they might have been entered twice, or a budget figure
+                        that no longer matches reality.
+                    </p>
+                    <div className="space-y-1.5">
+                        {summary.warnings.map((w, i) => (
+                            <div key={`${w.kind}${i}`}
+                                className="rounded-xl border border-amber-100 bg-white px-3 py-2 text-sm">
+                                <div className="text-gray-700">{w.message}</div>
+                                <div className="mt-0.5 text-[11px] text-gray-400">{w.detail}</div>
+                            </div>
+                        ))}
+                    </div>
+                </Card>
+            )}
+
+            <TrendCard snapshots={data.snapshots} />
+            <WhatIf data={data} />
+
+            <Card className="p-4 print:hidden">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <div className="text-sm font-semibold text-gray-800">Share it</div>
+                        <div className="mt-0.5 text-xs text-gray-400">
+                            A spreadsheet for your records, or a printable copy for a vendor meeting.
+                        </div>
+                    </div>
+                    <ExportButtons data={data} />
                 </div>
             </Card>
 

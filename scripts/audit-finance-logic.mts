@@ -53,6 +53,7 @@ const purchases: Purchase[] = SEED_PURCHASES.map((p, i) => ({
 let rid = 0;
 const contributors: Contributor[] = SEED_CONTRIBUTORS.map((c, i) => ({
     id: i + 1, name: c.name, pledged: c.pledged, notes: null, sort_order: i,
+    thank_you_sent: false, thank_you_sent_at: null,
     receipts: c.receipts.map((r) => ({
         id: ++rid, contributor_id: i + 1, amount: r.amount, received_on: null,
         item_id: r.item ? nameToId.get(r.item) ?? null : null,
@@ -130,7 +131,8 @@ const allZeroShares = buildSummary({ ...base, payers: payers.map((p) => ({ ...p,
 note('all shares 0: unallocatedDeficitCash', `${allZeroShares.unallocatedDeficitCash} (surfaced now)`);
 const overFunded = buildSummary({
     ...base,
-    contributors: [{ id: 1, name: 'Rich uncle', pledged: 60000, notes: null, sort_order: 0, receipts: [
+    contributors: [{ id: 1, name: 'Rich uncle', pledged: 60000, notes: null, sort_order: 0,
+        thank_you_sent: false, thank_you_sent_at: null, receipts: [
         { id: 1, contributor_id: 1, amount: 60000, received_on: null, item_id: null, category_id: null, note: null },
     ] }],
 });

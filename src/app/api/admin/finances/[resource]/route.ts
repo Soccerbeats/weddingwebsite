@@ -28,7 +28,7 @@ interface ResourceDef {
 const RESOURCES: Record<string, ResourceDef> = {
     categories: {
         table: 'finance_categories',
-        fields: { name: { kind: 'text' }, sort_order: { kind: 'int' } },
+        fields: { name: { kind: 'text' }, sort_order: { kind: 'int' }, archived: { kind: 'bool' } },
         required: ['name'],
     },
     items: {
@@ -43,6 +43,7 @@ const RESOURCES: Record<string, ResourceDef> = {
             is_paid: { kind: 'bool' },
             notes: { kind: 'text' },
             sort_order: { kind: 'int' },
+            archived: { kind: 'bool' },
         },
         required: ['category_id', 'name'],
     },
@@ -72,6 +73,8 @@ const RESOURCES: Record<string, ResourceDef> = {
             amount: { kind: 'number' },
             purchased_on: { kind: 'date' },
             notes: { kind: 'text' },
+            receipt_path: { kind: 'text' },
+            archived: { kind: 'bool' },
         },
         required: ['description'],
     },
@@ -82,8 +85,24 @@ const RESOURCES: Record<string, ResourceDef> = {
             pledged: { kind: 'number' },
             notes: { kind: 'text' },
             sort_order: { kind: 'int' },
+            thank_you_sent: { kind: 'bool' },
+            archived: { kind: 'bool' },
         },
         required: ['name'],
+    },
+    schedule: {
+        table: 'finance_schedule',
+        fields: {
+            item_id: { kind: 'ref' },
+            category_id: { kind: 'ref' },
+            label: { kind: 'text' },
+            kind: { kind: 'enum', values: ['installment', 'deposit', 'balance'] },
+            amount: { kind: 'number' },
+            due_on: { kind: 'date' },
+            settled: { kind: 'bool' },
+            sort_order: { kind: 'int' },
+        },
+        required: ['label'],
     },
     receipts: {
         table: 'finance_receipts',
@@ -117,6 +136,16 @@ function applyTargetExclusivity(def: ResourceDef, columns: string[], values: unk
     const at = columns.indexOf(clear);
     if (at >= 0) values[at] = null;
     else { columns.push(clear); values.push(null); }
+}
+
+/** Record when a thank-you was marked sent, and clear it when unmarked. */
+function stampThankYou(
+    def: ResourceDef, body: Record<string, unknown>, columns: string[], values: unknown[],
+) {
+    if (def.table !== 'finance_contributors' || !('thank_you_sent' in body)) return;
+    const sent = columns.includes('thank_you_sent') && values[columns.indexOf('thank_you_sent')] === true;
+    columns.push('thank_you_sent_at');
+    values.push(sent ? new Date().toISOString() : null);
 }
 
 /**
@@ -260,6 +289,24 @@ export async function PATCH(request: Request, { params }: Params) {
             return NextResponse.json({ success: true });
         }
 
+        // Bulk edit: { ids: [...], ...fields } updates them all in one statement.
+        if (Array.isArray(body.ids)) {
+            const ids = body.ids
+                .map((raw: unknown) => Math.trunc(Number(raw)))
+                .filter((n: number) => Number.isFinite(n) && n > 0);
+            if (!ids.length) return NextResponse.json({ error: 'No valid ids' }, { status: 400 });
+            const { columns, values } = collect(def, body);
+            applyTargetExclusivity(def, columns, values);
+            stampThankYou(def, body, columns, values);
+            if (!columns.length) return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
+            const sets = columns.map((c, i) => `${c} = $${i + 1}`).join(', ');
+            const result = await pool.query(
+                `UPDATE ${def.table} SET ${sets} WHERE id = ANY($${columns.length + 1})`,
+                [...values, ids],
+            );
+            return NextResponse.json({ success: true, updated: result.rowCount });
+        }
+
         const id = Math.trunc(Number(body.id));
         if (!Number.isFinite(id) || id <= 0) {
             return NextResponse.json({ error: 'Valid id required' }, { status: 400 });
@@ -268,6 +315,7 @@ export async function PATCH(request: Request, { params }: Params) {
         const { columns, values } = collect(def, body);
         if (!columns.length) return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
         applyTargetExclusivity(def, columns, values);
+        stampThankYou(def, body, columns, values);
 
         const sets = columns.map((c, i) => `${c} = $${i + 1}`).join(', ');
         const result = await pool.query(

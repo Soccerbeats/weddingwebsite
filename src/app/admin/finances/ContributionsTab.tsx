@@ -46,6 +46,11 @@ export default function ContributionsTab({ data, api }: { data: FinancePayload; 
                 <StatTile label="Still expected" value={formatMoney(summary.outstandingPledges)}
                     tone={summary.outstandingPledges > 0 ? 'warn' : 'good'}
                     hint={summary.outstandingPledges > 0 ? 'Promised but not in hand' : 'All pledges collected'} />
+                <StatTile label="Thanked" value={
+                    `${contributors.filter((c) => c.thank_you_sent).length}/${contributors.length}`
+                } tone={contributors.length > 0
+                    && contributors.every((c) => c.thank_you_sent) ? 'good' : 'warn'}
+                    hint="thank-you notes sent" />
                 <StatTile label="Covers" value={
                     summary.budgetTotal > 0
                         ? `${((summary.receivedTotal / summary.budgetTotal) * 100).toFixed(1)}%`
@@ -150,15 +155,31 @@ function ContributorCard({ contributor, targetGroups, api }: {
                         </div>
                     </div>
                 </div>
+                <button
+                    onClick={() => api.update('contributors', {
+                        id: contributor.id, thank_you_sent: !contributor.thank_you_sent,
+                    })}
+                    title={contributor.thank_you_sent_at
+                        ? `Sent ${contributor.thank_you_sent_at.slice(0, 10)}`
+                        : 'Not sent yet'}
+                    className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-medium transition-colors
+                        ${contributor.thank_you_sent
+                            ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                            : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                >
+                    {contributor.thank_you_sent ? '✓ Thanked' : 'Thank you?'}
+                </button>
                 <GlyphButton
-                    label={`Delete ${contributor.name}`}
+                    label={`Archive ${contributor.name}`}
                     className="text-lg leading-none hover:text-rose-500"
                     onClick={() => {
+                        // Archived rather than deleted: removing a contributor would
+                        // cascade their payment history, which an undo can't rebuild.
                         const count = contributor.receipts.length;
                         const message = count
-                            ? `Delete ${contributor.name} and their ${count} logged payment${count === 1 ? '' : 's'}?`
-                            : `Delete ${contributor.name}?`;
-                        if (confirm(message)) api.remove('contributors', contributor.id);
+                            ? `Archive ${contributor.name} and their ${count} logged payment${count === 1 ? '' : 's'}? Nothing is lost — they stop counting toward your totals and you can restore them from Settings.`
+                            : `Archive ${contributor.name}?`;
+                        if (confirm(message)) api.update('contributors', { id: contributor.id, archived: true });
                     }}
                 >
                     &times;
@@ -235,13 +256,24 @@ function ContributorCard({ contributor, targetGroups, api }: {
                                 </RowField>
                                 <DeleteButton
                                     label={`Delete payment ${receipt.note ?? ''}`.trim()}
-                                    onClick={() => api.remove('receipts', receipt.id)}
+                                    onClick={() => api.removeWithUndo(
+                                        'receipts', receipt.id,
+                                        `${contributor.name}'s ${receipt.note || 'payment'}`,
+                                        {
+                                            contributor_id: contributor.id, amount: receipt.amount,
+                                            received_on: receipt.received_on, note: receipt.note,
+                                            item_id: receipt.item_id, category_id: receipt.category_id,
+                                        },
+                                    )}
                                 />
                             </div>
                         ))}
                     </div>
                 )}
                 <AddButton onClick={addReceipt}>+ Log a payment received</AddButton>
+                <p className="text-[11px] text-gray-400">
+                    A refund or a returned gift goes in as a negative amount.
+                </p>
             </div>
         </Card>
     );

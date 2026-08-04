@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { itemTotal, subItemTotal, effectiveQuantity, type BudgetItem, type Category } from '@/lib/finance';
 import type { FinanceApi, FinancePayload } from './useFinances';
+import { StateBadge, TemplatePicker } from './extras';
 import {
     AddButton, Bar, Card, DeleteButton, EmptyState, GlyphButton, InlineNumber, InlineText,
     Money, PillButton, RowDate, RowField, RowSelect, Toggle, formatMoney,
@@ -19,6 +20,7 @@ export default function BudgetTab({ data, api }: { data: FinancePayload; api: Fi
     const { settings, categories, summary } = data;
     const [expanded, setExpanded] = useState<Set<number>>(new Set());
     const [newCategory, setNewCategory] = useState('');
+    const [templating, setTemplating] = useState(false);
 
     const toggleExpanded = (id: number) => {
         setExpanded((prev) => {
@@ -47,12 +49,19 @@ export default function BudgetTab({ data, api }: { data: FinancePayload; api: Fi
                             {formatMoney(summary.budgetTotal)}
                         </div>
                     </div>
-                    <div className="text-xs text-gray-400 text-right">
+                    <div className="text-right text-xs text-gray-400">
                         {summary.itemCount} line{summary.itemCount === 1 ? '' : 's'} ·{' '}
-                        {summary.paidItemCount} marked paid
+                        {summary.items.filter((i) => i.state === 'paid').length} fully paid
                         <div className="mt-0.5">
                             Headcount: {settings.adult_count} adults + {settings.minor_count} minors
                         </div>
+                        {summary.items.some((i) => i.stateConflict) && (
+                            <div className="mt-1 text-amber-600">
+                                {summary.items.filter((i) => i.stateConflict).length} line
+                                {summary.items.filter((i) => i.stateConflict).length === 1 ? '' : 's'}
+                                {' '}where the paid tick and the payments disagree
+                            </div>
+                        )}
                     </div>
                 </div>
             </Card>
@@ -88,7 +97,23 @@ export default function BudgetTab({ data, api }: { data: FinancePayload; api: Fi
                         Add section
                     </PillButton>
                 </div>
+                {categories.length > 0 && (
+                    <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-gray-50 pt-3">
+                        <PillButton onClick={() => setTemplating(true)}>
+                            ✨ Add common line items
+                        </PillButton>
+                        {data.archived.items + data.archived.categories > 0 && (
+                            <span className="text-[11px] text-gray-400">
+                                {data.archived.items + data.archived.categories} archived — see Settings
+                            </span>
+                        )}
+                    </div>
+                )}
             </Card>
+
+            {templating && (
+                <TemplatePicker data={data} api={api} onClose={() => setTemplating(false)} />
+            )}
         </div>
     );
 }
@@ -115,10 +140,22 @@ function CategoryBlock({ category, data, api, expanded, onToggleExpanded }: {
     const deleteCategory = () => {
         const count = category.items.length;
         const message = count
-            ? `Delete "${category.name}" and its ${count} line item${count === 1 ? '' : 's'}? Purchases stay, but lose their budget link.`
-            : `Delete "${category.name}"?`;
-        if (confirm(message)) api.remove('categories', category.id);
+            ? `Archive "${category.name}" and its ${count} line item${count === 1 ? '' : 's'}? Nothing is lost — it stops counting toward your totals and you can bring it back from Settings.`
+            : `Archive "${category.name}"?`;
+        if (confirm(message)) api.update('categories', { id: category.id, archived: true });
     };
+
+    // Moving a section is a two-row swap, then one bulk reorder call.
+    const move = (delta: number) => {
+        const all = data.categories;
+        const from = all.findIndex((c) => c.id === category.id);
+        const to = from + delta;
+        if (from < 0 || to < 0 || to >= all.length) return;
+        const next = [...all];
+        [next[from], next[to]] = [next[to], next[from]];
+        api.reorder('categories', next.map((c) => ({ id: c.id })));
+    };
+    const index = data.categories.findIndex((c) => c.id === category.id);
 
     return (
         <Card className="overflow-hidden">
@@ -134,10 +171,20 @@ function CategoryBlock({ category, data, api, expanded, onToggleExpanded }: {
                     <div className="font-semibold tabular-nums text-sm">{formatMoney(stats?.total ?? 0)}</div>
                     <div className="text-[11px] text-gray-400">{(stats?.pct ?? 0).toFixed(1)}% of budget</div>
                 </div>
-                <GlyphButton onClick={deleteCategory} label={`Delete ${category.name}`}
-                    className="text-lg leading-none hover:text-rose-500">
-                    &times;
-                </GlyphButton>
+                <div className="flex shrink-0 items-center">
+                    <GlyphButton onClick={() => move(-1)} label={`Move ${category.name} up`}
+                        className={index === 0 ? 'pointer-events-none opacity-25' : ''}>
+                        ⌃
+                    </GlyphButton>
+                    <GlyphButton onClick={() => move(1)} label={`Move ${category.name} down`}
+                        className={index === data.categories.length - 1 ? 'pointer-events-none opacity-25' : ''}>
+                        ⌄
+                    </GlyphButton>
+                    <GlyphButton onClick={deleteCategory} label={`Archive ${category.name}`}
+                        className="text-lg leading-none hover:text-rose-500">
+                        &times;
+                    </GlyphButton>
+                </div>
             </div>
 
             <div className="hidden md:grid grid-cols-[1.6fr_5.5rem_5rem_6rem_5rem_4.5rem_1.5rem] gap-2 px-4 py-2
@@ -409,11 +456,8 @@ function ItemRow({ item, data, api, expanded, onToggleExpanded }: {
                     <span className="shrink-0 pl-1 text-sm font-medium tabular-nums md:hidden">
                         <Money value={total} />
                     </span>
-                    {item.is_paid && (
-                        <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px]
-                            font-semibold text-emerald-700 md:hidden">
-                            PAID
-                        </span>
+                    {stats && stats.state !== 'unpaid' && (
+                        <StateBadge state={stats.state} className="md:hidden" />
                     )}
                 </div>
 
@@ -467,7 +511,10 @@ function ItemRow({ item, data, api, expanded, onToggleExpanded }: {
                 </RowField>
 
                 <RowField label="Paid">
-                    <div className="flex justify-end md:justify-center">
+                    <div className="flex items-center justify-end gap-2 md:justify-center">
+                        {stats && (
+                            <StateBadge state={stats.state} className="hidden md:inline-block" />
+                        )}
                         <Toggle
                             checked={item.is_paid}
                             onChange={(is_paid) => patch({ is_paid })}
@@ -478,7 +525,12 @@ function ItemRow({ item, data, api, expanded, onToggleExpanded }: {
 
                 <DeleteButton
                     label={`Delete ${item.name}`}
-                    onClick={() => { if (confirm(`Delete "${item.name}"?`)) api.remove('items', item.id); }}
+                    onClick={() => api.removeWithUndo('items', item.id, `"${item.name}"`, {
+                        category_id: item.category_id, name: item.name, unit_cost: item.unit_cost,
+                        quantity: item.quantity, qty_source: item.qty_source,
+                        use_subitems: item.use_subitems, is_paid: item.is_paid,
+                        notes: item.notes, sort_order: item.sort_order,
+                    })}
                 />
                 </div>
             </div>
@@ -502,6 +554,13 @@ function ItemRow({ item, data, api, expanded, onToggleExpanded }: {
                     {variance < 0 && (
                         <span className="text-gray-400">
                             {formatMoney(-variance)} left on this line
+                        </span>
+                    )}
+                    {stats?.stateConflict && (
+                        <span className="font-medium text-amber-600">
+                            {item.is_paid
+                                ? 'Ticked paid, but the payments don\u2019t cover it'
+                                : 'Fully covered by payments \u2014 tick it paid?'}
                         </span>
                     )}
                 </div>

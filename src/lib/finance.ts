@@ -61,6 +61,7 @@ export interface Payer {
 export interface Purchase {
     id: number;
     payer_id: number | null;
+    receipt_path?: string | null;
     item_id: number | null;
     /**
      * Set instead of `item_id` when a payment covers a whole section rather than
@@ -92,7 +93,34 @@ export interface Contributor {
     pledged: number;
     notes: string | null;
     sort_order: number;
+    thank_you_sent: boolean;
+    thank_you_sent_at: string | null;
     receipts: Receipt[];
+}
+
+export type ScheduleKind = 'deposit' | 'installment' | 'balance';
+
+/** A payment you owe by a date — the thing the spreadsheet could never tell you. */
+export interface ScheduledPayment {
+    id: number;
+    item_id: number | null;
+    category_id: number | null;
+    label: string;
+    kind: ScheduleKind;
+    amount: number;
+    due_on: string | null;
+    settled: boolean;
+    sort_order: number;
+}
+
+export interface Snapshot {
+    taken_on: string;
+    budget_total: number;
+    paid_total: number;
+    bill_remaining: number;
+    gift_received: number;
+    still_to_spend: number;
+    item_count: number;
 }
 
 export const DEFAULT_SETTINGS: FinanceSettings = {
@@ -195,6 +223,28 @@ export interface PayerSummary {
     planCash: PlanBreakdown;
 }
 
+/**
+ * Payment state, derived from what has actually been paid rather than a flag
+ * someone remembered to tick. `is_paid` survives only as a manual override, so a
+ * line can't claim to be settled while money is still outstanding.
+ */
+export type PaidState = 'unpaid' | 'partial' | 'paid' | 'overpaid';
+
+export function paidState(paid: number, budget: number, override: boolean): PaidState {
+    if (budget > 0 && paid > budget + 0.005) return 'overpaid';
+    if (override) return 'paid';
+    if (paid <= 0.005) return 'unpaid';
+    if (budget > 0 && paid >= budget - 0.005) return 'paid';
+    return 'partial';
+}
+
+export const PAID_STATE_LABEL: Record<PaidState, string> = {
+    unpaid: 'Not paid',
+    partial: 'Part paid',
+    paid: 'Paid',
+    overpaid: 'Overpaid',
+};
+
 export interface ItemSummary {
     id: number;
     name: string;
@@ -211,7 +261,12 @@ export interface ItemSummary {
     paid: number;
     /** paid − budgeted; positive is an overrun */
     variance: number;
+    /** the manual override flag */
     isPaid: boolean;
+    /** what the payments actually say */
+    state: PaidState;
+    /** flag says paid but the money doesn't agree, or vice versa */
+    stateConflict: boolean;
 }
 
 export interface CategorySummary {
@@ -238,6 +293,7 @@ export interface CategorySummary {
     paidPct: number;
     /** lump-sum payments against the section: own installments + earmarked gifts */
     installmentCount: number;
+    state: PaidState;
 }
 
 export interface FinanceSummary {
@@ -271,6 +327,15 @@ export interface FinanceSummary {
     isOverFunded: boolean;
     /** shares don't add up, so part of the deficit is assigned to nobody */
     unallocatedDeficitCash: number;
+    /** scheduled payments, soonest first, with overdue/due-soon flags */
+    schedule: ScheduleStatus[];
+    scheduledUnsettled: number;
+    overdueTotal: number;
+    dueSoonTotal: number;
+    /** cost per head and the marginal cost of one more guest */
+    guestCost: GuestCost;
+    /** things that look like data-entry mistakes */
+    warnings: DuplicateWarning[];
     pledgedTotal: number;
     receivedTotal: number;
     outstandingPledges: number;
@@ -333,12 +398,40 @@ export function computeHorizon(
     };
 }
 
+export interface ScheduleStatus extends ScheduledPayment {
+    targetName: string;
+    /** null when no due date is set */
+    daysUntilDue: number | null;
+    isOverdue: boolean;
+    isDueSoon: boolean;
+}
+
+export interface DuplicateWarning {
+    kind: 'same-amount' | 'similar-name' | 'over-line';
+    message: string;
+    detail: string;
+    amount: number;
+}
+
+export interface GuestCost {
+    guests: number;
+    /** budget per head */
+    perGuest: number;
+    /**
+     * What one more adult actually adds: every line whose quantity tracks the
+     * adult or total headcount, at its unit cost.
+     */
+    marginalPerAdult: number;
+    marginalLines: { name: string; unitCost: number }[];
+}
+
 export interface SummaryInput {
     categories: Category[];
     payers: Payer[];
     purchases: Purchase[];
     contributors: Contributor[];
     settings: FinanceSettings;
+    schedule?: ScheduledPayment[];
     weddingDate?: string | null;
     now?: Date;
 }
@@ -425,6 +518,7 @@ export function buildSummary(input: SummaryInput): FinanceSummary {
             itemGift += giftApplied;
             itemCount += 1;
             if (item.is_paid) paidItemCount += 1;
+            const state = paidState(paid, lineTotal, item.is_paid);
             items.push({
                 id: item.id,
                 name: item.name,
@@ -437,6 +531,10 @@ export function buildSummary(input: SummaryInput): FinanceSummary {
                 paid,
                 variance: money(paid - lineTotal),
                 isPaid: item.is_paid,
+                state,
+                stateConflict: item.is_paid
+                    ? paid < lineTotal - 0.005
+                    : lineTotal > 0 && paid >= lineTotal - 0.005,
             });
         }
         const catTotal = categoryTotal(category, settings);
@@ -458,6 +556,7 @@ export function buildSummary(input: SummaryInput): FinanceSummary {
             remaining: money(catTotal - paid),
             paidPct: catTotal > 0 ? money((paid / catTotal) * 100) : 0,
             installmentCount: installmentsByCategory.get(category.id) ?? 0,
+            state: paidState(paid, catTotal, false),
         });
     }
 
@@ -499,6 +598,82 @@ export function buildSummary(input: SummaryInput): FinanceSummary {
     const paidTotal = money(budgetedOutOfPocket + giftAppliedTotal);
     const allocated = money(payerSummaries.reduce((sum, p) => sum + p.shareCash, 0));
 
+    // ---- payment schedule ----
+    const itemName = new Map(items.map((i) => [i.id, i.name]));
+    const categoryName = new Map(categorySummaries.map((c) => [c.id, c.name]));
+    const startOfToday = new Date(now);
+    startOfToday.setHours(0, 0, 0, 0);
+    const scheduleStatus: ScheduleStatus[] = (input.schedule ?? []).map((sp) => {
+        const due = sp.due_on ? new Date(sp.due_on) : null;
+        const valid = due && !isNaN(due.getTime());
+        const days = valid
+            ? Math.ceil((due.getTime() - startOfToday.getTime()) / 86_400_000)
+            : null;
+        return {
+            ...sp,
+            targetName: sp.item_id != null
+                ? itemName.get(sp.item_id) ?? 'Deleted line'
+                : sp.category_id != null
+                    ? categoryName.get(sp.category_id) ?? 'Deleted section'
+                    : 'Whole wedding',
+            daysUntilDue: days,
+            isOverdue: !sp.settled && days != null && days < 0,
+            isDueSoon: !sp.settled && days != null && days >= 0 && days <= 30,
+        };
+    }).sort((a, b) => {
+        if (a.settled !== b.settled) return a.settled ? 1 : -1;
+        if (a.due_on && b.due_on) return a.due_on.localeCompare(b.due_on);
+        return a.due_on ? -1 : b.due_on ? 1 : 0;
+    });
+    const unsettled = scheduleStatus.filter((sp) => !sp.settled);
+
+    // ---- per-guest cost ----
+    const guests = num(settings.adult_count) + num(settings.minor_count);
+    const marginalLines: { name: string; unitCost: number }[] = [];
+    for (const category of categories) {
+        for (const item of category.items || []) {
+            if (item.use_subitems) continue;
+            if (item.qty_source === 'adults' || item.qty_source === 'total') {
+                marginalLines.push({ name: item.name, unitCost: money(num(item.unit_cost)) });
+            }
+        }
+    }
+
+    // ---- likely data-entry mistakes ----
+    const warnings: DuplicateWarning[] = [];
+    const normalise = (text: string) =>
+        text.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    for (let i = 0; i < purchases.length; i += 1) {
+        for (let j = i + 1; j < purchases.length; j += 1) {
+            const a = purchases[i];
+            const b = purchases[j];
+            if (num(a.amount) <= 0 || Math.abs(num(a.amount) - num(b.amount)) > 0.005) continue;
+            const sameTarget = a.item_id != null && a.item_id === b.item_id;
+            const wordsA = new Set(normalise(a.description).split(' ').filter(Boolean));
+            const shared = normalise(b.description).split(' ').filter((w) => wordsA.has(w));
+            if (sameTarget || shared.length > 0) {
+                warnings.push({
+                    kind: sameTarget ? 'same-amount' : 'similar-name',
+                    message: `"${a.description}" and "${b.description}" are both ${formatMoney(num(a.amount))}`,
+                    detail: sameTarget
+                        ? 'Same amount against the same budget line — possibly logged twice.'
+                        : 'Same amount and overlapping wording — possibly logged twice.',
+                    amount: money(num(a.amount)),
+                });
+            }
+        }
+    }
+    for (const item of items) {
+        if (item.total > 0 && item.paid > item.total * 2) {
+            warnings.push({
+                kind: 'over-line',
+                message: `${item.name}: ${formatMoney(item.paid)} paid against a ${formatMoney(item.total)} budget`,
+                detail: 'More than double the budgeted amount — check the budget figure or the payments.',
+                amount: money(item.paid - item.total),
+            });
+        }
+    }
+
     return {
         budgetTotal: total,
         outOfPocketTotal,
@@ -510,6 +685,19 @@ export function buildSummary(input: SummaryInput): FinanceSummary {
         billRemaining: money(total - paidTotal),
         isOverFunded: deficitCash < 0,
         unallocatedDeficitCash: money(deficitCash - allocated),
+        schedule: scheduleStatus,
+        scheduledUnsettled: money(unsettled.reduce((sum, sp) => sum + num(sp.amount), 0)),
+        overdueTotal: money(scheduleStatus.filter((sp) => sp.isOverdue)
+            .reduce((sum, sp) => sum + num(sp.amount), 0)),
+        dueSoonTotal: money(scheduleStatus.filter((sp) => sp.isDueSoon)
+            .reduce((sum, sp) => sum + num(sp.amount), 0)),
+        guestCost: {
+            guests,
+            perGuest: guests > 0 ? money(total / guests) : 0,
+            marginalPerAdult: money(marginalLines.reduce((sum, l) => sum + l.unitCost, 0)),
+            marginalLines,
+        },
+        warnings: warnings.slice(0, 12),
         pledgedTotal,
         receivedTotal,
         outstandingPledges: money(pledgedTotal - receivedTotal),
