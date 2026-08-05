@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import { Pool } from 'pg';
+import { buildActivityFeed } from '@/lib/activity';
+import { loadFinanceData } from '@/lib/financeDb';
+import { buildSummary } from '@/lib/finance';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
@@ -103,6 +106,56 @@ export async function GET() {
       console.error('Dashboard seating query error:', e);
     }
 
+    // Finance headline. Read-only: unlike /api/admin/finances this deliberately
+    // does not write a daily snapshot — loading the dashboard shouldn't count as
+    // taking a reading of the budget.
+    let finance: {
+      budgetTotal: number; paidTotal: number; billRemaining: number;
+      receivedTotal: number; pledgedTotal: number; outstandingPledges: number;
+      giftUnapplied: number; stillToSpendCash: number;
+      overdueTotal: number; dueSoonTotal: number; scheduledUnsettled: number;
+      itemCount: number; paidItemCount: number;
+      nextPayment: { label: string; amount: number; dueOn: string | null; isOverdue: boolean; isDueSoon: boolean } | null;
+      topCategories: { name: string; total: number; paid: number; paidPct: number }[];
+    } | null = null;
+    try {
+      const financeData = await loadFinanceData();
+      const s = buildSummary({ ...financeData, weddingDate: siteConfig.weddingDate ?? null });
+      const next = s.schedule.find(sp => !sp.settled && sp.due_on) ?? null;
+      finance = {
+        budgetTotal: s.budgetTotal,
+        paidTotal: s.paidTotal,
+        billRemaining: s.billRemaining,
+        receivedTotal: s.receivedTotal,
+        pledgedTotal: s.pledgedTotal,
+        outstandingPledges: s.outstandingPledges,
+        giftUnapplied: s.giftUnapplied,
+        stillToSpendCash: s.stillToSpendCash,
+        overdueTotal: s.overdueTotal,
+        dueSoonTotal: s.dueSoonTotal,
+        scheduledUnsettled: s.scheduledUnsettled,
+        itemCount: s.itemCount,
+        paidItemCount: s.paidItemCount,
+        nextPayment: next
+          ? { label: next.label, amount: next.amount, dueOn: next.due_on, isOverdue: next.isOverdue, isDueSoon: next.isDueSoon }
+          : null,
+        topCategories: [...s.categories]
+          .sort((a, b) => b.total - a.total)
+          .slice(0, 4)
+          .map(c => ({ name: c.name, total: c.total, paid: c.paid, paidPct: c.paidPct })),
+      };
+    } catch (e) {
+      console.error('Dashboard finance query error:', e);
+    }
+
+    // Recent activity feed — assembled from existing timestamps, never fatal.
+    let activity: Awaited<ReturnType<typeof buildActivityFeed>> = [];
+    try {
+      activity = await buildActivityFeed(client, photos, milestones);
+    } catch (e) {
+      console.error('Dashboard activity feed error:', e);
+    }
+
     const rsvp = rsvpResult.rows[0];
     const guests = guestResult.rows[0];
 
@@ -154,6 +207,8 @@ export async function GET() {
       recentRsvps: recentResult.rows,
       wipToggles: wipResult.rows as { page_label: string; is_wip: boolean; is_hidden: boolean }[],
       seating,
+      finance,
+      activity,
     });
   } finally {
     client.release();
