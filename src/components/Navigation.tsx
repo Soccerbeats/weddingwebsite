@@ -5,6 +5,11 @@ import Image from 'next/image';
 import { useState, useEffect, useRef, CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
 import { usePathname } from 'next/navigation';
 
+// Height the fixed nav island occupies (12px top offset + 68px tall). Content
+// scrolled to sits below this, so scrollspy detection starts here too — the
+// same offset HeroCollapse uses when it scrolls to #about.
+const NAV_OFFSET = 88;
+
 interface NavigationProps {
     brideName?: string;
     groomName?: string;
@@ -79,13 +84,22 @@ export default function Navigation({
     }, [pathname]);
 
     // Track whether the #about section is visible so we can highlight the About nav link.
+    //
+    // Watches a thin band just under the fixed nav rather than a share of the
+    // section. It used to be `threshold: 0.2`, but #about is the whole About
+    // region — header, How We Met, Venue, FAQ — around 4000px tall, so landing
+    // on it makes visible only (viewportHeight - NAV_OFFSET) / 4000 of it.
+    // That clears 0.2 solely on viewports taller than ~890px: the link
+    // highlighted on a 1440p screen and silently stayed dark on 1080p, and the
+    // cutoff moved whenever anyone edited an FAQ. Whether the section spans a
+    // fixed band depends on neither the section's height nor the viewport's.
     useEffect(() => {
         if (pathname !== '/') { setAboutInView(false); return; }
         const el = document.getElementById('about');
         if (!el) return;
         const observer = new IntersectionObserver(
             ([entry]) => setAboutInView(entry.isIntersecting),
-            { threshold: 0.2 }
+            { rootMargin: `-${NAV_OFFSET}px 0px -70% 0px`, threshold: 0 }
         );
         observer.observe(el);
         return () => observer.disconnect();
