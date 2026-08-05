@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Playfair_Display, Geist, Geist_Mono, Great_Vibes } from 'next/font/google';
 import './globals.css';
 import AppShell from '@/components/AppShell';
@@ -33,9 +33,36 @@ const geistMono = Geist_Mono({
 
 export async function generateMetadata(): Promise<Metadata> {
   const config = getSiteConfig();
+  const couple = config.brideName && config.groomName
+    ? `${config.brideName} & ${config.groomName}`
+    : 'Our Wedding';
   return {
-    title: `${config.brideName} & ${config.groomName} | The Wedding`,
+    title: `${couple} | The Wedding`,
     description: `Join us in celebrating our wedding on ${config.weddingDate}.`,
+    // Keeps older iOS in standalone mode; iOS 16.4+ uses the manifest instead.
+    appleWebApp: {
+      capable: true,
+      title: couple,
+      // 'default' leaves the status bar as its own opaque strip, so the fixed
+      // nav can't slide under the clock and Dynamic Island. Paired with not
+      // setting viewport-fit: cover, iOS insets the viewport itself and
+      // nothing needs safe-area padding.
+      statusBarStyle: 'default',
+    },
+    icons: {
+      icon: [{ url: '/api/app-icon?size=192', sizes: '192x192', type: 'image/png' }],
+      // iOS uses this for the Home Screen icon. Without it, it screenshots the page.
+      apple: [{ url: '/api/app-icon?size=180', sizes: '180x180', type: 'image/png' }],
+    },
+  };
+}
+
+export async function generateViewport(): Promise<Viewport> {
+  const config = getSiteConfig();
+  return {
+    width: 'device-width',
+    initialScale: 1,
+    themeColor: config.accentColor || '#D4AF37',
   };
 }
 
@@ -63,6 +90,12 @@ export default async function RootLayout({
   return (
     <html lang="en">
       <head>
+        {/*
+          Next emits the standardised `mobile-web-app-capable`, but iOS before
+          16.4 only honours the apple-prefixed name — without it those versions
+          launch the Home Screen icon in a normal Safari tab.
+        */}
+        <meta name="apple-mobile-web-app-capable" content="yes" />
         {/*
           Runs before first paint so an admin page never flashes the reserved
           scrollbar gutter it doesn't want. AppShell keeps this in sync from
