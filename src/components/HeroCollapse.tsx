@@ -44,6 +44,45 @@ function scrollToAbout(behavior: ScrollBehavior) {
   window.scrollTo({ top: Math.max(0, top), behavior });
 }
 
+/**
+ * Smooth-scroll to a position and run `onArrive` once the page settles.
+ *
+ * `window.scrollTo({behavior:'smooth'})` has no completion callback, so poll:
+ * finish on arrival, on a stall (the user grabbed the page mid-flight), or on a
+ * hard timeout. Returns a cancel function. The stall check is held off for the
+ * first few frames because the browser hasn't started moving yet — checking
+ * immediately would read "not moving" and fire straight away.
+ */
+function smoothScrollTo(top: number, onArrive: () => void): () => void {
+  const target = Math.max(0, top);
+  const started = performance.now();
+  let raf = 0;
+  let cancelled = false;
+  let frames = 0;
+  let stillFor = 0;
+  let last = window.scrollY;
+
+  window.scrollTo({ top: target, behavior: 'smooth' });
+
+  const tick = () => {
+    if (cancelled) return;
+    frames++;
+    const y = window.scrollY;
+    stillFor = Math.abs(y - last) < 0.5 ? stillFor + 1 : 0;
+    last = y;
+
+    const arrived = Math.abs(y - target) <= 2;
+    const stalled = frames > 12 && stillFor > 8;
+    const tooLong = performance.now() - started > 1600;
+
+    if (arrived || stalled || tooLong) { onArrive(); return; }
+    raf = requestAnimationFrame(tick);
+  };
+  raf = requestAnimationFrame(tick);
+
+  return () => { cancelled = true; cancelAnimationFrame(raf); };
+}
+
 export default function HeroCollapse({
   images,
   fallbackImage,
@@ -107,6 +146,15 @@ export default function HeroCollapse({
     if (aboutTimerRef.current) {
       clearTimeout(aboutTimerRef.current);
       aboutTimerRef.current = null;
+    }
+  };
+
+  // In-flight smooth scroll back to the hero (nav Home click while on home)
+  const homeScrollRef = useRef<(() => void) | null>(null);
+  const cancelHomeScroll = () => {
+    if (homeScrollRef.current) {
+      homeScrollRef.current();
+      homeScrollRef.current = null;
     }
   };
 
@@ -234,7 +282,7 @@ export default function HeroCollapse({
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  useEffect(() => cancelAboutTimer, []);
+  useEffect(() => () => { cancelAboutTimer(); cancelHomeScroll(); }, []);
 
   // ── Snap to collapsed if page scrolls past hero without wheel animation ──
   // This handles hash-link navigation (e.g. clicking "About" in the nav),
@@ -312,15 +360,34 @@ export default function HeroCollapse({
     };
 
     // Reset to the slideshow start — fired when the user clicks "Home" in the nav.
-    // Without this, clicking Home while already collapsed leaves the collage on screen.
+    // Glides back up to the hero and then plays the collage → slideshow expand,
+    // the exact reverse of the About sequence. Jumping straight to the top would
+    // skip past everything the user scrolled through.
     const onReset = () => {
       cancelAboutTimer();
-      cancelAnimationFrame(rafRef.current);
-      stateRef.current = 'full';
-      progressRef.current = 0;
-      applyProgress(0);
-      window.scrollTo({ top: 0, behavior: 'instant' });
-      window.dispatchEvent(new CustomEvent('hero-expanded'));
+      cancelHomeScroll();
+      if (stateRef.current === 'animating') return;
+
+      const expand = () => {
+        homeScrollRef.current = null;
+        cancelAnimationFrame(rafRef.current);
+        stateRef.current = 'animating';
+        // Reclaim the scroll room *before* animating, not after. The hero is
+        // sticky and pinned across the whole section so the jump is invisible
+        // either way, but doing it first means no trailing scroll event can
+        // land at 900 and flip the nav back to its island mid-expand.
+        window.scrollTo({ top: 0, behavior: 'instant' });
+        window.dispatchEvent(new CustomEvent('hero-expanded'));
+        runAnimation(0, () => { stateRef.current = 'full'; });
+      };
+
+      const room = sectionScrollRoom();
+      // Already at the top with the hero open: nothing to undo.
+      if (stateRef.current === 'full' && window.scrollY <= 1) return;
+      // Standing at the section boundary already — go straight into the expand.
+      if (window.scrollY <= room + 8) { expand(); return; }
+
+      homeScrollRef.current = smoothScrollTo(room, expand);
     };
 
     // "About" clicked in the nav while already on the home page: play the
@@ -665,15 +732,30 @@ export default function HeroCollapse({
     };
 
     // Reset to the slideshow start — fired when the user clicks "Home" in the nav.
+    // Same two beats as desktop: glide back up to the hero, then expand.
     const onReset = () => {
       cancelAboutTimer();
-      if (mobileRafRef.current) cancelAnimationFrame(mobileRafRef.current);
-      mobileStateRef.current = 'full';
-      mobileProgressRef.current = 0;
-      setMobileHiRes(true);
-      applyMobileProgress(0);
-      window.scrollTo({ top: 0, behavior: 'instant' });
-      window.dispatchEvent(new CustomEvent('hero-expanded'));
+      cancelHomeScroll();
+      if (mobileStateRef.current === 'animating') return;
+
+      const runExpand = () => {
+        homeScrollRef.current = null;
+        if (mobileRafRef.current) cancelAnimationFrame(mobileRafRef.current);
+        mobileStateRef.current = 'animating';
+        setMobileHiRes(true);
+        // Scroll room reclaimed first — see the desktop path for why.
+        window.scrollTo({ top: 0, behavior: 'instant' });
+        window.dispatchEvent(new CustomEvent('hero-expanded'));
+        runMobileAnimation(0, () => {
+          setTimeout(() => { mobileStateRef.current = 'full'; }, 50);
+        });
+      };
+
+      const room = mobileSectionScrollRoom();
+      if (mobileStateRef.current === 'full' && window.scrollY <= 1) return;
+      if (window.scrollY <= room + 8) { runExpand(); return; }
+
+      homeScrollRef.current = smoothScrollTo(room, runExpand);
     };
 
     window.addEventListener('touchstart', onTouchStart, { passive: true });

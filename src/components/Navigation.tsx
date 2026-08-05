@@ -114,6 +114,9 @@ export default function Navigation({
     //  • About, elsewhere→ let the /#about link through; HeroCollapse teleports
     const onNavClick = (href: string) => (e: ReactMouseEvent) => {
         if (href === '/') {
+            // Already home: swallow the click so Next doesn't snap the page to
+            // the top — HeroCollapse glides there and replays the hero instead.
+            if (pathname === '/') e.preventDefault();
             window.dispatchEvent(new CustomEvent('hero-reset'));
             return;
         }
@@ -200,7 +203,7 @@ export default function Navigation({
                 <div ref={logoRef} style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
                     <Link
                         href="/"
-                        onClick={() => window.dispatchEvent(new CustomEvent('hero-reset'))}
+                        onClick={onNavClick('/')}
                         className={logoMode && weddingLogo
                             ? 'block py-1'
                             : 'font-serif text-2xl font-bold tracking-tighter'}
