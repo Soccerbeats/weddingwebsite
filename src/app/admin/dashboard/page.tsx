@@ -214,7 +214,10 @@ function ActivityFeed({ events }: { events: ActivityEvent[] }) {
 
   return (
     <div className="relative">
-      <div className="-mx-2 max-h-72 overflow-y-auto pr-1 pl-2" data-activity-feed>
+      {/* Padding must be symmetric with the rows' -mx-2 below, or they overhang
+          and the browser adds a horizontal scrollbar — overflow-y:auto computes
+          overflow-x to `auto` too, so it can't be left implicit either. */}
+      <div className="-mx-2 px-2 max-h-72 overflow-y-auto overflow-x-hidden" data-activity-feed>
       <ol className="relative">
         {events.map(e => {
           const style = ACTIVITY_STYLE[e.kind] ?? ACTIVITY_STYLE.guest;
