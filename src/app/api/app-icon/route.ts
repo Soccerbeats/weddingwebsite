@@ -39,7 +39,17 @@ export async function GET(request: NextRequest) {
     const size = ALLOWED.includes(requested) ? requested : 512;
 
     const config = getSiteConfig();
-    const bg = isSafeColor(config.accentColor) ? config.accentColor : '#D4AF37';
+    // The admin icon uses a neutral ground so the two Home Screen icons are
+    // distinguishable at a glance — same logo, obviously different app.
+    //
+    // Light, not dark: wedding logos are typically dark artwork on
+    // transparency, and this one is black calligraphy that all but disappears
+    // against a dark slate. Light grey keeps it legible and still reads as
+    // clearly not the vivid accent-coloured public icon.
+    const isAdmin = request.nextUrl.searchParams.get('variant') === 'admin';
+    const bg = isAdmin
+        ? '#e5e7eb'
+        : (isSafeColor(config.accentColor) ? config.accentColor : '#D4AF37');
 
     try {
         let png: Buffer;
@@ -67,7 +77,9 @@ export async function GET(request: NextRequest) {
                 .png()
                 .toBuffer();
         } else {
-            png = await sharp(heartTile(size, bg, '#ffffff')).png().toBuffer();
+            // Foreground has to follow the ground, or the admin variant would
+            // draw a white heart on light grey and show nothing at all.
+            png = await sharp(heartTile(size, bg, isAdmin ? '#374151' : '#ffffff')).png().toBuffer();
         }
 
         return new NextResponse(new Uint8Array(png), {

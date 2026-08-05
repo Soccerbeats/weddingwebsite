@@ -39,6 +39,10 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: `${couple} | The Wedding`,
     description: `Join us in celebrating our wedding on ${config.weddingDate}.`,
+    // Linked explicitly because the manifest is a route handler now, not the
+    // `app/manifest.ts` convention — that export gets no request and so could
+    // only ever emit one variant. The admin layout overrides this.
+    manifest: '/manifest.webmanifest',
     // Keeps older iOS in standalone mode; iOS 16.4+ uses the manifest instead.
     appleWebApp: {
       capable: true,
