@@ -33,23 +33,46 @@ export default function AdminLayout({
         router.refresh();
     };
 
-    const navItems = [
-        { href: '/admin/dashboard', label: '⌂ Dashboard' },
-        { href: '/admin/rsvps', label: 'RSVPs' },
-        { href: '/admin/photos', label: 'Photos' },
-        { href: '/admin/timeline', label: 'Our Story' },
-        { href: '/admin/home', label: 'Home Page' },
-        { href: '/admin/nav-cards', label: 'Nav Cards' },
-        { href: '/admin/about', label: 'About Page' },
-        { href: '/admin/wedding-party', label: 'Wedding Party' },
-        { href: '/admin/faqs', label: 'Q&A' },
-        { href: '/admin/schedule', label: 'Schedule' },
-        { href: '/admin/registry', label: 'Registry' },
-        { href: '/admin/finances', label: 'Finances' },
-        { href: '/admin/settings', label: 'General Settings' },
-        { href: '/admin/color', label: 'Color' },
-        { href: '/admin/seating', label: 'Seating Chart' },
-        { href: '/admin/wip-control', label: 'Work in Progress' },
+    // Grouped by what you're actually doing, because a flat list of sixteen
+    // gave no clue that Finances and Seating are the same kind of job as RSVPs
+    // while Colour and WIP are not.
+    const navGroups: { title?: string; items: { href: string; label: string }[] }[] = [
+        { items: [{ href: '/admin/dashboard', label: '⌂ Dashboard' }] },
+        {
+            // Running the wedding — the live, day-to-day work.
+            title: 'Planning',
+            items: [
+                { href: '/admin/rsvps', label: 'RSVPs' },
+                { href: '/admin/finances', label: 'Finances' },
+                { href: '/admin/seating', label: 'Seating Chart' },
+            ],
+        },
+        {
+            // Page editors, in the order the pages appear in the public nav bar.
+            // Nav Cards and Q&A sit under Home Page and About Page because
+            // that's where those sections render.
+            title: 'Pages',
+            items: [
+                { href: '/admin/home', label: 'Home Page' },
+                { href: '/admin/nav-cards', label: 'Nav Cards' },
+                { href: '/admin/about', label: 'About Page' },
+                { href: '/admin/faqs', label: 'Q&A' },
+                { href: '/admin/timeline', label: 'Our Story' },
+                { href: '/admin/wedding-party', label: 'Wedding Party' },
+                { href: '/admin/schedule', label: 'Schedule' },
+                { href: '/admin/photos', label: 'Photos' },
+                { href: '/admin/registry', label: 'Registry' },
+            ],
+        },
+        {
+            // Set once, rarely touched again.
+            title: 'Settings',
+            items: [
+                { href: '/admin/settings', label: 'General Settings' },
+                { href: '/admin/color', label: 'Color' },
+                { href: '/admin/wip-control', label: 'Work in Progress' },
+            ],
+        },
     ];
 
     if (pathname === '/admin/login') {
@@ -111,19 +134,30 @@ export default function AdminLayout({
                                 Admin Panel
                             </span>
                         </div>
-                        <nav className="p-4 space-y-2 flex-1">
-                            {navItems.map((item) => (
-                                <Link
-                                    key={item.href}
-                                    href={item.href}
-                                    onClick={() => setSidebarOpen(false)}
-                                    className={`block px-4 py-2 rounded-md text-sm font-medium transition-colors ${pathname?.startsWith(item.href)
-                                        ? 'bg-accent/10 text-accent'
-                                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                                        }`}
-                                >
-                                    {item.label}
-                                </Link>
+                        <nav className="p-4 flex-1">
+                            {navGroups.map((group, i) => (
+                                <div key={group.title ?? 'top'} className={i > 0 ? 'mt-6' : ''}>
+                                    {group.title && (
+                                        <p className="px-4 mb-2 text-[11px] font-semibold uppercase tracking-widest text-gray-400">
+                                            {group.title}
+                                        </p>
+                                    )}
+                                    <div className="space-y-1">
+                                        {group.items.map((item) => (
+                                            <Link
+                                                key={item.href}
+                                                href={item.href}
+                                                onClick={() => setSidebarOpen(false)}
+                                                className={`block px-4 py-2 rounded-md text-sm font-medium transition-colors ${pathname?.startsWith(item.href)
+                                                    ? 'bg-accent/10 text-accent'
+                                                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                                    }`}
+                                            >
+                                                {item.label}
+                                            </Link>
+                                        ))}
+                                    </div>
+                                </div>
                             ))}
                             <button
                                 onClick={handleLogout}
