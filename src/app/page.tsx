@@ -106,8 +106,19 @@ export default function Home() {
         )}
       </HeroCollapse>
 
-      {/* ── Intro / Countdown Section ── */}
-      <div className="relative -mt-8 rounded-t-[80px] py-24 bg-white shadow-[0_-8px_24px_-4px_rgba(0,0,0,0.12)]">
+      {/* ── Intro / Countdown Section ──
+           Square top corners on mobile. The mobile hero collage is full-bleed,
+           so the cut-away corners expose the page background and the hard
+           bottom edge of the photo strip behind them — on desktop the collage
+           is inset and there's nothing there to reveal.
+
+           Square is the base and the radius is added from 769px up, so the
+           breakpoint lines up exactly with HeroCollapse's own
+           `(max-width: 768px)`. Neither `md:` nor `max-[768px]:` would:
+           Tailwind compiles the latter to `not all and (min-width:768px)`,
+           i.e. strictly < 768, leaving 768px itself with a mobile hero and
+           rounded corners. */}
+      <div className="relative -mt-8 rounded-t-none min-[769px]:rounded-t-[80px] py-24 bg-white shadow-[0_-8px_24px_-4px_rgba(0,0,0,0.12)]">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <FadeIn animation="slide-up">
             <h2 className="text-3xl font-serif text-gray-900 mb-6">
