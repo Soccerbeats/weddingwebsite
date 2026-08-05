@@ -25,7 +25,7 @@ const ANIM_DURATION = 900;
 // Section height in vh (100vh hero + 100vh "already scrolled past" scroll room)
 const SECTION_VH    = 200;
 // How long the finished collage is held on screen before sliding to #about
-const ABOUT_PAUSE_MS = 1000;
+const ABOUT_PAUSE_MS = 500;
 // Scroll offset so the About section's rounded top clears the fixed nav island
 const ABOUT_OFFSET   = 88;
 
