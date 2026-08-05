@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { useState, useEffect, useRef, CSSProperties } from 'react';
+import { useState, useEffect, useRef, CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
 import { usePathname } from 'next/navigation';
 
 interface NavigationProps {
@@ -107,6 +107,21 @@ export default function Navigation({
         : allLinks
     ).filter(l => l.href !== '/registry' || registryEnabled || isAdmin)
      .filter(l => isAdmin || !hiddenPaths.has(l.href));
+
+    // Nav link click side-effects.
+    //  • Home            → reset the hero back to the full slideshow
+    //  • About, on home  → play the collapse animation, pause, glide to #about
+    //  • About, elsewhere→ let the /#about link through; HeroCollapse teleports
+    const onNavClick = (href: string) => (e: ReactMouseEvent) => {
+        if (href === '/') {
+            window.dispatchEvent(new CustomEvent('hero-reset'));
+            return;
+        }
+        if (href === '/#about' && pathname === '/') {
+            e.preventDefault();
+            window.dispatchEvent(new CustomEvent('hero-to-about'));
+        }
+    };
 
     const isActive = (href: string) => {
         if (href === '/#about') return aboutInView;
@@ -214,7 +229,7 @@ export default function Navigation({
                             <Link
                                 key={link.href}
                                 href={link.href}
-                                onClick={() => { if (link.href === '/') window.dispatchEvent(new CustomEvent('hero-reset')); }}
+                                onClick={onNavClick(link.href)}
                                 className="relative px-3 py-2 text-sm font-medium uppercase tracking-widest group whitespace-nowrap"
                                 style={{
                                     color: active ? activeColor : linkColor,
@@ -300,7 +315,7 @@ export default function Navigation({
                             <Link
                                 key={link.href}
                                 href={link.href}
-                                onClick={() => { setIsOpen(false); if (link.href === '/') window.dispatchEvent(new CustomEvent('hero-reset')); }}
+                                onClick={e => { setIsOpen(false); onNavClick(link.href)(e); }}
                                 className={`block px-4 py-3 rounded-lg text-base font-medium uppercase tracking-widest text-center transition-all duration-200 ${
                                     active ? 'text-accent bg-accent/5' : 'text-gray-900 hover:text-accent hover:bg-gray-50'
                                 }`}

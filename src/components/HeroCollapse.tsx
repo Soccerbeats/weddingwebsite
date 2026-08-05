@@ -24,12 +24,24 @@ const SCATTER: { x: number; y: number; rot: number; w: number }[] = [
 const ANIM_DURATION = 900;
 // Section height in vh (100vh hero + 100vh "already scrolled past" scroll room)
 const SECTION_VH    = 200;
+// How long the finished collage is held on screen before sliding to #about
+const ABOUT_PAUSE_MS = 1000;
+// Scroll offset so the About section's rounded top clears the fixed nav island
+const ABOUT_OFFSET   = 88;
 
 type CollapseState = 'full' | 'animating' | 'collapsed';
 
 /** Ease in-out cubic */
 function eio(t: number) {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+/** Scroll the #about band into view, leaving room for the nav island. */
+function scrollToAbout(behavior: ScrollBehavior) {
+  const el = document.getElementById('about');
+  if (!el) return;
+  const top = el.getBoundingClientRect().top + window.scrollY - ABOUT_OFFSET;
+  window.scrollTo({ top: Math.max(0, top), behavior });
 }
 
 export default function HeroCollapse({
@@ -88,6 +100,15 @@ export default function HeroCollapse({
   const mobileParticleRaf    = useRef<number>(0);
   const mobilePostHintRef    = useRef<HTMLDivElement>(null);
   const mobileDotsRef        = useRef<HTMLDivElement>(null);
+
+  // Pending "pause, then slide to #about" timer (nav About click while on home)
+  const aboutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelAboutTimer = () => {
+    if (aboutTimerRef.current) {
+      clearTimeout(aboutTimerRef.current);
+      aboutTimerRef.current = null;
+    }
+  };
 
   // ── Detect mobile (also responds to resize / DevTools viewport changes) ──
   useEffect(() => {
@@ -202,6 +223,19 @@ export default function HeroCollapse({
     return () => cancelAnimationFrame(raf);
   }, []);
 
+  // ── Arriving from another page via /#about: teleport straight there ──────
+  // Next's own hash handling is unreliable across client-side navigations, so
+  // pin the position ourselves. The scroll listeners below then snap the hero
+  // to its collapsed state, so the collage is already in place behind us.
+  useLayoutEffect(() => {
+    if (typeof window === 'undefined' || window.location.hash !== '#about') return;
+    scrollToAbout('instant');
+    const raf = requestAnimationFrame(() => scrollToAbout('instant'));
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  useEffect(() => cancelAboutTimer, []);
+
   // ── Snap to collapsed if page scrolls past hero without wheel animation ──
   // This handles hash-link navigation (e.g. clicking "About" in the nav),
   // which jumps scrollY past the section without triggering the wheel handler.
@@ -265,6 +299,7 @@ export default function HeroCollapse({
         const atSectionBoundary = window.scrollY <= sectionScrollRoom() + 8;
         if (atSectionBoundary) {
           e.preventDefault();
+          cancelAboutTimer(); // user took over during the pause — drop the queued slide
           stateRef.current = 'animating';
           // Tell the nav to go back to full banner at the same moment the hero starts expanding
           window.dispatchEvent(new CustomEvent('hero-expanded'));
@@ -279,6 +314,7 @@ export default function HeroCollapse({
     // Reset to the slideshow start — fired when the user clicks "Home" in the nav.
     // Without this, clicking Home while already collapsed leaves the collage on screen.
     const onReset = () => {
+      cancelAboutTimer();
       cancelAnimationFrame(rafRef.current);
       stateRef.current = 'full';
       progressRef.current = 0;
@@ -287,12 +323,35 @@ export default function HeroCollapse({
       window.dispatchEvent(new CustomEvent('hero-expanded'));
     };
 
+    // "About" clicked in the nav while already on the home page: play the
+    // slideshow → collage collapse, hold it for a beat, then glide to #about.
+    const onToAbout = () => {
+      if (stateRef.current === 'animating') return;
+      cancelAboutTimer();
+      if (stateRef.current === 'collapsed') {
+        scrollToAbout('smooth');
+        return;
+      }
+      stateRef.current = 'animating';
+      window.dispatchEvent(new CustomEvent('hero-collapsing'));
+      runAnimation(1, () => {
+        stateRef.current = 'collapsed';
+        window.scrollTo({ top: sectionScrollRoom(), behavior: 'instant' });
+        aboutTimerRef.current = setTimeout(() => {
+          aboutTimerRef.current = null;
+          scrollToAbout('smooth');
+        }, ABOUT_PAUSE_MS);
+      });
+    };
+
     // Non-passive so we can preventDefault
     window.addEventListener('wheel', onWheel, { passive: false });
     window.addEventListener('hero-reset', onReset);
+    window.addEventListener('hero-to-about', onToAbout);
     return () => {
       window.removeEventListener('wheel', onWheel);
       window.removeEventListener('hero-reset', onReset);
+      window.removeEventListener('hero-to-about', onToAbout);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMobile]);
@@ -563,7 +622,7 @@ export default function HeroCollapse({
       // Hero is collapsed and user is at section boundary: upward swipe → expand
       if (s === 'collapsed') {
         const atBoundary = window.scrollY <= mobileSectionScrollRoom() + 10;
-        if (atBoundary && dy < -5) { e.preventDefault(); expand(); return; }
+        if (atBoundary && dy < -5) { e.preventDefault(); cancelAboutTimer(); expand(); return; }
       }
     }
     function onTouchEnd() { touchStartY = null; }
@@ -581,12 +640,33 @@ export default function HeroCollapse({
       }
       if (s === 'collapsed' && e.deltaY < 0) {
         const atBoundary = window.scrollY <= mobileSectionScrollRoom() + 8;
-        if (atBoundary) { e.preventDefault(); expand(); }
+        if (atBoundary) { e.preventDefault(); cancelAboutTimer(); expand(); }
       }
+    };
+
+    // "About" clicked in the nav while already on the home page — same beat as
+    // desktop: collapse to the collage, hold, then glide down to #about.
+    const onToAbout = () => {
+      const s = mobileStateRef.current;
+      if (s === 'animating') return;
+      cancelAboutTimer();
+      if (s === 'collapsed') { scrollToAbout('smooth'); return; }
+      mobileStateRef.current = 'animating';
+      setMobileHiRes(false);
+      window.dispatchEvent(new CustomEvent('hero-collapsing'));
+      runMobileAnimation(1, () => {
+        mobileStateRef.current = 'collapsed';
+        window.scrollTo({ top: mobileSectionScrollRoom(), behavior: 'instant' });
+        aboutTimerRef.current = setTimeout(() => {
+          aboutTimerRef.current = null;
+          scrollToAbout('smooth');
+        }, ABOUT_PAUSE_MS);
+      });
     };
 
     // Reset to the slideshow start — fired when the user clicks "Home" in the nav.
     const onReset = () => {
+      cancelAboutTimer();
       if (mobileRafRef.current) cancelAnimationFrame(mobileRafRef.current);
       mobileStateRef.current = 'full';
       mobileProgressRef.current = 0;
@@ -601,14 +681,19 @@ export default function HeroCollapse({
     window.addEventListener('touchend',   onTouchEnd,   { passive: true });
     window.addEventListener('wheel',      onWheel,      { passive: false });
     window.addEventListener('hero-reset', onReset);
+    window.addEventListener('hero-to-about', onToAbout);
 
-    applyMobileProgress(0);
+    // Paint whatever state we're actually in. Not hard-coded to 0: a deep-link
+    // to /#about lands the page already scrolled, and onScroll above has
+    // already snapped us to the collapsed collage.
+    applyMobileProgress(mobileProgressRef.current);
     return () => {
       window.removeEventListener('touchstart', onTouchStart);
       window.removeEventListener('touchmove',  onTouchMove);
       window.removeEventListener('touchend',   onTouchEnd);
       window.removeEventListener('wheel',      onWheel);
       window.removeEventListener('hero-reset', onReset);
+      window.removeEventListener('hero-to-about', onToAbout);
       window.removeEventListener('scroll', onScroll);
       if (mobileRafRef.current) cancelAnimationFrame(mobileRafRef.current);
       if (mobileParticleRaf.current) cancelAnimationFrame(mobileParticleRaf.current);
