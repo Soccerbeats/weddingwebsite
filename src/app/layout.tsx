@@ -62,6 +62,18 @@ export default async function RootLayout({
 
   return (
     <html lang="en">
+      <head>
+        {/*
+          Runs before first paint so an admin page never flashes the reserved
+          scrollbar gutter it doesn't want. AppShell keeps this in sync from
+          here on; see the `scrollbar-gutter` rules in globals.css.
+        */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{if(location.pathname.indexOf('/admin')===0){document.documentElement.classList.add('no-scrollbar-gutter')}}catch(e){}`,
+          }}
+        />
+      </head>
       <body className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} ${greatVibes.variable} antialiased`}>
         <style dangerouslySetInnerHTML={{
           __html: `

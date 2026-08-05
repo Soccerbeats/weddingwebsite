@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import Navigation from './Navigation';
 import ConditionalFooter from './ConditionalFooter';
@@ -30,6 +31,14 @@ export default function AppShell({
 }: AppShellProps) {
   const pathname = usePathname();
   const isAdminRoute = pathname?.startsWith('/admin');
+
+  // Public pages scroll the document and want the scrollbar gutter reserved;
+  // admin pages scroll an inner container and don't. The initial value is set
+  // before paint by an inline script in the root layout — this only has to
+  // follow client-side navigations between the two. See globals.css.
+  useEffect(() => {
+    document.documentElement.classList.toggle('no-scrollbar-gutter', !!isAdminRoute);
+  }, [isAdminRoute]);
 
   if (isAdminRoute) {
     return (

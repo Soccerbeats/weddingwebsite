@@ -32,6 +32,32 @@
   }
 } */
 
+/*
+ * Reserve the scrollbar's gutter permanently.
+ *
+ * `<main key={pathname}>` in AppShell remounts on every route change, so for a
+ * frame or two the page is just the `min-h-screen` wrapper — exactly 100vh,
+ * zero overflow. The scrollbar vanishes, the viewport widens by its width, and
+ * every position:fixed thing (the nav) jogs sideways and back. Reserving the
+ * gutter makes the layout independent of whether a scrollbar is present, which
+ * also fixes the same jump when landing on a genuinely short page.
+ *
+ * No-op on platforms with overlay scrollbars, which have no gutter to reserve.
+ */
+html {
+  scrollbar-gutter: stable;
+}
+
+/*
+ * Admin routes put everything inside a fixed, overflow-hidden container, so the
+ * document never scrolls there — a reserved gutter would just be a dead strip
+ * down the right-hand edge. Set before first paint by an inline script in the
+ * root layout, and kept in sync across client-side navigations by AppShell.
+ */
+html.no-scrollbar-gutter {
+  scrollbar-gutter: auto;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
