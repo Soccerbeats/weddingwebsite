@@ -41,7 +41,8 @@ const BOX = { minLat: -9.6, maxLat: 2.0, minLng: 102.0, maxLng: 116.5 };
 const ALIASES: Record<string, string[]> = {
     'Tegalalang Rice Terrace': ['Tegallalang Rice Terraces', 'Ceking Rice Terrace, Tegallalang'],
     'Beachwalk Shopping Center': ['Beachwalk Bali', 'Beachwalk Mall, Kuta'],
-    'Courtyard by Marriott Bali Seminyak Resort': ['Courtyard Bali Seminyak', 'Courtyard Seminyak'],
+    'Hard Rock Bali': ['Hard Rock Hotel Bali'],
+    'Courtyard Bali Seminyak': ['Courtyard by Marriott Bali Seminyak Resort', 'Courtyard Seminyak'],
     'Sacred Monkey Forest Sanctuary': ['Mandala Suci Wenara Wana'],
     'Goa Gajah Elephant Cave': ['Goa Gajah'],
     'Ubud Traditional Art Market': ['Pasar Seni Ubud'],

@@ -389,12 +389,8 @@ export const SEED_PLACES: SeedPlace[] = [
     { name: 'Gembleng Waterfall', region: 'North Bali', category: 'waterfall' },
 
     /* ---- Kuta / Seminyak (Austin & Heaven's own list) ---- */
-    { name: 'Hard Rock Hotel Bali', region: 'Seminyak & Kuta', category: 'stay' },
-    {
-        name: 'Courtyard by Marriott Bali Seminyak Resort',
-        region: 'Seminyak & Kuta',
-        category: 'stay',
-    },
+    { name: 'Hard Rock Bali', region: 'Seminyak & Kuta', category: 'stay' },
+    { name: 'Courtyard Bali Seminyak', region: 'Seminyak & Kuta', category: 'stay' },
     {
         name: 'Beachwalk Shopping Center',
         region: 'Seminyak & Kuta',

@@ -142,7 +142,8 @@ async function main() {
             console.log(`+ place ${place.name} (${place.category}, ${place.region})`
                 + `${baked ? ' [pre-pinned]' : ''}`);
             placesAdded += 1;
-            if (!baked) toGeocode.push({ id: null, name: place.name, query });
+            if (baked) prePinned += 1;
+            else toGeocode.push({ id: null, name: place.name, query });
             continue;
         }
 

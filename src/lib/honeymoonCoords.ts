@@ -602,11 +602,6 @@ export const SEED_COORDS: Record<string, SeedCoord> = {
         "lng": 103.994982,
         "address": "Singapore Changi Airport, T2 Departure Drive, Changi, East Region, Singapore, 819643, Singapore"
     },
-    "Hard Rock Hotel Bali": {
-        "lat": -8.721381,
-        "lng": 115.171097,
-        "address": "Hard Rock Hotel Bali, Jalan Pantai Kuta, Kuta, Badung, Bali, 80361, Indonesia"
-    },
     "Chez Monique Jewelry": {
         "lat": -8.501442,
         "lng": 115.266154,
@@ -632,14 +627,19 @@ export const SEED_COORDS: Record<string, SeedCoord> = {
         "lng": 115.279456,
         "address": "Tegallalang Rice Terraces, Tangkup, Kedisan, Tegallalang, Gianyar, Bali, 80561, Indonesia"
     },
-    "Courtyard by Marriott Bali Seminyak Resort": {
-        "lat": -8.691448,
-        "lng": 115.163064,
-        "address": "Courtyard Bali Seminyak Resort, 103, Jalan Camplung Tanduk, Seminyak, Kuta, Badung, Bali, 80361, Indonesia"
-    },
     "Beachwalk Shopping Center": {
         "lat": -8.716546,
         "lng": 115.16931,
         "address": "Beachwalk Bali, Jalan Pantai Kuta, Kuta, Badung, Bali, 80361, Indonesia"
+    },
+    "Hard Rock Bali": {
+        "lat": -8.721381,
+        "lng": 115.171097,
+        "address": "Hard Rock Hotel Bali, Jalan Pantai Kuta, Kuta, Badung, Bali, 80361, Indonesia"
+    },
+    "Courtyard Bali Seminyak": {
+        "lat": -8.691448,
+        "lng": 115.163064,
+        "address": "Courtyard Bali Seminyak Resort, 103, Jalan Camplung Tanduk, Seminyak, Kuta, Badung, Bali, 80361, Indonesia"
     }
 };
