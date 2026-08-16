@@ -1,11 +1,19 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import type { Place, PlaceLink, PlaceStatus } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
 import {
     Button, CategorySelect, Modal, SelectField, StatusSelect, TextArea, TextField,
 } from './ui';
+
+// Leaflet reaches for `window` at import time, so the preview map never joins
+// the server bundle.
+const PinMap = dynamic(() => import('./PinMap'), {
+    ssr: false,
+    loading: () => <div className="h-52 w-full rounded-2xl bg-gray-100 animate-pulse" />,
+});
 
 interface GeocodeHit {
     label: string;
@@ -198,14 +206,42 @@ export default function PlaceEditor({ api, place, open, onClose }: {
                         </ul>
                     )}
 
-                    {needsReview && (
-                        <div className="flex items-center justify-between gap-3 rounded-2xl bg-amber-50 px-3 py-2">
+                    {/* Confirming a pin you can't see is a coin flip, so the map
+                        appears as soon as there is a coordinate to show. */}
+                    {lat != null && lng != null && (
+                        <>
+                            <PinMap
+                                lat={lat}
+                                lng={lng}
+                                category={category}
+                                onChange={(nextLat, nextLng) => {
+                                    setLat(nextLat);
+                                    setLng(nextLng);
+                                    // Placing the pin by hand IS the confirmation.
+                                    setNeedsReview(false);
+                                }}
+                            />
+                            <p className="text-[11px] text-gray-400">
+                                Drag the pin or click the map to move it.
+                            </p>
+                        </>
+                    )}
+
+                    {needsReview && lat != null ? (
+                        <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl
+                            bg-amber-50 px-3 py-2">
                             <span className="text-xs text-amber-800">
-                                This pin was placed automatically and hasn&apos;t been confirmed.
+                                Placed automatically — check the map above before trusting it.
                             </span>
                             <Button onClick={() => setNeedsReview(false)}>Looks right</Button>
                         </div>
-                    )}
+                    ) : needsReview ? (
+                        <div className="rounded-2xl bg-amber-50 px-3 py-2">
+                            <span className="text-xs text-amber-800">
+                                No pin yet — search above, or paste a Google Maps link.
+                            </span>
+                        </div>
+                    ) : null}
 
                     {lat != null && (
                         <button

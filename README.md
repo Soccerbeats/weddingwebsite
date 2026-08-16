@@ -574,8 +574,14 @@ input:
 | Raw coordinates | `-8.4715, 115.3567` | Exact |
 
 Right-clicking a pin in Google Maps copies the coordinates, which is the most
-reliable route for anywhere the search can't find. Confirming a pin by hand is
-what clears its review flag.
+reliable route for anywhere the search can't find.
+
+As soon as there is a coordinate, a **map appears inside the Location card**
+showing exactly where the pin landed — so "Looks right" is a judgement you can
+actually make rather than a guess. **Drag the pin, or click anywhere on the map,
+to move it**; that covers the common geocoder failure of right-street-wrong-side
+without going back to Google Maps. Placing the pin by hand counts as confirming
+it and clears the review flag on its own.
 
 **Guide tab.** The half of the travel guide with no coordinates. Region write-ups
 (expand a region to edit its description) and **Know Before You Go** cards grouped

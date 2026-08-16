@@ -33,6 +33,12 @@ All notable changes to this project are documented here.
 
   Multi-line note bodies now **grow to fit** in the Guide tab; a numbered route was previously trapped in a three-row scrollbox.
 
+- **Honeymoon portal — the place editor now shows the pin on a map.** Confirming a bulk-geocoded pin previously meant clicking "Looks right" about a coordinate you couldn't see, which is a coin flip. The Location card now renders a map of the current pin as soon as one exists, and the marker is **draggable with click-to-move** — the usual geocoder failure is right-street-wrong-side, and nudging beats going back to Google Maps for coordinates. Moving the pin by hand clears `needs_review` on its own, since placing it *is* the confirmation. A place with no pin gets a short explanation instead of an empty box.
+
+  Built as its own `PinMap` rather than reusing `TripMap`: that component exists to frame a whole set of pins and owns its viewport via `fitBounds`, so sharing it would have meant bolting a "unless there's only one" branch onto every effect in it. Wheel-zoom is off because the editor lives in a scrollable modal and would otherwise swallow the page scroll whenever the cursor crossed the map.
+
+  Browser testing caught a crash this introduced: the deferred `invalidateSize()` calls that stop the map rendering grey inside a still-animating modal kept firing *after* the modal closed and the map was destroyed, throwing on `_leaflet_pos`. The timer handles are now cleared on unmount, alongside `map.stop()` and a connected-container guard before any animated move.
+
 - **`npm run check:honeymoon`** — 44 assertions over the pure logic that would otherwise fail silently and wrongly: great-circle distances against known city pairs, day-number arithmetic across a month boundary, 12-hour time formatting at noon and midnight, Google Maps URL parsing in all three shapes, rejection of null island and out-of-range latitudes, hop calculation across unpinned and deleted stops, and seed-data integrity (no duplicate names, no orphan regions, no unknown categories).
 - **Finances suite (`/admin/finances`)** — replaces the `Heav & Aust Wedding Spreadsheet — Budget` tab. Five tabs: **Overview** (reporting), **Budget**, **Purchases**, **Gift Money**, **Settings**. Everything edits inline — commit on blur or Enter, revert on `Esc`, no Save button — and every derived figure recalculates from a single refetch so the grand total, percentages, both deficits and both payment plans can't disagree with each other.
 
