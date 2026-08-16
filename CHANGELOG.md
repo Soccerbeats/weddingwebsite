@@ -55,6 +55,10 @@ All notable changes to this project are documented here.
 
   **Bug found by browser testing, worth remembering: never let React re-render a Leaflet container's `className`.** Making the class depend on `selectMode` (to show a crosshair cursor) meant React rewrote the whole class attribute on toggle, silently stripping the `leaflet-container` / `leaflet-touch` classes Leaflet had added imperatively — so arming the lasso broke the map. The container's className is now static and anything dynamic goes through inline `style`.
 
+- **Honeymoon map — unconfirmed pins are hidden.** A bulk-geocoded guess draws exactly like a real location, so the map now shows only confirmed pins. The **⚠ Unconfirmed** toggle flips to showing *only* the unconfirmed ones, matching how the review job actually goes: see them, lasso the good ones, Mark reviewed.
+
+  The hiding is never silent — the count line reads *"12 pinned · 114 unconfirmed hidden"*, and if nothing confirmed remains the empty state explains why and how to get at them, rather than looking broken. A place scheduled on a day still appears in that day's view whatever its review state, because hiding a stop you deliberately planned would tear a hole in its route.
+
 - **`npm run check:honeymoon`** — 44 assertions over the pure logic that would otherwise fail silently and wrongly: great-circle distances against known city pairs, day-number arithmetic across a month boundary, 12-hour time formatting at noon and midnight, Google Maps URL parsing in all three shapes, rejection of null island and out-of-range latitudes, hop calculation across unpinned and deleted stops, and seed-data integrity (no duplicate names, no orphan regions, no unknown categories).
 - **Finances suite (`/admin/finances`)** — replaces the `Heav & Aust Wedding Spreadsheet — Budget` tab. Five tabs: **Overview** (reporting), **Budget**, **Purchases**, **Gift Money**, **Settings**. Everything edits inline — commit on blur or Enter, revert on `Esc`, no Save button — and every derived figure recalculates from a single refetch so the grand total, percentages, both deficits and both payment plans can't disagree with each other.
 

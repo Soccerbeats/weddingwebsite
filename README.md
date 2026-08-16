@@ -530,6 +530,15 @@ waterfalls that share names across regions. Unconfirmed pins draw with a dashed
 amber ring on the map and can be filtered to in both Map and Places tabs. Confirm
 them before you plan a day around one.
 
+**Unconfirmed pins are hidden from the map.** A bulk-geocoded guess renders
+exactly like a real location, so the map shows only pins you have confirmed. The
+count line always says how many are being withheld (*"12 pinned · 114 unconfirmed
+hidden"*) — the map never quietly omits things. Hit **⚠ Unconfirmed** to flip to
+showing *only* the unconfirmed ones, which is the shape the review job takes:
+see them, lasso the ones that look right, Mark reviewed. Anything you have
+actually scheduled on a day still shows in that day's view regardless, since
+hiding a stop you deliberately planned would break its route.
+
 **Map tab.** The map runs **full-bleed** — it fills the whole content area edge to
 edge and top to bottom, and nothing on this tab scrolls. The filter row sits
 above it; the legend, the selected-place card and the lasso actions float *over*

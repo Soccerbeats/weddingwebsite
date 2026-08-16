@@ -31,7 +31,14 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
     const [statusFilter, setStatusFilter] = useState('');
     const [dayFilter, setDayFilter] = useState('');
     const [sourceFilter, setSourceFilter] = useState('');
-    const [reviewOnly, setReviewOnly] = useState(false);
+    /**
+     * Unconfirmed pins are hidden from the map by default — a bulk-geocoded
+     * guess on the map reads exactly like a real location, and a map you
+     * cannot trust is worse than a smaller one. Flipping this shows *only*
+     * the unconfirmed ones, which is the shape the review job actually takes:
+     * see them, lasso them, mark them reviewed.
+     */
+    const [showUnconfirmed, setShowUnconfirmed] = useState(false);
     const [selectedId, setSelectedId] = useState<number | null>(null);
     const [editing, setEditing] = useState<Place | null>(null);
     const [editorOpen, setEditorOpen] = useState(false);
@@ -54,14 +61,15 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
             return places.filter((p) => ids.has(p.id));
         }
         return places.filter((p) => {
+            // The one rule that runs before the rest.
+            if (showUnconfirmed ? !p.needs_review : p.needs_review) return false;
             if (regionFilter && String(p.region_id ?? '') !== regionFilter) return false;
             if (categoryFilter && p.category !== categoryFilter) return false;
             if (statusFilter && p.status !== statusFilter) return false;
             if (sourceFilter && sourceLabel(p.source) !== sourceFilter) return false;
-            if (reviewOnly && !p.needs_review) return false;
             return true;
         });
-    }, [places, selectedDay, regionFilter, categoryFilter, statusFilter, sourceFilter, reviewOnly]);
+    }, [places, selectedDay, regionFilter, categoryFilter, statusFilter, sourceFilter, showUnconfirmed]);
 
     /** The ordered polyline for a selected day. */
     const route = useMemo(() => {
@@ -77,15 +85,22 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
 
     const pinnedCount = visible.filter(hasCoords).length;
     const unpinnedCount = visible.length - pinnedCount;
+    /** Confirmed-but-hidden count, so the map never quietly omits things. */
+    const hiddenUnconfirmed = useMemo(
+        () => (selectedDay || showUnconfirmed
+            ? 0
+            : places.filter((p) => p.needs_review && hasCoords(p)).length),
+        [places, selectedDay, showUnconfirmed],
+    );
     const selected = selectedId == null ? null : api.placeById.get(selectedId) ?? null;
 
     const resetFilters = () => {
         setRegionFilter(''); setCategoryFilter(''); setStatusFilter('');
-        setDayFilter(''); setReviewOnly(false); setSourceFilter('');
+        setDayFilter(''); setShowUnconfirmed(false); setSourceFilter('');
     };
 
     const filterKey = `${regionFilter}|${categoryFilter}|${statusFilter}|${dayFilter}`
-        + `|${reviewOnly}|${sourceFilter}`;
+        + `|${showUnconfirmed}|${sourceFilter}`;
 
     /** Bulk action over the lassoed set — same verbs as the Places tab. */
     const bulk = async (fields: Record<string, unknown>) => {
@@ -157,14 +172,15 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                         {STATUSES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
                     </SelectField>
                     <button
-                        onClick={() => setReviewOnly((v) => !v)}
+                        onClick={() => setShowUnconfirmed((v) => !v)}
                         disabled={!!selectedDay}
+                        title="Unconfirmed pins are hidden from the map. Turn this on to work through them."
                         className={`rounded-2xl px-3 py-2 text-sm font-medium border transition
-                            disabled:opacity-40 ${reviewOnly
-                            ? 'bg-amber-50 border-amber-200 text-amber-800'
+                            disabled:opacity-40 ${showUnconfirmed
+                            ? 'bg-amber-500 border-amber-500 text-white'
                             : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}
                     >
-                        ⚠ Needs review
+                        {showUnconfirmed ? '⚠ Reviewing' : '⚠ Unconfirmed'}
                     </button>
                     <button
                         onClick={() => {
@@ -193,6 +209,16 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                                     : ''}
                             </span>
                         )}
+                        {hiddenUnconfirmed > 0 && (
+                            <span className="text-amber-600">
+                                {' '}· {hiddenUnconfirmed} unconfirmed hidden
+                            </span>
+                        )}
+                        {showUnconfirmed && (
+                            <span className="text-amber-700">
+                                {' '}· showing only unconfirmed pins — lasso them and Mark reviewed
+                            </span>
+                        )}
                         {selectMode && (
                             <span className="text-slate-700">
                                 {' '}· draw a loop around the pins you want (hold Shift to add)
@@ -211,10 +237,16 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                     <div className="h-full bg-white rounded-2xl shadow-sm border border-gray-100
                         flex items-center justify-center">
                         <EmptyState
-                            title="Nothing to show on the map yet"
-                            hint={places.length
-                                ? 'These places have no coordinates yet. Open one and use Find to pin it.'
-                                : 'Add places in the Places tab, or run the seed script to load the Bali guide.'}
+                            title={hiddenUnconfirmed > 0
+                                ? 'No confirmed pins to show'
+                                : 'Nothing to show on the map yet'}
+                            hint={hiddenUnconfirmed > 0
+                                ? `${hiddenUnconfirmed} pin(s) are hidden because they haven't been `
+                                    + 'confirmed yet. Hit ⚠ Unconfirmed to see them, lasso the ones that '
+                                    + 'look right, and Mark reviewed.'
+                                : places.length
+                                    ? 'These places have no coordinates yet. Open one and use Find to pin it.'
+                                    : 'Add places in the Places tab, or run the seed script to load the Bali guide.'}
                         />
                     </div>
                 ) : (
