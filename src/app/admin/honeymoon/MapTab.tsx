@@ -8,7 +8,7 @@ import {
 } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
 import PlaceEditor from './PlaceEditor';
-import { Button, CategoryChip, EmptyState, SelectField, StatusChip } from './ui';
+import { Button, CategoryChip, EmptyState, MiniSelect, SelectField, StatusChip } from './ui';
 
 // Leaflet must never be part of the server bundle — it reaches for `window` on
 // import. This is the only place the map is loaded.
@@ -268,28 +268,36 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                 )}
 
                 {/* ---- Lasso selection actions, floating over the map ---- */}
+                {/* w-max: the bar is exactly as wide as its contents. It used to be a
+                    fixed-width flex row that scrolled sideways, which is a worse
+                    answer than simply being the right size. On a narrow screen it
+                    wraps rather than scrolling. */}
                 {lassoed.size > 0 && (
                     <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[500]
+                        w-max max-w-[calc(100%-1.5rem)]
                         bg-white/95 backdrop-blur rounded-2xl shadow-lg border border-gray-200
-                        px-3 py-2 flex items-center gap-2 whitespace-nowrap max-w-[95%] overflow-x-auto">
-                        <span className="text-sm font-medium text-gray-700 pl-1 shrink-0">
+                        px-3 py-2 flex flex-wrap items-center justify-center gap-2">
+                        <span className="text-sm font-medium text-gray-700 pl-1">
                             {lassoed.size} selected
                         </span>
-                        <SelectField
-                            className="w-[9rem] shrink-0 !py-1"
+                        <MiniSelect
                             value=""
                             onChange={(e) => {
                                 if (e.target.value) bulk({ status: e.target.value as PlaceStatus });
                             }}
                         >
-                            <option value="">Set status…</option>
-                            {STATUSES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
-                        </SelectField>
-                        <Button className="shrink-0" onClick={() => bulk({ needs_review: false })}>
+                            {/* A native select is sized by its widest option, so these
+                                are abbreviated — the full words live in the Places tab. */}
+                            <option value="">Status</option>
+                            <option value="idea">Idea</option>
+                            <option value="shortlisted">Short</option>
+                            <option value="booked">Booked</option>
+                        </MiniSelect>
+                        <Button className="!px-3" onClick={() => bulk({ needs_review: false })}>
                             Mark reviewed
                         </Button>
-                        <Button className="shrink-0" tone="danger" onClick={bulkDelete}>Delete</Button>
-                        <Button className="shrink-0" tone="ghost" onClick={() => setLassoed(new Set())}>
+                        <Button className="!px-3" tone="danger" onClick={bulkDelete}>Delete</Button>
+                        <Button className="!px-3" tone="ghost" onClick={() => setLassoed(new Set())}>
                             Clear
                         </Button>
                     </div>

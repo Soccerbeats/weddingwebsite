@@ -24,6 +24,24 @@ export function SelectField(props: React.SelectHTMLAttributes<HTMLSelectElement>
     return <select {...props} className={`${FIELD} ${props.className ?? ''}`} />;
 }
 
+/**
+ * Small select that sizes to its content.
+ *
+ * SelectField is `w-full` by design — it lives in form grids. Reusing it inside
+ * a floating toolbar produced a control four times wider than its longest
+ * option, which then forced the whole bar to scroll sideways.
+ */
+export function MiniSelect(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
+    return (
+        <select
+            {...props}
+            className={`w-auto bg-gray-50 border border-gray-200 rounded-xl pl-2 pr-1 py-1
+                text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-accent/30
+                focus:border-accent/40 transition ${props.className ?? ''}`}
+        />
+    );
+}
+
 export function TextArea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
     return <textarea {...props} className={`${FIELD} leading-relaxed ${props.className ?? ''}`} />;
 }
