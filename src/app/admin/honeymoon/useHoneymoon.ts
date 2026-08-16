@@ -85,6 +85,11 @@ export function useHoneymoon() {
         () => fetch(`${BASE}/${resource}?id=${id}`, { method: 'DELETE' }),
     ), [run]);
 
+    /** Delete a whole selection in one request rather than N. */
+    const removeMany = useCallback((resource: Resource, ids: number[]) => run(
+        () => fetch(`${BASE}/${resource}?ids=${ids.join(',')}`, { method: 'DELETE' }),
+    ), [run]);
+
     /** Lookup used everywhere a stop needs to resolve to its pinned place. */
     const placeById = useMemo(() => {
         const map = new Map<number, Place>();
@@ -110,7 +115,7 @@ export function useHoneymoon() {
 
     return {
         data, loading, error, saving: busy > 0,
-        refresh, create, update, reorder, remove,
+        refresh, create, update, reorder, remove, removeMany,
         placeById, regionById, scheduledPlaceIds,
         clearError: () => setError(''),
     };

@@ -13,6 +13,10 @@
  *
  * Source of record: docs/honeymoon/bali-guide.md
  */
+import { SOURCE_AMY, SOURCE_YOUTUBE } from './honeymoon';
+
+/** Anything that doesn't say otherwise came from the YouTube travel guide. */
+export const DEFAULT_SEED_SOURCE = SOURCE_YOUTUBE;
 
 export interface SeedRegion {
     name: string;
@@ -29,12 +33,18 @@ export interface SeedPlace {
     description?: string;
     /** Website / booking links, stored on the place as JSONB. */
     links?: { label: string; url: string }[];
+    /**
+     * Who suggested it. Defaults to the YouTube travel guide, which is where
+     * the bulk of this list came from; the later batch overrides it.
+     */
+    source?: string;
 }
 
 export interface SeedNote {
     title: string;
     body: string;
     category: string;
+    source?: string;
 }
 
 export const SEED_REGIONS: SeedRegion[] = [
@@ -388,22 +398,24 @@ export const SEED_PLACES: SeedPlace[] = [
     { name: 'Upper Yeh Labuh Waterfall', region: 'North Bali', category: 'waterfall' },
     { name: 'Gembleng Waterfall', region: 'North Bali', category: 'waterfall' },
 
-    /* ---- Kuta / Seminyak (Austin & Heaven's own list) ---- */
-    { name: 'Hard Rock Bali', region: 'Seminyak & Kuta', category: 'stay' },
-    { name: 'Courtyard Bali Seminyak', region: 'Seminyak & Kuta', category: 'stay' },
+    /* ---- Kuta / Seminyak (Amy's suggestions) ---- */
+    { name: 'Hard Rock Bali', region: 'Seminyak & Kuta', category: 'stay', source: SOURCE_AMY },
+    { name: 'Courtyard Bali Seminyak', region: 'Seminyak & Kuta', category: 'stay', source: SOURCE_AMY },
     {
         name: 'Beachwalk Shopping Center',
         region: 'Seminyak & Kuta',
         category: 'shop',
+        source: SOURCE_AMY,
         description: 'Shopping and restaurants — the more Americanised end of Kuta. '
             + 'See the separate shopping document.',
     },
 
-    /* ---- Ubud day out (Austin & Heaven's own list) ---- */
+    /* ---- Ubud day out (Amy's suggestions) ---- */
     {
         name: 'Chez Monique Jewelry',
         region: 'Ubud',
         category: 'activity',
+        source: SOURCE_AMY,
         description: 'Jewellery-making class.',
         links: [{ label: 'Website', url: 'https://chezmoniquejewelry.com/' }],
     },
@@ -411,18 +423,21 @@ export const SEED_PLACES: SeedPlace[] = [
         name: 'Bali Zen',
         region: 'Ubud',
         category: 'shop',
+        source: SOURCE_AMY,
         description: 'Worth stopping into on the walk down Jl. Monkey Forest Road.',
     },
     {
         name: 'Cafe Lotus',
         region: 'Ubud',
         category: 'restaurant',
+        source: SOURCE_AMY,
         description: 'On Jl. Raya Ubud, just after the Starbucks. Lotus pond and temple views.',
     },
     {
         name: 'Ubud Palace',
         region: 'Ubud',
         category: 'attraction',
+        source: SOURCE_AMY,
         description: 'Puri Saren Agung — right by the Art Market.',
     },
 
@@ -495,6 +510,7 @@ export const SEED_NOTES: SeedNote[] = [
     {
         title: 'Driver contacts',
         category: 'Transport',
+        source: SOURCE_AMY,
         body:
             'Two recommended drivers:\n'
             + '  • contact@thebalidriver.com\n'
@@ -506,6 +522,7 @@ export const SEED_NOTES: SeedNote[] = [
     {
         title: 'A day in Ubud — suggested walking route',
         category: 'Itinerary ideas',
+        source: SOURCE_AMY,
         body:
             'Rice terraces and the swings first, then into town:\n\n'
             + '1. Monkey Forest — walk the paths and see the monkeys.\n'

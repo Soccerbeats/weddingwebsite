@@ -559,10 +559,19 @@ the rice terraces." Deleting a place that's already scheduled **keeps the stop**
 and just unlinks it, so the itinerary never grows holes.
 
 **Places tab.** The library, built for a few hundred rows: search plus filters for
-region, category, status, *needs review* and *not pinned*. Tick multiple rows for
-bulk status changes or to clear review flags. Each place carries a status —
-**Idea → Shortlisted → Booked** — and rows already on the itinerary show a
-*scheduled* badge.
+**source**, region, category, status, *needs review* and *not pinned*. Tick
+multiple rows for bulk status changes, to clear review flags, or to **delete the
+selection** in one go. Each place carries a status — **Idea → Shortlisted →
+Booked** — and rows already on the itinerary show a *scheduled* badge.
+
+**Sources.** Every place and guide note records who suggested it, so batches from
+different people stay tellable apart — the bundled data ships as *YouTube Travel
+Guide* (224 places, 12 notes) and *Amy's Suggestions* (7 places, 2 notes), and
+anything you add yourself defaults to *Added by me*. It is a free-text label, not
+a fixed list: type a new one in the place editor and it becomes a filter option
+on both the Places and Map tabs automatically. Bulk-deleting a place that is on
+your itinerary leaves the stop in place as plain text, and the confirmation says
+so before you commit.
 
 **Adding or re-pinning a place.** The editor's **Find** box takes three kinds of
 input:

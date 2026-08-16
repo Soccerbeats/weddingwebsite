@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
-import type { Place, PlaceLink, PlaceStatus } from '@/lib/honeymoon';
+import { SOURCE_MANUAL, sourceLabel, sourcesOf, type Place, type PlaceLink, type PlaceStatus } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
 import {
     Button, CategorySelect, Modal, SelectField, StatusSelect, TextArea, TextField,
@@ -49,6 +49,7 @@ export default function PlaceEditor({ api, place, open, onClose }: {
     const [lng, setLng] = useState<number | null>(null);
     const [needsReview, setNeedsReview] = useState(false);
     const [links, setLinks] = useState<PlaceLink[]>([]);
+    const [source, setSource] = useState(SOURCE_MANUAL);
 
     const [query, setQuery] = useState('');
     const [hits, setHits] = useState<GeocodeHit[]>([]);
@@ -70,6 +71,7 @@ export default function PlaceEditor({ api, place, open, onClose }: {
         setLng(place?.lng ?? null);
         setNeedsReview(place?.needs_review ?? false);
         setLinks(place?.links ?? []);
+        setSource(place ? sourceLabel(place.source) : SOURCE_MANUAL);
         setQuery('');
         setHits([]);
         setLookupError('');
@@ -121,10 +123,11 @@ export default function PlaceEditor({ api, place, open, onClose }: {
             lat, lng,
             needs_review: needsReview,
             links: links.filter((l) => l.url.trim()),
+            source: source.trim() || SOURCE_MANUAL,
         };
         const ok = editing
             ? await api.update('places', { id: place.id, ...payload })
-            : await api.create('places', { ...payload, source: 'manual' });
+            : await api.create('places', payload);
         if (ok) onClose();
     };
 
@@ -267,6 +270,20 @@ export default function PlaceEditor({ api, place, open, onClose }: {
                     <div>
                         <label className="block text-xs font-semibold text-gray-500 mb-1">Address</label>
                         <TextField value={address} onChange={(e) => setAddress(e.target.value)} />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-semibold text-gray-500 mb-1">Source</label>
+                        <TextField
+                            list="honeymoon-sources"
+                            value={source}
+                            onChange={(e) => setSource(e.target.value)}
+                            placeholder="Who suggested this?"
+                        />
+                        <datalist id="honeymoon-sources">
+                            {sourcesOf(api.data?.places ?? []).map((s) => (
+                                <option key={s} value={s} />
+                            ))}
+                        </datalist>
                     </div>
                     <div>
                         <label className="block text-xs font-semibold text-gray-500 mb-1">Price note</label>

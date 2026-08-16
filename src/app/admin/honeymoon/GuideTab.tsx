@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { sourceLabel } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
 import { Button, Card, EmptyState, InlineText, OverflowMenu, TextField } from './ui';
 
@@ -168,14 +169,19 @@ export default function GuideTab({ api }: { api: HoneymoonApi }) {
                                                     },
                                                 }]} />
                                             </div>
-                                            <InlineText
-                                                value={note.category ?? ''}
-                                                placeholder="Category"
-                                                className="text-[11px] text-gray-400 -ml-2 mt-1"
-                                                onCommit={(cat) => api.update('notes', {
-                                                    id: note.id, category: cat,
-                                                })}
-                                            />
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <InlineText
+                                                    value={note.category ?? ''}
+                                                    placeholder="Category"
+                                                    className="text-[11px] text-gray-400 -ml-2"
+                                                    onCommit={(cat) => api.update('notes', {
+                                                        id: note.id, category: cat,
+                                                    })}
+                                                />
+                                                <span className="text-[11px] text-gray-300 shrink-0 pr-1">
+                                                    {sourceLabel(note.source)}
+                                                </span>
+                                            </div>
                                         </Card>
                                     ))}
                                 </div>

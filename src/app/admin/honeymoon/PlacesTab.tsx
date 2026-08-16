@@ -1,7 +1,10 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { CATEGORIES, STATUSES, hasCoords, type Place, type PlaceStatus } from '@/lib/honeymoon';
+import {
+    CATEGORIES, STATUSES, hasCoords, sourceLabel, sourcesOf,
+    type Place, type PlaceStatus,
+} from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
 import PlaceEditor from './PlaceEditor';
 import {
@@ -22,6 +25,7 @@ export default function PlacesTab({ api }: { api: HoneymoonApi }) {
     const [statusFilter, setStatusFilter] = useState('');
     const [reviewOnly, setReviewOnly] = useState(false);
     const [unpinnedOnly, setUnpinnedOnly] = useState(false);
+    const [sourceFilter, setSourceFilter] = useState('');
     const [editing, setEditing] = useState<Place | null>(null);
     const [editorOpen, setEditorOpen] = useState(false);
     const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -40,9 +44,14 @@ export default function PlacesTab({ api }: { api: HoneymoonApi }) {
             if (statusFilter && p.status !== statusFilter) return false;
             if (reviewOnly && !p.needs_review) return false;
             if (unpinnedOnly && hasCoords(p)) return false;
+            if (sourceFilter && sourceLabel(p.source) !== sourceFilter) return false;
             return true;
         });
-    }, [places, search, regionFilter, categoryFilter, statusFilter, reviewOnly, unpinnedOnly]);
+    }, [places, search, regionFilter, categoryFilter, statusFilter,
+        reviewOnly, unpinnedOnly, sourceFilter]);
+
+    /** Built from the data, so a new batch of suggestions shows up on its own. */
+    const sources = useMemo(() => sourcesOf(places), [places]);
 
     const counts = useMemo(() => ({
         total: places.length,
@@ -99,7 +108,11 @@ export default function PlacesTab({ api }: { api: HoneymoonApi }) {
                         + Add
                     </Button>
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
+                    <SelectField value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}>
+                        <option value="">All sources</option>
+                        {sources.map((src) => <option key={src} value={src}>{src}</option>)}
+                    </SelectField>
                     <SelectField value={regionFilter} onChange={(e) => setRegionFilter(e.target.value)}>
                         <option value="">All regions</option>
                         {(data?.regions ?? []).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
@@ -145,6 +158,22 @@ export default function PlacesTab({ api }: { api: HoneymoonApi }) {
                         {STATUSES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
                     </SelectField>
                     <Button onClick={() => bulk({ needs_review: false })}>Mark reviewed</Button>
+                    <Button
+                        tone="danger"
+                        onClick={async () => {
+                            const ids = [...selected];
+                            const scheduled = ids.filter((id) => api.scheduledPlaceIds.has(id)).length;
+                            const warning = scheduled
+                                ? `Delete ${ids.length} place(s)? ${scheduled} of them are on your `
+                                    + 'itinerary — those stops stay put and become plain text.'
+                                : `Delete ${ids.length} place(s)?`;
+                            if (!confirm(warning)) return;
+                            await api.removeMany('places', ids);
+                            setSelected(new Set());
+                        }}
+                    >
+                        Delete
+                    </Button>
                     <Button tone="ghost" onClick={() => setSelected(new Set())}>Clear</Button>
                 </Card>
             )}
@@ -203,6 +232,9 @@ export default function PlacesTab({ api }: { api: HoneymoonApi }) {
                                                     {api.regionById.get(place.region_id)}
                                                 </span>
                                             )}
+                                            <span className="text-[11px] text-gray-300">
+                                                · {sourceLabel(place.source)}
+                                            </span>
                                         </div>
                                     </button>
                                     <OverflowMenu

@@ -7,7 +7,39 @@
  */
 
 export type PlaceStatus = 'idea' | 'shortlisted' | 'booked';
-export type PlaceSource = 'guide' | 'manual';
+
+/**
+ * Where a suggestion came from — a free-text label, not an enum.
+ *
+ * It started as 'guide' | 'manual', which stopped being enough the moment a
+ * second batch of suggestions arrived from a different person. Keeping it open
+ * means the next list someone sends can be labelled without a migration, and
+ * the filter dropdown is built from the values actually present rather than a
+ * hardcoded set.
+ */
+export type PlaceSource = string;
+
+export const SOURCE_YOUTUBE = 'YouTube Travel Guide';
+export const SOURCE_AMY = "Amy's Suggestions";
+export const SOURCE_MANUAL = 'Added by me';
+
+/** Legacy values, still possible in a database seeded before sources existed. */
+const LEGACY_SOURCE_LABELS: Record<string, string> = {
+    guide: SOURCE_YOUTUBE,
+    manual: SOURCE_MANUAL,
+};
+
+export function sourceLabel(source: string | null | undefined): string {
+    if (!source) return SOURCE_MANUAL;
+    return LEGACY_SOURCE_LABELS[source] ?? source;
+}
+
+/** Distinct sources present, for building a filter dropdown. */
+export function sourcesOf(places: { source: string }[]): string[] {
+    const seen = new Set<string>();
+    for (const place of places) seen.add(sourceLabel(place.source));
+    return [...seen].sort((a, b) => a.localeCompare(b));
+}
 export type TravelMode = 'flight' | 'boat' | 'car' | 'train' | 'walk';
 
 /** A link attached to a place — a website, a booking page, an Instagram. */
@@ -81,6 +113,8 @@ export interface GuideNote {
     title: string;
     body: string;
     category: string | null;
+    /** Same provenance label as a place carries. */
+    source: string | null;
     sort_order: number;
 }
 

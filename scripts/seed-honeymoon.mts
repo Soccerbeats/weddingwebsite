@@ -15,11 +15,19 @@
  * pin is a guess, and the admin renders it as one.
  */
 import { Pool } from 'pg';
-import { SEED_NOTES, SEED_PLACES, SEED_REGIONS } from '../src/lib/honeymoonSeed';
+import {
+    DEFAULT_SEED_SOURCE, SEED_NOTES, SEED_PLACES, SEED_REGIONS,
+} from '../src/lib/honeymoonSeed';
 import { SEED_COORDS } from '../src/lib/honeymoonCoords';
 
 const DRY = process.argv.includes('--dry');
 const NO_GEO = process.argv.includes('--no-geo');
+/**
+ * Backfill provenance onto rows that predate the source labels. Only touches
+ * rows still carrying a legacy value ('guide' / 'manual'), so a label you have
+ * since set by hand is never overwritten.
+ */
+const RELABEL = process.argv.includes('--relabel-sources');
 
 const NOMINATIM = 'https://nominatim.openstreetmap.org/search';
 const USER_AGENT = process.env.GEOCODER_USER_AGENT
@@ -106,8 +114,9 @@ async function main() {
         if (existing.rowCount) continue;
         if (!DRY) {
             await pool.query(
-                'INSERT INTO honeymoon_notes (title, body, category, sort_order) VALUES ($1, $2, $3, $4)',
-                [note.title, note.body, note.category, index],
+                `INSERT INTO honeymoon_notes (title, body, category, source, sort_order)
+                 VALUES ($1, $2, $3, $4, $5)`,
+                [note.title, note.body, note.category, note.source ?? DEFAULT_SEED_SOURCE, index],
             );
         }
         notesAdded += 1;
@@ -151,12 +160,13 @@ async function main() {
             `INSERT INTO honeymoon_places
                 (region_id, name, category, description, lat, lng, address,
                  links, status, source, needs_review, sort_order)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'idea', 'guide', TRUE, $9)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'idea', $9, TRUE, $10)
              RETURNING id`,
             [
                 regionId, place.name, place.category, place.description ?? null,
                 baked?.lat ?? null, baked?.lng ?? null, baked?.address ?? null,
-                JSON.stringify(place.links ?? []), index,
+                JSON.stringify(place.links ?? []),
+                place.source ?? DEFAULT_SEED_SOURCE, index,
             ],
         );
         placesAdded += 1;
@@ -165,6 +175,30 @@ async function main() {
     }
     console.log(`Places: ${placesAdded} added (${prePinned} pre-pinned from the harvested `
         + `coordinates), ${placesSkipped} already present.\n`);
+
+    /* ---- Backfill provenance on pre-existing rows ---- */
+    if (RELABEL) {
+        let relabelled = 0;
+        for (const place of SEED_PLACES) {
+            const source = place.source ?? DEFAULT_SEED_SOURCE;
+            const result = await pool.query(
+                `UPDATE honeymoon_places SET source = $1
+                 WHERE lower(name) = lower($2) AND source IN ('guide', 'manual')`,
+                [source, place.name],
+            );
+            relabelled += result.rowCount ?? 0;
+        }
+        for (const note of SEED_NOTES) {
+            const source = note.source ?? DEFAULT_SEED_SOURCE;
+            const result = await pool.query(
+                `UPDATE honeymoon_notes SET source = $1
+                 WHERE lower(title) = lower($2) AND (source IS NULL OR source IN ('guide', 'manual'))`,
+                [source, note.title],
+            );
+            relabelled += result.rowCount ?? 0;
+        }
+        console.log(`Relabelled ${relabelled} row(s) with their source.\n`);
+    }
 
     /* ---- Geocoding ---- */
     if (!toGeocode.length) {

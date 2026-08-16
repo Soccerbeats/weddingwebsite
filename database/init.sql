@@ -244,8 +244,11 @@ CREATE TABLE IF NOT EXISTS honeymoon_notes (
   title TEXT NOT NULL,
   body TEXT NOT NULL DEFAULT '',
   category TEXT,
+  source TEXT,
   sort_order INTEGER NOT NULL DEFAULT 0
 );
+
+ALTER TABLE honeymoon_notes ADD COLUMN IF NOT EXISTS source TEXT;
 
 CREATE INDEX IF NOT EXISTS honeymoon_places_region_idx ON honeymoon_places (region_id);
 CREATE INDEX IF NOT EXISTS honeymoon_stops_day_idx ON honeymoon_stops (day_id);

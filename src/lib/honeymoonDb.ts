@@ -97,9 +97,12 @@ async function createTables() {
             title TEXT NOT NULL,
             body TEXT NOT NULL DEFAULT '',
             category TEXT,
+            source TEXT,
             sort_order INTEGER NOT NULL DEFAULT 0
         )
     `);
+    // Added after the notes table shipped; harmless on a fresh database.
+    await pool.query('ALTER TABLE honeymoon_notes ADD COLUMN IF NOT EXISTS source TEXT');
 
     await pool.query(`
         INSERT INTO honeymoon_trip (id, title) VALUES (1, 'Honeymoon')
@@ -260,6 +263,7 @@ export async function getHoneymoonPayload(): Promise<HoneymoonPayload> {
         title: r.title,
         body: r.body ?? '',
         category: r.category ?? null,
+        source: r.source ?? null,
         sort_order: r.sort_order ?? 0,
     }));
 

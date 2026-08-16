@@ -58,7 +58,9 @@ const RESOURCES: Record<string, ResourceDef> = {
             price_note: { kind: 'text' },
             links: { kind: 'json' },
             photos: { kind: 'json' },
-            source: { kind: 'enum', values: ['manual', 'guide'] },
+            // Free text, not an enum: a new batch of suggestions from a new
+            // person should be labellable without a code change.
+            source: { kind: 'text' },
             needs_review: { kind: 'bool' },
             sort_order: { kind: 'int' },
         },
@@ -106,6 +108,7 @@ const RESOURCES: Record<string, ResourceDef> = {
             title: { kind: 'text' },
             body: { kind: 'text' },
             category: { kind: 'text' },
+            source: { kind: 'text' },
             sort_order: { kind: 'int' },
         },
         required: ['title'],
@@ -338,7 +341,24 @@ export async function DELETE(request: Request, { params }: Params) {
         const def = resolve(resource);
         if (!def) return NextResponse.json({ error: 'Unknown resource' }, { status: 404 });
 
-        const id = Math.trunc(Number(new URL(request.url).searchParams.get('id')));
+        const params = new URL(request.url).searchParams;
+
+        // ?ids=1,2,3 deletes a selection in one statement — one round trip and
+        // one refetch instead of N of each, which matters when the places table
+        // is a few hundred rows and you have ticked forty of them.
+        const idsParam = params.get('ids');
+        if (idsParam) {
+            const ids = idsParam.split(',')
+                .map((raw) => Math.trunc(Number(raw.trim())))
+                .filter((n) => Number.isFinite(n) && n > 0);
+            if (!ids.length) return NextResponse.json({ error: 'No valid ids' }, { status: 400 });
+            const result = await pool.query(
+                `DELETE FROM ${def.table} WHERE id = ANY($1)`, [ids],
+            );
+            return NextResponse.json({ success: true, deleted: result.rowCount });
+        }
+
+        const id = Math.trunc(Number(params.get('id')));
         if (!Number.isFinite(id) || id <= 0) {
             return NextResponse.json({ error: 'Valid id required' }, { status: 400 });
         }

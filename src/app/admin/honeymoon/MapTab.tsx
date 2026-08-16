@@ -3,7 +3,8 @@
 import { useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import {
-    CATEGORIES, STATUSES, categoryMeta, formatDayDate, hasCoords, type Place,
+    CATEGORIES, STATUSES, categoryMeta, formatDayDate, hasCoords, sourceLabel, sourcesOf,
+    type Place,
 } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
 import PlaceEditor from './PlaceEditor';
@@ -23,6 +24,7 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
     const [statusFilter, setStatusFilter] = useState('');
     const [dayFilter, setDayFilter] = useState('');
     const [reviewOnly, setReviewOnly] = useState(false);
+    const [sourceFilter, setSourceFilter] = useState('');
     const [selectedId, setSelectedId] = useState<number | null>(null);
     const [editing, setEditing] = useState<Place | null>(null);
     const [editorOpen, setEditorOpen] = useState(false);
@@ -47,9 +49,10 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
             if (categoryFilter && p.category !== categoryFilter) return false;
             if (statusFilter && p.status !== statusFilter) return false;
             if (reviewOnly && !p.needs_review) return false;
+            if (sourceFilter && sourceLabel(p.source) !== sourceFilter) return false;
             return true;
         });
-    }, [places, selectedDay, regionFilter, categoryFilter, statusFilter, reviewOnly]);
+    }, [places, selectedDay, regionFilter, categoryFilter, statusFilter, reviewOnly, sourceFilter]);
 
     /** The ordered polyline for a selected day. */
     const route = useMemo(() => {
@@ -69,16 +72,24 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
 
     const resetFilters = () => {
         setRegionFilter(''); setCategoryFilter(''); setStatusFilter('');
-        setDayFilter(''); setReviewOnly(false);
+        setDayFilter(''); setReviewOnly(false); setSourceFilter('');
     };
 
-    const filterKey = `${regionFilter}|${categoryFilter}|${statusFilter}|${dayFilter}|${reviewOnly}`;
+    const filterKey = `${regionFilter}|${categoryFilter}|${statusFilter}|${dayFilter}|${reviewOnly}|${sourceFilter}`;
 
     return (
         <div className="space-y-3">
             {/* ---- Filters ---- */}
             <Card className="p-3">
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
+                    <SelectField
+                        value={sourceFilter}
+                        onChange={(e) => setSourceFilter(e.target.value)}
+                        disabled={!!selectedDay}
+                    >
+                        <option value="">All sources</option>
+                        {sourcesOf(places).map((src) => <option key={src} value={src}>{src}</option>)}
+                    </SelectField>
                     <SelectField value={dayFilter} onChange={(e) => setDayFilter(e.target.value)}>
                         <option value="">All places</option>
                         {days.map((d) => (

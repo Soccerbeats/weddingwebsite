@@ -10,6 +10,7 @@
 import {
     boundsOf, dateForDay, distanceKm, formatDayDate, formatDistance, formatTime,
     dayHops, hasCoords, categoryMeta, CATEGORIES,
+    sourceLabel, sourcesOf, SOURCE_AMY, SOURCE_MANUAL, SOURCE_YOUTUBE,
     type Place, type Stop,
 } from '../src/lib/honeymoon';
 import { coordsFromMapsUrl, coordsFromPair } from '../src/app/api/admin/honeymoon/geocode/route';
@@ -183,6 +184,33 @@ console.log('\nSeed data');
     check('regions carry a search hint', SEED_REGIONS.every((r) => r.searchHint.trim().length > 0));
 
     check('unknown categories fall back to Other', categoryMeta('nonsense').key === 'misc');
+}
+
+console.log('\nSources');
+{
+    // Databases seeded before sources existed still hold the old enum values;
+    // they must read as the batch they actually came from, not as raw strings.
+    check('legacy "guide" reads as the YouTube guide', sourceLabel('guide') === SOURCE_YOUTUBE);
+    check('legacy "manual" reads as added-by-hand', sourceLabel('manual') === SOURCE_MANUAL);
+    check('a real label passes through', sourceLabel(SOURCE_AMY) === SOURCE_AMY);
+    check('null falls back rather than blanking', sourceLabel(null) === SOURCE_MANUAL);
+
+    const list = sourcesOf([
+        { source: 'guide' }, { source: SOURCE_AMY }, { source: 'guide' }, { source: SOURCE_MANUAL },
+    ]);
+    check('sources dedupe after normalising', list.length === 3, list.join(' | '));
+    check('sources are sorted', list.join('|') === [...list].sort((a, b) => a.localeCompare(b)).join('|'));
+    // Legacy and modern values for the same batch must not appear as two
+    // separate filter options, or the dropdown lies about how many batches exist.
+    check('legacy and modern values collapse to one option',
+        sourcesOf([{ source: 'guide' }, { source: SOURCE_YOUTUBE }]).length === 1);
+
+    const amy = SEED_PLACES.filter((p) => p.source === SOURCE_AMY);
+    check('Amy\'s batch is tagged', amy.length === 7, `got ${amy.length}`);
+    check('everything else is untagged (defaults to the guide)',
+        SEED_PLACES.filter((p) => p.source && p.source !== SOURCE_AMY).length === 0);
+    check('Amy\'s notes are tagged',
+        SEED_NOTES.filter((n) => n.source === SOURCE_AMY).length === 2);
 }
 
 console.log(`\n${failures === 0 ? 'PASS' : 'FAIL'} — ${checks - failures}/${checks} checks passed.\n`);

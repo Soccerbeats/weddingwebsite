@@ -39,6 +39,14 @@ All notable changes to this project are documented here.
 
   Browser testing caught a crash this introduced: the deferred `invalidateSize()` calls that stop the map rendering grey inside a still-animating modal kept firing *after* the modal closed and the map was destroyed, throwing on `_leaflet_pos`. The timer handles are now cleared on unmount, alongside `map.stop()` and a connected-container guard before any animated move.
 
+- **Honeymoon portal — provenance on every suggestion, and bulk delete.** Places and guide notes now record **who suggested them**, so batches from different people stay tellable apart: the bundled data splits into *YouTube Travel Guide* (224 places, 12 notes) and *Amy's Suggestions* (7 places, 2 notes), with anything hand-added defaulting to *Added by me*. Filterable on both the Places and Map tabs, shown inline on each row and note, and editable per place.
+
+  `source` changed from a `'guide' | 'manual'` enum to a **free-text label**. It stopped being enough the moment a second batch arrived from a different person, and an enum would mean a code change for every future list. The filter options are built from the values actually present rather than a hardcoded set, so a new label becomes a filter on its own. Legacy `guide`/`manual` values still in a database are normalised on read — and, importantly, collapse to the *same* filter option as their modern equivalent rather than doubling it, which a regression test pins.
+
+  The bulk bar gained **Delete**, backed by a new `?ids=1,2,3` form on the DELETE endpoint that removes a selection in one statement instead of N requests and N refetches. If any of the selection is on the itinerary, the confirmation says how many and that their stops survive as plain text.
+
+  `npm run seed:honeymoon -- --relabel-sources` backfills provenance onto rows that predate the labels, touching only rows still holding a legacy value so a label set by hand is never overwritten.
+
 - **`npm run check:honeymoon`** — 44 assertions over the pure logic that would otherwise fail silently and wrongly: great-circle distances against known city pairs, day-number arithmetic across a month boundary, 12-hour time formatting at noon and midnight, Google Maps URL parsing in all three shapes, rejection of null island and out-of-range latitudes, hop calculation across unpinned and deleted stops, and seed-data integrity (no duplicate names, no orphan regions, no unknown categories).
 - **Finances suite (`/admin/finances`)** — replaces the `Heav & Aust Wedding Spreadsheet — Budget` tab. Five tabs: **Overview** (reporting), **Budget**, **Purchases**, **Gift Money**, **Settings**. Everything edits inline — commit on blur or Enter, revert on `Esc`, no Save button — and every derived figure recalculates from a single refetch so the grand total, percentages, both deficits and both payment plans can't disagree with each other.
 
