@@ -539,6 +539,13 @@ see them, lasso the ones that look right, Mark reviewed. Anything you have
 actually scheduled on a day still shows in that day's view regardless, since
 hiding a stop you deliberately planned would break its route.
 
+**Every tab uses the full window width.** The map owns the viewport outright and
+never scrolls; the others scroll inside their own container so the heading and
+tab bar stay put. Tabs that would read badly as one very wide column lay
+themselves out in responsive columns instead — Itinerary shows days two or three
+abreast, Guide does the same for regions and notes, and Settings puts its cards
+side by side rather than stretching a text input across the screen.
+
 **Map tab.** The map runs **full-bleed** — it fills the whole content area edge to
 edge and top to bottom, and nothing on this tab scrolls. The filter row sits
 above it; the legend, the selected-place card and the lasso actions float *over*

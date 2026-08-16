@@ -56,7 +56,7 @@ export default function GuideTab({ api }: { api: HoneymoonApi }) {
                         />
                     </Card>
                 ) : (
-                    <div className="space-y-2">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-2 items-start">
                         {regions.map((region) => {
                             const count = (data?.places ?? []).filter((p) => p.region_id === region.id).length;
                             const open = openRegion === region.id;
@@ -137,7 +137,8 @@ export default function GuideTab({ api }: { api: HoneymoonApi }) {
                                 <h3 className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold mb-1.5 px-1">
                                     {category}
                                 </h3>
-                                <div className="space-y-2">
+                                <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3
+                                    gap-2 items-start">
                                     {items.map((note) => (
                                         <Card key={note.id} className="p-3">
                                             <div className="flex items-start gap-2">

@@ -57,14 +57,15 @@ export default function AdminHoneymoonPage() {
     const pinned = data.places.filter(hasCoords).length;
     const review = data.places.filter((p) => p.needs_review).length;
 
-    // The map tab goes full-bleed and owns the whole viewport; every other tab
-    // keeps the readable centred column and scrolls normally. The shell hands
-    // this page a non-scrolling flex column either way.
-    const fullBleed = tab === 'map';
+    // Every tab uses the full width now. The map owns the viewport outright and
+    // never scrolls; the others scroll inside their own container so the header
+    // and tab bar stay put. Tabs that would read badly as one 1600px-wide column
+    // lay themselves out in responsive columns instead — see each tab.
+    const mapTab = tab === 'map';
 
     return (
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-        <div className={`${fullBleed ? 'w-full px-4 md:px-6 pt-4 md:pt-6' : 'max-w-5xl mx-auto w-full px-4 md:px-8 pt-4 md:pt-8'} shrink-0`}>
+        <div className="w-full px-4 md:px-6 pt-4 md:pt-6 shrink-0">
             <div className="flex flex-wrap items-start justify-between gap-3 mb-1">
                 <div>
                     <h1 className="text-2xl font-semibold text-gray-900">{data.trip.title}</h1>
@@ -111,13 +112,13 @@ export default function AdminHoneymoonPage() {
         </div>
 
             {/* Map fills what's left with no page scroll; the rest scroll here. */}
-            {fullBleed ? (
+            {mapTab ? (
                 <div className="flex-1 min-h-0 px-4 md:px-6 pb-4 md:pb-6">
                     <MapTab api={api} />
                 </div>
             ) : (
                 <div className="flex-1 min-h-0 overflow-auto">
-                    <div className="max-w-5xl mx-auto w-full px-4 md:px-8 pb-8">
+                    <div className="w-full px-4 md:px-6 pb-6">
                         {tab === 'itinerary' && <ItineraryTab api={api} />}
                         {tab === 'places' && <PlacesTab api={api} />}
                         {tab === 'guide' && <GuideTab api={api} />}

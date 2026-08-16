@@ -67,6 +67,12 @@ All notable changes to this project are documented here.
 
   Also fixes the pin preview rendering half a screen of grey tiles: the fixed `invalidateSize()` timers only covered the modal's open animation, but the modal reflows again when the paste fills the name and address. A `ResizeObserver` on the container now covers every reflow.
 
+- **Honeymoon — every tab uses the full window width.** Itinerary, Places, Guide and Settings drop the centred `max-w-5xl` column that the map had already left behind. They still scroll inside their own container, so the heading and tab bar stay put.
+
+  Stretching a single column to 1600px is not the same as using the screen — a stop row with its time, name and actions a screen apart reads worse, not better. So the tabs that would suffer lay out in responsive columns instead: **Itinerary** shows days two abreast at `lg` and three at `2xl`, **Guide** does the same for regions and for notes within each category, and **Settings** puts its cards side by side while keeping the inputs a sane width.
+
+  Narrower columns exposed a real bug in the auto-growing note textarea: it estimated height from characters-per-line, which was tuned for one wide column, so the same text wrapped to more lines than predicted and notes ended mid-sentence inside a scrollbox. It now **measures its own `scrollHeight`** instead of estimating, with a `ResizeObserver` to re-measure when the column width changes.
+
 - **`npm run check:honeymoon`** — 44 assertions over the pure logic that would otherwise fail silently and wrongly: great-circle distances against known city pairs, day-number arithmetic across a month boundary, 12-hour time formatting at noon and midnight, Google Maps URL parsing in all three shapes, rejection of null island and out-of-range latitudes, hop calculation across unpinned and deleted stops, and seed-data integrity (no duplicate names, no orphan regions, no unknown categories).
 - **Finances suite (`/admin/finances`)** — replaces the `Heav & Aust Wedding Spreadsheet — Budget` tab. Five tabs: **Overview** (reporting), **Budget**, **Purchases**, **Gift Money**, **Settings**. Everything edits inline — commit on blur or Enter, revert on `Esc`, no Save button — and every derived figure recalculates from a single refetch so the grand total, percentages, both deficits and both payment plans can't disagree with each other.
 

@@ -36,9 +36,14 @@ export default function ItineraryTab({ api }: { api: HoneymoonApi }) {
         );
     }
 
+    // Columns rather than one very wide card: a stop row stretched across 1600px
+    // puts its time, name and actions a screen apart, and a trip is far easier to
+    // read as a wall of days you can scan than as a single tall strip.
     return (
         <div className="space-y-3">
-            {days.map((day) => <DayCard key={day.id} day={day} api={api} />)}
+            <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3 items-start">
+                {days.map((day) => <DayCard key={day.id} day={day} api={api} />)}
+            </div>
             <div className="flex justify-center pt-1">
                 <Button tone="primary" onClick={() => api.create('days', {})}>
                     + Add day {days.length + 1}

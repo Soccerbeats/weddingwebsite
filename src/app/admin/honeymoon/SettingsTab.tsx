@@ -11,8 +11,10 @@ export default function SettingsTab({ api }: { api: HoneymoonApi }) {
 
     const lastDay = days.length ? Math.max(...days.map((d) => d.day_number)) : 0;
 
+    // Two columns of cards uses the width without stretching a text input across
+    // the whole screen, which helps nobody.
     return (
-        <div className="space-y-3 max-w-xl">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start max-w-6xl">
             <Card className="p-4 space-y-4">
                 <div>
                     <label className="block text-xs font-semibold text-gray-500 mb-1">Trip name</label>

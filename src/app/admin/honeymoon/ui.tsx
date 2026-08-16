@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CATEGORIES, STATUSES, categoryMeta, type PlaceStatus } from '@/lib/honeymoon';
 
 export function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
@@ -85,20 +85,13 @@ export function InlineText({ value, onCommit, placeholder, className = '', multi
         focus:ring-accent/30 transition ${className}`;
 
     if (multiline) {
-        // Grow to fit rather than trapping a multi-line note (a suggested route,
-        // a region write-up) inside a three-row scrollbox. Counts wrapped lines
-        // roughly as well as hard ones, and stays draggable beyond the cap.
-        const lines = draft.split('\n').reduce(
-            (total, line) => total + Math.max(1, Math.ceil(line.length / 60)), 0,
-        );
         return (
-            <textarea
+            <AutoTextArea
                 value={draft}
                 placeholder={placeholder}
-                rows={Math.min(24, Math.max(3, lines + 1))}
-                onChange={(e) => setDraft(e.target.value)}
-                onBlur={commit}
-                onKeyDown={(e) => { if (e.key === 'Escape') { setDraft(value); e.currentTarget.blur(); } }}
+                onChange={setDraft}
+                onCommit={commit}
+                onRevert={() => setDraft(value)}
                 className={`${shared} leading-relaxed resize-y`}
             />
         );
@@ -115,6 +108,57 @@ export function InlineText({ value, onCommit, placeholder, className = '', multi
                 if (e.key === 'Escape') { setDraft(value); e.currentTarget.blur(); }
             }}
             className={shared}
+        />
+    );
+}
+
+/**
+ * Textarea that grows to fit its content.
+ *
+ * Measures its own scrollHeight rather than estimating characters-per-line. The
+ * estimate was fine in one wide column and wrong the moment the Guide tab moved
+ * to narrow columns — the same text wraps to far more lines, and a note would
+ * end mid-sentence inside a scrollbox. A ResizeObserver re-measures when the
+ * column width changes.
+ */
+function AutoTextArea({ value, placeholder, onChange, onCommit, onRevert, className }: {
+    value: string;
+    placeholder?: string;
+    onChange: (next: string) => void;
+    onCommit: () => void;
+    onRevert: () => void;
+    className: string;
+}) {
+    const ref = useRef<HTMLTextAreaElement | null>(null);
+
+    const fit = () => {
+        const el = ref.current;
+        if (!el) return;
+        // Collapse first: without this it can only ever grow, never shrink.
+        el.style.height = 'auto';
+        el.style.height = `${el.scrollHeight}px`;
+    };
+
+    useEffect(fit, [value]);
+
+    useEffect(() => {
+        const el = ref.current;
+        if (!el || typeof ResizeObserver === 'undefined') return;
+        const observer = new ResizeObserver(fit);
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, []);
+
+    return (
+        <textarea
+            ref={ref}
+            value={value}
+            placeholder={placeholder}
+            rows={2}
+            onChange={(e) => onChange(e.target.value)}
+            onBlur={onCommit}
+            onKeyDown={(e) => { if (e.key === 'Escape') { onRevert(); e.currentTarget.blur(); } }}
+            className={`${className} overflow-hidden`}
         />
     );
 }
