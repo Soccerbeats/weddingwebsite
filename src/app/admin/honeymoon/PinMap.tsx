@@ -37,6 +37,7 @@ export default function PinMap({ lat, lng, category, onChange }: {
     /* Create the map once. */
     useEffect(() => {
         let cancelled = false;
+        let observer: ResizeObserver | null = null;
         const timers: ReturnType<typeof setTimeout>[] = [];
 
         (async () => {
@@ -76,11 +77,21 @@ export default function PinMap({ lat, lng, category, onChange }: {
             // that runs against detached panes and throws on `_leaflet_pos`.
             timers.push(setTimeout(() => map.invalidateSize(), 60));
             timers.push(setTimeout(() => map.invalidateSize(), 300));
+
+            // Fixed timers only cover the open animation. The modal also reflows
+            // later — pasting a link fills the name and address and pushes the
+            // layout around — and a map sized before that reflow renders half a
+            // screen of grey tiles. Watching the box covers every case.
+            if (typeof ResizeObserver !== 'undefined' && containerRef.current) {
+                observer = new ResizeObserver(() => map.invalidateSize());
+                observer.observe(containerRef.current);
+            }
         })();
 
         return () => {
             cancelled = true;
             for (const t of timers) clearTimeout(t);
+            observer?.disconnect();
             const map = mapRef.current;
             if (map) {
                 // stop() first: closing the modal unmounts this mid-pan, and

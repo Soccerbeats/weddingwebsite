@@ -608,6 +608,15 @@ input:
 Right-clicking a pin in Google Maps copies the coordinates, which is the most
 reliable route for anywhere the search can't find.
 
+**A pasted or dropped Google Maps link fills in the rest.** It resolves as soon
+as it lands — no need to press Find — and sets the **name** (from the link's
+place segment), the **address** (reverse-geocoded from the coordinates, so it's a
+real address rather than a URL slug), the **pin**, and keeps the **link itself**
+on the place. Anything you already typed wins; it only fills blanks.
+
+**+ Add place** sits on the Map tab as well as the Places tab, so a place can be
+added without leaving the map.
+
 As soon as there is a coordinate, a **map appears inside the Location card**
 showing exactly where the pin landed — so "Looks right" is a judgement you can
 actually make rather than a guess. **Drag the pin, or click anywhere on the map,

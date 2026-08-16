@@ -25,6 +25,12 @@ export interface GeocodeHit {
     lng: number;
     /** Where the answer came from, so the UI can say whether to trust it. */
     precision: 'exact' | 'geocoded';
+    /** Place name recovered from a Google Maps URL, when there is one. */
+    name?: string;
+    /** Postal-ish address, reverse-geocoded for a pasted link. */
+    address?: string;
+    /** The link that was pasted, so the editor can keep it on the place. */
+    url?: string;
 }
 
 function finite(value: number): boolean {
@@ -67,6 +73,52 @@ export function coordsFromMapsUrl(input: string): { lat: number; lng: number } |
     }
 
     return null;
+}
+
+/**
+ * Recover the place name from a Google Maps URL.
+ *
+ * The /place/ segment carries the name Google shows, plus-encoded. Worth having
+ * because it is usually the name you would have typed anyway, and it saves
+ * retyping it after a paste.
+ */
+export function nameFromMapsUrl(input: string): string | null {
+    const match = input.match(/\/place\/([^/@?]+)/);
+    if (!match) return null;
+    try {
+        const decoded = decodeURIComponent(match[1].replace(/\+/g, ' ')).trim();
+        // "Ubud Palace, Jalan Raya Ubud, Bali" -> "Ubud Palace". The tail is the
+        // address, which is reverse-geocoded separately and more reliably.
+        const head = decoded.split(',')[0].trim();
+        if (!head || /^-?\d+(\.\d+)?$/.test(head)) return null;
+        return head;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Turn coordinates into an address.
+ *
+ * A pasted link gives an exact point but no address; without this the address
+ * field would stay blank on exactly the input that is most likely to be used.
+ */
+async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
+    const url = new URL('https://nominatim.openstreetmap.org/reverse');
+    url.searchParams.set('lat', String(lat));
+    url.searchParams.set('lon', String(lng));
+    url.searchParams.set('format', 'jsonv2');
+    try {
+        const res = await fetch(url, {
+            headers: { 'User-Agent': USER_AGENT, 'Accept-Language': 'en' },
+            signal: AbortSignal.timeout(10000),
+        });
+        if (!res.ok) return null;
+        const body = await res.json();
+        return typeof body?.display_name === 'string' ? body.display_name : null;
+    } catch {
+        return null;
+    }
 }
 
 /** A bare "-8.6478, 115.1385" pasted straight in. */
@@ -116,13 +168,17 @@ export async function GET(request: Request) {
             }
             const fromUrl = coordsFromMapsUrl(target);
             if (fromUrl) {
+                const name = nameFromMapsUrl(target);
+                const address = await reverseGeocode(fromUrl.lat, fromUrl.lng);
                 return NextResponse.json({
                     results: [{
-                        label: decodeURIComponent(
-                            target.match(/\/place\/([^/@]+)/)?.[1]?.replace(/\+/g, ' ') ?? 'Pasted location',
-                        ),
+                        label: name ?? address ?? 'Pasted location',
                         ...fromUrl,
                         precision: 'exact',
+                        ...(name ? { name } : {}),
+                        ...(address ? { address } : {}),
+                        // The link the user pasted, kept so the editor can store it.
+                        url: raw,
                     }],
                 } satisfies { results: GeocodeHit[] });
             }

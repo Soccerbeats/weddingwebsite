@@ -15,11 +15,18 @@ const PinMap = dynamic(() => import('./PinMap'), {
     loading: () => <div className="h-52 w-full rounded-2xl bg-gray-100 animate-pulse" />,
 });
 
+/** Matches a bare "lat, lng" so a pasted pair resolves without pressing Find. */
+const coordPair = /^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/;
+
 interface GeocodeHit {
     label: string;
     lat: number;
     lng: number;
     precision: 'exact' | 'geocoded';
+    /** Present when the hit came from a pasted Google Maps link. */
+    name?: string;
+    address?: string;
+    url?: string;
 }
 
 /**
@@ -100,14 +107,41 @@ export default function PlaceEditor({ api, place, open, onClose }: {
         }
     }, []);
 
+    /**
+     * Take everything a hit can give us.
+     *
+     * A pasted Google Maps link carries a name, an address and the link itself —
+     * retyping all three when they arrived in one paste is busywork. Existing
+     * values are never clobbered: if you already typed a name, the link's name
+     * loses.
+     */
     const applyHit = (hit: GeocodeHit) => {
         setLat(hit.lat);
         setLng(hit.lng);
-        // Confirming a pin by hand is exactly what clears the review flag.
+        // Placing a pin deliberately is exactly what clears the review flag.
         setNeedsReview(false);
-        if (!address && hit.precision === 'geocoded') setAddress(hit.label);
+
+        if (!name.trim() && hit.name) setName(hit.name);
+        if (!address.trim()) {
+            if (hit.address) setAddress(hit.address);
+            else if (hit.precision === 'geocoded') setAddress(hit.label);
+        }
+        if (hit.url) {
+            // Don't stack duplicates if the same link is pasted twice.
+            setLinks((prev) => (prev.some((l) => l.url === hit.url)
+                ? prev
+                : [...prev, { label: 'Google Maps', url: hit.url! }]));
+        }
+
         setHits([]);
         setQuery('');
+    };
+
+    /** A pasted or dropped link should just work, without hunting for Find. */
+    const autoLookup = (value: string) => {
+        setQuery(value);
+        const trimmed = value.trim();
+        if (/^https?:\/\//i.test(trimmed) || coordPair.test(trimmed)) lookup(trimmed);
     };
 
     const save = async () => {
@@ -182,7 +216,23 @@ export default function PlaceEditor({ api, place, open, onClose }: {
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
                             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); lookup(query); } }}
-                            placeholder="Search a name, paste a Google Maps link, or type lat, lng"
+                            onPaste={(e) => {
+                                const text = e.clipboardData.getData('text');
+                                if (!text) return;
+                                e.preventDefault();
+                                autoLookup(text);
+                            }}
+                            onDragOver={(e) => e.preventDefault()}
+                            onDrop={(e) => {
+                                // Dragging a link from the browser gives text/uri-list;
+                                // dragging selected text gives text/plain.
+                                const text = e.dataTransfer.getData('text/uri-list')
+                                    || e.dataTransfer.getData('text');
+                                if (!text) return;
+                                e.preventDefault();
+                                autoLookup(text.trim());
+                            }}
+                            placeholder="Search a name, or paste/drop a Google Maps link"
                         />
                         <Button onClick={() => lookup(query)} disabled={searching || !query.trim()}>
                             {searching ? '…' : 'Find'}

@@ -14,7 +14,9 @@ import {
     pointInPolygon, placesInPolygon,
     type Place, type Stop,
 } from '../src/lib/honeymoon';
-import { coordsFromMapsUrl, coordsFromPair } from '../src/app/api/admin/honeymoon/geocode/route';
+import {
+    coordsFromMapsUrl, coordsFromPair, nameFromMapsUrl,
+} from '../src/app/api/admin/honeymoon/geocode/route';
 import { SEED_PLACES, SEED_REGIONS, SEED_NOTES } from '../src/lib/honeymoonSeed';
 
 let failures = 0;
@@ -123,6 +125,31 @@ console.log('\nCoordinate parsing');
     // 0,0 is in the Atlantic; accepting it would drag fitBounds across the world.
     check('rejects null island', coordsFromPair('0, 0') === null);
     check('rejects an out-of-range latitude', coordsFromPair('130.5, 20.0') === null);
+}
+
+console.log('\nName from a Maps link');
+{
+    check('reads the place name',
+        nameFromMapsUrl('https://www.google.com/maps/place/Ubud+Palace/@-8.5069,115.2625,17z')
+        === 'Ubud Palace');
+    // The /place/ slug often carries the whole address; the name is the head of
+    // it, and the real address comes from reverse geocoding instead.
+    check('keeps only the name, not the trailing address',
+        nameFromMapsUrl('https://www.google.com/maps/place/Cafe+Lotus,+Jalan+Raya+Ubud,+Bali/@-8.5,115.2,17z')
+        === 'Cafe Lotus');
+    check('decodes percent-encoding',
+        nameFromMapsUrl('https://www.google.com/maps/place/Caf%C3%A9%20Lotus/@-8.5,115.2,17z')
+        === 'Café Lotus');
+    check('no /place/ segment yields nothing',
+        nameFromMapsUrl('https://www.google.com/maps/@-8.5,115.2,15z') === null);
+    // A coordinate-only slug is not a name; filling the name field with digits
+    // would be worse than leaving it blank.
+    check('a coordinate slug is not treated as a name',
+        nameFromMapsUrl('https://www.google.com/maps/place/-8.5069,115.2625/@-8.5,115.2,17z') === null);
+    // Host-agnostic by design: it only looks for a /place/ segment, and the
+    // caller has already established this is a maps link.
+    check('any /place/ segment is read, whatever the host',
+        nameFromMapsUrl('https://example.com/place/Thing') === 'Thing');
 }
 
 console.log('\nHops');

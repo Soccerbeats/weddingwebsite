@@ -126,7 +126,7 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
         <div className="h-full flex flex-col gap-2">
             {/* ---- Filters ---- */}
             <div className="shrink-0 bg-white rounded-2xl shadow-sm border border-gray-100 p-2.5">
-                <div className="grid grid-cols-2 md:grid-cols-7 gap-2">
+                <div className="grid grid-cols-2 md:grid-cols-8 gap-2">
                     <SelectField value={dayFilter} onChange={(e) => setDayFilter(e.target.value)}>
                         <option value="">All places</option>
                         {days.map((d) => (
@@ -181,6 +181,13 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                             : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}
                     >
                         {showUnconfirmed ? '⚠ Reviewing' : '⚠ Unconfirmed'}
+                    </button>
+                    <button
+                        onClick={() => { setEditing(null); setEditorOpen(true); }}
+                        className="rounded-2xl px-3 py-2 text-sm font-medium border border-transparent
+                            bg-accent text-white hover:opacity-90 transition"
+                    >
+                        + Add place
                     </button>
                     <button
                         onClick={() => {
