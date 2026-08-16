@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
 import type * as LeafletNS from 'leaflet';
-import { boundsOf, categoryMeta, hasCoords, type Place } from '@/lib/honeymoon';
+import { boundsOf, categoryMeta, hasCoords, placesInPolygon, type LatLng, type Place } from '@/lib/honeymoon';
 
 /**
  * The trip map.
@@ -32,11 +32,18 @@ export interface TripMapProps {
     onSelect?: (id: number) => void;
     /** Bumped by the parent to force a re-fit after a filter change. */
     fitKey?: string;
+    /** While true, dragging draws a lasso instead of panning the map. */
+    selectMode?: boolean;
+    /** Ids currently lasso-selected, drawn with a highlight ring. */
+    selectedIds?: Set<number>;
+    /** Fired on release with everything inside the drawn loop. */
+    onLassoSelect?: (ids: number[], additive: boolean) => void;
     className?: string;
 }
 
 export default function TripMap({
-    places, route = [], selectedId = null, onSelect, fitKey = '', className = '',
+    places, route = [], selectedId = null, onSelect, fitKey = '',
+    selectMode = false, selectedIds, onLassoSelect, className = '',
 }: TripMapProps) {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const mapRef = useRef<LeafletNS.Map | null>(null);
@@ -57,6 +64,15 @@ export default function TripMap({
     // without every marker being rebuilt when the parent re-renders.
     const onSelectRef = useRef(onSelect);
     onSelectRef.current = onSelect;
+
+    // The lasso handlers are bound once and read everything current through
+    // refs, so toggling a filter never rebinds them mid-draw.
+    const placesRef = useRef(places);
+    placesRef.current = places;
+    const onLassoRef = useRef(onLassoSelect);
+    onLassoRef.current = onLassoSelect;
+    const selectModeRef = useRef(selectMode);
+    selectModeRef.current = selectMode;
 
     /* Create the map once. */
     useEffect(() => {
@@ -119,7 +135,9 @@ export default function TripMap({
             layerRef.current = null;
         }
 
-        const clustered = route.length === 0;
+        // Clustering is suspended while lassoing: you cannot meaningfully draw
+        // around points that are hidden inside a count badge.
+        const clustered = route.length === 0 && !selectMode;
         const layer = clustered
             ? L.markerClusterGroup({
                 showCoverageOnHover: false,
@@ -149,9 +167,14 @@ export default function TripMap({
             const selected = place.id === selectedId;
             // An unconfirmed pin gets a dashed amber ring so a bulk-geocoded
             // guess never looks as trustworthy as one you placed yourself.
-            const ring = place.needs_review
-                ? 'border-style:dashed;border-color:#f59e0b;border-width:2px;'
-                : `border-style:solid;border-color:#fff;border-width:${selected ? 3 : 2}px;`;
+            const lassoed = selectedIds?.has(place.id) ?? false;
+            const ring = lassoed
+                // A lassoed pin has to read as picked at a glance, so it wins
+                // over both the review ring and the click highlight.
+                ? 'border-style:solid;border-color:#0f172a;border-width:4px;'
+                : place.needs_review
+                    ? 'border-style:dashed;border-color:#f59e0b;border-width:2px;'
+                    : `border-style:solid;border-color:#fff;border-width:${selected ? 3 : 2}px;`;
 
             const icon = L.divIcon({
                 className: 'honeymoon-pin',
@@ -181,10 +204,13 @@ export default function TripMap({
                 + `<div style="color:#6b7280;font-size:12px">${meta.icon} ${meta.label}</div>`
                 + reviewNote,
             );
-            marker.on('click', () => onSelectRef.current?.(place.id));
+            marker.on('click', () => {
+                if (selectModeRef.current) return;
+                onSelectRef.current?.(place.id);
+            });
             marker.addTo(layer);
         }
-    }, [places, selectedId, route.length, ready]);
+    }, [places, selectedId, selectedIds, route.length, selectMode, ready]);
 
     /* Draw the selected day's route. */
     useEffect(() => {
@@ -223,6 +249,96 @@ export default function TripMap({
     }, [route, ready]);
 
     /**
+     * Freehand lasso.
+     *
+     * Bound to the container rather than Leaflet's own mouse events so it works
+     * with a finger as well as a mouse, and so the drag can be swallowed before
+     * Leaflet's pan handler ever sees it.
+     */
+    useEffect(() => {
+        const L = leafletRef.current;
+        const map = mapRef.current;
+        const container = containerRef.current;
+        if (!L || !map || !container) return;
+
+        if (!selectMode) {
+            map.dragging.enable();
+            return;
+        }
+
+        // Panning and lassoing are the same gesture; the lasso wins while armed.
+        map.dragging.disable();
+
+        let drawing = false;
+        let additive = false;
+        let points: LatLng[] = [];
+        let line: LeafletNS.Polyline | null = null;
+
+        const toLatLng = (event: PointerEvent): LatLng => {
+            const rect = container.getBoundingClientRect();
+            const p = map.containerPointToLatLng(
+                L.point(event.clientX - rect.left, event.clientY - rect.top),
+            );
+            return { lat: p.lat, lng: p.lng };
+        };
+
+        const clear = () => {
+            if (line) { line.remove(); line = null; }
+            points = [];
+            drawing = false;
+        };
+
+        const onDown = (event: PointerEvent) => {
+            if (event.button != null && event.button !== 0) return;
+            drawing = true;
+            // Hold shift/ctrl to add to the current selection rather than replace it.
+            additive = event.shiftKey || event.ctrlKey || event.metaKey;
+            points = [toLatLng(event)];
+            line = L.polyline([[points[0].lat, points[0].lng]], {
+                color: '#0f172a', weight: 2, dashArray: '5 4',
+            }).addTo(map);
+            container.setPointerCapture?.(event.pointerId);
+            event.preventDefault();
+        };
+
+        const onMove = (event: PointerEvent) => {
+            if (!drawing || !line) return;
+            const next = toLatLng(event);
+            const last = points[points.length - 1];
+            // Thin the path: every pixel-level move would build a polygon of
+            // thousands of vertices and make the containment test crawl.
+            if (last && Math.abs(next.lat - last.lat) < 1e-5 && Math.abs(next.lng - last.lng) < 1e-5) return;
+            points.push(next);
+            line.addLatLng([next.lat, next.lng]);
+            event.preventDefault();
+        };
+
+        const onUp = (event: PointerEvent) => {
+            if (!drawing) return;
+            container.releasePointerCapture?.(event.pointerId);
+            const loop = points;
+            clear();
+            // A tap is not a lasso; ignore anything too small to be deliberate.
+            if (loop.length < 3) return;
+            onLassoRef.current?.(placesInPolygon(placesRef.current, loop), additive);
+        };
+
+        container.addEventListener('pointerdown', onDown);
+        container.addEventListener('pointermove', onMove);
+        container.addEventListener('pointerup', onUp);
+        container.addEventListener('pointercancel', onUp);
+
+        return () => {
+            container.removeEventListener('pointerdown', onDown);
+            container.removeEventListener('pointermove', onMove);
+            container.removeEventListener('pointerup', onUp);
+            container.removeEventListener('pointercancel', onUp);
+            clear();
+            map.dragging.enable();
+        };
+    }, [selectMode, ready]);
+
+    /**
      * Fit the view to whatever is currently showing.
      *
      * This is the behaviour the whole map was chosen for: all pins frames
@@ -249,7 +365,18 @@ export default function TripMap({
         return () => clearTimeout(timer);
     }, [places, route, fitKey, ready]);
 
-    return <div ref={containerRef} className={`rounded-2xl overflow-hidden z-0 ${className}`} />;
+    // The container's className must NEVER depend on state. Leaflet adds its own
+    // classes (leaflet-container, leaflet-touch, drag targets…) to this element
+    // imperatively, and React rewrites the whole class attribute whenever the
+    // prop changes — silently stripping them and leaving an unstyled, broken
+    // map. Anything dynamic goes through inline style instead.
+    return (
+        <div
+            ref={containerRef}
+            className={`rounded-2xl overflow-hidden z-0 ${className}`}
+            style={{ cursor: selectMode ? 'crosshair' : undefined }}
+        />
+    );
 }
 
 function escapeHtml(value: string): string {

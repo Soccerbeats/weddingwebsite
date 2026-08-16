@@ -26,7 +26,7 @@ export default function AdminHoneymoonPage() {
 
     if (loading) {
         return (
-            <div className="max-w-5xl mx-auto">
+            <div className="max-w-5xl mx-auto p-4 md:p-8">
                 <div className="animate-pulse space-y-4">
                     <div className="h-8 bg-gray-100 rounded-2xl w-56" />
                     <div className="h-24 bg-gray-100 rounded-2xl" />
@@ -38,7 +38,7 @@ export default function AdminHoneymoonPage() {
 
     if (!data) {
         return (
-            <div className="max-w-5xl mx-auto">
+            <div className="max-w-5xl mx-auto p-4 md:p-8">
                 <div className="bg-rose-50 border border-rose-200 rounded-2xl p-5">
                     <h2 className="font-semibold text-rose-900 mb-1">Couldn&apos;t load the honeymoon portal</h2>
                     <p className="text-sm text-rose-700">{error || 'Something went wrong.'}</p>
@@ -57,8 +57,14 @@ export default function AdminHoneymoonPage() {
     const pinned = data.places.filter(hasCoords).length;
     const review = data.places.filter((p) => p.needs_review).length;
 
+    // The map tab goes full-bleed and owns the whole viewport; every other tab
+    // keeps the readable centred column and scrolls normally. The shell hands
+    // this page a non-scrolling flex column either way.
+    const fullBleed = tab === 'map';
+
     return (
-        <div className="max-w-5xl mx-auto">
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+        <div className={`${fullBleed ? 'w-full px-4 md:px-6 pt-4 md:pt-6' : 'max-w-5xl mx-auto w-full px-4 md:px-8 pt-4 md:pt-8'} shrink-0`}>
             <div className="flex flex-wrap items-start justify-between gap-3 mb-1">
                 <div>
                     <h1 className="text-2xl font-semibold text-gray-900">{data.trip.title}</h1>
@@ -102,11 +108,23 @@ export default function AdminHoneymoonPage() {
                 ))}
             </div>
 
-            {tab === 'map' && <MapTab api={api} />}
-            {tab === 'itinerary' && <ItineraryTab api={api} />}
-            {tab === 'places' && <PlacesTab api={api} />}
-            {tab === 'guide' && <GuideTab api={api} />}
-            {tab === 'settings' && <SettingsTab api={api} />}
+        </div>
+
+            {/* Map fills what's left with no page scroll; the rest scroll here. */}
+            {fullBleed ? (
+                <div className="flex-1 min-h-0 px-4 md:px-6 pb-4 md:pb-6">
+                    <MapTab api={api} />
+                </div>
+            ) : (
+                <div className="flex-1 min-h-0 overflow-auto">
+                    <div className="max-w-5xl mx-auto w-full px-4 md:px-8 pb-8">
+                        {tab === 'itinerary' && <ItineraryTab api={api} />}
+                        {tab === 'places' && <PlacesTab api={api} />}
+                        {tab === 'guide' && <GuideTab api={api} />}
+                        {tab === 'settings' && <SettingsTab api={api} />}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

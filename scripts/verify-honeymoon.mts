@@ -11,6 +11,7 @@ import {
     boundsOf, dateForDay, distanceKm, formatDayDate, formatDistance, formatTime,
     dayHops, hasCoords, categoryMeta, CATEGORIES,
     sourceLabel, sourcesOf, SOURCE_AMY, SOURCE_MANUAL, SOURCE_YOUTUBE,
+    pointInPolygon, placesInPolygon,
     type Place, type Stop,
 } from '../src/lib/honeymoon';
 import { coordsFromMapsUrl, coordsFromPair } from '../src/app/api/admin/honeymoon/geocode/route';
@@ -184,6 +185,39 @@ console.log('\nSeed data');
     check('regions carry a search hint', SEED_REGIONS.every((r) => r.searchHint.trim().length > 0));
 
     check('unknown categories fall back to Other', categoryMeta('nonsense').key === 'misc');
+}
+
+console.log('\nLasso geometry');
+{
+    // A square around Ubud.
+    const box = [
+        { lat: -8.60, lng: 115.20 }, { lat: -8.60, lng: 115.30 },
+        { lat: -8.45, lng: 115.30 }, { lat: -8.45, lng: 115.20 },
+    ];
+    check('a point inside is inside', pointInPolygon({ lat: -8.51, lng: 115.26 }, box));
+    check('a point outside is outside', !pointInPolygon({ lat: -8.65, lng: 115.14 }, box));
+    check('a point far away is outside', !pointInPolygon({ lat: 1.35, lng: 103.99 }, box));
+    check('a degenerate loop selects nothing', !pointInPolygon({ lat: -8.5, lng: 115.25 }, box.slice(0, 2)));
+
+    // Concave: a C-shape must not capture the gap it wraps around.
+    const cShape = [
+        { lat: 0, lng: 0 }, { lat: 0, lng: 10 }, { lat: 10, lng: 10 }, { lat: 10, lng: 0 },
+        { lat: 8, lng: 0 }, { lat: 8, lng: 8 }, { lat: 2, lng: 8 }, { lat: 2, lng: 0 },
+    ];
+    check('a concave loop excludes its notch', !pointInPolygon({ lat: 5, lng: 4 }, cShape));
+    check('a concave loop includes its arms', pointInPolygon({ lat: 9, lng: 5 }, cShape));
+
+    const places: Place[] = [
+        makePlace(1, 'inside', -8.51, 115.26),
+        makePlace(2, 'outside', -8.90, 115.10),
+        makePlace(3, 'unpinned', null, null),
+    ];
+    const hit = placesInPolygon(places, box);
+    check('only pinned places inside are selected', hit.length === 1 && hit[0] === 1, hit.join(','));
+    // An unpinned place has no position, so it can never be lassoed — it must
+    // not be silently swept into a bulk delete.
+    check('unpinned places are never lassoed', !hit.includes(3));
+    check('too few points selects nothing', placesInPolygon(places, box.slice(0, 2)).length === 0);
 }
 
 console.log('\nSources');

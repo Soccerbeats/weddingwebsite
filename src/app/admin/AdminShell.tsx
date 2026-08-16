@@ -36,6 +36,9 @@ export default function AdminShell({
     // Grouped by what you're actually doing, because a flat list of sixteen
     // gave no clue that Finances and Seating are the same kind of job as RSVPs
     // while Colour and WIP are not.
+    const isFullBleed = pathname?.startsWith('/admin/seating')
+        || pathname?.startsWith('/admin/honeymoon');
+
     const navGroups: { title?: string; items: { href: string; label: string }[] }[] = [
         { items: [{ href: '/admin/dashboard', label: '⌂ Dashboard' }] },
         {
@@ -169,9 +172,12 @@ export default function AdminShell({
                         </nav>
                     </aside>
 
-                    {/* Main Content — seating: no padding, no scroll; others: padded + scrollable */}
-                    <main className={`flex-1 min-w-0 flex flex-col ${pathname?.startsWith('/admin/seating') ? 'overflow-hidden' : 'overflow-auto'}`}>
-                        {pathname?.startsWith('/admin/seating')
+                    {/* Main Content — full-bleed pages (seating, honeymoon) own their
+                        own padding and scrolling so a map can fill the viewport
+                        without the shell adding a second scrollbar; everything
+                        else stays padded and scrollable here. */}
+                    <main className={`flex-1 min-w-0 flex flex-col ${isFullBleed ? 'overflow-hidden' : 'overflow-auto'}`}>
+                        {isFullBleed
                             ? <div className="flex-1 min-h-0 flex flex-col overflow-hidden">{children}</div>
                             : <div className="p-4 md:p-8">{children}</div>
                         }

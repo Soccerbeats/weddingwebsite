@@ -253,6 +253,40 @@ export function boundsOf(points: LatLng[]): [[number, number], [number, number]]
     return [[minLat, minLng], [maxLat, maxLng]];
 }
 
+/**
+ * Is a point inside a polygon? Ray casting, treating lng as x and lat as y.
+ *
+ * Used by the map's lasso select. Safe here because a hand-drawn loop around
+ * some pins never spans the antimeridian or a pole — the cases where naive
+ * planar treatment of lat/lng breaks down.
+ *
+ * The `>` / `<=` asymmetry on the vertical test is deliberate: it counts a
+ * vertex exactly once when the ray passes through it, so a pin sitting exactly
+ * on a drawn line doesn't flicker in and out of the selection.
+ */
+export function pointInPolygon(point: LatLng, polygon: LatLng[]): boolean {
+    if (polygon.length < 3) return false;
+    let inside = false;
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+        const yi = polygon[i].lat, xi = polygon[i].lng;
+        const yj = polygon[j].lat, xj = polygon[j].lng;
+        const straddles = (yi > point.lat) !== (yj > point.lat);
+        if (!straddles) continue;
+        const crossingLng = ((xj - xi) * (point.lat - yi)) / (yj - yi) + xi;
+        if (point.lng < crossingLng) inside = !inside;
+    }
+    return inside;
+}
+
+/** Places with coordinates that fall inside a drawn loop. */
+export function placesInPolygon(places: Place[], polygon: LatLng[]): number[] {
+    if (polygon.length < 3) return [];
+    return places
+        .filter(hasCoords)
+        .filter((p) => pointInPolygon({ lat: p.lat, lng: p.lng }, polygon))
+        .map((p) => p.id);
+}
+
 /* ------------------------------------------------------------------ */
 /* Dates                                                               */
 /* ------------------------------------------------------------------ */

@@ -530,7 +530,21 @@ waterfalls that share names across regions. Unconfirmed pins draw with a dashed
 amber ring on the map and can be filtered to in both Map and Places tabs. Confirm
 them before you plan a day around one.
 
-**Map tab.** Pins are **clustered** — framing Singapore and Bali together puts
+**Map tab.** The map runs **full-bleed** — it fills the whole content area edge to
+edge and top to bottom, and nothing on this tab scrolls. The filter row sits
+above it; the legend, the selected-place card and the lasso actions float *over*
+the map rather than taking height from it.
+
+**Lasso select.** Hit **◯ Lasso select** and drag to draw a freehand loop around
+any pins you want; everything inside is selected and gets a dark ring. A floating
+bar then offers the same verbs as the Places tab — set status, mark reviewed,
+delete, clear. Hold **Shift** (or Ctrl/Cmd) while drawing to add to the current
+selection instead of replacing it. Clustering switches off while the lasso is
+armed, since you can't meaningfully draw around pins hidden inside a count badge.
+Places with no coordinates can never be lassoed, so they can't be swept into a
+bulk delete by accident.
+
+Pins are **clustered** — framing Singapore and Bali together puts
 ~1,700 km on screen, where 118 individual pins would collapse into two unreadable
 blobs; clustering shows counts that split apart as you zoom. Clustering switches
 off while a day's route is displayed, since merging consecutive stops would hide
