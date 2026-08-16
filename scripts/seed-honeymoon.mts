@@ -149,12 +149,13 @@ async function main() {
         const inserted = await pool.query(
             `INSERT INTO honeymoon_places
                 (region_id, name, category, description, lat, lng, address,
-                 status, source, needs_review, sort_order)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, 'idea', 'guide', TRUE, $8)
+                 links, status, source, needs_review, sort_order)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'idea', 'guide', TRUE, $9)
              RETURNING id`,
             [
                 regionId, place.name, place.category, place.description ?? null,
-                baked?.lat ?? null, baked?.lng ?? null, baked?.address ?? null, index,
+                baked?.lat ?? null, baked?.lng ?? null, baked?.address ?? null,
+                JSON.stringify(place.links ?? []), index,
             ],
         );
         placesAdded += 1;

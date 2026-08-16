@@ -580,7 +580,9 @@ what clears its review flag.
 **Guide tab.** The half of the travel guide with no coordinates. Region write-ups
 (expand a region to edit its description) and **Know Before You Go** cards grouped
 by category — the tap-water warning, the rupiah rate, Grab vs. Gojek, the helmet
-law. All inline-editable, all deletable.
+law, **driver contacts**, and an **Itinerary ideas** card holding the suggested
+Ubud walking route. All inline-editable, all deletable; note bodies grow to fit
+rather than scrolling inside a fixed box.
 
 **Settings tab.** Trip name and **start date**. Leave the date blank to keep
 planning in relative days; set it and every day picks up its real calendar date

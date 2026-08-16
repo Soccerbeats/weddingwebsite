@@ -10,9 +10,15 @@
  * against a third-party service is a bad thing to depend on.
  *
  * These are guesses, and the seed marks every one of them needs_review.
+ *
+ * Incremental: names already resolved in honeymoonCoords.ts are kept as-is and
+ * skipped, so adding a handful of places costs a handful of lookups rather than
+ * a full four-minute re-crawl. Previously-missed names are retried, since a
+ * place absent from OSM last time may have been added since.
  */
 import { writeFileSync } from 'node:fs';
 import { SEED_PLACES, SEED_REGIONS } from '../src/lib/honeymoonSeed';
+import { SEED_COORDS } from '../src/lib/honeymoonCoords';
 
 const NOMINATIM = 'https://nominatim.openstreetmap.org/search';
 const USER_AGENT = process.env.GEOCODER_USER_AGENT
@@ -25,6 +31,22 @@ const RATE_LIMIT_MS = 1100;
  * km away would wreck the map's fitBounds. Anything outside this is discarded.
  */
 const BOX = { minLat: -9.6, maxLat: 2.0, minLng: 102.0, maxLng: 116.5 };
+
+/**
+ * Alternate search terms for places OpenStreetMap files under a different name
+ * than the guide uses — a different transliteration ("Tegalalang" vs OSM's
+ * "Tegallalang"), a brand short-name, or the operator rather than the venue.
+ * Tried in order after the plain name fails.
+ */
+const ALIASES: Record<string, string[]> = {
+    'Tegalalang Rice Terrace': ['Tegallalang Rice Terraces', 'Ceking Rice Terrace, Tegallalang'],
+    'Beachwalk Shopping Center': ['Beachwalk Bali', 'Beachwalk Mall, Kuta'],
+    'Courtyard by Marriott Bali Seminyak Resort': ['Courtyard Bali Seminyak', 'Courtyard Seminyak'],
+    'Sacred Monkey Forest Sanctuary': ['Mandala Suci Wenara Wana'],
+    'Goa Gajah Elephant Cave': ['Goa Gajah'],
+    'Ubud Traditional Art Market': ['Pasar Seni Ubud'],
+    'Ngurah Rai International Airport': ['Bandara Internasional I Gusti Ngurah Rai'],
+};
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -59,20 +81,31 @@ async function lookup(query: string): Promise<{ lat: number; lng: number; label:
 }
 
 const hintByRegion = new Map(SEED_REGIONS.map((r) => [r.name, r.searchHint]));
-const resolved: Record<string, { lat: number; lng: number; address: string }> = {};
+// Start from what is already known and only look up the gaps.
+const resolved: Record<string, { lat: number; lng: number; address: string }> =
+    { ...SEED_COORDS };
+const pending = SEED_PLACES.filter((p) => !resolved[p.name]);
 let hits = 0;
 let misses = 0;
 
-for (const [i, place] of SEED_PLACES.entries()) {
+console.log(`${Object.keys(resolved).length} already pinned, ${pending.length} to look up.\n`);
+
+for (const [i, place] of pending.entries()) {
     const hint = hintByRegion.get(place.region) ?? 'Bali, Indonesia';
 
     // Try the specific query first, then a broader one — a business name plus a
     // village often finds nothing while the name plus the island does.
+    const country = place.region === 'Singapore' ? 'Singapore' : 'Bali, Indonesia';
     let found = await lookup(`${place.name}, ${hint}`);
     if (!found) {
         await sleep(RATE_LIMIT_MS);
-        const country = place.region === 'Singapore' ? 'Singapore' : 'Bali, Indonesia';
         found = await lookup(`${place.name}, ${country}`);
+    }
+    // Last resort: any alternate name OSM might file this place under.
+    for (const alias of ALIASES[place.name] ?? []) {
+        if (found) break;
+        await sleep(RATE_LIMIT_MS);
+        found = await lookup(`${alias}, ${country}`);
     }
 
     if (found) {
@@ -86,7 +119,7 @@ for (const [i, place] of SEED_PLACES.entries()) {
         misses += 1;
     }
 
-    console.log(`${found ? '·' : '✗'} [${i + 1}/${SEED_PLACES.length}] ${place.name}`);
+    console.log(`${found ? '·' : '✗'} [${i + 1}/${pending.length}] ${place.name}`);
     await sleep(RATE_LIMIT_MS);
 }
 
@@ -96,8 +129,9 @@ const header = `/**
  * network.
  *
  * EVERY ENTRY IS A GUESS. The seed writes them with needs_review = true and the
- * admin draws them with a dashed ring until you confirm each one. Resolved
- * ${hits} of ${SEED_PLACES.length}; the remaining ${misses} are pinned by hand.
+ * admin draws them with a dashed ring until you confirm each one.
+ * ${Object.keys(resolved).length} of ${SEED_PLACES.length} places are pinned;
+ * the remaining ${SEED_PLACES.length - Object.keys(resolved).length} are pinned by hand.
  */
 
 export interface SeedCoord { lat: number; lng: number; address: string }
@@ -106,4 +140,6 @@ export const SEED_COORDS: Record<string, SeedCoord> = ${JSON.stringify(resolved,
 `;
 
 writeFileSync(new URL('../src/lib/honeymoonCoords.ts', import.meta.url), header);
-console.log(`\nResolved ${hits}, missed ${misses}. Written to src/lib/honeymoonCoords.ts`);
+console.log(`\nNewly resolved ${hits}, still missing ${misses}. `
+    + `${Object.keys(resolved).length}/${SEED_PLACES.length} pinned overall. `
+    + `Written to src/lib/honeymoonCoords.ts`);

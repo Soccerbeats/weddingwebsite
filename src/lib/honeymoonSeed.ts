@@ -27,6 +27,8 @@ export interface SeedPlace {
     region: string;
     category: string;
     description?: string;
+    /** Website / booking links, stored on the place as JSONB. */
+    links?: { label: string; url: string }[];
 }
 
 export interface SeedNote {
@@ -318,7 +320,12 @@ export const SEED_PLACES: SeedPlace[] = [
     { name: 'Campuhan Ridge Walk', region: 'Ubud', category: 'attraction' },
     { name: 'Goa Gajah Elephant Cave', region: 'Ubud', category: 'attraction' },
     { name: 'Ubud Traditional Art Market', region: 'Ubud', category: 'shop' },
-    { name: 'Tegalalang Rice Terrace', region: 'Ubud', category: 'attraction' },
+    {
+        name: 'Tegalalang Rice Terrace',
+        region: 'Ubud',
+        category: 'attraction',
+        description: 'The rice terraces — and the swings.',
+    },
     { name: 'Pura Taman Kemuda Saraswati', region: 'Ubud', category: 'temple' },
     { name: 'Goa Garba', region: 'Ubud', category: 'temple' },
     { name: 'Mason Adventures', region: 'Ubud', category: 'activity' },
@@ -380,6 +387,48 @@ export const SEED_PLACES: SeedPlace[] = [
     { name: 'Lower Yeh Labuh Waterfall', region: 'North Bali', category: 'waterfall' },
     { name: 'Upper Yeh Labuh Waterfall', region: 'North Bali', category: 'waterfall' },
     { name: 'Gembleng Waterfall', region: 'North Bali', category: 'waterfall' },
+
+    /* ---- Kuta / Seminyak (Austin & Heaven's own list) ---- */
+    { name: 'Hard Rock Hotel Bali', region: 'Seminyak & Kuta', category: 'stay' },
+    {
+        name: 'Courtyard by Marriott Bali Seminyak Resort',
+        region: 'Seminyak & Kuta',
+        category: 'stay',
+    },
+    {
+        name: 'Beachwalk Shopping Center',
+        region: 'Seminyak & Kuta',
+        category: 'shop',
+        description: 'Shopping and restaurants — the more Americanised end of Kuta. '
+            + 'See the separate shopping document.',
+    },
+
+    /* ---- Ubud day out (Austin & Heaven's own list) ---- */
+    {
+        name: 'Chez Monique Jewelry',
+        region: 'Ubud',
+        category: 'activity',
+        description: 'Jewellery-making class.',
+        links: [{ label: 'Website', url: 'https://chezmoniquejewelry.com/' }],
+    },
+    {
+        name: 'Bali Zen',
+        region: 'Ubud',
+        category: 'shop',
+        description: 'Worth stopping into on the walk down Jl. Monkey Forest Road.',
+    },
+    {
+        name: 'Cafe Lotus',
+        region: 'Ubud',
+        category: 'restaurant',
+        description: 'On Jl. Raya Ubud, just after the Starbucks. Lotus pond and temple views.',
+    },
+    {
+        name: 'Ubud Palace',
+        region: 'Ubud',
+        category: 'attraction',
+        description: 'Puri Saren Agung — right by the Art Market.',
+    },
 
     /* ---- Transport anchors ---- */
     { name: 'Ngurah Rai International Airport', region: 'Seminyak & Kuta', category: 'transport', description: 'DPS — Bali arrival and departure.' },
@@ -446,6 +495,31 @@ export const SEED_NOTES: SeedNote[] = [
             'About $30–50 for a full day (8–10 hours) depending on distance. Driving is a respected career '
             + 'here and drivers take real pride in showing you the island. Pick one and stick with them — '
             + 'they often end up taking you to their village, a local ceremony, or introducing their family.',
+    },
+    {
+        title: 'Driver contacts',
+        category: 'Transport',
+        body:
+            'Two recommended drivers:\n'
+            + '  • contact@thebalidriver.com\n'
+            + '  • poetoealit@yahoo.com\n\n'
+            + 'Work with your driver for entry to temples and events — they know which ones need a sarong, '
+            + 'which are closed for ceremonies, and can get you in where turning up alone is awkward. '
+            + 'There are many temples worth visiting; let the driver build that part of the day.',
+    },
+    {
+        title: 'A day in Ubud — suggested walking route',
+        category: 'Itinerary ideas',
+        body:
+            'Rice terraces and the swings first, then into town:\n\n'
+            + '1. Monkey Forest — walk the paths and see the monkeys.\n'
+            + '2. Walk down Jl. Monkey Forest Road for a snack and some shopping. '
+            + 'Stop in at Bali Zen.\n'
+            + '3. At Jl. Raya Ubud turn left and eat at Cafe Lotus, just past the Starbucks.\n'
+            + '4. After eating, visit the Ubud Art Market and Ubud Palace — they are next to '
+            + 'each other.\n\n'
+            + 'Separately: the jewellery-making class at Chez Monique, and the rice terraces at '
+            + 'Tegalalang where you can ride the swings.',
     },
     {
         title: 'Skip the rental car',

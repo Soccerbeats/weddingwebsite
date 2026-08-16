@@ -67,11 +67,17 @@ export function InlineText({ value, onCommit, placeholder, className = '', multi
         focus:ring-accent/30 transition ${className}`;
 
     if (multiline) {
+        // Grow to fit rather than trapping a multi-line note (a suggested route,
+        // a region write-up) inside a three-row scrollbox. Counts wrapped lines
+        // roughly as well as hard ones, and stays draggable beyond the cap.
+        const lines = draft.split('\n').reduce(
+            (total, line) => total + Math.max(1, Math.ceil(line.length / 60)), 0,
+        );
         return (
             <textarea
                 value={draft}
                 placeholder={placeholder}
-                rows={3}
+                rows={Math.min(24, Math.max(3, lines + 1))}
                 onChange={(e) => setDraft(e.target.value)}
                 onBlur={commit}
                 onKeyDown={(e) => { if (e.key === 'Escape') { setDraft(value); e.currentTarget.blur(); } }}

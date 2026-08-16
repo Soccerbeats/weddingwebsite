@@ -27,6 +27,12 @@ All notable changes to this project are documented here.
 
 - **Referential integrity chosen so the itinerary can't grow holes** — `honeymoon_stops.place_id` is nullable with `ON DELETE SET NULL`, so deleting a place demotes its scheduled stops to plain text rather than deleting them; a day's `base_place_id` clears the same way. Deleting a *day* cascades its stops and travel legs. Both paths verified against a live database.
 
+- **Honeymoon portal — personal additions to the seeded guide.** Driver contacts (`contact@thebalidriver.com`, `poetoealit@yahoo.com`) and the advice to work through your driver for temple and event entry become a **Driver contacts** note. The Ubud day — Monkey Forest, down Jl. Monkey Forest Road via Bali Zen, left at Jl. Raya Ubud to Cafe Lotus past the Starbucks, then the Art Market and Palace — becomes an **Itinerary ideas** note rather than a pre-built day, since it shouldn't presume where it lands in the trip. Seven new places: Hard Rock Hotel Bali, Courtyard by Marriott Bali Seminyak, Beachwalk Shopping Center, Chez Monique Jewelry (with its website), Bali Zen, Cafe Lotus and Ubud Palace. Tegalalang now mentions the swings.
+
+  `SeedPlace` gained an optional `links` field so a seeded place can carry its website, and the harvest script is now **incremental** — names already in `honeymoonCoords.ts` are kept and skipped, so adding a handful of places costs a handful of lookups instead of a full re-crawl, while previously-missed names are retried.
+
+  Multi-line note bodies now **grow to fit** in the Guide tab; a numbered route was previously trapped in a three-row scrollbox.
+
 - **`npm run check:honeymoon`** — 44 assertions over the pure logic that would otherwise fail silently and wrongly: great-circle distances against known city pairs, day-number arithmetic across a month boundary, 12-hour time formatting at noon and midnight, Google Maps URL parsing in all three shapes, rejection of null island and out-of-range latitudes, hop calculation across unpinned and deleted stops, and seed-data integrity (no duplicate names, no orphan regions, no unknown categories).
 - **Finances suite (`/admin/finances`)** — replaces the `Heav & Aust Wedding Spreadsheet — Budget` tab. Five tabs: **Overview** (reporting), **Budget**, **Purchases**, **Gift Money**, **Settings**. Everything edits inline — commit on blur or Enter, revert on `Esc`, no Save button — and every derived figure recalculates from a single refetch so the grand total, percentages, both deficits and both payment plans can't disagree with each other.
 

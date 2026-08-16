@@ -4,8 +4,9 @@
  * network.
  *
  * EVERY ENTRY IS A GUESS. The seed writes them with needs_review = true and the
- * admin draws them with a dashed ring until you confirm each one. Resolved
- * 118 of 224; the remaining 106 are pinned by hand.
+ * admin draws them with a dashed ring until you confirm each one.
+ * 126 of 231 places are pinned;
+ * the remaining 105 are pinned by hand.
  */
 
 export interface SeedCoord { lat: number; lng: number; address: string }
@@ -600,5 +601,45 @@ export const SEED_COORDS: Record<string, SeedCoord> = {
         "lat": 1.351092,
         "lng": 103.994982,
         "address": "Singapore Changi Airport, T2 Departure Drive, Changi, East Region, Singapore, 819643, Singapore"
+    },
+    "Hard Rock Hotel Bali": {
+        "lat": -8.721381,
+        "lng": 115.171097,
+        "address": "Hard Rock Hotel Bali, Jalan Pantai Kuta, Kuta, Badung, Bali, 80361, Indonesia"
+    },
+    "Chez Monique Jewelry": {
+        "lat": -8.501442,
+        "lng": 115.266154,
+        "address": "Chez Monique Jewelry Making, 57, Jalan Sri Wedari, Ubud, Ubud District, Gianyar, Bali, 80571, Indonesia"
+    },
+    "Cafe Lotus": {
+        "lat": -8.50624,
+        "lng": 115.261287,
+        "address": "Cafe Lotus, Jalan Raya Ubud, Ubud, Ubud District, Gianyar, Bali, 88571, Indonesia"
+    },
+    "Ubud Palace": {
+        "lat": -8.50695,
+        "lng": 115.262737,
+        "address": "Ubud Palace, Jalan Raya Ubud, Ubud, Ubud District, Gianyar, Bali, 80571, Indonesia"
+    },
+    "Goa Gajah Elephant Cave": {
+        "lat": -8.523693,
+        "lng": 115.286689,
+        "address": "Goa Gajah, Jalan Raya Goa Gajah, Bedulu, Blahbatuh, Gianyar, Bali, 80581, Indonesia"
+    },
+    "Tegalalang Rice Terrace": {
+        "lat": -8.433582,
+        "lng": 115.279456,
+        "address": "Tegallalang Rice Terraces, Tangkup, Kedisan, Tegallalang, Gianyar, Bali, 80561, Indonesia"
+    },
+    "Courtyard by Marriott Bali Seminyak Resort": {
+        "lat": -8.691448,
+        "lng": 115.163064,
+        "address": "Courtyard Bali Seminyak Resort, 103, Jalan Camplung Tanduk, Seminyak, Kuta, Badung, Bali, 80361, Indonesia"
+    },
+    "Beachwalk Shopping Center": {
+        "lat": -8.716546,
+        "lng": 115.16931,
+        "address": "Beachwalk Bali, Jalan Pantai Kuta, Kuta, Badung, Bali, 80361, Indonesia"
     }
 };
