@@ -7,12 +7,14 @@ import ItineraryTab from './ItineraryTab';
 import MapTab from './MapTab';
 import PlacesTab from './PlacesTab';
 import SettingsTab from './SettingsTab';
+import StaysTab from './StaysTab';
 import { useHoneymoon } from './useHoneymoon';
 
 const TABS = [
     { key: 'map', label: 'Map' },
     { key: 'itinerary', label: 'Itinerary' },
     { key: 'places', label: 'Places' },
+    { key: 'stays', label: 'Stays' },
     { key: 'guide', label: 'Guide' },
     { key: 'settings', label: 'Settings' },
 ] as const;
@@ -121,6 +123,7 @@ export default function AdminHoneymoonPage() {
                     <div className="w-full px-4 md:px-6 pb-6">
                         {tab === 'itinerary' && <ItineraryTab api={api} />}
                         {tab === 'places' && <PlacesTab api={api} />}
+                        {tab === 'stays' && <StaysTab api={api} />}
                         {tab === 'guide' && <GuideTab api={api} />}
                         {tab === 'settings' && <SettingsTab api={api} />}
                     </div>

@@ -52,6 +52,7 @@ async function createTables() {
             photos JSONB NOT NULL DEFAULT '[]'::jsonb,
             source TEXT NOT NULL DEFAULT 'manual',
             needs_review BOOLEAN NOT NULL DEFAULT FALSE,
+            rating TEXT,
             sort_order INTEGER NOT NULL DEFAULT 0,
             created_at TIMESTAMP DEFAULT NOW()
         )
@@ -103,6 +104,8 @@ async function createTables() {
     `);
     // Added after the notes table shipped; harmless on a fresh database.
     await pool.query('ALTER TABLE honeymoon_notes ADD COLUMN IF NOT EXISTS source TEXT');
+    // Interested / not interested on a candidate stay.
+    await pool.query('ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS rating TEXT');
 
     await pool.query(`
         INSERT INTO honeymoon_trip (id, title) VALUES (1, 'Honeymoon')
@@ -213,6 +216,7 @@ export async function getHoneymoonPayload(): Promise<HoneymoonPayload> {
         photos: jsonArray(r.photos),
         source: r.source ?? 'manual',
         needs_review: r.needs_review === true,
+        rating: r.rating === 'yes' || r.rating === 'no' ? r.rating : null,
         sort_order: r.sort_order ?? 0,
     }));
 

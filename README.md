@@ -573,6 +573,27 @@ between them in order, numbered. Pin colour is the category, and the legend list
 only the categories actually on screen. Click a pin for its detail card, with an
 *Open in Google Maps* link.
 
+**Stays tab.** A shortlist for accommodation. Paste (or drop) **Booking.com links
+— one per line, several at once** — and each becomes a candidate. Rate them
+**👍 Interested / 👎 Not interested** (click the active one again to clear it),
+filter by rating, and add price and notes inline. **Preview** opens the listing
+in a popup inside the portal, with an *Open in a tab* escape hatch.
+
+Two limits worth knowing, both imposed by Booking.com rather than by choice:
+
+- **The name is read from the link, not fetched.** Booking.com answers
+  server-side requests with a bot challenge, so there's no title, photo or price
+  to pull in. The URL slug gives a good name (`/hotel/id/hard-rock-bali.html` →
+  *Hard Rock Bali*); price and notes are yours to add.
+- **The in-portal preview is best-effort.** Booking.com currently sends
+  `frame-ancestors 'none'` in *report-only* mode, so embedding works today but is
+  one config change away from not. If the frame doesn't load, the popup says so
+  and offers the link instead. Your notes and rating live here either way.
+
+There's no import of your Booking.com favourites — that would need your account
+credentials, which this app should never hold. Pasting a batch of links is the
+supported route.
+
 **Itinerary tab.** Days are numbered (Day 1, Day 2…). Each day holds:
 - a **base** — where you're sleeping, chosen from places categorised *Stay*
 - optional **travel legs** — flight/boat/car/train/walk, with times and a

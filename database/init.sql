@@ -203,6 +203,7 @@ CREATE TABLE IF NOT EXISTS honeymoon_places (
   photos JSONB NOT NULL DEFAULT '[]'::jsonb,
   source TEXT NOT NULL DEFAULT 'manual',
   needs_review BOOLEAN NOT NULL DEFAULT FALSE,
+  rating TEXT,
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMP DEFAULT NOW()
 );
@@ -249,6 +250,7 @@ CREATE TABLE IF NOT EXISTS honeymoon_notes (
 );
 
 ALTER TABLE honeymoon_notes ADD COLUMN IF NOT EXISTS source TEXT;
+ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS rating TEXT;
 
 CREATE INDEX IF NOT EXISTS honeymoon_places_region_idx ON honeymoon_places (region_id);
 CREATE INDEX IF NOT EXISTS honeymoon_stops_day_idx ON honeymoon_stops (day_id);

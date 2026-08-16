@@ -11,7 +11,7 @@ import {
     boundsOf, dateForDay, distanceKm, formatDayDate, formatDistance, formatTime,
     dayHops, hasCoords, categoryMeta, CATEGORIES,
     sourceLabel, sourcesOf, SOURCE_AMY, SOURCE_MANUAL, SOURCE_YOUTUBE,
-    pointInPolygon, placesInPolygon,
+    pointInPolygon, placesInPolygon, nameFromStayUrl, stayUrlsFromText, isStayUrl,
     type Place, type Stop,
 } from '../src/lib/honeymoon';
 import {
@@ -245,6 +245,41 @@ console.log('\nLasso geometry');
     // not be silently swept into a bulk delete.
     check('unpinned places are never lassoed', !hit.includes(3));
     check('too few points selects nothing', placesInPolygon(places, box.slice(0, 2)).length === 0);
+}
+
+console.log('\nBooking links');
+{
+    check('reads a Booking.com property name',
+        nameFromStayUrl('https://www.booking.com/hotel/id/hard-rock-bali.html') === 'Hard Rock Bali');
+    // Booking appends a locale before .html; leaving it in gives "Bali En Gb".
+    check('strips the locale suffix',
+        nameFromStayUrl('https://www.booking.com/hotel/id/the-legian-bali.en-gb.html') === 'The Legian Bali',
+        String(nameFromStayUrl('https://www.booking.com/hotel/id/the-legian-bali.en-gb.html')));
+    check('survives query strings',
+        nameFromStayUrl('https://www.booking.com/hotel/id/desa-hay.html?checkin=2026-09-01&group_adults=2')
+        === 'Desa Hay');
+    check('handles an Airbnb room id',
+        nameFromStayUrl('https://www.airbnb.com/rooms/12345678?source=x') === 'Airbnb 12345678');
+    // A numeric slug is an id, not a name — better blank than "12345".
+    check('a numeric slug is not a name',
+        nameFromStayUrl('https://www.booking.com/hotel/id/12345.html') === null);
+    check('an unrelated url yields nothing',
+        nameFromStayUrl('https://example.com/about') === null);
+
+    check('recognises booking hosts', isStayUrl('https://www.booking.com/hotel/id/x.html'));
+    check('recognises airbnb', isStayUrl('https://www.airbnb.co.uk/rooms/1'));
+    check('rejects a non-booking host', !isStayUrl('https://example.com/x'));
+    check('rejects bare text', !isStayUrl('booking.com'));
+
+    const block = `https://www.booking.com/hotel/id/a.html
+        https://www.booking.com/hotel/id/b.html
+        not-a-url
+        https://www.booking.com/hotel/id/a.html`;
+    const urls = stayUrlsFromText(block);
+    // Pasting a block twice, or a list with a repeat, must not create duplicates.
+    check('splits a pasted block into urls', urls.length === 2, urls.join(' | '));
+    check('drops non-urls and duplicates', !urls.includes('not-a-url'));
+    check('empty text yields nothing', stayUrlsFromText('   ').length === 0);
 }
 
 console.log('\nSources');

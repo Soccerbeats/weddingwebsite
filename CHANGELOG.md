@@ -73,6 +73,16 @@ All notable changes to this project are documented here.
 
   Narrower columns exposed a real bug in the auto-growing note textarea: it estimated height from characters-per-line, which was tuned for one wide column, so the same text wrapped to more lines than predicted and notes ended mid-sentence inside a scrollbox. It now **measures its own `scrollHeight`** instead of estimating, with a `ResizeObserver` to re-measure when the column width changes.
 
+- **Honeymoon — Stays tab for shortlisting accommodation.** Paste or drop **Booking.com links, one per line or several at once**, and each becomes a candidate stay. Rate them **👍 Interested / 👎 Not interested** (clicking the active rating clears it), filter by rating, edit price and notes inline, and **Preview** the listing in a popup without leaving the portal. Stays are ordinary places with category `stay`, so anything already in the library shows up here and a shortlisted stay can still be a day's base on the Itinerary.
+
+  New nullable `honeymoon_places.rating` column, deliberately `text` rather than an enum: an enum coerces an unknown value to a fallback, and clearing a rating back to *unrated* has to survive as NULL rather than snapping to 'yes'.
+
+  **Two limits, both established by testing rather than assumed:**
+  - Booking.com answers server-side fetches with a **202 bot challenge** — no OG tags, so the existing `fetch-meta` route can't pull a title, photo or price. The name is derived from the URL slug instead (`/hotel/id/hard-rock-bali.en-gb.html` → *Hard Rock Bali*, locale suffix stripped, numeric-only slugs rejected as ids rather than names).
+  - Booking.com sends `frame-ancestors 'none'` **in report-only mode**, so the popup works today but is one config flip from breaking. The frame is treated as best-effort: if it hasn't loaded after six seconds the popup explains and offers the link, and *Open in a tab* is always present. The frame is sandboxed without `allow-same-origin`.
+
+  **No Booking.com favourites import.** There is no public API for a user's wishlist, and the alternative — holding the account password and scraping the logged-in session — is not something this app should do. Bulk paste covers the same ground.
+
 - **`npm run check:honeymoon`** — 44 assertions over the pure logic that would otherwise fail silently and wrongly: great-circle distances against known city pairs, day-number arithmetic across a month boundary, 12-hour time formatting at noon and midnight, Google Maps URL parsing in all three shapes, rejection of null island and out-of-range latitudes, hop calculation across unpinned and deleted stops, and seed-data integrity (no duplicate names, no orphan regions, no unknown categories).
 - **Finances suite (`/admin/finances`)** — replaces the `Heav & Aust Wedding Spreadsheet — Budget` tab. Five tabs: **Overview** (reporting), **Budget**, **Purchases**, **Gift Money**, **Settings**. Everything edits inline — commit on blur or Enter, revert on `Esc`, no Save button — and every derived figure recalculates from a single refetch so the grand total, percentages, both deficits and both payment plans can't disagree with each other.
 

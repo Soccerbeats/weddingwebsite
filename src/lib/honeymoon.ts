@@ -19,6 +19,14 @@ export type PlaceStatus = 'idea' | 'shortlisted' | 'booked';
  */
 export type PlaceSource = string;
 
+/** How you feel about a candidate stay. Null means not yet judged. */
+export type PlaceRating = 'yes' | 'no' | null;
+
+export const RATINGS: { key: 'yes' | 'no'; label: string; icon: string; color: string }[] = [
+    { key: 'yes', label: 'Interested', icon: '👍', color: '#059669' },
+    { key: 'no', label: 'Not interested', icon: '👎', color: '#be123c' },
+];
+
 export const SOURCE_YOUTUBE = 'YouTube Travel Guide';
 export const SOURCE_AMY = "Amy's Suggestions";
 export const SOURCE_MANUAL = 'Added by me';
@@ -73,6 +81,8 @@ export interface Place {
     photos: string[];
     source: PlaceSource;
     needs_review: boolean;
+    /** Interested / not interested. Used by the Stays shortlist. */
+    rating: PlaceRating;
     sort_order: number;
 }
 
@@ -285,6 +295,61 @@ export function placesInPolygon(places: Place[], polygon: LatLng[]): number[] {
         .filter(hasCoords)
         .filter((p) => pointInPolygon({ lat: p.lat, lng: p.lng }, polygon))
         .map((p) => p.id);
+}
+
+/* ------------------------------------------------------------------ */
+/* Accommodation links                                                 */
+/* ------------------------------------------------------------------ */
+
+/** Hosts whose URLs carry a usable property name in the path. */
+const STAY_HOSTS = /booking\.com|airbnb\.[a-z.]+|agoda\.com|expedia\.[a-z.]+|hotels\.com/i;
+
+export function isStayUrl(url: string): boolean {
+    return /^https?:\/\//i.test(url) && STAY_HOSTS.test(url);
+}
+
+/**
+ * Derive a property name from a booking URL.
+ *
+ * Booking.com blocks server-side page fetches with a bot challenge, so there is
+ * no title or image to scrape — but the slug in the path is the property name,
+ * which is enough to save a link without typing the name by hand.
+ *
+ *   /hotel/id/hard-rock-bali.en-gb.html  ->  "Hard Rock Bali"
+ */
+export function nameFromStayUrl(url: string): string | null {
+    let slug: string | null = null;
+
+    const booking = url.match(/\/hotel\/[a-z]{2}\/([^/?#]+)/i);
+    if (booking) {
+        slug = booking[1]
+            .replace(/\.html?$/i, '')
+            // Strip a trailing locale like ".en-gb" or ".pt-br".
+            .replace(/\.[a-z]{2}(-[a-z]{2})?$/i, '');
+    } else {
+        const airbnb = url.match(/\/rooms\/(?:plus\/)?(\d+)/i);
+        if (airbnb) return `Airbnb ${airbnb[1]}`;
+    }
+
+    if (!slug) return null;
+    const words = slug.split(/[-_]+/).filter(Boolean);
+    if (!words.length) return null;
+    // A slug that is only digits is an id, not a name.
+    if (words.every((w) => /^\d+$/.test(w))) return null;
+
+    return words
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' ');
+}
+
+/** Split a pasted block into one candidate URL per line. */
+export function stayUrlsFromText(text: string): string[] {
+    const seen = new Set<string>();
+    return text
+        .split(/[\s,]+/)
+        .map((t) => t.trim())
+        .filter((t) => /^https?:\/\//i.test(t))
+        .filter((t) => (seen.has(t) ? false : (seen.add(t), true)));
 }
 
 /* ------------------------------------------------------------------ */

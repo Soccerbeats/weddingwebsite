@@ -61,6 +61,10 @@ const RESOURCES: Record<string, ResourceDef> = {
             // Free text, not an enum: a new batch of suggestions from a new
             // person should be labellable without a code change.
             source: { kind: 'text' },
+            // Text rather than enum: an enum coerces an unknown value to a
+            // fallback, and clearing a rating back to "unrated" has to survive
+            // as NULL rather than snapping to 'yes'.
+            rating: { kind: 'text' },
             needs_review: { kind: 'bool' },
             sort_order: { kind: 'int' },
         },
