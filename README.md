@@ -54,6 +54,7 @@ A beautiful, customizable wedding website built with Next.js 16. Features includ
   - *Settings*: Page title, subtitle, description text, background color, payment method handles (Zelle/Venmo/Cash App/PayPal)
 - **Nav Cards**: Set background images for the home page navigation cards. Each card has a bundled grayscale default photo; use **Upload** to replace with a custom image or **Gallery** to pick from photos already on the site.
 - **Seating Chart**: Visual floor plan builder — add/resize room shape, place tables (round/rectangle/sweetheart), drag-drop guests from sidebar, party cohesion coloring
+- **Honeymoon Portal** (`/admin/honeymoon`, admin-only — no public page): Plan and visualise the honeymoon across five tabs — **Map** (auto-fitting Leaflet map), **Itinerary** (day-by-day builder), **Places** (the candidate library), **Guide** (region write-ups and Know Before You Go notes), and **Settings**. See *Honeymoon Portal* below
 - **WIP Control**:
   - Per-page **WIP** toggle (shows "coming soon" to non-admins)
   - Per-page **Hidden** toggle (removes page from nav entirely)
@@ -499,6 +500,98 @@ DATABASE_URL=... npx tsx scripts/verify-finance-db.mts    # schema, seed, CRUD, 
 BASE=... ADMIN_PASSWORD=... npx tsx scripts/verify-finance-ui.mts   # real browser, all five tabs
 ```
 
+### Honeymoon Portal
+
+`/admin/honeymoon` — a private planning tool. It is **not** a public page: there
+is no guest-facing route and no WIP toggle, so nothing here is ever visible on the
+wedding site.
+
+**Loading the Bali guide.** The portal ships with the guide already extracted
+into seed data — 7 regions, 224 places and 12 practical notes. Load it once:
+
+```bash
+DATABASE_URL=... npm run seed:honeymoon
+```
+
+Coordinates were geocoded ahead of time and committed to
+`src/lib/honeymoonCoords.ts`, so this runs in seconds and needs no internet.
+Anything the geocoder couldn't resolve is inserted **unpinned**, ready for you to
+place by hand.
+
+The seed is **idempotent and non-destructive**: it matches on place name and skips
+anything already present, so re-running never overwrites an edit you made.
+(The flip side: if you *rename* a seeded place, the next run treats the original
+name as missing and re-adds it. Delete rather than rename if you want one gone.)
+Use `--dry` to preview and `--no-geo` to skip the network fallback entirely.
+
+**Every seeded pin starts flagged "needs review."** A geocoder will confidently
+return *a* result for a name it only half-recognises, and this guide contains
+waterfalls that share names across regions. Unconfirmed pins draw with a dashed
+amber ring on the map and can be filtered to in both Map and Places tabs. Confirm
+them before you plan a day around one.
+
+**Map tab.** Pins are **clustered** — framing Singapore and Bali together puts
+~1,700 km on screen, where 118 individual pins would collapse into two unreadable
+blobs; clustering shows counts that split apart as you zoom. Clustering switches
+off while a day's route is displayed, since merging consecutive stops would hide
+the ordering the route exists to show.
+
+The view always fits itself to whatever is currently showing: with no
+filters it frames Singapore and Bali together; filter to a region and it zooms to
+that island; pick a day and it zooms to that day's stops and draws the route
+between them in order, numbered. Pin colour is the category, and the legend lists
+only the categories actually on screen. Click a pin for its detail card, with an
+*Open in Google Maps* link.
+
+**Itinerary tab.** Days are numbered (Day 1, Day 2…). Each day holds:
+- a **base** — where you're sleeping, chosen from places categorised *Stay*
+- optional **travel legs** — flight/boat/car/train/walk, with times and a
+  confirmation reference (add via the day's **⋯** menu)
+- an ordered list of **stops**, dragged to reorder, each with an optional time
+
+Between consecutive pinned stops the portal shows the **straight-line distance**,
+and warns when a single hop exceeds 40 km. This is not driving time — no routing
+API is involved — but on single-lane Balinese roads it's enough to catch a day
+that pairs a Canggu beach club with a North Bali waterfall.
+
+A stop doesn't have to be a pinned place: type a free-text label for "lunch near
+the rice terraces." Deleting a place that's already scheduled **keeps the stop**
+and just unlinks it, so the itinerary never grows holes.
+
+**Places tab.** The library, built for a few hundred rows: search plus filters for
+region, category, status, *needs review* and *not pinned*. Tick multiple rows for
+bulk status changes or to clear review flags. Each place carries a status —
+**Idea → Shortlisted → Booked** — and rows already on the itinerary show a
+*scheduled* badge.
+
+**Adding or re-pinning a place.** The editor's **Find** box takes three kinds of
+input:
+
+| Input | Example | Accuracy |
+|-------|---------|----------|
+| A name to search | `Tukad Cepung Waterfall` | Good for landmarks, poor for small businesses |
+| A Google Maps link | paste the URL straight in | Exact — reads the pin out of the URL |
+| Raw coordinates | `-8.4715, 115.3567` | Exact |
+
+Right-clicking a pin in Google Maps copies the coordinates, which is the most
+reliable route for anywhere the search can't find. Confirming a pin by hand is
+what clears its review flag.
+
+**Guide tab.** The half of the travel guide with no coordinates. Region write-ups
+(expand a region to edit its description) and **Know Before You Go** cards grouped
+by category — the tap-water warning, the rupiah rate, Grab vs. Gojek, the helmet
+law. All inline-editable, all deletable.
+
+**Settings tab.** Trip name and **start date**. Leave the date blank to keep
+planning in relative days; set it and every day picks up its real calendar date
+and weekday. Clearing it returns to relative days — nothing is lost either way.
+
+Verify the portal's logic (no database or network needed):
+
+```bash
+npm run check:honeymoon    # distances, date maths, URL parsing, seed integrity
+```
+
 ## File Storage
 
 | Data | Location | Persisted via |
@@ -528,6 +621,11 @@ BASE=... ADMIN_PASSWORD=... npx tsx scripts/verify-finance-ui.mts   # real brows
 | `finance_contributors` / `finance_receipts` | Gift-money pledges and the payments actually received, earmarkable to a line or section |
 | `finance_schedule` | Scheduled payments — deposits, instalments, final balances, with due dates |
 | `finance_snapshots` | One row per day of headline figures, for the trend chart |
+| `honeymoon_trip` | Trip title, optional start date, currency (single row) |
+| `honeymoon_regions` | Areas (Canggu, Ubud, Singapore…) with the guide's write-up |
+| `honeymoon_places` | The candidate library — coordinates, category, status, links |
+| `honeymoon_days` / `honeymoon_stops` / `honeymoon_travel` | Itinerary: numbered days, ordered stops, travel legs |
+| `honeymoon_notes` | Know Before You Go cards (money, water, transport, culture) |
 
 ## Backup
 

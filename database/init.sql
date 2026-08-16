@@ -157,3 +157,95 @@ CREATE TABLE IF NOT EXISTS floor_plan_walls (
   y2 FLOAT NOT NULL,
   created_at TIMESTAMP DEFAULT NOW()
 );
+
+-- ---------------------------------------------------------------------------
+-- Honeymoon portal
+--
+-- Mirrored by ensureHoneymoonTables() in src/lib/honeymoonDb.ts, which runs the
+-- same statements on first request so an already-deployed database migrates
+-- itself. Both must stay in step.
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS honeymoon_trip (
+  id INTEGER PRIMARY KEY DEFAULT 1,
+  title TEXT NOT NULL DEFAULT 'Honeymoon',
+  start_date DATE,
+  home_currency TEXT NOT NULL DEFAULT 'USD',
+  notes TEXT,
+  CONSTRAINT honeymoon_trip_singleton CHECK (id = 1)
+);
+
+INSERT INTO honeymoon_trip (id, title) VALUES (1, 'Honeymoon') ON CONFLICT (id) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS honeymoon_regions (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  country TEXT NOT NULL DEFAULT '',
+  description TEXT,
+  center_lat DOUBLE PRECISION,
+  center_lng DOUBLE PRECISION,
+  sort_order INTEGER NOT NULL DEFAULT 0
+);
+
+-- lat/lng nullable: an unpinned place is still a real place.
+CREATE TABLE IF NOT EXISTS honeymoon_places (
+  id SERIAL PRIMARY KEY,
+  region_id INTEGER REFERENCES honeymoon_regions(id) ON DELETE SET NULL,
+  name TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT 'misc',
+  lat DOUBLE PRECISION,
+  lng DOUBLE PRECISION,
+  address TEXT,
+  description TEXT,
+  status TEXT NOT NULL DEFAULT 'idea',
+  price_note TEXT,
+  links JSONB NOT NULL DEFAULT '[]'::jsonb,
+  photos JSONB NOT NULL DEFAULT '[]'::jsonb,
+  source TEXT NOT NULL DEFAULT 'manual',
+  needs_review BOOLEAN NOT NULL DEFAULT FALSE,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS honeymoon_days (
+  id SERIAL PRIMARY KEY,
+  day_number INTEGER NOT NULL UNIQUE,
+  title TEXT,
+  base_place_id INTEGER REFERENCES honeymoon_places(id) ON DELETE SET NULL,
+  notes TEXT
+);
+
+-- ON DELETE SET NULL: deleting a place demotes its scheduled stops to plain
+-- text rather than tearing holes in the itinerary.
+CREATE TABLE IF NOT EXISTS honeymoon_stops (
+  id SERIAL PRIMARY KEY,
+  day_id INTEGER NOT NULL REFERENCES honeymoon_days(id) ON DELETE CASCADE,
+  place_id INTEGER REFERENCES honeymoon_places(id) ON DELETE SET NULL,
+  custom_label TEXT,
+  start_time TEXT,
+  notes TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS honeymoon_travel (
+  id SERIAL PRIMARY KEY,
+  day_id INTEGER NOT NULL REFERENCES honeymoon_days(id) ON DELETE CASCADE,
+  mode TEXT NOT NULL DEFAULT 'flight',
+  from_text TEXT,
+  to_text TEXT,
+  depart_time TEXT,
+  arrive_time TEXT,
+  confirmation_ref TEXT,
+  notes TEXT
+);
+
+CREATE TABLE IF NOT EXISTS honeymoon_notes (
+  id SERIAL PRIMARY KEY,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL DEFAULT '',
+  category TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS honeymoon_places_region_idx ON honeymoon_places (region_id);
+CREATE INDEX IF NOT EXISTS honeymoon_stops_day_idx ON honeymoon_stops (day_id);

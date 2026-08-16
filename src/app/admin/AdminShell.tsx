@@ -45,6 +45,7 @@ export default function AdminShell({
                 { href: '/admin/rsvps', label: 'RSVPs' },
                 { href: '/admin/finances', label: 'Finances' },
                 { href: '/admin/seating', label: 'Seating Chart' },
+                { href: '/admin/honeymoon', label: 'Honeymoon' },
             ],
         },
         {
