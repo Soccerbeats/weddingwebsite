@@ -11,6 +11,19 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.2 — [Released] A demo instance, and the image finally runs init.sql (`main`, 2026-08-17 17:08)
+
+### Added
+- **A demo instance with a fictional wedding in it**, for showing the site to someone without showing them the guest list. A separate stack — its own database, its own volumes, port 3001, admin password `demo` — sharing nothing with production but the image, which is why it is a stack rather than a "demo mode" inside the running site. `docker-compose.demo.yml` plus `npm run seed:demo`.
+- **`src/lib/demoSeed.ts` — an entirely invented wedding, as filled-out as a real one.** Maya and Theo, married at a stone house outside Asheville; ninety guests with addresses, party members, dietary notes and flags; twenty-six RSVPs with messages; fourteen donations; a twenty-eight-line budget with payers, contributors and purchases; thirteen tables with a hundred-and-thirteen people seated; eleven FAQs, a seven-item schedule, twelve wedding-party members, eight timeline milestones; and a sixteen-day honeymoon in Portugal — eighty-three places across ten regions, fourteen guide notes, twelve to-dos. The guest list comes out of a **fixed-seed generator**, so re-seeding produces the same names and a screenshot taken today still matches tomorrow.
+- Photographs are fetched from **Lorem Picsum with a fixed seed per file**, so the demo ships with real images rather than grey rectangles and the same run always yields the same pictures; `--no-photos` skips the download on a re-seed. The honeymoon's places are **real Portuguese landmarks with approximate coordinates**, because a map of invented points looks like a bug and a demo map wants to look like a map.
+- `npm run seed:demo` is destructive and says so: it refuses to run without `--yes-wipe` and prints the database it is about to empty.
+
+### Fixed
+- **A fresh install came up with a partial schema, and had for a long time.** The Dockerfile built `init-db.sh` by pasting an **inline copy** of the schema into a shell script, and that copy had drifted a long way behind `database/init.sql` — it created three tables with their original columns and nothing else. `init.sql` was never copied into the image and never ran. Everything added since (seating, donations, the finance suite, the honeymoon portal, and six of `guest_list`'s columns) only appeared when its own API route was first called, so a long-running install never noticed while a brand-new one was broken in ways that depended on which page you opened first. **The image now copies `init.sql` and runs it**, as a single query because its `DO $$ … $$` blocks cannot survive being split on semicolons, and it is idempotent so it is safe on every boot. Verified against a genuinely empty database: 17 tables and a complete `guest_list` on first start, where before there were 3. Found because the new demo instance is the first fresh install this project has had in months.
+- `database/init.sql` gained the pieces it was missing against production: `guest_list.flag`, `guest_list.relationship`, `wip_toggles.is_hidden` and the whole `donations` table, each mirroring the runtime statement that had been the only copy.
+- Production was redeployed onto this and its data checked before and after — 91 guests, 23 RSVPs, 207 places, 133 seat assignments, unchanged. The one data-touching migration in `init.sql` was confirmed to match **zero** rows there first, and a dump was taken before the swap.
+
 ## v0.9.1 — [Released] Versioned changelog, and Jarvis's viewer for it (`main`, 2026-08-17 16:10)
 
 ### Added

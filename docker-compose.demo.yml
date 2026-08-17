@@ -1,0 +1,52 @@
+# The public demo instance.
+#
+# A second, completely separate stack: its own database, its own volumes, its own
+# port. It shares nothing with production but the image, so nothing done in the
+# demo can reach the real guest list — which is the whole reason it exists as a
+# stack rather than as a "demo mode" inside the running site.
+#
+# Fill it with `npm run seed:demo` (see README → The demo instance). The seed is
+# destructive by design and refuses to run without --yes-wipe.
+#
+#   docker compose -p weddingdemo -f docker-compose.demo.yml up -d
+#
+# The database port is published on 5433 so the seed can reach it over an SSH
+# tunnel from a machine that has the repository. Close it afterwards if you would
+# rather not have Postgres listening.
+
+services:
+  web:
+    image: ghcr.io/soccerbeats/weddingwebsite:latest
+    container_name: wedding-web-demo
+    restart: always
+    ports:
+      - '3001:3000'
+    environment:
+      - DATABASE_URL=postgresql://demo:demo@db:5432/demo
+      # Deliberately guessable: this instance holds nothing worth protecting and
+      # the password is meant to be shared with whoever is being shown around.
+      - ADMIN_PASSWORD=demo
+      - NODE_ENV=production
+    volumes:
+      - demo_photos:/app/public/photos
+      - demo_config:/app/public/config
+    depends_on:
+      - db
+
+  db:
+    image: postgres:15-alpine
+    container_name: wedding-db-demo
+    restart: always
+    ports:
+      - '5433:5432'
+    environment:
+      - POSTGRES_USER=demo
+      - POSTGRES_PASSWORD=demo
+      - POSTGRES_DB=demo
+    volumes:
+      - demo_postgres:/var/lib/postgresql/data
+
+volumes:
+  demo_postgres:
+  demo_photos:
+  demo_config:

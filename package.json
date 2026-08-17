@@ -15,7 +15,8 @@
     "seed:honeymoon": "npx --yes tsx scripts/seed-honeymoon.mts",
     "check:types": "tsc --noEmit && tsc --noEmit -p tsconfig.scripts.json",
     "audit:finance": "npx --yes tsx scripts/audit-finance-logic.mts",
-    "check:changelog": "npx --yes tsx scripts/check-changelog.mts"
+    "check:changelog": "npx --yes tsx scripts/check-changelog.mts",
+    "seed:demo": "npx --yes tsx scripts/seed-demo.mts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

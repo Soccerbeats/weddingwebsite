@@ -239,6 +239,43 @@ docker compose -p weddingwebsite --env-file stack.env -f docker-compose.yml ps
 
 The image's own entrypoint/cmd are correct (`docker-entrypoint.sh` + `sh -c "/app/init-db.sh && node server.js"`) — do not override them.
 
+## The demo instance
+
+A second, completely separate stack with a **fictional** wedding in it — for
+showing the site to someone without showing them your guest list. It shares
+nothing with production but the image: its own database, its own volumes, its own
+port, so nothing done in the demo can reach real data.
+
+```bash
+# Bring it up (docker-server, port 3001, admin password "demo")
+docker compose -p weddingdemo -f docker-compose.demo.yml up -d
+
+# Fill it. Destructive by design, hence the flag.
+DATABASE_URL=postgresql://demo:demo@<host>:5433/demo \
+  CONFIG_DIR=/tmp/demo/config PHOTO_DIR=/tmp/demo/photos \
+  npm run seed:demo -- --yes-wipe
+
+# Then copy the config and photos into the web container's volumes
+docker cp /tmp/demo/config/. wedding-web-demo:/app/public/config/
+docker cp /tmp/demo/photos/. wedding-web-demo:/app/public/photos/
+docker exec -u root wedding-web-demo chown -R nextjs:nodejs /app/public/config /app/public/photos
+```
+
+The content lives in `src/lib/demoSeed.ts` and is entirely invented: Maya and
+Theo, ninety guests with addresses and dietary notes, twenty-six RSVPs, a budget
+of twenty-eight lines, thirteen tables with a hundred-odd people seated, and a
+sixteen-day honeymoon in Portugal. The guest list is generated from a fixed seed,
+so re-seeding gives the same names and a screenshot stays true.
+
+Two deliberate choices. Photographs are fetched from **Lorem Picsum** with a fixed
+seed per file, so the demo ships with real images rather than grey rectangles and
+the same run always produces the same pictures — `--no-photos` skips the download
+when re-seeding. And the honeymoon's *places* are real Portuguese landmarks with
+approximate coordinates, because a map of invented points looks like a bug.
+
+`npm run seed:demo` refuses to run without `--yes-wipe`, and prints the database
+it is about to empty. Never point it at production.
+
 ## Admin Panel Guide
 
 ### Versions and the changelog

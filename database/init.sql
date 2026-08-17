@@ -41,7 +41,41 @@ CREATE TABLE IF NOT EXISTS guest_list (
 ALTER TABLE guest_list ADD COLUMN IF NOT EXISTS plus_one_name VARCHAR(255);
 ALTER TABLE guest_list ADD COLUMN IF NOT EXISTS address TEXT;
 ALTER TABLE guest_list ADD COLUMN IF NOT EXISTS party_members JSONB;
+-- Added with the guest-list bulk editor; the API adds these at runtime too, and
+-- the two must stay in step so a fresh database is not a column behind.
+ALTER TABLE guest_list ADD COLUMN IF NOT EXISTS flag VARCHAR(20);
+ALTER TABLE guest_list ADD COLUMN IF NOT EXISTS relationship VARCHAR(255);
 ALTER TABLE rsvps ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
+-- Per-page "hidden from the nav" flag, added with the WIP controls. Created at
+-- runtime by /api/wip-status too; both must stay in step.
+ALTER TABLE wip_toggles ADD COLUMN IF NOT EXISTS is_hidden BOOLEAN DEFAULT false;
+
+-- ---------------------------------------------------------------------------
+-- Donations against the honeymoon fund.
+--
+-- Mirrored by ensureDonationsTable() in src/app/api/admin/donations/route.ts,
+-- which runs the same statements on first request. Both must stay in step — a
+-- fresh database that has never had that route called still needs the table,
+-- which is how the demo seed discovered it was missing here.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS donations (
+  id SERIAL PRIMARY KEY,
+  guest_id INTEGER,
+  guest_name TEXT NOT NULL,
+  amount NUMERIC DEFAULT 0,
+  fund_item_id TEXT,
+  fund_item_title TEXT,
+  event TEXT,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+ALTER TABLE donations ADD COLUMN IF NOT EXISTS co_donors JSONB DEFAULT '[]'::jsonb;
+-- A donation can be money, a physical gift, or both, so amount is not required.
+ALTER TABLE donations ADD COLUMN IF NOT EXISTS gift TEXT;
+ALTER TABLE donations ADD COLUMN IF NOT EXISTS thank_you_sent BOOLEAN DEFAULT FALSE;
+ALTER TABLE donations ADD COLUMN IF NOT EXISTS thank_you_sent_at TIMESTAMP;
+ALTER TABLE donations ALTER COLUMN amount SET DEFAULT 0;
+ALTER TABLE donations ALTER COLUMN amount DROP NOT NULL;
 
 -- Migrate plus_one_name into party_members and backfill remaining slots as null
 DO $$
