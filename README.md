@@ -2,6 +2,74 @@
 
 A beautiful, customizable wedding website built with Next.js 16. Features include photo galleries, a relationship timeline, RSVP management, a tabbed registry (honeymoon fund + product registry), seating chart builder, and a comprehensive admin panel for content management.
 
+<img src="docs/images/home.jpg" width="820" alt="The home page: a full-bleed hero slideshow with the couple's names and a countdown">
+
+> Every screenshot on this page comes from the **demo instance**, so the couple,
+> the guests, the budget and the honeymoon are all fictional. See
+> [The demo instance](#the-demo-instance).
+
+## Screenshots
+
+### The public site
+
+| Our Story | Wedding Party |
+|---|---|
+| <img src="docs/images/our-story.jpg" alt="A vertical timeline of milestones, photographs alternating left and right"> | <img src="docs/images/wedding-party.jpg" alt="Wedding party member cards with photographs and how each person is known to the couple"> |
+| A vertical timeline that alternates sides, with tilted photographs | Cards for each side of the party |
+
+| Schedule | Registry |
+|---|---|
+| <img src="docs/images/schedule.jpg" alt="The wedding day schedule, each event with a time, a description and a location"> | <img src="docs/images/registry.jpg" alt="The registry page with honeymoon fund items showing progress bars, and a product grid"> |
+| The day in order, with times and locations | A honeymoon fund with progress, plus a product registry |
+
+<img src="docs/images/photos.jpg" width="820" alt="The photo gallery: a grid of hearted photographs that opens into a lightbox">
+
+*The gallery shows only the photographs you have hearted in the admin panel.*
+
+### The admin panel
+
+| Dashboard | RSVPs & guests |
+|---|---|
+| <img src="docs/images/admin-dashboard.jpg" alt="The admin dashboard with overview cards for the countdown, RSVPs, guests, content and seating"> | <img src="docs/images/admin-rsvps.jpg" alt="The RSVP table with stats cards, filters, and party members as sub-rows"> |
+| Where everything stands, at a glance | Ninety guests, filterable, with party members as sub-rows |
+
+| Finances | Seating chart |
+|---|---|
+| <img src="docs/images/admin-finances.jpg" alt="The finance suite: budget lines grouped by category with paid and remaining totals"> | <img src="docs/images/admin-seating.jpg" alt="The seating chart builder with round tables on a floor plan and guests assigned to seats"> |
+| A real budget: lines, payers, contributors, what is left | Drag guests onto tables on a floor plan |
+
+| Photos | Changelog |
+|---|---|
+| <img src="docs/images/admin-photos.jpg" alt="Photo management with drag-to-reorder, heart-to-publish and inline editing"> | <img src="docs/images/changelog.jpg" alt="The changelog viewer: a version nav on the left beside a reading pane of release cards"> |
+| Drag to reorder, heart to publish | Every release, read in the panel — see [Versions and the changelog](#versions-and-the-changelog) |
+
+### The honeymoon portal
+
+Private planning for the trip — admin-only, with no public page.
+
+<img src="docs/images/honeymoon-map.jpg" width="820" alt="The honeymoon map: clustered pins across Portugal, Madeira and the Azores, with filters above and a category legend">
+
+*Every place on one map, clustered, filterable, and fitted to whatever is showing.*
+
+| Itinerary | Calendar |
+|---|---|
+| <img src="docs/images/honeymoon-itinerary.jpg" alt="The itinerary: day cards with a base, travel legs, timed stops and straight-line distances between them"> | <img src="docs/images/honeymoon-calendar.jpg" alt="The same itinerary as a month calendar, each trip day a tile carrying its stops"> |
+| Days with a base, travel legs and timed stops | The same trip on a real calendar |
+
+| Dashboard | Guide |
+|---|---|
+| <img src="docs/images/honeymoon-dashboard.jpg" alt="The honeymoon dashboard: counts, the itinerary, a map of confirmed pins, what needs attention and rough costs"> | <img src="docs/images/honeymoon-guide.jpg" alt="Region write-ups and Know Before You Go notes grouped by category"> |
+| The whole trip on one screen | Region write-ups and everything with no coordinates |
+
+### On a phone
+
+<p>
+  <img src="docs/images/mobile-home.jpg" width="290" alt="The home page on a phone">
+  &nbsp;
+  <img src="docs/images/mobile-itinerary.jpg" width="290" alt="The honeymoon itinerary on a phone">
+</p>
+
+
 ## Features
 
 ### Public Site

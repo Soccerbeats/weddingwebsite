@@ -664,7 +664,10 @@ function StopRow({ stop, index, api, dayNumber, hopKm }: {
                     type="time"
                     defaultValue={stop.start_time ?? ''}
                     onBlur={(e) => api.update('stops', { id: stop.id, start_time: e.target.value })}
-                    className="text-xs text-gray-500 bg-transparent w-[5.5rem] shrink-0
+                    // 6.75rem, not 5.5: "09:30 AM" plus the picker icon does not
+                    // fit in 5.5 and Chromium silently clipped the M, so every
+                    // afternoon stop read "03:30 PI".
+                    className="text-xs text-gray-500 bg-transparent w-[6.75rem] shrink-0
                         rounded-lg px-1 py-1 hover:bg-gray-50 focus:bg-white focus:outline-none
                         focus:ring-2 focus:ring-accent/30"
                     aria-label="Start time"

@@ -11,6 +11,19 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.3 — [Released] Screenshots in the README (`main`, 2026-08-17 19:08)
+
+### Added
+- **Nineteen screenshots in the README**, committed to `docs/images/` and referenced with relative paths — so they render on github.com, in clones and forks, in an editor's preview, and while the repo is private. A hero shot of the home page up top, then a **Screenshots** section grouped into the public site, the admin panel, the honeymoon portal and a phone, using two-column tables for side-by-side pairs and inline `<img width>` so nothing renders at 1400px. Every image carries alt text.
+- They are all taken from the **demo instance**, so the couple, guests, budget and honeymoon in them are fictional and no real guest data is published. The README says so where a reader will see it.
+- Captured at 1500×940 (620px for the phone shots), resized to 1400px and encoded as both palette-PNG and mozjpeg with the **smaller of the two kept** per image — JPEG won every time. **8.3MB → 1.9MB, 76% smaller**, largest file 216KB. Git keeps binaries forever, so this is worth doing once rather than regretting later.
+
+### Fixed
+- **Every afternoon stop in the itinerary read "03:30 PI".** The time input was `w-[5.5rem]`, which is not enough for `09:30 AM` plus Chromium's picker icon, so the browser silently clipped the last character. Widened to `6.75rem`. It had been wrong on screen the whole time and only became obvious when a screenshot of it was about to become the front page of the repository.
+
+### Changed
+- Screenshots are shot against the live demo by a script, so refreshing them is a re-run rather than nineteen manual captures. An emoji font had to be installed for the capturing browser — without one, `🖨 Print` and `🗓 Export` photograph as empty boxes and libel the product.
+
 ## v0.9.2 — [Released] A demo instance, and the image finally runs init.sql (`main`, 2026-08-17 17:08)
 
 ### Added
