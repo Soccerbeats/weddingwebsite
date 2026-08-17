@@ -683,7 +683,12 @@ map and dropped onto a day like anything else. The flag is separate from the
 category deliberately — *what* an excursion is varies, and tying the tab to one
 category would drop anything you re-typed.
 
-**Itinerary tab.** Days are numbered (Day 1, Day 2…). Each day holds:
+**Itinerary tab.** **Drag a day by its ⠿ handle to reorder the trip** — the days
+renumber, their dates follow, and each day's stops travel with it. Days have
+their own handle in the header so dragging a day never fights the stop handles
+or the inline text fields inside it.
+
+Days are numbered (Day 1, Day 2…). Each day holds:
 - a **base** — where you're sleeping, chosen from places categorised *Stay*
 - optional **travel legs** — flight/boat/car/train/walk, with times and a
   confirmation reference (add via the day's **⋯** menu)

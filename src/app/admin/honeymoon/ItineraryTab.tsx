@@ -6,7 +6,7 @@ import {
     type DragEndEvent,
 } from '@dnd-kit/core';
 import {
-    SortableContext, useSortable, verticalListSortingStrategy,
+    SortableContext, rectSortingStrategy, useSortable, verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
@@ -21,6 +21,25 @@ import {
 export default function ItineraryTab({ api }: { api: HoneymoonApi }) {
     const { data } = api;
     const days = data?.days ?? [];
+
+    // A slightly longer press than the stop handles use: days are the bigger,
+    // rarer move, and a twitchy day drag while aiming at a stop is worse than a
+    // fractionally slower one.
+    const daySensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+        useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
+    );
+
+    const onDayDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+        if (!over || active.id === over.id) return;
+        const ids = days.map((d) => d.id);
+        const from = ids.indexOf(Number(active.id));
+        const to = ids.indexOf(Number(over.id));
+        if (from < 0 || to < 0) return;
+        ids.splice(to, 0, ids.splice(from, 1)[0]);
+        api.reorder('days', ids);
+    };
 
     if (!days.length) {
         return (
@@ -41,9 +60,17 @@ export default function ItineraryTab({ api }: { api: HoneymoonApi }) {
     // read as a wall of days you can scan than as a single tall strip.
     return (
         <div className="space-y-3">
-            <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3 items-start">
-                {days.map((day) => <DayCard key={day.id} day={day} api={api} />)}
-            </div>
+            <p className="text-xs text-gray-400 px-1">
+                Drag a day by its ⠿ handle to reorder the trip — the days renumber and
+                their dates follow.
+            </p>
+            <DndContext sensors={daySensors} collisionDetection={closestCenter} onDragEnd={onDayDragEnd}>
+                <SortableContext items={days.map((d) => d.id)} strategy={rectSortingStrategy}>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3 items-start">
+                        {days.map((day) => <DayCard key={day.id} day={day} api={api} />)}
+                    </div>
+                </SortableContext>
+            </DndContext>
             <div className="flex justify-center pt-1">
                 <Button tone="primary" onClick={() => api.create('days', {})}>
                     + Add day {days.length + 1}
@@ -54,6 +81,10 @@ export default function ItineraryTab({ api }: { api: HoneymoonApi }) {
 }
 
 function DayCard({ day, api }: { day: Day; api: HoneymoonApi }) {
+    const {
+        attributes: dayAttributes, listeners: dayListeners, setNodeRef: setDayRef,
+        transform: dayTransform, transition: dayTransition, isDragging: dayDragging,
+    } = useSortable({ id: day.id });
     const [adding, setAdding] = useState(false);
     const [pickPlace, setPickPlace] = useState('');
     const [customLabel, setCustomLabel] = useState('');
@@ -92,11 +123,27 @@ function DayCard({ day, api }: { day: Day; api: HoneymoonApi }) {
     };
 
     return (
+        <div
+            ref={setDayRef}
+            style={{ transform: CSS.Transform.toString(dayTransform), transition: dayTransition }}
+            className={dayDragging ? 'opacity-60' : ''}
+        >
         <Card className="p-4">
             {/* ---- Day header ---- */}
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                     <div className="flex items-baseline gap-2">
+                        {/* Its own handle: dragging anywhere on the card would fight
+                            the stop handles and the inline text fields inside it. */}
+                        <button
+                            {...dayAttributes}
+                            {...dayListeners}
+                            className="cursor-grab active:cursor-grabbing text-gray-300
+                                hover:text-gray-500 touch-none -ml-1 px-1 shrink-0"
+                            aria-label={`Drag day ${day.day_number} to reorder`}
+                        >
+                            ⠿
+                        </button>
                         <span className="text-sm font-semibold text-gray-900 shrink-0">
                             Day {day.day_number}
                         </span>
@@ -271,6 +318,7 @@ function DayCard({ day, api }: { day: Day; api: HoneymoonApi }) {
                 </button>
             )}
         </Card>
+        </div>
     );
 }
 

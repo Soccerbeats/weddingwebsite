@@ -177,6 +177,12 @@ All notable changes to this project are documented here.
 
 - **Honeymoon map — the place detail card moved to the top-right.** It was bottom-right. Top-right keeps it clear of the legend (bottom-left) and the itinerary panel (top-left), and off the pin you just clicked. It is also height-capped now, so a long description scrolls inside the card rather than running off the bottom of the map.
 
+- **Honeymoon itinerary — days can be dragged to reorder.** Drag a day by its handle and the trip renumbers: move day 3 above day 1 and it becomes day 1, with its dates and its stops following. Stops hang off `day_id`, so they travel with their day rather than staying put.
+
+  `day_number` is `UNIQUE`, so assigning the new numbers directly would collide the moment two days swap. Every affected row is parked on `-id` first — unique and negative, so nothing can clash — then given its final number, all inside one transaction.
+
+  Days get their own drag handle in the card header rather than the whole card being draggable, so a day drag can't fight the stop handles or the inline text fields inside it, and the day sensor needs a slightly longer press than the stop sensor for the same reason.
+
 - **`npm run check:honeymoon`** — 44 assertions over the pure logic that would otherwise fail silently and wrongly: great-circle distances against known city pairs, day-number arithmetic across a month boundary, 12-hour time formatting at noon and midnight, Google Maps URL parsing in all three shapes, rejection of null island and out-of-range latitudes, hop calculation across unpinned and deleted stops, and seed-data integrity (no duplicate names, no orphan regions, no unknown categories).
 - **Finances suite (`/admin/finances`)** — replaces the `Heav & Aust Wedding Spreadsheet — Budget` tab. Five tabs: **Overview** (reporting), **Budget**, **Purchases**, **Gift Money**, **Settings**. Everything edits inline — commit on blur or Enter, revert on `Esc`, no Save button — and every derived figure recalculates from a single refetch so the grand total, percentages, both deficits and both payment plans can't disagree with each other.
 

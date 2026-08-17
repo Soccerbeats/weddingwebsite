@@ -329,16 +329,41 @@ export async function PATCH(request: Request, { params }: Params) {
 
         // A bare array of {id} reorders in one transaction — index becomes sort_order.
         if (Array.isArray(body)) {
+            const ids = body
+                .map((row) => Math.trunc(Number((row as { id: unknown }).id)))
+                .filter((id) => Number.isFinite(id) && id > 0);
+
             const client = await pool.connect();
             try {
                 await client.query('BEGIN');
-                for (const [index, row] of body.entries()) {
-                    const id = Math.trunc(Number((row as { id: unknown }).id));
-                    if (!Number.isFinite(id) || id <= 0) continue;
+
+                if (def.table === 'honeymoon_days') {
+                    // Days have no sort_order: their order *is* day_number, so
+                    // moving one renumbers the trip — drag day 3 above day 1 and
+                    // it becomes day 1, dates and all. Stops hang off day_id, so
+                    // they travel with their day.
+                    //
+                    // day_number is UNIQUE, so assigning final numbers directly
+                    // would collide the moment two days swap. Parking every row
+                    // on -id first is collision-free (ids are unique and
+                    // positive) and leaves nothing to clash with.
                     await client.query(
-                        `UPDATE ${def.table} SET sort_order = $1 WHERE id = $2`, [index, id],
+                        'UPDATE honeymoon_days SET day_number = -id WHERE id = ANY($1)', [ids],
                     );
+                    for (const [index, id] of ids.entries()) {
+                        await client.query(
+                            'UPDATE honeymoon_days SET day_number = $1 WHERE id = $2',
+                            [index + 1, id],
+                        );
+                    }
+                } else {
+                    for (const [index, id] of ids.entries()) {
+                        await client.query(
+                            `UPDATE ${def.table} SET sort_order = $1 WHERE id = $2`, [index, id],
+                        );
+                    }
                 }
+
                 await client.query('COMMIT');
             } catch (error) {
                 await client.query('ROLLBACK');
