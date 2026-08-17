@@ -157,7 +157,7 @@ export default function PinMap({ lat, lng, category, onChange }: {
     return (
         <div
             ref={containerRef}
-            className="h-52 w-full rounded-2xl overflow-hidden border border-gray-200 z-0"
+            className="h-48 w-full rounded-2xl overflow-hidden border border-gray-200 z-0"
         />
     );
 }

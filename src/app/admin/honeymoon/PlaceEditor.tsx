@@ -16,7 +16,7 @@ import {
 // the server bundle.
 const PinMap = dynamic(() => import('./PinMap'), {
     ssr: false,
-    loading: () => <div className="h-52 w-full rounded-2xl bg-gray-100 animate-pulse" />,
+    loading: () => <div className="h-48 w-full rounded-2xl bg-gray-100 animate-pulse" />,
 });
 
 /** Matches a bare "lat, lng" so a pasted pair resolves without pressing Find. */
@@ -179,7 +179,11 @@ export default function PlaceEditor({ api, place, open, onClose }: {
 
     return (
         <Modal open={open} onClose={onClose} title={editing ? 'Edit place' : 'Add a place'} wide>
-            <div className="space-y-4">
+            {/* Two columns from lg up, and tight spacing throughout: this dialog
+                has to fit a laptop screen without a scrollbar, and stacking the
+                map above the notes made it about twice as tall as it needed to
+                be while the space beside the map sat empty. */}
+            <div className="space-y-3">
                 <div>
                     <label className="block text-xs font-semibold text-gray-500 mb-1">Name</label>
                     <TextField
@@ -265,180 +269,191 @@ export default function PlaceEditor({ api, place, open, onClose }: {
                     </div>
                 </div>
 
-                {/* ---- Location ---- */}
-                <div className="rounded-2xl border border-gray-200 p-3 space-y-3">
-                    <div className="flex items-center justify-between gap-2">
-                        <label className="block text-xs font-semibold text-gray-500">Location</label>
-                        {lat != null && lng != null ? (
-                            <span className="text-[11px] text-gray-400 tabular-nums">
-                                {lat.toFixed(5)}, {lng.toFixed(5)}
-                            </span>
-                        ) : (
-                            <span className="text-[11px] text-amber-600">Not pinned</span>
-                        )}
-                    </div>
-
-                    <div className="flex gap-2">
-                        <TextField
-                            value={query}
-                            onChange={(e) => setQuery(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); lookup(query); } }}
-                            onPaste={(e) => {
-                                const text = e.clipboardData.getData('text');
-                                if (!text) return;
-                                e.preventDefault();
-                                autoLookup(text);
-                            }}
-                            onDragOver={(e) => e.preventDefault()}
-                            onDrop={(e) => {
-                                // Dragging a link from the browser gives text/uri-list;
-                                // dragging selected text gives text/plain.
-                                const text = e.dataTransfer.getData('text/uri-list')
-                                    || e.dataTransfer.getData('text');
-                                if (!text) return;
-                                e.preventDefault();
-                                autoLookup(text.trim());
-                            }}
-                            placeholder="Search a name, or paste/drop a Google Maps link"
-                        />
-                        <Button onClick={() => lookup(query)} disabled={searching || !query.trim()}>
-                            {searching ? '…' : 'Find'}
-                        </Button>
-                    </div>
-
-                    {lookupError && <p className="text-xs text-amber-700">{lookupError}</p>}
-
-                    {hits.length > 0 && (
-                        <ul className="divide-y divide-gray-100 rounded-2xl border border-gray-100 overflow-hidden">
-                            {hits.map((hit, i) => (
-                                <li key={`${hit.lat},${hit.lng},${i}`}>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
+                    {/* ---- Location ---- */}
+                    <div className="rounded-2xl border border-gray-200 p-3 space-y-2.5">
+                        {/* Coordinates and Clear pin share the header line — both
+                            are about the pin, and giving Clear pin a row of its
+                            own cost more height than the control is worth. */}
+                        <div className="flex items-center justify-between gap-2">
+                            <label className="block text-xs font-semibold text-gray-500">Location</label>
+                            {lat != null && lng != null ? (
+                                <span className="flex items-center gap-2">
+                                    <span className="text-[11px] text-gray-400 tabular-nums">
+                                        {lat.toFixed(5)}, {lng.toFixed(5)}
+                                    </span>
                                     <button
-                                        onClick={() => applyHit(hit)}
-                                        className="w-full text-left px-3 py-2 hover:bg-gray-50 transition"
+                                        onClick={() => { setLat(null); setLng(null); }}
+                                        className="text-[11px] text-gray-400 hover:text-rose-600"
                                     >
-                                        <div className="text-sm text-gray-800 line-clamp-2">{hit.label}</div>
-                                        <div className="text-[11px] text-gray-400 tabular-nums">
-                                            {hit.lat.toFixed(5)}, {hit.lng.toFixed(5)}
-                                        </div>
+                                        Clear pin
                                     </button>
-                                </li>
-                            ))}
-                        </ul>
-                    )}
+                                </span>
+                            ) : (
+                                <span className="text-[11px] text-amber-600">Not pinned</span>
+                            )}
+                        </div>
 
-                    {/* Confirming a pin you can't see is a coin flip, so the map
-                        appears as soon as there is a coordinate to show. */}
-                    {lat != null && lng != null && (
-                        <>
-                            <PinMap
-                                lat={lat}
-                                lng={lng}
-                                category={category}
-                                onChange={(nextLat, nextLng) => {
-                                    setLat(nextLat);
-                                    setLng(nextLng);
-                                    // Placing the pin by hand IS the confirmation.
-                                    setNeedsReview(false);
+                        <div className="flex gap-2">
+                            <TextField
+                                value={query}
+                                onChange={(e) => setQuery(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); lookup(query); } }}
+                                onPaste={(e) => {
+                                    const text = e.clipboardData.getData('text');
+                                    if (!text) return;
+                                    e.preventDefault();
+                                    autoLookup(text);
                                 }}
+                                onDragOver={(e) => e.preventDefault()}
+                                onDrop={(e) => {
+                                    // Dragging a link from the browser gives text/uri-list;
+                                    // dragging selected text gives text/plain.
+                                    const text = e.dataTransfer.getData('text/uri-list')
+                                        || e.dataTransfer.getData('text');
+                                    if (!text) return;
+                                    e.preventDefault();
+                                    autoLookup(text.trim());
+                                }}
+                                placeholder="Search a name, or paste/drop a Google Maps link"
                             />
-                            <p className="text-[11px] text-gray-400">
-                                Drag the pin or click the map to move it.
-                            </p>
-                        </>
-                    )}
-
-                    {needsReview && lat != null ? (
-                        <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl
-                            bg-amber-50 px-3 py-2">
-                            <span className="text-xs text-amber-800">
-                                Placed automatically — check the map above before trusting it.
-                            </span>
-                            <Button onClick={() => setNeedsReview(false)}>Looks right</Button>
+                            <Button onClick={() => lookup(query)} disabled={searching || !query.trim()}>
+                                {searching ? '…' : 'Find'}
+                            </Button>
                         </div>
-                    ) : needsReview ? (
-                        <div className="rounded-2xl bg-amber-50 px-3 py-2">
-                            <span className="text-xs text-amber-800">
-                                No pin yet — search above, or paste a Google Maps link.
-                            </span>
+
+                        {lookupError && <p className="text-xs text-amber-700">{lookupError}</p>}
+
+                        {hits.length > 0 && (
+                            <ul className="divide-y divide-gray-100 rounded-2xl border border-gray-100 overflow-hidden">
+                                {hits.map((hit, i) => (
+                                    <li key={`${hit.lat},${hit.lng},${i}`}>
+                                        <button
+                                            onClick={() => applyHit(hit)}
+                                            className="w-full text-left px-3 py-2 hover:bg-gray-50 transition"
+                                        >
+                                            <div className="text-sm text-gray-800 line-clamp-2">{hit.label}</div>
+                                            <div className="text-[11px] text-gray-400 tabular-nums">
+                                                {hit.lat.toFixed(5)}, {hit.lng.toFixed(5)}
+                                            </div>
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+
+                        {/* Confirming a pin you can't see is a coin flip, so the map
+                            appears as soon as there is a coordinate to show. */}
+                        {lat != null && lng != null && (
+                            <>
+                                <PinMap
+                                    lat={lat}
+                                    lng={lng}
+                                    category={category}
+                                    onChange={(nextLat, nextLng) => {
+                                        setLat(nextLat);
+                                        setLng(nextLng);
+                                        // Placing the pin by hand IS the confirmation.
+                                        setNeedsReview(false);
+                                    }}
+                                />
+                                <p className="text-[11px] text-gray-400">
+                                    Drag the pin or click the map to move it.
+                                </p>
+                            </>
+                        )}
+
+                        {needsReview && lat != null ? (
+                            <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl
+                                bg-amber-50 px-3 py-2">
+                                <span className="text-xs text-amber-800">
+                                    Placed automatically — check the map above before trusting it.
+                                </span>
+                                <Button onClick={() => setNeedsReview(false)}>Looks right</Button>
+                            </div>
+                        ) : needsReview ? (
+                            <div className="rounded-2xl bg-amber-50 px-3 py-2">
+                                <span className="text-xs text-amber-800">
+                                    No pin yet — search above, or paste a Google Maps link.
+                                </span>
+                            </div>
+                        ) : null}
+
+                    </div>
+
+                    <div className="space-y-3">
+                        <div>
+                            <label className="block text-xs font-semibold text-gray-500 mb-1">Notes</label>
+                            <TextArea
+                                rows={3}
+                                value={description}
+                                onChange={(e) => setDescription(e.target.value)}
+                                placeholder="Light rays between 9 and 11am."
+                            />
                         </div>
-                    ) : null}
 
-                    {lat != null && (
-                        <button
-                            onClick={() => { setLat(null); setLng(null); }}
-                            className="text-xs text-gray-400 hover:text-rose-600"
-                        >
-                            Clear pin
-                        </button>
-                    )}
-                </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-gray-500 mb-1">Address</label>
+                            <TextField value={address} onChange={(e) => setAddress(e.target.value)} />
+                        </div>
 
-                <div>
-                    <label className="block text-xs font-semibold text-gray-500 mb-1">Notes</label>
-                    <TextArea
-                        rows={3}
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                        placeholder="Light rays between 9 and 11am."
-                    />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                        <label className="block text-xs font-semibold text-gray-500 mb-1">Address</label>
-                        <TextField value={address} onChange={(e) => setAddress(e.target.value)} />
-                    </div>
-                    <div>
-                        <label className="block text-xs font-semibold text-gray-500 mb-1">Source</label>
-                        <TextField
-                            list="honeymoon-sources"
-                            value={source}
-                            onChange={(e) => setSource(e.target.value)}
-                            placeholder="Who suggested this?"
-                        />
-                        <datalist id="honeymoon-sources">
-                            {sourcesOf(api.data?.places ?? []).map((s) => (
-                                <option key={s} value={s} />
-                            ))}
-                        </datalist>
-                    </div>
-                    <div>
-                        <label className="block text-xs font-semibold text-gray-500 mb-1">Price note</label>
-                        <TextField
-                            value={priceNote}
-                            onChange={(e) => setPriceNote(e.target.value)}
-                            placeholder="~500k IDR entry"
-                        />
-                    </div>
-                </div>
-
-                {/* ---- Links ---- */}
-                <div>
-                    <label className="block text-xs font-semibold text-gray-500 mb-1">Links</label>
-                    <div className="space-y-2">
-                        {links.map((link, i) => (
-                            <div key={i} className="flex gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-500 mb-1">Source</label>
                                 <TextField
-                                    value={link.label}
-                                    placeholder="Website"
-                                    className="md:max-w-[10rem]"
-                                    onChange={(e) => setLinks(links.map((l, j) =>
-                                        j === i ? { ...l, label: e.target.value } : l))}
+                                    list="honeymoon-sources"
+                                    value={source}
+                                    onChange={(e) => setSource(e.target.value)}
+                                    placeholder="Who suggested this?"
                                 />
+                                <datalist id="honeymoon-sources">
+                                    {sourcesOf(api.data?.places ?? []).map((s) => (
+                                        <option key={s} value={s} />
+                                    ))}
+                                </datalist>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-500 mb-1">Price note</label>
                                 <TextField
-                                    value={link.url}
-                                    placeholder="https://…"
-                                    onChange={(e) => setLinks(links.map((l, j) =>
-                                        j === i ? { ...l, url: e.target.value } : l))}
+                                    value={priceNote}
+                                    onChange={(e) => setPriceNote(e.target.value)}
+                                    placeholder="~500k IDR entry"
                                 />
-                                <Button tone="ghost" onClick={() => setLinks(links.filter((_, j) => j !== i))}>
-                                    ✕
+                            </div>
+                        </div>
+
+                        {/* ---- Links ---- */}
+                        <div>
+                            <label className="block text-xs font-semibold text-gray-500 mb-1">Links</label>
+                            <div className="space-y-2">
+                                {links.map((link, i) => (
+                                    <div key={i} className="flex gap-2">
+                                        <TextField
+                                            value={link.label}
+                                            placeholder="Website"
+                                            className="max-w-[8rem]"
+                                            onChange={(e) => setLinks(links.map((l, j) =>
+                                                j === i ? { ...l, label: e.target.value } : l))}
+                                        />
+                                        <TextField
+                                            value={link.url}
+                                            placeholder="https://…"
+                                            onChange={(e) => setLinks(links.map((l, j) =>
+                                                j === i ? { ...l, url: e.target.value } : l))}
+                                        />
+                                        <Button
+                                            tone="ghost"
+                                            onClick={() => setLinks(links.filter((_, j) => j !== i))}
+                                        >
+                                            ✕
+                                        </Button>
+                                    </div>
+                                ))}
+                                <Button onClick={() => setLinks([...links, { label: '', url: '' }])}>
+                                    + Add link
                                 </Button>
                             </div>
-                        ))}
-                        <Button onClick={() => setLinks([...links, { label: '', url: '' }])}>
-                            + Add link
-                        </Button>
+                        </div>
                     </div>
                 </div>
 

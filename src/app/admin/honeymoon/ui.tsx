@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
     STATUSES, categoriesOf, categoryMeta, normalizeCategoryKey,
     type CategoryMeta, type PlaceStatus,
@@ -469,10 +470,29 @@ export function Modal({ open, onClose, title, children, wide = false }: {
 }) {
     const pressedBackdrop = useRef(false);
 
-    if (!open) return null;
-    return (
+    // A portal needs a document, which the server render doesn't have. No
+    // mounted flag is needed to bridge that: every dialog in the portal starts
+    // closed and is opened by a click, so `open` is always false on the server
+    // and on the hydrating render — both sides agree on null.
+    if (!open || typeof document === 'undefined') return null;
+
+    /*
+     * Rendered into <body>, not in place.
+     *
+     * The admin area lives inside AppShell's `position: fixed` container, and a
+     * fixed element establishes a stacking context — so every z-index inside it,
+     * however large, is capped at that container's own level. The site's fixed
+     * nav sits outside it at z-index 50 and therefore painted straight over the
+     * top of any dialog opened from an admin page, hiding its title bar and
+     * close button. Escaping to <body> puts the dialog in the same stacking
+     * context as the nav, where z-[60] actually means above it.
+     *
+     * Raising the z-index alone cannot fix this, and pushing the dialog down
+     * below the nav would only trade a covered title for lost height.
+     */
+    return createPortal((
         <div
-            className="fixed inset-0 z-50 bg-gray-900/30 backdrop-blur-sm flex items-end md:items-center
+            className="fixed inset-0 z-[60] bg-gray-900/30 backdrop-blur-sm flex items-end md:items-center
                 justify-center p-0 md:p-4"
             onPointerDown={(e) => { pressedBackdrop.current = e.target === e.currentTarget; }}
             onClick={(e) => {
@@ -483,7 +503,7 @@ export function Modal({ open, onClose, title, children, wide = false }: {
             }}
         >
             <div
-                className={`bg-white w-full ${wide ? 'md:max-w-3xl' : 'md:max-w-lg'} rounded-t-3xl md:rounded-3xl
+                className={`bg-white w-full ${wide ? 'md:max-w-3xl xl:max-w-5xl' : 'md:max-w-lg'} rounded-t-3xl md:rounded-3xl
                     shadow-xl max-h-[92vh] overflow-y-auto`}
                 onClick={(e) => e.stopPropagation()}
             >
@@ -498,8 +518,106 @@ export function Modal({ open, onClose, title, children, wide = false }: {
                         &times;
                     </button>
                 </div>
-                <div className="p-5">{children}</div>
+                <div className="p-4 md:p-5">{children}</div>
             </div>
+        </div>
+    ), document.body);
+}
+
+export interface BulkField {
+    /** The column to write. */
+    key: string;
+    label: string;
+    /** Values offered for it. `value` is sent to the API exactly as given. */
+    options: { value: unknown; label: string; danger?: boolean }[];
+}
+
+/**
+ * Change any one field across a selection, in two clicks.
+ *
+ * A toolbar can hold two or three of the most-used verbs before it stops being
+ * readable, which left the rest of a place's fields editable only one row at a
+ * time. This is the rest of them: pick the field, pick the value, done. Two
+ * steps rather than one long flat list because a flat list would mix "Booked"
+ * and "Ubud" and "Indonesia" with no clue which is which.
+ */
+export function BulkFieldMenu({ fields, onApply, label = 'Change…' }: {
+    fields: BulkField[];
+    onApply: (key: string, value: unknown) => void;
+    label?: string;
+}) {
+    const [open, setOpen] = useState(false);
+    const [field, setField] = useState<BulkField | null>(null);
+
+    const close = () => { setOpen(false); setField(null); };
+    if (!fields.length) return null;
+
+    return (
+        <div className="relative">
+            <button
+                onClick={() => (open ? close() : setOpen(true))}
+                title={label}
+                aria-label={label}
+                aria-expanded={open}
+                className="shrink-0 rounded-full border border-gray-200 bg-white px-3 py-1.5
+                    text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
+            >
+                ⋯
+            </button>
+            {open && (
+                <>
+                    <div className="fixed inset-0 z-10" onClick={close} />
+                    {/* left-0, not right-0: this button sits mid-bar, and a menu
+                        hung off its right edge would open back over the actions
+                        it is meant to supplement. */}
+                    <div className="absolute left-0 top-full mt-1 z-20 bg-white rounded-2xl shadow-lg
+                        border border-gray-100 py-1 min-w-[12rem] max-h-[60vh] overflow-auto">
+                        {field == null ? (
+                            <>
+                                <p className="px-4 py-1 text-[11px] uppercase tracking-wide
+                                    text-gray-400 font-semibold">
+                                    Change for all selected
+                                </p>
+                                {fields.map((f) => (
+                                    <button
+                                        key={f.key}
+                                        onClick={() => setField(f)}
+                                        className="flex w-full items-center justify-between gap-3 px-4 py-2
+                                            text-sm text-gray-700 hover:bg-gray-50"
+                                    >
+                                        {f.label}
+                                        <span className="text-gray-300">›</span>
+                                    </button>
+                                ))}
+                            </>
+                        ) : (
+                            <>
+                                <button
+                                    onClick={() => setField(null)}
+                                    className="flex w-full items-center gap-2 px-4 py-1 text-[11px]
+                                        uppercase tracking-wide text-gray-400 font-semibold
+                                        hover:text-gray-700"
+                                >
+                                    ‹ {field.label}
+                                </button>
+                                {field.options.map((opt) => (
+                                    <button
+                                        key={String(opt.value)}
+                                        onClick={() => { close(); onApply(field.key, opt.value); }}
+                                        className={`block w-full text-left px-4 py-2 text-sm hover:bg-gray-50
+                                            ${opt.danger ? 'text-rose-600' : 'text-gray-700'}`}
+                                    >
+                                        {opt.label}
+                                    </button>
+                                ))}
+                                {!field.options.length && (
+                                    <p className="px-4 py-2 text-sm text-gray-400">Nothing to pick yet.</p>
+                                )}
+                            </>
+                        )}
+                    </div>
+                </>
+            )}
         </div>
     );
 }

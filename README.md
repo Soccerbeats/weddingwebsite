@@ -617,7 +617,17 @@ the map rather than taking height from it.
 **Lasso select.** Hit **◯ Lasso select** and drag to draw a freehand loop around
 any pins you want; everything inside is selected and gets a dark ring. A floating
 bar then offers the same verbs as the Places tab — set status, mark reviewed,
-delete, clear. Hold **Shift** (or Ctrl/Cmd) while drawing to add to the current
+delete, clear.
+
+The **⋯** button on that bar, left of *Mark reviewed*, changes **any** field
+across the whole selection in two clicks: pick the field, pick the value. Type,
+region, country, status, source, review flag, excursion and rating are all there,
+with their options built from your own data — a category or region you invented
+five minutes ago is in the list. Name, notes and coordinates deliberately are
+not: they describe one place, and writing one value across a selection would
+destroy them.
+
+Hold **Shift** (or Ctrl/Cmd) while drawing to add to the current
 selection instead of replacing it. Clustering switches off while the lasso is
 armed, since you can't meaningfully draw around pins hidden inside a count badge.
 Places with no coordinates can never be lassoed, so they can't be swept into a
@@ -688,6 +698,15 @@ category would drop anything you re-typed.
 renumber, their dates follow, and each day's stops travel with it. Days have
 their own handle in the header so dragging a day never fights the stop handles
 or the inline text fields inside it.
+
+**☰ Days / 🗓 Calendar**, top right, switches between the working list and the
+trip on a real calendar — every month it touches, Sunday-first, with the days
+either side shown greyed so you can see the shape of it against the month. Each
+trip day is a tile with its title, travel legs and first three stops; click one
+to open the very same day card the list uses, so there is only ever one place a
+day is edited. The calendar needs a **start date** (Settings) to exist at all,
+and says so if there isn't one. Your choice of view is remembered in that
+browser.
 
 Days are numbered (Day 1, Day 2…). Each day holds:
 - a **base** — where you're sleeping, chosen from places categorised *Stay*

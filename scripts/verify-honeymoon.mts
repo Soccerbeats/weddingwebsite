@@ -13,7 +13,7 @@ import {
     sourceLabel, sourcesOf, SOURCE_AMY, SOURCE_MANUAL, SOURCE_YOUTUBE,
     categoriesOf, normalizeCategoryKey,
     pointInPolygon, placesInPolygon, nameFromStayUrl, stayUrlsFromText, isStayUrl, cleanListingTitle, formatPerNight,
-    formatPrice, nameFromAnyUrl, priceValue, effectiveCountry, countriesInUse,
+    formatPrice, nameFromAnyUrl, priceValue, effectiveCountry, countriesInUse, calendarMonths,
     type Place, type Stop,
 } from '../src/lib/honeymoon';
 import {
@@ -450,6 +450,58 @@ console.log('\nSources');
         SEED_PLACES.filter((p) => p.source && p.source !== SOURCE_AMY).length === 0);
     check('Amy\'s notes are tagged',
         SEED_NOTES.filter((n) => n.source === SOURCE_AMY).length === 2);
+}
+
+console.log('\nCalendar grid');
+{
+    // 2026-09-28 is a Monday; a 10-day trip from it runs into October, so this
+    // covers the month rollover as well as the ordinary case.
+    const months = calendarMonths('2026-09-28', 10);
+    check('spans every month the trip touches', months.length === 2,
+        months.map((m) => m.key).join(','));
+    check('months are labelled', months[0].label === 'September 2026'
+        && months[1].label === 'October 2026', months[0].label);
+
+    for (const month of months) {
+        check(`${month.key} is whole weeks`, month.cells.length % 7 === 0,
+            `${month.cells.length} cells`);
+        check(`${month.key} starts on a Sunday`, month.cells[0].date.getUTCDay() === 0);
+        check(`${month.key} ends on a Saturday`,
+            month.cells[month.cells.length - 1].date.getUTCDay() === 6);
+    }
+
+    const all = months.flatMap((m) => m.cells);
+    const tripCells = all.filter((c) => c.dayNumber != null);
+    // The trip appears once per month grid it falls in, and the overlap days
+    // (Sep 28-30) are borrowed into October's leading week too.
+    const numbers = [...new Set(tripCells.map((c) => c.dayNumber))].sort((a, b) => a! - b!);
+    check('every trip day is on the grid', numbers.length === 10
+        && numbers[0] === 1 && numbers[9] === 10, numbers.join(','));
+
+    const dayOne = all.find((c) => c.dayNumber === 1)!;
+    check('day 1 lands on its start date', dayOne.key === '2026-09-28', dayOne.key);
+    check('day 1 is a Monday', dayOne.date.getUTCDay() === 1);
+    const dayTen = all.find((c) => c.dayNumber === 10)!;
+    check('day 10 lands 9 days later', dayTen.key === '2026-10-07', dayTen.key);
+
+    check('the day before the trip is blank',
+        all.find((c) => c.key === '2026-09-27')!.dayNumber === null);
+    check('the day after the trip is blank',
+        all.find((c) => c.key === '2026-10-08')!.dayNumber === null);
+
+    check('September marks its own days as in-month',
+        months[0].cells.filter((c) => c.inMonth).length === 30);
+    check('borrowed days are marked',
+        months[0].cells.some((c) => !c.inMonth));
+    check('dayOfMonth matches the date',
+        all.every((c) => c.dayOfMonth === c.date.getUTCDate()));
+
+    // A trip inside one month must not spill into a second grid.
+    check('a single-month trip yields one month',
+        calendarMonths('2026-09-07', 5).length === 1);
+    // Without a start date there is nothing to draw, and the view says so.
+    check('no start date yields nothing', calendarMonths(null, 10).length === 0);
+    check('no days yields nothing', calendarMonths('2026-09-28', 0).length === 0);
 }
 
 console.log(`\n${failures === 0 ? 'PASS' : 'FAIL'} — ${checks - failures}/${checks} checks passed.\n`);

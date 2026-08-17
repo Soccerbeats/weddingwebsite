@@ -671,6 +671,88 @@ export function formatDayDate(startDate: string | null, dayNumber: number): stri
     });
 }
 
+export interface CalendarCell {
+    /** UTC midnight of the date this cell shows. */
+    date: Date;
+    /** `YYYY-MM-DD`, stable enough to be a React key. */
+    key: string;
+    /** Day of the month, 1-31. */
+    dayOfMonth: number;
+    /** False for the leading/trailing days borrowed from the neighbouring month. */
+    inMonth: boolean;
+    /** The trip day that falls on this date, or null if the trip isn't on yet. */
+    dayNumber: number | null;
+}
+
+export interface CalendarMonth {
+    /** `YYYY-MM`. */
+    key: string;
+    /** "September 2026". */
+    label: string;
+    /** Whole weeks, Sunday-first — always a multiple of 7. */
+    cells: CalendarCell[];
+}
+
+/**
+ * Every month the trip touches, as full Sunday-first week grids.
+ *
+ * A calendar has to show the days *around* the trip as well as the trip itself —
+ * that is the whole point of looking at one — so each month is padded out to
+ * whole weeks and the borrowed days are marked rather than dropped.
+ *
+ * All arithmetic is on UTC parts, matching `dateForDay`: the trip's dates are
+ * calendar dates, not instants, and doing this in local time would shift the
+ * whole grid by a day for anyone west of Greenwich.
+ */
+export function calendarMonths(startDate: string | null, dayCount: number): CalendarMonth[] {
+    const first = dateForDay(startDate, 1);
+    const last = dateForDay(startDate, dayCount);
+    if (!first || !last || dayCount < 1) return [];
+
+    const months: CalendarMonth[] = [];
+    const cursor = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth(), 1));
+    const stop = new Date(Date.UTC(last.getUTCFullYear(), last.getUTCMonth(), 1));
+
+    while (cursor.getTime() <= stop.getTime()) {
+        const year = cursor.getUTCFullYear();
+        const month = cursor.getUTCMonth();
+        const monthStart = new Date(Date.UTC(year, month, 1));
+        const monthEnd = new Date(Date.UTC(year, month + 1, 0));
+
+        const gridStart = new Date(monthStart);
+        gridStart.setUTCDate(gridStart.getUTCDate() - gridStart.getUTCDay());
+        const gridEnd = new Date(monthEnd);
+        gridEnd.setUTCDate(gridEnd.getUTCDate() + (6 - gridEnd.getUTCDay()));
+
+        const cells: CalendarCell[] = [];
+        for (
+            const day = new Date(gridStart);
+            day.getTime() <= gridEnd.getTime();
+            day.setUTCDate(day.getUTCDate() + 1)
+        ) {
+            const offset = Math.round((day.getTime() - first.getTime()) / 86_400_000);
+            const dayNumber = offset >= 0 && offset < dayCount ? offset + 1 : null;
+            cells.push({
+                date: new Date(day),
+                key: day.toISOString().slice(0, 10),
+                dayOfMonth: day.getUTCDate(),
+                inMonth: day.getUTCMonth() === month,
+                dayNumber,
+            });
+        }
+
+        months.push({
+            key: `${year}-${String(month + 1).padStart(2, '0')}`,
+            label: monthStart.toLocaleDateString('en-US', {
+                month: 'long', year: 'numeric', timeZone: 'UTC',
+            }),
+            cells,
+        });
+        cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+    }
+    return months;
+}
+
 /** "9:30 AM" from a stored "09:30" — blank input stays blank. */
 export function formatTime(value: string | null): string {
     if (!value) return '';

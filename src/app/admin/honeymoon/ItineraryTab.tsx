@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
     DndContext, PointerSensor, TouchSensor, closestCenter, useSensor, useSensors,
     type DragEndEvent,
@@ -10,17 +10,38 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
-    SPREAD_WARNING_KM, TRAVEL_MODES, dayHops, formatDayDate, formatDistance, formatTime,
-    type Day, type Stop, type TravelMode,
+    SPREAD_WARNING_KM, TRAVEL_MODES, calendarMonths, dayHops, formatDayDate, formatDistance,
+    formatTime,
+    type CalendarCell, type Day, type Stop, type TravelMode,
 } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
 import {
-    Button, Card, CategoryChip, EmptyState, InlineText, OverflowMenu, SelectField, TextField,
+    Button, Card, CategoryChip, EmptyState, InlineText, Modal, OverflowMenu, SelectField, TextField,
 } from './ui';
+
+type View = 'list' | 'calendar';
+
+const VIEW_KEY = 'honeymoon.itinerary.view';
 
 export default function ItineraryTab({ api }: { api: HoneymoonApi }) {
     const { data } = api;
     const days = data?.days ?? [];
+
+    // Remembered like the other view preferences, but locally: which way you
+    // like to read the trip is about you and this browser, not about the trip.
+    // Read after mount, not in the initial state: the server has no
+    // localStorage, so seeding from it directly would render one view on the
+    // server and the other on the client and blow up hydration.
+    const [view, setView] = useState<View>('list');
+    useEffect(() => {
+        const saved = localStorage.getItem(VIEW_KEY);
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        if (saved === 'calendar' || saved === 'list') setView(saved);
+    }, []);
+    const chooseView = (next: View) => {
+        setView(next);
+        localStorage.setItem(VIEW_KEY, next);
+    };
 
     // A slightly longer press than the stop handles use: days are the bigger,
     // rarer move, and a twitchy day drag while aiming at a stop is worse than a
@@ -60,23 +81,221 @@ export default function ItineraryTab({ api }: { api: HoneymoonApi }) {
     // read as a wall of days you can scan than as a single tall strip.
     return (
         <div className="space-y-3">
-            <p className="text-xs text-gray-400 px-1">
-                Drag a day by its ⠿ handle to reorder the trip — the days renumber and
-                their dates follow.
-            </p>
-            <DndContext sensors={daySensors} collisionDetection={closestCenter} onDragEnd={onDayDragEnd}>
-                <SortableContext items={days.map((d) => d.id)} strategy={rectSortingStrategy}>
-                    <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3 items-start">
-                        {days.map((day) => <DayCard key={day.id} day={day} api={api} />)}
-                    </div>
-                </SortableContext>
-            </DndContext>
+            <div className="flex items-center justify-between gap-3 px-1">
+                <p className="text-xs text-gray-400">
+                    {view === 'list'
+                        ? 'Drag a day by its ⠿ handle to reorder the trip — the days renumber and '
+                            + 'their dates follow.'
+                        : 'Click any day to open it.'}
+                </p>
+                <ViewToggle view={view} onChange={chooseView} />
+            </div>
+
+            {view === 'calendar' ? (
+                <CalendarView api={api} days={days} />
+            ) : (
+                <DndContext sensors={daySensors} collisionDetection={closestCenter} onDragEnd={onDayDragEnd}>
+                    <SortableContext items={days.map((d) => d.id)} strategy={rectSortingStrategy}>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3 items-start">
+                            {days.map((day) => <DayCard key={day.id} day={day} api={api} />)}
+                        </div>
+                    </SortableContext>
+                </DndContext>
+            )}
+
             <div className="flex justify-center pt-1">
                 <Button tone="primary" onClick={() => api.create('days', {})}>
                     + Add day {days.length + 1}
                 </Button>
             </div>
         </div>
+    );
+}
+
+/** Two views of the same trip: the working list, and the shape of it. */
+function ViewToggle({ view, onChange }: { view: View; onChange: (view: View) => void }) {
+    const options: { key: View; label: string }[] = [
+        { key: 'list', label: '☰ Days' },
+        { key: 'calendar', label: '🗓 Calendar' },
+    ];
+    return (
+        <div className="shrink-0 inline-flex rounded-full border border-gray-200 bg-white p-0.5">
+            {options.map((opt) => (
+                <button
+                    key={opt.key}
+                    onClick={() => onChange(opt.key)}
+                    aria-pressed={view === opt.key}
+                    className={`rounded-full px-3 py-1 text-sm font-medium transition
+                        ${view === opt.key
+                        ? 'bg-accent text-white'
+                        : 'text-gray-600 hover:bg-gray-50'}`}
+                >
+                    {opt.label}
+                </button>
+            ))}
+        </div>
+    );
+}
+
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/**
+ * The trip on a real calendar.
+ *
+ * A numbered list answers "what is day 6"; this answers "what are we doing on
+ * the Saturday" and "how much of September does this eat" — questions the list
+ * genuinely can't. It needs a start date to exist at all, so without one it says
+ * so and points at Settings rather than rendering an empty grid.
+ *
+ * Cells are summaries, not editors: clicking one opens the very same day card
+ * the list view uses, so there is one place a day is edited and no second
+ * implementation to keep in step.
+ */
+function CalendarView({ api, days }: { api: HoneymoonApi; days: Day[] }) {
+    const startDate = api.data?.trip.start_date ?? null;
+    const [openDayId, setOpenDayId] = useState<number | null>(null);
+
+    const months = useMemo(
+        () => calendarMonths(startDate, days.length),
+        [startDate, days.length],
+    );
+    const dayByNumber = useMemo(() => {
+        const map = new Map<number, Day>();
+        for (const day of days) map.set(day.day_number, day);
+        return map;
+    }, [days]);
+
+    const openDay = openDayId == null ? null : days.find((d) => d.id === openDayId) ?? null;
+
+    if (!months.length) {
+        return (
+            <Card>
+                <EmptyState
+                    title="No start date yet"
+                    hint="A calendar needs to know when day 1 is. Set the trip's start date in Settings and every day lands on a real date."
+                />
+            </Card>
+        );
+    }
+
+    return (
+        <>
+            <div className="space-y-3">
+                {months.map((month) => (
+                    <Card key={month.key} className="p-3">
+                        <h2 className="text-sm font-semibold text-gray-900 mb-2 px-1">{month.label}</h2>
+                        <div className="grid grid-cols-7 gap-1">
+                            {WEEKDAYS.map((weekday) => (
+                                <div
+                                    key={weekday}
+                                    className="text-[11px] uppercase tracking-wide text-gray-400
+                                        font-semibold text-center pb-1"
+                                >
+                                    {weekday}
+                                </div>
+                            ))}
+                            {month.cells.map((cell) => {
+                                const day = cell.dayNumber == null
+                                    ? null
+                                    : dayByNumber.get(cell.dayNumber) ?? null;
+                                return (
+                                    <CalendarCellBox
+                                        key={cell.key}
+                                        cell={cell}
+                                        day={day}
+                                        api={api}
+                                        onOpen={() => day && setOpenDayId(day.id)}
+                                    />
+                                );
+                            })}
+                        </div>
+                    </Card>
+                ))}
+            </div>
+
+            {/* The day card drags its stops, so it needs a DnD context of its own
+                out here — the calendar grid deliberately has none. */}
+            <Modal
+                open={openDay != null}
+                onClose={() => setOpenDayId(null)}
+                title={openDay
+                    ? `Day ${openDay.day_number}${openDay.title ? ` — ${openDay.title}` : ''}`
+                    : ''}
+                wide
+            >
+                {openDay && (
+                    <DndContext collisionDetection={closestCenter} onDragEnd={() => {}}>
+                        <SortableContext items={[openDay.id]} strategy={rectSortingStrategy}>
+                            <DayCard day={openDay} api={api} />
+                        </SortableContext>
+                    </DndContext>
+                )}
+            </Modal>
+        </>
+    );
+}
+
+function CalendarCellBox({ cell, day, api, onOpen }: {
+    cell: CalendarCell;
+    day: Day | null;
+    api: HoneymoonApi;
+    onOpen: () => void;
+}) {
+    // Outside the trip: a real date, greyed, so the shape of the trip against
+    // the month is visible.
+    if (!day) {
+        return (
+            <div className={`min-h-[5.5rem] rounded-xl border border-gray-100 p-1.5
+                ${cell.inMonth ? 'bg-gray-50/60' : 'bg-transparent'}`}>
+                <span className={`text-[11px] tabular-nums
+                    ${cell.inMonth ? 'text-gray-400' : 'text-gray-300'}`}>
+                    {cell.dayOfMonth}
+                </span>
+            </div>
+        );
+    }
+
+    const base = day.base_place_id == null ? null : api.placeById.get(day.base_place_id);
+
+    return (
+        <button
+            onClick={onOpen}
+            className="min-h-[5.5rem] rounded-xl border border-accent/30 bg-accent/5 p-1.5
+                text-left hover:bg-accent/10 hover:border-accent/50 transition
+                focus:outline-none focus:ring-2 focus:ring-accent/30 overflow-hidden"
+        >
+            <div className="flex items-baseline justify-between gap-1">
+                <span className="text-[11px] tabular-nums text-gray-500">{cell.dayOfMonth}</span>
+                <span className="text-[10px] font-semibold text-accent shrink-0">
+                    Day {day.day_number}
+                </span>
+            </div>
+            {day.title && (
+                <p className="text-[11px] font-medium text-gray-800 truncate">{day.title}</p>
+            )}
+            {day.travel.map((leg) => (
+                <p key={leg.id} className="text-[10px] text-slate-500 truncate">
+                    {TRAVEL_MODES.find((m) => m.key === leg.mode)?.icon ?? '→'}{' '}
+                    {leg.depart_time ? formatTime(leg.depart_time) : ''} {leg.to_text ?? ''}
+                </p>
+            ))}
+            {/* Three, then a count: any more and the cell sets the row height for
+                the whole week. */}
+            {day.stops.slice(0, 3).map((stop) => (
+                <p key={stop.id} className="text-[10px] text-gray-600 truncate">
+                    {stop.start_time ? `${formatTime(stop.start_time)} ` : '• '}
+                    {stop.custom_label
+                        || (stop.place_id != null ? api.placeById.get(stop.place_id)?.name : '')
+                        || 'Untitled stop'}
+                </p>
+            ))}
+            {day.stops.length > 3 && (
+                <p className="text-[10px] text-gray-400">+{day.stops.length - 3} more</p>
+            )}
+            {!day.stops.length && !day.title && base && (
+                <p className="text-[10px] text-gray-500 truncate">🛏 {base.name}</p>
+            )}
+        </button>
     );
 }
 

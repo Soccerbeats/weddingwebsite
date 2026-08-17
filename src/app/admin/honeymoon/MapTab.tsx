@@ -9,7 +9,9 @@ import {
 } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
 import PlaceEditor from './PlaceEditor';
-import { Button, CategoryChip, EmptyState, MiniSelect, SelectField, StatusChip } from './ui';
+import {
+    BulkFieldMenu, Button, CategoryChip, EmptyState, MiniSelect, SelectField, StatusChip,
+} from './ui';
 
 // Leaflet must never be part of the server bundle — it reaches for `window` on
 // import. This is the only place the map is loaded.
@@ -201,6 +203,78 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
         setRegionFilter(''); setCategoryFilter(''); setStatusFilter('');
         setDayFilter(''); setShowUnconfirmed(false); setSourceFilter('');
     };
+
+    /**
+     * Every field worth setting on a whole selection at once.
+     *
+     * Options come from the data, not a hard-coded list, so a category or region
+     * you invent is bulk-appliable the moment it exists. Status stays on the bar
+     * as well: it is the one people reach for constantly, and one click beats
+     * two. Name, notes and coordinates are deliberately absent — they describe a
+     * single place, and writing one value across a selection would destroy them.
+     */
+    const bulkFields = useMemo(() => [
+        {
+            key: 'category',
+            label: 'Type',
+            options: (data?.categories ?? []).map((c) => ({
+                value: c.key, label: `${c.icon} ${c.label}`,
+            })),
+        },
+        {
+            key: 'region_id',
+            label: 'Region',
+            options: [
+                { value: null, label: '— no region —' },
+                ...regions.map((r) => ({
+                    value: r.id, label: r.country ? `${r.name} · ${r.country}` : r.name,
+                })),
+            ],
+        },
+        {
+            key: 'country',
+            label: 'Country',
+            options: [
+                { value: '', label: '— from region —' },
+                ...countries.map((c) => ({ value: c, label: c })),
+            ],
+        },
+        {
+            key: 'status',
+            label: 'Status',
+            options: STATUSES.map((s) => ({ value: s.key, label: s.label })),
+        },
+        {
+            key: 'source',
+            label: 'Source',
+            options: sourcesOf(places).map((s) => ({ value: s, label: s })),
+        },
+        {
+            key: 'needs_review',
+            label: 'Review flag',
+            options: [
+                { value: false, label: 'Reviewed — pin is right' },
+                { value: true, label: 'Needs review' },
+            ],
+        },
+        {
+            key: 'is_excursion',
+            label: 'Excursion',
+            options: [
+                { value: true, label: 'Is an excursion' },
+                { value: false, label: 'Not an excursion' },
+            ],
+        },
+        {
+            key: 'rating',
+            label: 'Rating',
+            options: [
+                { value: 'yes', label: '👍 Interested' },
+                { value: 'no', label: '👎 Not interested' },
+                { value: '', label: '— unrated —' },
+            ],
+        },
+    ], [data?.categories, regions, countries, places]);
 
     /** Bulk action over the lassoed set — same verbs as the Places tab. */
     const bulk = async (fields: Record<string, unknown>) => {
@@ -481,6 +555,11 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                                 ))}
                             </MiniSelect>
                         )}
+                        <BulkFieldMenu
+                            fields={bulkFields}
+                            onApply={(key, value) => bulk({ [key]: value })}
+                            label="Change a field on all selected"
+                        />
                         <Button className="!px-3" onClick={() => bulk({ needs_review: false })}>
                             Mark reviewed
                         </Button>
