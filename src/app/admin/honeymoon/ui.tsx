@@ -23,24 +23,50 @@ export function TextField(props: React.InputHTMLAttributes<HTMLInputElement>) {
     return <input {...props} className={`${FIELD} ${props.className ?? ''}`} />;
 }
 
+/**
+ * Native select chrome is a grey bevelled box that ignores border radius on most
+ * platforms. appearance-none removes it; the chevron is drawn as a background
+ * SVG so the control keeps the same rounded shape as every other field, while
+ * staying a real <select> (native picker on mobile, keyboard support for free).
+ */
+const SELECT_CHROME = 'appearance-none bg-no-repeat pr-9 cursor-pointer';
+const CHEVRON = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' \
+fill='none' viewBox='0 0 24 24' stroke='%236b7280' stroke-width='2'%3E%3Cpath \
+stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E")`;
+
+const chevronStyle: React.CSSProperties = {
+    backgroundImage: CHEVRON,
+    backgroundPosition: 'right 0.6rem center',
+    backgroundSize: '1rem',
+};
+
 export function SelectField(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
-    return <select {...props} className={`${FIELD} ${props.className ?? ''}`} />;
+    return (
+        <select
+            {...props}
+            style={{ ...chevronStyle, ...(props.style ?? {}) }}
+            className={`${FIELD} ${SELECT_CHROME} ${props.className ?? ''}`}
+        />
+    );
 }
 
 /**
- * Small select that sizes to its content.
+ * Small select that sizes to its content and matches Button exactly.
  *
- * SelectField is `w-full` by design — it lives in form grids. Reusing it inside
- * a floating toolbar produced a control four times wider than its longest
- * option, which then forced the whole bar to scroll sideways.
+ * SelectField is `w-full` by design — it lives in form grids — so a toolbar
+ * needs its own. The padding, text size, border and radius here are Button's, so
+ * a select sitting in a row of pills is the same height and shape rather than a
+ * slightly smaller odd one out.
  */
 export function MiniSelect(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
     return (
         <select
             {...props}
-            className={`w-auto bg-gray-50 border border-gray-200 rounded-xl pl-2 pr-1 py-1
-                text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-accent/30
-                focus:border-accent/40 transition ${props.className ?? ''}`}
+            style={{ ...chevronStyle, ...(props.style ?? {}) }}
+            className={`w-auto bg-white border border-gray-200 rounded-full pl-4 pr-9 py-1.5
+                text-sm font-medium text-gray-700 focus:outline-none focus:ring-2
+                focus:ring-accent/30 focus:border-accent/40 transition
+                ${SELECT_CHROME} ${props.className ?? ''}`}
         />
     );
 }
@@ -191,6 +217,7 @@ export function StatusChip({ status }: { status: PlaceStatus }) {
 }
 
 const CUSTOM = '__custom__';
+const MANAGE = '__manage__';
 
 /**
  * A select that can grow a new option.
@@ -200,12 +227,16 @@ const CUSTOM = '__custom__';
  * it isn't one of the offered options, so an existing custom value never
  * silently reverts to the first item when the editor reopens.
  */
-export function CustomisableSelect({ value, options, onChange, onCreate, placeholder, label }: {
+export function CustomisableSelect({
+    value, options, onChange, onCreate, onManage, placeholder, label,
+}: {
     value: string;
     options: { key: string; label: string }[];
     onChange: (next: string) => void;
     /** Returns the value to select; async so a region can be created first. */
     onCreate: (typed: string) => Promise<string | null> | string | null;
+    /** Opens the rename/delete list, when the caller supports editing. */
+    onManage?: () => void;
     placeholder: string;
     label: string;
 }) {
@@ -254,20 +285,23 @@ export function CustomisableSelect({ value, options, onChange, onCreate, placeho
             aria-label={label}
             onChange={(e) => {
                 if (e.target.value === CUSTOM) { setTyping(true); return; }
+                if (e.target.value === MANAGE) { onManage?.(); return; }
                 onChange(e.target.value);
             }}
         >
             {options.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
             <option value={CUSTOM}>＋ Custom…</option>
+            {onManage && <option value={MANAGE}>✎ Edit / remove…</option>}
         </SelectField>
     );
 }
 
 /** Category picker, including any custom categories already in use. */
-export function CategorySelect({ value, places, onChange }: {
+export function CategorySelect({ value, places, onChange, onManage }: {
     value: string;
     places: { category: string }[];
     onChange: (next: string) => void;
+    onManage?: () => void;
 }) {
     const options: CategoryMeta[] = categoriesOf(places);
     // The current value may be a custom category that nothing else uses yet.
@@ -282,7 +316,78 @@ export function CategorySelect({ value, places, onChange }: {
             options={all.map((c) => ({ key: c.key, label: `${c.icon} ${c.label}` }))}
             onChange={onChange}
             onCreate={(typed) => normalizeCategoryKey(typed)}
+            onManage={onManage}
         />
+    );
+}
+
+/**
+ * Rename or remove the entries behind a dropdown.
+ *
+ * One component for categories and regions because the job is identical: a list,
+ * an editable name, a delete that says what it will cost. `warn` is per-item so
+ * the confirmation can name the actual consequence — "12 places move to Other"
+ * rather than a generic are-you-sure.
+ */
+export function ManageListModal({ open, onClose, title, items, onRename, onDelete, hint }: {
+    open: boolean;
+    onClose: () => void;
+    title: string;
+    items: { id: number; label: string; detail?: string; warn?: string; locked?: string }[];
+    onRename: (id: number, label: string) => void;
+    onDelete: (id: number) => void;
+    hint?: string;
+}) {
+    if (!open) return null;
+    return (
+        <Modal open onClose={onClose} title={title}>
+            {hint && <p className="text-xs text-gray-500 mb-3">{hint}</p>}
+            {items.length === 0 ? (
+                <EmptyState title="Nothing to edit yet" />
+            ) : (
+                <ul className="divide-y divide-gray-100">
+                    {items.map((item) => (
+                        <li key={item.id} className="flex items-center gap-2 py-2">
+                            <div className="flex-1 min-w-0">
+                                <InlineText
+                                    value={item.label}
+                                    className="text-sm -ml-2"
+                                    onCommit={(next) => {
+                                        const clean = next.trim();
+                                        if (clean && clean !== item.label) onRename(item.id, clean);
+                                    }}
+                                />
+                                {item.detail && (
+                                    <span className="block text-[11px] text-gray-400 px-2">
+                                        {item.detail}
+                                    </span>
+                                )}
+                            </div>
+                            {item.locked ? (
+                                <span className="text-[11px] text-gray-400 shrink-0" title={item.locked}>
+                                    kept
+                                </span>
+                            ) : (
+                                <Button
+                                    tone="danger"
+                                    className="!px-3 shrink-0"
+                                    onClick={() => {
+                                        if (confirm(item.warn ?? `Delete "${item.label}"?`)) {
+                                            onDelete(item.id);
+                                        }
+                                    }}
+                                >
+                                    Delete
+                                </Button>
+                            )}
+                        </li>
+                    ))}
+                </ul>
+            )}
+            <div className="flex justify-end pt-3">
+                <Button onClick={onClose}>Done</Button>
+            </div>
+        </Modal>
     );
 }
 

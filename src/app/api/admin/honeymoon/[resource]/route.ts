@@ -31,6 +31,17 @@ interface ResourceDef {
 }
 
 const RESOURCES: Record<string, ResourceDef> = {
+    categories: {
+        table: 'honeymoon_categories',
+        fields: {
+            key: { kind: 'text' },
+            label: { kind: 'text' },
+            color: { kind: 'text' },
+            icon: { kind: 'text' },
+            sort_order: { kind: 'int' },
+        },
+        required: ['key', 'label'],
+    },
     regions: {
         table: 'honeymoon_regions',
         fields: {
@@ -381,6 +392,25 @@ export async function DELETE(request: Request, { params }: Params) {
         const id = Math.trunc(Number(params.get('id')));
         if (!Number.isFinite(id) || id <= 0) {
             return NextResponse.json({ error: 'Valid id required' }, { status: 400 });
+        }
+
+        // Places keep a category by key, not by id, so deleting a category would
+        // leave them pointing at nothing. Move them to Other first — the same
+        // "never destroy the user's rows" rule the itinerary follows.
+        if (def.table === 'honeymoon_categories') {
+            const row = await pool.query('SELECT key FROM honeymoon_categories WHERE id = $1', [id]);
+            const key = row.rows[0]?.key;
+            if (key === 'misc') {
+                return NextResponse.json(
+                    { error: 'Other is the fallback category and cannot be deleted' },
+                    { status: 400 },
+                );
+            }
+            if (key) {
+                await pool.query(
+                    "UPDATE honeymoon_places SET category = 'misc' WHERE category = $1", [key],
+                );
+            }
         }
 
         const result = await pool.query(`DELETE FROM ${def.table} WHERE id = $1`, [id]);

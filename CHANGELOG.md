@@ -109,6 +109,16 @@ All notable changes to this project are documented here.
 
 - **Honeymoon map — the unconfirmed toggle now adds instead of swapping.** It previously replaced the confirmed pins with the unconfirmed ones, which meant losing every landmark you were using for orientation at exactly the moment you needed it. **⚠ Show unconfirmed** now layers them on top of the confirmed set, and **⚠ Hide unconfirmed** takes them away again. The button label states which way the next click goes, and the count line reads *"including N unconfirmed"* while they're on.
 
+- **Honeymoon — categories and regions are editable, and the lasso feeds the itinerary.**
+
+  **Categories became rows.** They were a hardcoded constant, which made "edit and remove" impossible; a `honeymoon_categories` table is now seeded from that constant on first run, after which the database is the truth and re-seeding never overwrites an edit. Both dropdowns gained **✎ Edit / remove…**, opening a list with a usage count per entry. Renaming changes only the label — the key is immutable, so nothing gets unfiled. Deleting a category **moves its places to Other** instead of orphaning them, mirroring the itinerary's rule that a delete never destroys rows; *Other* itself is refused, since it's the fallback. Deleting a region keeps its places and clears their region.
+
+  Every colour and label lookup now consults the stored list. Threading it through every marker, chip and legend would have meant a prop in six components, so the data hook publishes a registry that `categoryMeta` reads — set from an async callback, never during render, with one hook instance on the page.
+
+  **Lasso → Add to day…** puts every selected place onto a day as stops, skipping any already there. Drawing a loop round a neighbourhood and sending it to Tuesday is the point of selecting on a map; without it you'd re-find each place by name in the itinerary dropdown.
+
+  **Selects are no longer native chrome.** `appearance-none` plus a background-SVG chevron, so they keep the same rounded shape as every other field while staying real `<select>`s — native picker on mobile, keyboard support for free. The toolbar select now shares Button's padding, text size, border and radius, so a row of pills is uniform rather than one slightly smaller odd one out.
+
 - **`npm run check:honeymoon`** — 44 assertions over the pure logic that would otherwise fail silently and wrongly: great-circle distances against known city pairs, day-number arithmetic across a month boundary, 12-hour time formatting at noon and midnight, Google Maps URL parsing in all three shapes, rejection of null island and out-of-range latitudes, hop calculation across unpinned and deleted stops, and seed-data integrity (no duplicate names, no orphan regions, no unknown categories).
 - **Finances suite (`/admin/finances`)** — replaces the `Heav & Aust Wedding Spreadsheet — Budget` tab. Five tabs: **Overview** (reporting), **Budget**, **Purchases**, **Gift Money**, **Settings**. Everything edits inline — commit on blur or Enter, revert on `Esc`, no Save button — and every derived figure recalculates from a single refetch so the grand total, percentages, both deficits and both payment plans can't disagree with each other.
 

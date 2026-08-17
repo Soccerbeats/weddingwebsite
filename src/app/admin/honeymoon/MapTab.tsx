@@ -114,6 +114,26 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
         setLassoed(new Set());
     };
 
+    /**
+     * Put every lassoed place onto a day as stops.
+     *
+     * Drawing a loop around an area and sending it to a day is the whole point
+     * of selecting on a map — otherwise you would be re-finding each place by
+     * name in the itinerary's dropdown.
+     */
+    const addToDay = async (dayId: number) => {
+        const day = days.find((d) => d.id === dayId);
+        if (!day) return;
+        // Skip anything already on that day rather than stacking duplicates.
+        const already = new Set(day.stops.map((s) => s.place_id).filter((v): v is number => v != null));
+        const toAdd = [...lassoed].filter((id) => !already.has(id));
+        for (const placeId of toAdd) {
+            await api.create('stops', { day_id: dayId, place_id: placeId });
+        }
+        setLassoed(new Set());
+        setSelectMode(false);
+    };
+
     const bulkDelete = async () => {
         const ids = [...lassoed];
         if (!ids.length) return;
@@ -305,6 +325,21 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                             <option value="shortlisted">Short</option>
                             <option value="booked">Booked</option>
                         </MiniSelect>
+                        {days.length > 0 && (
+                            <MiniSelect
+                                value=""
+                                onChange={(e) => {
+                                    if (e.target.value) addToDay(Number(e.target.value));
+                                }}
+                            >
+                                <option value="">Add to day…</option>
+                                {days.map((d) => (
+                                    <option key={d.id} value={d.id}>
+                                        Day {d.day_number}{d.title ? ` — ${d.title}` : ''}
+                                    </option>
+                                ))}
+                            </MiniSelect>
+                        )}
                         <Button className="!px-3" onClick={() => bulk({ needs_review: false })}>
                             Mark reviewed
                         </Button>

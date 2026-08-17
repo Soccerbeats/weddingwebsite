@@ -6,8 +6,9 @@
  * with no separate migration step.
  */
 import pool from './db';
+import { CATEGORIES } from './honeymoon';
 import type {
-    Day, GuideNote, HoneymoonPayload, Place, Region, Stop, TravelLeg, Trip,
+    CategoryRow, Day, GuideNote, HoneymoonPayload, Place, Region, Stop, TravelLeg, Trip,
 } from './honeymoon';
 
 let ready: Promise<void> | null = null;
@@ -110,6 +111,27 @@ async function createTables() {
     // Preview image scraped from a listing's Open Graph tags.
     await pool.query('ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS image_url TEXT');
 
+    // Categories are rows so they can be renamed and deleted like anything else.
+    // The built-in list seeds them once; after that the database is the truth,
+    // and re-seeding never overwrites an edit.
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS honeymoon_categories (
+            id SERIAL PRIMARY KEY,
+            key TEXT NOT NULL UNIQUE,
+            label TEXT NOT NULL,
+            color TEXT NOT NULL DEFAULT '#6b7280',
+            icon TEXT NOT NULL DEFAULT '●',
+            sort_order INTEGER NOT NULL DEFAULT 0
+        )
+    `);
+    for (const [index, category] of CATEGORIES.entries()) {
+        await pool.query(
+            `INSERT INTO honeymoon_categories (key, label, color, icon, sort_order)
+             VALUES ($1, $2, $3, $4, $5) ON CONFLICT (key) DO NOTHING`,
+            [category.key, category.label, category.color, category.icon, index],
+        );
+    }
+
     await pool.query(`
         INSERT INTO honeymoon_trip (id, title) VALUES (1, 'Honeymoon')
         ON CONFLICT (id) DO NOTHING
@@ -175,8 +197,10 @@ function jsonArray<T>(value: unknown): T[] {
 export async function getHoneymoonPayload(): Promise<HoneymoonPayload> {
     await ensureHoneymoonTables();
 
-    const [tripRes, regionRes, placeRes, dayRes, stopRes, travelRes, noteRes] = await Promise.all([
+    const [tripRes, categoryRes, regionRes, placeRes, dayRes, stopRes, travelRes, noteRes]
+        = await Promise.all([
         pool.query('SELECT * FROM honeymoon_trip WHERE id = 1'),
+        pool.query('SELECT * FROM honeymoon_categories ORDER BY sort_order, label'),
         pool.query('SELECT * FROM honeymoon_regions ORDER BY sort_order, name'),
         pool.query('SELECT * FROM honeymoon_places ORDER BY sort_order, name'),
         pool.query('SELECT * FROM honeymoon_days ORDER BY day_number'),
@@ -193,6 +217,15 @@ export async function getHoneymoonPayload(): Promise<HoneymoonPayload> {
         home_currency: tripRow.home_currency ?? 'USD',
         notes: tripRow.notes ?? null,
     };
+
+    const categories: CategoryRow[] = categoryRes.rows.map((r) => ({
+        id: r.id,
+        key: r.key,
+        label: r.label,
+        color: r.color ?? '#6b7280',
+        icon: r.icon ?? '●',
+        sort_order: r.sort_order ?? 0,
+    }));
 
     const regions: Region[] = regionRes.rows.map((r) => ({
         id: r.id,
@@ -275,5 +308,5 @@ export async function getHoneymoonPayload(): Promise<HoneymoonPayload> {
         sort_order: r.sort_order ?? 0,
     }));
 
-    return { trip, regions, places, days, notes };
+    return { trip, categories, regions, places, days, notes };
 }

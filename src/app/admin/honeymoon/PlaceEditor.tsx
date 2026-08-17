@@ -5,7 +5,8 @@ import dynamic from 'next/dynamic';
 import { SOURCE_MANUAL, sourceLabel, sourcesOf, type Place, type PlaceLink, type PlaceStatus } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
 import {
-    Button, CategorySelect, CustomisableSelect, Modal, StatusSelect, TextArea, TextField,
+    Button, CategorySelect, CustomisableSelect, ManageListModal, Modal, StatusSelect,
+    TextArea, TextField,
 } from './ui';
 
 // Leaflet reaches for `window` at import time, so the preview map never joins
@@ -57,6 +58,7 @@ export default function PlaceEditor({ api, place, open, onClose }: {
     const [needsReview, setNeedsReview] = useState(false);
     const [links, setLinks] = useState<PlaceLink[]>([]);
     const [source, setSource] = useState(SOURCE_MANUAL);
+    const [managing, setManaging] = useState<'categories' | 'regions' | null>(null);
 
     const [query, setQuery] = useState('');
     const [hits, setHits] = useState<GeocodeHit[]>([]);
@@ -185,6 +187,7 @@ export default function PlaceEditor({ api, place, open, onClose }: {
                             value={category}
                             places={api.data?.places ?? []}
                             onChange={setCategory}
+                            onManage={() => setManaging('categories')}
                         />
                     </div>
                     <div>
@@ -211,6 +214,7 @@ export default function PlaceEditor({ api, place, open, onClose }: {
                                 const created = await api.createRegion(typed);
                                 return created == null ? null : String(created);
                             }}
+                            onManage={() => setManaging('regions')}
                         />
                     </div>
                     <div>
@@ -395,6 +399,52 @@ export default function PlaceEditor({ api, place, open, onClose }: {
                         </Button>
                     </div>
                 </div>
+
+                <ManageListModal
+                    open={managing === 'categories'}
+                    onClose={() => setManaging(null)}
+                    title="Edit categories"
+                    hint="Renaming keeps every place filed under it. Deleting moves them to Other."
+                    items={(api.data?.categories ?? []).map((c) => {
+                        const used = (api.data?.places ?? [])
+                            .filter((p) => p.category === c.key).length;
+                        return {
+                            id: c.id,
+                            // Label only — what you edit is exactly what is stored.
+                            label: c.label,
+                            detail: `${c.icon}  ${used ? `${used} place${used === 1 ? '' : 's'}` : 'unused'}`,
+                            warn: used
+                                ? `Delete "${c.label}"? ${used} place(s) will move to Other.`
+                                : `Delete "${c.label}"?`,
+                            locked: c.key === 'misc'
+                                ? 'Other is the fallback category'
+                                : undefined,
+                        };
+                    })}
+                    onRename={(id, label) => api.update('categories', { id, label })}
+                    onDelete={(id) => api.remove('categories', id)}
+                />
+
+                <ManageListModal
+                    open={managing === 'regions'}
+                    onClose={() => setManaging(null)}
+                    title="Edit regions"
+                    hint="Renaming keeps every place in it. Deleting leaves the places but clears their region."
+                    items={(api.data?.regions ?? []).map((r) => {
+                        const used = (api.data?.places ?? [])
+                            .filter((p) => p.region_id === r.id).length;
+                        return {
+                            id: r.id,
+                            label: r.name,
+                            detail: used ? `${used} place${used === 1 ? '' : 's'}` : 'unused',
+                            warn: used
+                                ? `Delete "${r.name}"? ${used} place(s) stay but lose their region.`
+                                : `Delete "${r.name}"?`,
+                        };
+                    })}
+                    onRename={(id, name) => api.update('regions', { id, name })}
+                    onDelete={(id) => api.remove('regions', id)}
+                />
 
                 <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
                     <Button onClick={onClose}>Cancel</Button>

@@ -140,6 +140,7 @@ export interface Trip {
 
 export interface HoneymoonPayload {
     trip: Trip;
+    categories: CategoryRow[];
     regions: Region[];
     places: Place[];
     days: Day[];
@@ -188,6 +189,32 @@ export interface CategoryMeta {
     icon: string;
 }
 
+/** A category as stored — the built-ins are seeded rows, so all are editable. */
+export interface CategoryRow extends CategoryMeta {
+    id: number;
+    sort_order: number;
+}
+
+/**
+ * The live category list, published by the data hook whenever the payload
+ * loads.
+ *
+ * Categories became editable rows, so every colour and label lookup has to
+ * consult the database rather than the constant below. Threading the list into
+ * `categoryMeta` would mean a prop through every marker, chip and legend in the
+ * portal; a single registry the hook updates keeps those call sites unchanged.
+ * It is set from an async callback, never during render, and there is exactly
+ * one hook instance on the page.
+ */
+let REGISTRY: Map<string, CategoryMeta> | null = null;
+let REGISTRY_ORDER: CategoryMeta[] = [];
+
+export function setCategoryRegistry(rows: CategoryMeta[] | null | undefined) {
+    if (!rows || !rows.length) { REGISTRY = null; REGISTRY_ORDER = []; return; }
+    REGISTRY = new Map(rows.map((r) => [r.key, r]));
+    REGISTRY_ORDER = rows;
+}
+
 const CATEGORY_BY_KEY = new Map<string, CategoryMeta>(
     CATEGORIES.map((c) => [c.key as string, { ...c } as CategoryMeta]),
 );
@@ -226,6 +253,8 @@ function colorForCustom(key: string): string {
  * name and gets a stable colour rather than collapsing into "Other".
  */
 export function categoryMeta(key: string): CategoryMeta {
+    const live = REGISTRY?.get(key);
+    if (live) return live;
     const known = CATEGORY_BY_KEY.get(key);
     if (known) return known;
     const trimmed = (key ?? '').trim();
@@ -238,18 +267,24 @@ export function categoryMeta(key: string): CategoryMeta {
     };
 }
 
-/** Built-in categories plus any custom ones actually in use, for a filter list. */
+/**
+ * Every category worth offering: the stored list, plus anything a place still
+ * refers to that has since been deleted — so a filter can always reach it.
+ */
 export function categoriesOf(places: { category: string }[]): CategoryMeta[] {
-    const extra = new Map<string, CategoryMeta>();
+    const base: CategoryMeta[] = REGISTRY_ORDER.length
+        ? REGISTRY_ORDER
+        : CATEGORIES.map((c) => ({ ...c } as CategoryMeta));
+    const known = new Set(base.map((c) => c.key));
+
+    const orphans = new Map<string, CategoryMeta>();
     for (const place of places) {
         const key = place.category;
-        if (!key || CATEGORY_BY_KEY.has(key)) continue;
-        if (!extra.has(key)) extra.set(key, categoryMeta(key));
+        if (!key || known.has(key) || orphans.has(key)) continue;
+        orphans.set(key, categoryMeta(key));
     }
-    return [
-        ...CATEGORIES.map((c) => ({ ...c } as CategoryMeta)),
-        ...[...extra.values()].sort((a, b) => a.label.localeCompare(b.label)),
-    ];
+
+    return [...base, ...[...orphans.values()].sort((a, b) => a.label.localeCompare(b.label))];
 }
 
 export const STATUSES: { key: PlaceStatus; label: string; color: string }[] = [

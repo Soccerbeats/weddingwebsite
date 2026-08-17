@@ -1,9 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { normalizeCategoryKey, setCategoryRegistry, titleCase } from '@/lib/honeymoon';
 import type { HoneymoonPayload, Place } from '@/lib/honeymoon';
 
-export type Resource = 'regions' | 'places' | 'days' | 'stops' | 'travel' | 'notes' | 'trip';
+export type Resource =
+    'categories' | 'regions' | 'places' | 'days' | 'stops' | 'travel' | 'notes' | 'trip';
 
 const BASE = '/api/admin/honeymoon';
 
@@ -26,7 +28,11 @@ export function useHoneymoon() {
         try {
             const res = await fetch(BASE, { cache: 'no-store' });
             if (!res.ok) throw new Error('Failed to load honeymoon data');
-            setData(await res.json());
+            const payload: HoneymoonPayload = await res.json();
+            // Publish before the state update so the first render that sees the
+            // new places already resolves their colours and labels correctly.
+            setCategoryRegistry(payload.categories);
+            setData(payload);
             setError('');
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Failed to load honeymoon data');
@@ -108,6 +114,37 @@ export function useHoneymoon() {
         }
     }, [refresh]);
 
+    /**
+     * Create a category and hand back its key.
+     * The key is derived once and never changes afterwards, so renaming the
+     * label later cannot orphan the places already filed under it.
+     */
+    const createCategory = useCallback(async (label: string): Promise<string | null> => {
+        const clean = label.trim();
+        if (!clean) return null;
+        const key = normalizeCategoryKey(clean);
+        try {
+            const res = await fetch(`${BASE}/categories`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    key,
+                    label: titleCase(clean),
+                    color: '#6b7280',
+                    icon: '●',
+                    sort_order: 999,
+                }),
+            });
+            // A duplicate key just means it already exists, which is fine.
+            if (!res.ok && res.status !== 500) throw new Error('Could not add that category');
+            await refresh();
+            return key;
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'Could not add that category');
+            return null;
+        }
+    }, [refresh]);
+
     /** Delete a whole selection in one request rather than N. */
     const removeMany = useCallback((resource: Resource, ids: number[]) => run(
         () => fetch(`${BASE}/${resource}?ids=${ids.join(',')}`, { method: 'DELETE' }),
@@ -138,7 +175,7 @@ export function useHoneymoon() {
 
     return {
         data, loading, error, saving: busy > 0,
-        refresh, create, update, reorder, remove, removeMany, createRegion,
+        refresh, create, update, reorder, remove, removeMany, createRegion, createCategory,
         placeById, regionById, scheduledPlaceIds,
         clearError: () => setError(''),
     };
