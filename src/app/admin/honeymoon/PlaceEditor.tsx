@@ -19,6 +19,18 @@ const PinMap = dynamic(() => import('./PinMap'), {
     loading: () => <div className="h-48 w-full rounded-2xl bg-gray-100 animate-pulse" />,
 });
 
+/** Every editable field, in one comparable string. */
+function fingerprint(form: {
+    name: string; category: string; regionId: string; status: string; description: string;
+    address: string; priceNote: string; lat: number | null; lng: number | null;
+    needsReview: boolean; links: PlaceLink[]; source: string; country: string;
+}): string {
+    return JSON.stringify([
+        form.name, form.category, form.regionId, form.status, form.description, form.address,
+        form.priceNote, form.lat, form.lng, form.needsReview, form.links, form.source, form.country,
+    ]);
+}
+
 /** Matches a bare "lat, lng" so a pasted pair resolves without pressing Find. */
 const coordPair = /^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/;
 
@@ -63,6 +75,8 @@ export default function PlaceEditor({ api, place, open, onClose }: {
     const [source, setSource] = useState(SOURCE_MANUAL);
     const [country, setCountry] = useState('');
     const [managing, setManaging] = useState<'categories' | 'regions' | null>(null);
+    /** Fingerprint of the form as it was opened — see confirmDiscard. */
+    const pristine = useRef('');
 
     const [query, setQuery] = useState('');
     const [hits, setHits] = useState<GeocodeHit[]>([]);
@@ -70,25 +84,49 @@ export default function PlaceEditor({ api, place, open, onClose }: {
     const [lookupError, setLookupError] = useState('');
     const searchSeq = useRef(0);
 
-    /* Load the incoming place into the form each time the modal opens. */
+    /**
+     * Load the incoming place into the form each time the modal opens, and
+     * record what "untouched" looks like.
+     *
+     * The snapshot has to be taken from the same values being written here, not
+     * from state read on a later render: state updates are queued, so reading it
+     * afterwards captures the *previous* form and every dialog would then look
+     * dirty the moment it opened.
+     */
     useEffect(() => {
         if (!open) return;
-        setName(place?.name ?? '');
-        setCategory(place?.category ?? 'misc');
-        setRegionId(place?.region_id != null ? String(place.region_id) : '');
-        setStatus(place?.status ?? 'idea');
-        setDescription(place?.description ?? '');
-        setAddress(place?.address ?? '');
-        setPriceNote(place?.price_note ?? '');
-        setLat(place?.lat ?? null);
-        setLng(place?.lng ?? null);
-        setNeedsReview(place?.needs_review ?? false);
-        setLinks(place?.links ?? []);
-        setSource(place ? sourceLabel(place.source) : SOURCE_MANUAL);
-        setCountry(place?.country ?? '');
+        const initial = {
+            name: place?.name ?? '',
+            category: place?.category ?? 'misc',
+            regionId: place?.region_id != null ? String(place.region_id) : '',
+            status: place?.status ?? 'idea',
+            description: place?.description ?? '',
+            address: place?.address ?? '',
+            priceNote: place?.price_note ?? '',
+            lat: place?.lat ?? null,
+            lng: place?.lng ?? null,
+            needsReview: place?.needs_review ?? false,
+            links: place?.links ?? [],
+            source: place ? sourceLabel(place.source) : SOURCE_MANUAL,
+            country: place?.country ?? '',
+        };
+        setName(initial.name);
+        setCategory(initial.category);
+        setRegionId(initial.regionId);
+        setStatus(initial.status as PlaceStatus);
+        setDescription(initial.description);
+        setAddress(initial.address);
+        setPriceNote(initial.priceNote);
+        setLat(initial.lat);
+        setLng(initial.lng);
+        setNeedsReview(initial.needsReview);
+        setLinks(initial.links);
+        setSource(initial.source);
+        setCountry(initial.country);
         setQuery('');
         setHits([]);
         setLookupError('');
+        pristine.current = fingerprint(initial);
     }, [open, place]);
 
     /** What this place would count as if it just followed its region. */
@@ -155,6 +193,25 @@ export default function PlaceEditor({ api, place, open, onClose }: {
         if (/^https?:\/\//i.test(trimmed) || coordPair.test(trimmed)) lookup(trimmed);
     };
 
+    /**
+     * Is the form still as it was opened?
+     *
+     * Closing this dialog used to throw away everything typed into it without a
+     * word — a stray Escape or a mis-aimed click and the notes you just wrote
+     * were gone. Comparing a fingerprint of the form against the one taken when
+     * it opened tells "nothing happened" from "you are about to lose work", and
+     * only the second one is worth interrupting anyone for.
+     */
+    const confirmDiscard = useCallback(() => {
+        const now = fingerprint({
+            name, category, regionId, status, description, address, priceNote,
+            lat, lng, needsReview, links, source, country,
+        });
+        if (now === pristine.current) return true;
+        return confirm('Discard your changes to this place?');
+    }, [name, category, regionId, status, description, address, priceNote,
+        lat, lng, needsReview, links, source, country]);
+
     const save = async () => {
         if (!name.trim()) return;
         const payload: Record<string, unknown> = {
@@ -178,12 +235,25 @@ export default function PlaceEditor({ api, place, open, onClose }: {
     };
 
     return (
-        <Modal open={open} onClose={onClose} title={editing ? 'Edit place' : 'Add a place'} wide>
+        <Modal
+            open={open}
+            onClose={onClose}
+            guard={confirmDiscard}
+            title={editing ? 'Edit place' : 'Add a place'}
+            wide
+        >
             {/* Two columns from lg up, and tight spacing throughout: this dialog
                 has to fit a laptop screen without a scrollbar, and stacking the
                 map above the notes made it about twice as tall as it needed to
                 be while the space beside the map sat empty. */}
-            <div className="space-y-3">
+            <div
+                className="space-y-3"
+                // Save without reaching for the mouse. Plain Enter can't do it —
+                // this form has a search box where Enter means "look that up".
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); save(); }
+                }}
+            >
                 <div>
                     <label className="block text-xs font-semibold text-gray-500 mb-1">Name</label>
                     <TextField
@@ -504,7 +574,7 @@ export default function PlaceEditor({ api, place, open, onClose }: {
                 />
 
                 <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
-                    <Button onClick={onClose}>Cancel</Button>
+                    <Button onClick={() => { if (confirmDiscard()) onClose(); }}>Cancel</Button>
                     <Button tone="primary" onClick={save} disabled={!name.trim()}>
                         {editing ? 'Save' : 'Add place'}
                     </Button>

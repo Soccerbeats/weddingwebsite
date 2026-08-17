@@ -187,11 +187,10 @@ export default function GuideTab({ api }: { api: HoneymoonApi }) {
                                                 <OverflowMenu items={[{
                                                     label: 'Delete note',
                                                     danger: true,
-                                                    onClick: () => {
-                                                        if (confirm(`Delete "${note.title}"?`)) {
-                                                            api.remove('notes', note.id);
-                                                        }
-                                                    },
+                                                    // Undoable, so no confirm — see the toast.
+                                                    onClick: () => api.removeRow(
+                                                        'notes', note, `Deleted "${note.title}"`,
+                                                    ),
                                                 }]} />
                                             </div>
                                             <div className="flex items-center gap-2 mt-1">

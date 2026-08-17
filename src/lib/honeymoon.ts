@@ -159,6 +159,15 @@ export interface Trip {
     id: number;
     title: string;
     start_date: string | null;
+    /**
+     * Last day of the trip.
+     *
+     * Kept alongside the day rows rather than derived from them, because the two
+     * answer different questions: `end_date` is when you fly home — a decision —
+     * while the day rows are how much of it you have planned. Setting the range
+     * reconciles the rows to it, so they agree unless you are mid-edit.
+     */
+    end_date: string | null;
     home_currency: string;
     notes: string | null;
     /**
@@ -694,63 +703,422 @@ export interface CalendarMonth {
 }
 
 /**
+ * One month as full Sunday-first week grids.
+ *
+ * A calendar has to show the days *around* its subject as well as the subject
+ * itself — that is the whole point of looking at one — so the month is padded
+ * out to whole weeks and the borrowed days are marked rather than dropped.
+ *
+ * All arithmetic is on UTC parts, matching `dateForDay`: these are calendar
+ * dates, not instants, and doing it in local time would shift the whole grid by
+ * a day for anyone west of Greenwich.
+ *
+ * `dayNumberOf` decides what, if anything, each date means — trip day numbers
+ * for the itinerary view, nothing at all for a blank date picker.
+ */
+export function monthMatrix(
+    year: number,
+    month: number,
+    dayNumberOf: (date: Date) => number | null = () => null,
+): CalendarMonth {
+    const monthStart = new Date(Date.UTC(year, month, 1));
+    const monthEnd = new Date(Date.UTC(year, month + 1, 0));
+
+    const gridStart = new Date(monthStart);
+    gridStart.setUTCDate(gridStart.getUTCDate() - gridStart.getUTCDay());
+    const gridEnd = new Date(monthEnd);
+    gridEnd.setUTCDate(gridEnd.getUTCDate() + (6 - gridEnd.getUTCDay()));
+
+    const cells: CalendarCell[] = [];
+    for (
+        const day = new Date(gridStart);
+        day.getTime() <= gridEnd.getTime();
+        day.setUTCDate(day.getUTCDate() + 1)
+    ) {
+        cells.push({
+            date: new Date(day),
+            key: isoOf(day),
+            dayOfMonth: day.getUTCDate(),
+            inMonth: day.getUTCMonth() === monthStart.getUTCMonth(),
+            dayNumber: dayNumberOf(day),
+        });
+    }
+
+    return {
+        key: `${monthStart.getUTCFullYear()}-${String(monthStart.getUTCMonth() + 1).padStart(2, '0')}`,
+        label: monthStart.toLocaleDateString('en-US', {
+            month: 'long', year: 'numeric', timeZone: 'UTC',
+        }),
+        cells,
+    };
+}
+
+/** `YYYY-MM-DD` for a UTC date — the shape every date column and key uses. */
+export function isoOf(date: Date): string {
+    return date.toISOString().slice(0, 10);
+}
+
+/** Today as `YYYY-MM-DD`, read off UTC parts so it matches every stored date. */
+export function todayIso(now: Date = new Date()): string {
+    return isoOf(new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())));
+}
+
+/** Whole days from one date to another, both `YYYY-MM-DD`. Null if either is unparseable. */
+export function daysBetween(from: string | null, to: string | null): number | null {
+    if (!from || !to) return null;
+    const a = new Date(`${from}T00:00:00Z`);
+    const b = new Date(`${to}T00:00:00Z`);
+    if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return null;
+    return Math.round((b.getTime() - a.getTime()) / 86_400_000);
+}
+
+/** `YYYY-MM-DD` a number of days after another. */
+export function addDays(date: string, days: number): string {
+    const parsed = new Date(`${date}T00:00:00Z`);
+    parsed.setUTCDate(parsed.getUTCDate() + days);
+    return isoOf(parsed);
+}
+
+/**
  * Every month the trip touches, as full Sunday-first week grids.
  *
- * A calendar has to show the days *around* the trip as well as the trip itself —
- * that is the whole point of looking at one — so each month is padded out to
- * whole weeks and the borrowed days are marked rather than dropped.
- *
- * All arithmetic is on UTC parts, matching `dateForDay`: the trip's dates are
- * calendar dates, not instants, and doing this in local time would shift the
- * whole grid by a day for anyone west of Greenwich.
+ * Thin wrapper over `monthMatrix` that numbers the trip's own days.
  */
 export function calendarMonths(startDate: string | null, dayCount: number): CalendarMonth[] {
     const first = dateForDay(startDate, 1);
     const last = dateForDay(startDate, dayCount);
     if (!first || !last || dayCount < 1) return [];
 
+    const dayNumberOf = (date: Date) => {
+        const offset = Math.round((date.getTime() - first.getTime()) / 86_400_000);
+        return offset >= 0 && offset < dayCount ? offset + 1 : null;
+    };
+
     const months: CalendarMonth[] = [];
     const cursor = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth(), 1));
     const stop = new Date(Date.UTC(last.getUTCFullYear(), last.getUTCMonth(), 1));
-
     while (cursor.getTime() <= stop.getTime()) {
-        const year = cursor.getUTCFullYear();
-        const month = cursor.getUTCMonth();
-        const monthStart = new Date(Date.UTC(year, month, 1));
-        const monthEnd = new Date(Date.UTC(year, month + 1, 0));
-
-        const gridStart = new Date(monthStart);
-        gridStart.setUTCDate(gridStart.getUTCDate() - gridStart.getUTCDay());
-        const gridEnd = new Date(monthEnd);
-        gridEnd.setUTCDate(gridEnd.getUTCDate() + (6 - gridEnd.getUTCDay()));
-
-        const cells: CalendarCell[] = [];
-        for (
-            const day = new Date(gridStart);
-            day.getTime() <= gridEnd.getTime();
-            day.setUTCDate(day.getUTCDate() + 1)
-        ) {
-            const offset = Math.round((day.getTime() - first.getTime()) / 86_400_000);
-            const dayNumber = offset >= 0 && offset < dayCount ? offset + 1 : null;
-            cells.push({
-                date: new Date(day),
-                key: day.toISOString().slice(0, 10),
-                dayOfMonth: day.getUTCDate(),
-                inMonth: day.getUTCMonth() === month,
-                dayNumber,
-            });
-        }
-
-        months.push({
-            key: `${year}-${String(month + 1).padStart(2, '0')}`,
-            label: monthStart.toLocaleDateString('en-US', {
-                month: 'long', year: 'numeric', timeZone: 'UTC',
-            }),
-            cells,
-        });
+        months.push(monthMatrix(cursor.getUTCFullYear(), cursor.getUTCMonth(), dayNumberOf));
         cursor.setUTCMonth(cursor.getUTCMonth() + 1);
     }
     return months;
+}
+
+/* ------------------------------------------------------------------ */
+/* Trip range                                                          */
+/* ------------------------------------------------------------------ */
+
+export interface RangePlan {
+    /** Normalised, so dragging right-to-left still means what you meant. */
+    start: string;
+    end: string;
+    /** Nights on the trip — 1 for a day trip, never less. */
+    length: number;
+    /** Day numbers to create, in order. */
+    add: number[];
+    /** Day numbers that would no longer exist. */
+    remove: number[];
+    /** True when only the dates move and every day row survives. */
+    shiftOnly: boolean;
+}
+
+/**
+ * What setting a date range would do to the day rows.
+ *
+ * Pure on purpose: dropping days deletes their stops and travel legs, so the
+ * caller has to be able to say exactly what is about to be lost *before*
+ * anything is written. Returning a plan rather than performing one makes that
+ * possible and makes the arithmetic testable without a database.
+ */
+export function planRange(
+    from: string,
+    to: string,
+    existingDayNumbers: number[],
+): RangePlan {
+    const [start, end] = daysBetween(from, to)! < 0 ? [to, from] : [from, to];
+    const length = Math.max(1, (daysBetween(start, end) ?? 0) + 1);
+
+    const have = new Set(existingDayNumbers);
+    const add: number[] = [];
+    for (let n = 1; n <= length; n += 1) if (!have.has(n)) add.push(n);
+    const remove = existingDayNumbers.filter((n) => n > length).sort((a, b) => a - b);
+
+    return { start, end, length, add, remove, shiftOnly: !add.length && !remove.length };
+}
+
+/* ------------------------------------------------------------------ */
+/* Calendar export                                                     */
+/* ------------------------------------------------------------------ */
+
+export interface IcsEvent {
+    uid: string;
+    summary: string;
+    description?: string;
+    location?: string;
+    /** `YYYY-MM-DD` for an all-day event. */
+    date: string;
+    /** `HH:MM`. Both present makes it a timed event; absent makes it all-day. */
+    start?: string;
+    end?: string;
+}
+
+/** Escape per RFC 5545: backslash, semicolon, comma and newline are syntax. */
+function icsText(value: string): string {
+    return value
+        .replace(/\\/g, '\\\\')
+        .replace(/;/g, '\\;')
+        .replace(/,/g, '\\,')
+        .replace(/\r?\n/g, '\\n');
+}
+
+/**
+ * Fold to 75 octets per RFC 5545, continuing with a leading space.
+ *
+ * Ignoring this is the classic way to produce a file that imports fine into one
+ * calendar app and silently truncates in another.
+ */
+function icsFold(line: string): string {
+    if (line.length <= 75) return line;
+    const parts = [line.slice(0, 75)];
+    let rest = line.slice(75);
+    while (rest.length > 74) {
+        parts.push(` ${rest.slice(0, 74)}`);
+        rest = rest.slice(74);
+    }
+    if (rest) parts.push(` ${rest}`);
+    return parts.join('\r\n');
+}
+
+/**
+ * A valid iCalendar file for a list of events.
+ *
+ * `stamp` is passed in rather than read from the clock so the output is
+ * reproducible and testable — the same trip always exports the same bytes.
+ */
+export function buildIcs(events: IcsEvent[], stamp: string, calendarName = 'Honeymoon'): string {
+    const lines = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//Wedding Website//Honeymoon Portal//EN',
+        'CALSCALE:GREGORIAN',
+        'METHOD:PUBLISH',
+        `X-WR-CALNAME:${icsText(calendarName)}`,
+    ];
+
+    for (const event of events) {
+        const compact = event.date.replace(/-/g, '');
+        lines.push('BEGIN:VEVENT');
+        lines.push(`UID:${event.uid}`);
+        lines.push(`DTSTAMP:${stamp}`);
+        if (event.start) {
+            const end = event.end && event.end > event.start
+                ? event.end
+                // No end time given: an hour is a better guess than a zero-length
+                // event, which some calendars refuse to draw at all.
+                : addHour(event.start);
+            lines.push(`DTSTART:${compact}T${event.start.replace(':', '')}00`);
+            lines.push(`DTEND:${compact}T${end.replace(':', '')}00`);
+        } else {
+            // All-day events are exclusive at the end, hence the +1 day.
+            lines.push(`DTSTART;VALUE=DATE:${compact}`);
+            lines.push(`DTEND;VALUE=DATE:${addDays(event.date, 1).replace(/-/g, '')}`);
+        }
+        lines.push(`SUMMARY:${icsText(event.summary)}`);
+        if (event.description) lines.push(`DESCRIPTION:${icsText(event.description)}`);
+        if (event.location) lines.push(`LOCATION:${icsText(event.location)}`);
+        lines.push('END:VEVENT');
+    }
+
+    lines.push('END:VCALENDAR');
+    // CRLF throughout: the spec requires it, and Outlook enforces it.
+    return `${lines.map(icsFold).join('\r\n')}\r\n`;
+}
+
+function addHour(time: string): string {
+    const [h, m] = time.split(':').map(Number);
+    const hour = Math.min(23, (h ?? 0) + 1);
+    return `${String(hour).padStart(2, '0')}:${String(m ?? 0).padStart(2, '0')}`;
+}
+
+/**
+ * The trip as calendar events.
+ *
+ * One all-day event per day carrying its stops in the description — that is the
+ * thing you want on the phone when you wake up — plus a timed event for every
+ * travel leg and every stop that has a time, which are the things you can
+ * actually be late for.
+ */
+export function tripEvents(
+    trip: { start_date: string | null; title: string },
+    days: Day[],
+    placeName: (id: number) => string | undefined,
+): IcsEvent[] {
+    if (!trip.start_date) return [];
+    const events: IcsEvent[] = [];
+
+    for (const day of days) {
+        const date = dateForDay(trip.start_date, day.day_number);
+        if (!date) continue;
+        const iso = isoOf(date);
+        const label = (stop: Stop) =>
+            stop.custom_label || (stop.place_id != null ? placeName(stop.place_id) : '') || 'Stop';
+
+        const lines = day.stops.map((stop) => {
+            const time = stop.start_time ? `${formatTime(stop.start_time)} — ` : '• ';
+            return `${time}${label(stop)}`;
+        });
+        if (day.notes) lines.push('', day.notes);
+
+        events.push({
+            uid: `honeymoon-day-${day.id}@wedding`,
+            summary: `Day ${day.day_number}${day.title ? ` — ${day.title}` : ''}`,
+            description: lines.join('\n'),
+            date: iso,
+        });
+
+        for (const leg of day.travel) {
+            const mode = TRAVEL_MODES.find((m) => m.key === leg.mode)?.label ?? 'Travel';
+            const route = [leg.from_text, leg.to_text].filter(Boolean).join(' → ');
+            events.push({
+                uid: `honeymoon-travel-${leg.id}@wedding`,
+                summary: `${mode}${route ? `: ${route}` : ''}`,
+                description: leg.confirmation_ref ? `Ref ${leg.confirmation_ref}` : undefined,
+                date: iso,
+                start: leg.depart_time ?? undefined,
+                end: leg.arrive_time ?? undefined,
+            });
+        }
+
+        for (const stop of day.stops) {
+            if (!stop.start_time) continue;
+            events.push({
+                uid: `honeymoon-stop-${stop.id}@wedding`,
+                summary: label(stop),
+                description: stop.notes ?? undefined,
+                date: iso,
+                start: stop.start_time,
+            });
+        }
+    }
+
+    return events;
+}
+
+/* ------------------------------------------------------------------ */
+/* Search                                                              */
+/* ------------------------------------------------------------------ */
+
+export interface SearchHit {
+    kind: 'place' | 'note' | 'todo' | 'day' | 'region';
+    id: number;
+    label: string;
+    /** Where it lives, shown under the label. */
+    detail: string;
+    /** Lower is better. */
+    score: number;
+}
+
+/**
+ * Rank a term across everything in the portal.
+ *
+ * Prefix matches beat contained matches, and a hit in a title beats a hit in a
+ * body — searching "ubud" should surface the Ubud region and the day called
+ * Ubud before a restaurant whose description happens to mention it.
+ */
+function scoreOf(term: string, title: string, body = ''): number | null {
+    const t = title.toLowerCase();
+    if (t === term) return 0;
+    if (t.startsWith(term)) return 1;
+    if (t.includes(term)) return 2;
+    if (body.toLowerCase().includes(term)) return 4;
+    return null;
+}
+
+export function searchHoneymoon(
+    term: string,
+    data: {
+        places: Place[];
+        notes: GuideNote[];
+        todos: TodoItem[];
+        days: Day[];
+        regions: Region[];
+    },
+    limit = 12,
+): SearchHit[] {
+    const needle = term.trim().toLowerCase();
+    if (needle.length < 2) return [];
+    const hits: SearchHit[] = [];
+
+    for (const place of data.places) {
+        const score = scoreOf(needle, place.name, `${place.description ?? ''} ${place.address ?? ''}`);
+        if (score != null) {
+            hits.push({
+                kind: 'place',
+                id: place.id,
+                label: place.name,
+                detail: categoryMeta(place.category).label,
+                score,
+            });
+        }
+    }
+    for (const region of data.regions) {
+        const score = scoreOf(needle, region.name, region.description ?? '');
+        if (score != null) {
+            hits.push({ kind: 'region', id: region.id, label: region.name, detail: region.country || 'Region', score });
+        }
+    }
+    for (const note of data.notes) {
+        const score = scoreOf(needle, note.title, note.body);
+        if (score != null) {
+            hits.push({ kind: 'note', id: note.id, label: note.title, detail: note.category || 'Guide', score });
+        }
+    }
+    for (const todo of data.todos) {
+        const score = scoreOf(needle, todo.text, todo.result ?? '');
+        if (score != null) {
+            hits.push({
+                kind: 'todo',
+                id: todo.id,
+                label: todo.text,
+                detail: todo.done ? 'Done' : (todo.category || 'To do'),
+                score,
+            });
+        }
+    }
+    for (const day of data.days) {
+        const stops = day.stops.map((s) => s.custom_label ?? '').join(' ');
+        const score = scoreOf(needle, day.title || `Day ${day.day_number}`, `${day.notes ?? ''} ${stops}`);
+        if (score != null) {
+            hits.push({
+                kind: 'day',
+                id: day.id,
+                label: `Day ${day.day_number}${day.title ? ` — ${day.title}` : ''}`,
+                detail: `${day.stops.length} stop${day.stops.length === 1 ? '' : 's'}`,
+                score,
+            });
+        }
+    }
+
+    hits.sort((a, b) => a.score - b.score || a.label.localeCompare(b.label));
+
+    /*
+     * Give every kind a seat before filling by score.
+     *
+     * There are two hundred places and a dozen to-dos, so a plain score sort
+     * hands the whole list to places: searching "ubud" buried the *to-do* called
+     * "Book Ubud driver" under eleven places whose names begin with Ubud. One
+     * best hit per kind first, then the rest in score order — the top result is
+     * still the best match, but a search can no longer hide a whole category.
+     */
+    const seen = new Set<SearchHit>();
+    const spread: SearchHit[] = [];
+    for (const kind of ['place', 'day', 'note', 'todo', 'region'] as SearchHit['kind'][]) {
+        const best = hits.find((h) => h.kind === kind);
+        if (best) { spread.push(best); seen.add(best); }
+    }
+    spread.sort((a, b) => a.score - b.score || a.label.localeCompare(b.label));
+    for (const hit of hits) if (!seen.has(hit)) spread.push(hit);
+    return spread.slice(0, limit);
 }
 
 /** "9:30 AM" from a stored "09:30" — blank input stays blank. */

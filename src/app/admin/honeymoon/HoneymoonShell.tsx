@@ -1,9 +1,12 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { hasCoords } from '@/lib/honeymoon';
+import { daysBetween, hasCoords } from '@/lib/honeymoon';
 import { HoneymoonProvider } from './HoneymoonContext';
+import SearchPalette from './SearchPalette';
+import { UndoToast } from './ui';
 import { useHoneymoon } from './useHoneymoon';
 
 const BASE = '/admin/honeymoon';
@@ -31,6 +34,19 @@ export default function HoneymoonShell({ children }: { children: React.ReactNode
     const api = useHoneymoon();
     const pathname = usePathname();
     const { data, loading, error, saving } = api;
+    const [searching, setSearching] = useState(false);
+
+    // ⌘K / Ctrl-K from anywhere in the portal. Bound on the shell because it
+    // must work on every tab, including the map, which owns its whole viewport.
+    useEffect(() => {
+        const onKey = (event: KeyboardEvent) => {
+            if (event.key.toLowerCase() !== 'k' || !(event.metaKey || event.ctrlKey)) return;
+            event.preventDefault();
+            setSearching((v) => !v);
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, []);
 
     // The map owns the viewport outright and never scrolls. The dashboard is
     // sized to fit too, but inside a scroller: its own min-height is the floor,
@@ -71,6 +87,7 @@ export default function HoneymoonShell({ children }: { children: React.ReactNode
 
     const pinned = data.places.filter(hasCoords).length;
     const review = data.places.filter((p) => p.needs_review).length;
+    const nights = daysBetween(data.trip.start_date, data.trip.end_date);
 
     return (
         <HoneymoonProvider api={api}>
@@ -80,14 +97,23 @@ export default function HoneymoonShell({ children }: { children: React.ReactNode
                         <div>
                             <h1 className="text-2xl font-semibold text-gray-900">{data.trip.title}</h1>
                             <p className="text-xs md:text-sm text-gray-400 mt-0.5">
+                                {nights != null && <>{nights} night{nights === 1 ? '' : 's'} · </>}
                                 {data.days.length} day{data.days.length === 1 ? '' : 's'} ·{' '}
                                 {data.places.length} place{data.places.length === 1 ? '' : 's'} ·{' '}
                                 {pinned} pinned
                                 {review > 0 && <span className="text-amber-600"> · {review} to review</span>}
                             </p>
                         </div>
-                        <div className="h-5 flex items-center">
+                        <div className="flex items-center gap-3">
                             {saving && <span className="text-xs text-gray-400">Saving…</span>}
+                            <button
+                                onClick={() => setSearching(true)}
+                                className="rounded-full border border-gray-200 bg-white px-3 py-1.5
+                                    text-sm text-gray-500 hover:bg-gray-50 transition"
+                                title="Find a place, note, to-do or day"
+                            >
+                                Search <kbd className="text-[11px] text-gray-400">⌘K</kbd>
+                            </button>
                         </div>
                     </div>
 
@@ -104,7 +130,12 @@ export default function HoneymoonShell({ children }: { children: React.ReactNode
                         </div>
                     )}
 
-                    <div className="flex gap-1.5 overflow-x-auto py-3 md:py-4 -mx-1 px-1">
+                    {/* Nine tabs don't fit a phone, so the strip scrolls — with a
+                        fade on the right so it's visibly scrollable rather than
+                        looking like the tabs simply end at Stays. Wrapping to
+                        three rows instead would cost 100px of height on the one
+                        screen size that can least afford it. */}
+                    <div className="tab-scroller flex gap-1.5 overflow-x-auto py-3 md:py-4 -mx-1 px-1">
                         {TABS.map((t) => {
                             const active = t.href === BASE
                                 ? pathname === BASE || pathname === `${BASE}/`
@@ -137,6 +168,19 @@ export default function HoneymoonShell({ children }: { children: React.ReactNode
                     </div>
                 )}
             </div>
+
+            <SearchPalette api={api} open={searching} onClose={() => setSearching(false)} />
+
+            {/* One offer at a time, above everything, wherever you are — deleting
+                on the map and undoing from the itinerary is fine. */}
+            {api.undo && (
+                <UndoToast
+                    key={api.undo.label}
+                    label={api.undo.label}
+                    onUndo={api.undo.restore}
+                    onDismiss={api.clearUndo}
+                />
+            )}
         </HoneymoonProvider>
     );
 }

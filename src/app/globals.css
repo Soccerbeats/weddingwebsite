@@ -189,4 +189,62 @@ html {
     -webkit-appearance: none;
     appearance: none;
   }
+
+  /*
+   * A dedicated print sheet wins outright when one is on the page.
+   *
+   * The honeymoon itinerary prints as its own document rather than as a
+   * screenshot of the admin panel. The sheet is portalled to <body> for exactly
+   * this reason: the admin area lives inside a `position: fixed` container with
+   * `overflow: hidden`, which clips a print to a single page no matter how much
+   * content there is. As a direct child of <body> it can run to as many pages as
+   * it needs, and hiding its siblings removes the shell in one rule.
+   */
+  body:has(.print-sheet) > *:not(.print-sheet) {
+    display: none !important;
+  }
+
+  /* The rule above hides site chrome by tag name, which would otherwise swallow
+     the print sheet's own <header> — its title block. */
+  .print-sheet header {
+    display: block !important;
+  }
+
+  body:has(.print-sheet),
+  html:has(.print-sheet) {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .print-sheet {
+    break-inside: auto;
+  }
+
+  .print-day {
+    break-inside: avoid;
+  }
+}
+
+/*
+ * Horizontally scrolling tab strips (the honeymoon portal's nine tabs).
+ *
+ * On a phone the strip always overflows, so it fades at the right edge to say
+ * so — without it the tabs look like they simply end at whichever one is cut
+ * off. Above `md` everything fits on one row and a fade would just make the
+ * last tab look faulty, so the mask is mobile-only. The scrollbar itself is
+ * hidden because it would sit across the pills.
+ */
+@media (max-width: 767px) {
+  .tab-scroller {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 2rem), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 2rem), transparent);
+  }
+}
+
+.tab-scroller {
+  scrollbar-width: none;
+}
+
+.tab-scroller::-webkit-scrollbar {
+  display: none;
 }

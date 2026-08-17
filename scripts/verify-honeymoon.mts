@@ -14,6 +14,8 @@ import {
     categoriesOf, normalizeCategoryKey,
     pointInPolygon, placesInPolygon, nameFromStayUrl, stayUrlsFromText, isStayUrl, cleanListingTitle, formatPerNight,
     formatPrice, nameFromAnyUrl, priceValue, effectiveCountry, countriesInUse, calendarMonths,
+    monthMatrix, planRange, daysBetween, addDays, isoOf, buildIcs, tripEvents, searchHoneymoon,
+    type Day, type GuideNote, type Region, type TodoItem,
     type Place, type Stop,
 } from '../src/lib/honeymoon';
 import {
@@ -502,6 +504,203 @@ console.log('\nCalendar grid');
     // Without a start date there is nothing to draw, and the view says so.
     check('no start date yields nothing', calendarMonths(null, 10).length === 0);
     check('no days yields nothing', calendarMonths('2026-09-28', 0).length === 0);
+}
+
+console.log('\nMonth grid');
+{
+    const sep = monthMatrix(2026, 8);          // September 2026
+    check('is labelled', sep.label === 'September 2026', sep.label);
+    check('is whole weeks', sep.cells.length % 7 === 0);
+    check('starts on a Sunday', sep.cells[0].date.getUTCDay() === 0);
+    check('has all 30 days in-month', sep.cells.filter((c) => c.inMonth).length === 30);
+    check('numbers nothing without a rule',
+        sep.cells.every((c) => c.dayNumber === null));
+
+    // February in a leap year is the classic off-by-one.
+    const feb = monthMatrix(2028, 1);
+    check('handles a leap February', feb.cells.filter((c) => c.inMonth).length === 29);
+    const feb27 = monthMatrix(2027, 1);
+    check('handles a common February', feb27.cells.filter((c) => c.inMonth).length === 28);
+
+    // December has to roll the year, not just the month.
+    const dec = monthMatrix(2026, 11);
+    check('December rolls into January', dec.cells.some((c) => c.date.getUTCFullYear() === 2027));
+
+    const rule = (d: Date) => (d.getUTCDate() % 7 === 0 ? 1 : null);
+    check('applies the numbering rule it is given',
+        monthMatrix(2026, 8, rule).cells.filter((c) => c.dayNumber === 1).length >= 4);
+}
+
+console.log('\nDate arithmetic');
+{
+    check('counts whole days', daysBetween('2026-09-28', '2026-10-07') === 9);
+    check('counts backwards too', daysBetween('2026-10-07', '2026-09-28') === -9);
+    check('same day is zero', daysBetween('2026-09-28', '2026-09-28') === 0);
+    check('a missing end is null', daysBetween('2026-09-28', null) === null);
+    check('adds across a month end', addDays('2026-09-30', 1) === '2026-10-01');
+    check('adds across a year end', addDays('2026-12-31', 1) === '2027-01-01');
+    check('subtracts', addDays('2026-10-01', -1) === '2026-09-30');
+    check('iso of a UTC date', isoOf(new Date(Date.UTC(2026, 8, 28))) === '2026-09-28');
+}
+
+console.log('\nTrip range');
+{
+    // Nothing planned yet: every day has to be created.
+    const fresh = planRange('2026-09-28', '2026-10-07', []);
+    check('a ten-day range is ten days', fresh.length === 10, String(fresh.length));
+    check('creates all of them', fresh.add.length === 10 && fresh.add[9] === 10);
+    check('removes nothing', fresh.remove.length === 0);
+    check('is not a shift', !fresh.shiftOnly);
+
+    // Dragged right-to-left means the same trip.
+    const backwards = planRange('2026-10-07', '2026-09-28', []);
+    check('a backwards drag normalises', backwards.start === '2026-09-28'
+        && backwards.end === '2026-10-07');
+
+    // Same length, later start: no rows change, only the dates.
+    const shifted = planRange('2026-10-05', '2026-10-14', [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    check('moving the whole trip touches no days', shifted.shiftOnly);
+    check('and keeps its length', shifted.length === 10);
+
+    // Longer: only the missing tail is added.
+    const longer = planRange('2026-09-28', '2026-10-11', [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    check('extending adds only the new days',
+        longer.add.join(',') === '11,12,13,14', longer.add.join(','));
+    check('extending removes nothing', longer.remove.length === 0);
+
+    // Shorter: the tail is named so the UI can say what would be lost.
+    const shorter = planRange('2026-09-28', '2026-10-04', [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    check('shortening names the days to drop',
+        shorter.remove.join(',') === '8,9,10', shorter.remove.join(','));
+    check('shortening adds nothing', shorter.add.length === 0);
+
+    // A single day is a real trip, not a zero-length one.
+    const single = planRange('2026-09-28', '2026-09-28', []);
+    check('one day is length 1', single.length === 1 && single.add.join(',') === '1');
+
+    // Gaps left by deleting a day in the middle are filled, not ignored.
+    const gappy = planRange('2026-09-28', '2026-10-02', [1, 2, 5]);
+    check('fills a gap in the middle', gappy.add.join(',') === '3,4', gappy.add.join(','));
+    check('and keeps day 5', !gappy.remove.includes(5));
+}
+
+console.log('\nCalendar export');
+{
+    const stamp = '20260817T120000Z';
+    const ics = buildIcs([{
+        uid: 'a@b',
+        summary: 'Day 1 — Fly out; then, dinner',
+        description: 'Line one\nLine two',
+        date: '2026-09-28',
+    }], stamp, 'Our Honeymoon');
+
+    check('is a calendar', ics.startsWith('BEGIN:VCALENDAR\r\n') && ics.trimEnd().endsWith('END:VCALENDAR'));
+    check('uses CRLF', ics.includes('\r\n') && !/[^\r]\n/.test(ics));
+    check('names the calendar', ics.includes('X-WR-CALNAME:Our Honeymoon'));
+    check('escapes semicolons and commas',
+        ics.includes('SUMMARY:Day 1 — Fly out\\; then\\, dinner'),
+        ics.split('\r\n').find((l) => l.startsWith('SUMMARY')));
+    check('escapes newlines', ics.includes('Line one\\nLine two'));
+    check('an all-day event is a DATE', ics.includes('DTSTART;VALUE=DATE:20260928'));
+    check('and ends the next day', ics.includes('DTEND;VALUE=DATE:20260929'));
+
+    const timed = buildIcs([{
+        uid: 'c@d', summary: 'Flight', date: '2026-09-28', start: '09:30', end: '12:45',
+    }], stamp);
+    check('a timed event carries its times',
+        timed.includes('DTSTART:20260928T093000') && timed.includes('DTEND:20260928T124500'));
+
+    const open = buildIcs([{ uid: 'e@f', summary: 'Dinner', date: '2026-09-28', start: '19:00' }], stamp);
+    check('no end time means an hour', open.includes('DTEND:20260928T200000'));
+
+    const long = buildIcs([{ uid: 'g@h', summary: 'x'.repeat(200), date: '2026-09-28' }], stamp);
+    check('long lines are folded',
+        long.split('\r\n').every((line) => line.length <= 75), 'a line ran past 75 octets');
+
+    // A trip with no dates cannot be a calendar.
+    check('no start date means no events',
+        tripEvents({ start_date: null, title: 'T' }, [], () => undefined).length === 0);
+
+    const day: Day = {
+        id: 4, day_number: 2, title: 'Ubud', base_place_id: null, notes: 'bring cash',
+        stops: [
+            { id: 1, day_id: 4, place_id: 9, custom_label: null, start_time: '09:30', notes: null, sort_order: 0 },
+            { id: 2, day_id: 4, place_id: null, custom_label: 'Lunch', start_time: null, notes: null, sort_order: 1 },
+        ],
+        travel: [{
+            id: 7, day_id: 4, mode: 'car', from_text: 'Canggu', to_text: 'Ubud',
+            depart_time: '08:00', arrive_time: '09:15', confirmation_ref: 'XY12', notes: null,
+        }],
+    };
+    const events = tripEvents({ start_date: '2026-09-28', title: 'T' }, [day],
+        (id) => (id === 9 ? 'Monkey Forest' : undefined));
+    check('a day becomes one all-day event',
+        events.filter((e) => !e.start).length === 1);
+    check('on its real date', events[0].date === '2026-09-29', events[0].date);
+    check('carrying its stops', (events[0].description ?? '').includes('Monkey Forest')
+        && (events[0].description ?? '').includes('Lunch'));
+    check('and its notes', (events[0].description ?? '').includes('bring cash'));
+    check('travel legs become timed events',
+        events.some((e) => e.summary.startsWith('Car') && e.start === '08:00'));
+    check('a timed stop gets its own event',
+        events.some((e) => e.summary === 'Monkey Forest' && e.start === '09:30'));
+    check('an untimed stop does not',
+        !events.some((e) => e.summary === 'Lunch' && e.start));
+    check('every event has a unique id',
+        new Set(events.map((e) => e.uid)).size === events.length);
+}
+
+console.log('\nSearch');
+{
+    const places = [
+        makePlace(1, 'Ubud Palace', null, null),
+        makePlace(2, 'Cafe Lotus', null, null),
+        makePlace(3, 'Nowhere', null, null),
+    ];
+    places[2].description = 'near ubud somewhere';
+    const regions: Region[] = [{
+        id: 1, name: 'Ubud', country: 'Indonesia', description: null,
+        center_lat: null, center_lng: null, sort_order: 0,
+    }];
+    const notes: GuideNote[] = [{
+        id: 1, title: 'Money', body: 'ATMs in Ubud', category: 'General', source: null, sort_order: 0,
+    }];
+    const todos: TodoItem[] = [{
+        id: 1, text: 'Book Ubud driver', done: false, result: null,
+        category: 'Transport', due_on: null, sort_order: 0,
+    }];
+    const days: Day[] = [{
+        id: 1, day_number: 3, title: 'Ubud day', base_place_id: null, notes: null,
+        stops: [], travel: [],
+    }];
+    const all = { places, notes, todos, days, regions };
+
+    check('a short term finds nothing', searchHoneymoon('u', all).length === 0);
+    const hits = searchHoneymoon('ubud', all);
+    check('searches every kind at once',
+        new Set(hits.map((h) => h.kind)).size >= 4, hits.map((h) => h.kind).join(','));
+    check('an exact title wins', hits[0].label === 'Ubud', hits[0].label);
+    check('a body-only match ranks last',
+        hits[hits.length - 1].label === 'Nowhere', hits[hits.length - 1].label);
+    check('is case-insensitive', searchHoneymoon('UBUD', all).length === hits.length);
+    check('a miss is empty', searchHoneymoon('zzzz', all).length === 0);
+    check('respects the limit', searchHoneymoon('ubud', all, 2).length === 2);
+    check('finds a place by name', searchHoneymoon('lotus', all)[0].label === 'Cafe Lotus');
+    check('a day hit is labelled with its number',
+        searchHoneymoon('ubud day', all).some((h) => h.kind === 'day' && h.label.includes('Day 3')));
+
+    // Two hundred places must not bury the one to-do that matches.
+    const crowded = {
+        ...all,
+        places: Array.from({ length: 40 }, (_, i) => makePlace(100 + i, `Ubud place ${i}`, null, null)),
+    };
+    const spread = searchHoneymoon('ubud', crowded, 6);
+    check('every kind gets a seat before score fills the rest',
+        new Set(spread.map((h) => h.kind)).size === 5, spread.map((h) => h.kind).join(','));
+    check('and the to-do is one of them',
+        spread.some((h) => h.kind === 'todo'), spread.map((h) => h.label).join(' | '));
+    check('the best match is still first',
+        spread[0].kind === 'region' && spread[0].label === 'Ubud', spread[0].label);
 }
 
 console.log(`\n${failures === 0 ? 'PASS' : 'FAIL'} — ${checks - failures}/${checks} checks passed.\n`);

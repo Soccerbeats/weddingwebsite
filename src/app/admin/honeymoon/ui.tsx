@@ -461,14 +461,37 @@ export function EmptyState({ title, hint }: { title: string; hint?: string }) {
  * you were doing. Tracking where the press began fixes it: releasing outside is
  * not clicking outside.
  */
-export function Modal({ open, onClose, title, children, wide = false }: {
+export function Modal({ open, onClose, title, children, wide = false, guard }: {
     open: boolean;
     onClose: () => void;
     title: string;
     children: React.ReactNode;
     wide?: boolean;
+    /**
+     * Runs before any close the user asks for; false keeps the dialog open.
+     *
+     * This is how a half-typed form stops being thrown away by a stray Escape.
+     * It is deliberately not consulted when the dialog closes *itself* after a
+     * save — that path calls `onClose` directly.
+     */
+    guard?: () => boolean;
 }) {
     const pressedBackdrop = useRef(false);
+
+    // Escape closes, like every other dialog on the platform. Bound while open
+    // only, so a page with five mounted-but-closed dialogs has one listener.
+    useEffect(() => {
+        if (!open) return;
+        const onKey = (event: KeyboardEvent) => {
+            if (event.key !== 'Escape') return;
+            // A native <select> popup swallows its own Escape; anything else
+            // that wants to keep it must stop propagation itself.
+            event.stopPropagation();
+            if (!guard || guard()) onClose();
+        };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+    }, [open, onClose, guard]);
 
     // A portal needs a document, which the server render doesn't have. No
     // mounted flag is needed to bridge that: every dialog in the portal starts
@@ -499,7 +522,7 @@ export function Modal({ open, onClose, title, children, wide = false }: {
                 if (e.target !== e.currentTarget) return;
                 if (!pressedBackdrop.current) return;
                 pressedBackdrop.current = false;
-                onClose();
+                if (!guard || guard()) onClose();
             }}
         >
             <div
@@ -511,7 +534,7 @@ export function Modal({ open, onClose, title, children, wide = false }: {
                     flex items-center justify-between rounded-t-3xl">
                     <h3 className="font-semibold text-gray-900">{title}</h3>
                     <button
-                        onClick={onClose}
+                        onClick={() => { if (!guard || guard()) onClose(); }}
                         className="text-gray-400 hover:text-gray-700 text-2xl leading-none px-1"
                         aria-label="Close"
                     >
@@ -519,6 +542,69 @@ export function Modal({ open, onClose, title, children, wide = false }: {
                     </button>
                 </div>
                 <div className="p-4 md:p-5">{children}</div>
+            </div>
+        </div>
+    ), document.body);
+}
+
+/**
+ * "Deleted X — Undo", bottom centre, for ten seconds.
+ *
+ * Ten seconds because it is roughly how long it takes to look at what you just
+ * did and realise. The countdown is drawn as a draining bar rather than a
+ * number: it says "this is going away" without asking you to read anything.
+ *
+ * Hovering pauses it — reaching for the mouse should not be a race.
+ */
+export function UndoToast({ label, onUndo, onDismiss, seconds = 10 }: {
+    label: string;
+    onUndo: () => void;
+    onDismiss: () => void;
+    seconds?: number;
+}) {
+    const [left, setLeft] = useState(seconds);
+    const [paused, setPaused] = useState(false);
+
+    useEffect(() => {
+        if (paused) return;
+        if (left <= 0) { onDismiss(); return; }
+        const timer = setTimeout(() => setLeft((n) => n - 0.25), 250);
+        return () => clearTimeout(timer);
+    }, [left, paused, onDismiss]);
+
+    if (typeof document === 'undefined') return null;
+
+    return createPortal((
+        <div
+            className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[70] w-max max-w-[calc(100%-2rem)]"
+            onMouseEnter={() => setPaused(true)}
+            onMouseLeave={() => setPaused(false)}
+            role="status"
+        >
+            <div className="rounded-2xl bg-gray-900 text-white shadow-xl overflow-hidden">
+                <div className="flex items-center gap-4 px-4 py-2.5">
+                    <span className="text-sm">{label}</span>
+                    <button
+                        onClick={onUndo}
+                        className="rounded-full bg-white/15 hover:bg-white/25 px-3 py-1
+                            text-sm font-semibold transition"
+                    >
+                        Undo
+                    </button>
+                    <button
+                        onClick={onDismiss}
+                        className="text-white/50 hover:text-white text-lg leading-none"
+                        aria-label="Dismiss"
+                    >
+                        &times;
+                    </button>
+                </div>
+                <div className="h-0.5 bg-white/10">
+                    <div
+                        className="h-full bg-white/50 transition-[width] duration-250 ease-linear"
+                        style={{ width: `${Math.max(0, (left / seconds) * 100)}%` }}
+                    />
+                </div>
             </div>
         </div>
     ), document.body);

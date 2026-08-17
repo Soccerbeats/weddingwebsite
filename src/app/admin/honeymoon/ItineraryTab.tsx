@@ -15,6 +15,7 @@ import {
     type CalendarCell, type Day, type Stop, type TravelMode,
 } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
+import PrintSheet from './PrintSheet';
 import {
     Button, Card, CategoryChip, EmptyState, InlineText, Modal, OverflowMenu, SelectField, TextField,
 } from './ui';
@@ -88,8 +89,27 @@ export default function ItineraryTab({ api }: { api: HoneymoonApi }) {
                             + 'their dates follow.'
                         : 'Click any day to open it.'}
                 </p>
-                <ViewToggle view={view} onChange={chooseView} />
+                <div className="flex items-center gap-2 shrink-0">
+                    <Button onClick={() => window.print()} title="Print the whole trip as a sheet">
+                        🖨 Print
+                    </Button>
+                    {/* A real navigation to a download endpoint: next/link would
+                        client-route it and nothing would download. */}
+                    {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+                    <a
+                        href="/api/admin/honeymoon/ics"
+                        className="rounded-full border border-gray-200 bg-white px-4 py-1.5 text-sm
+                            font-medium text-gray-700 hover:bg-gray-50 transition"
+                        title="Every day, travel leg and timed stop, as a calendar file"
+                    >
+                        🗓 Export
+                    </a>
+                    <ViewToggle view={view} onChange={chooseView} />
+                </div>
             </div>
+
+            {/* Invisible on screen; the only thing on the page in print. */}
+            <PrintSheet api={api} />
 
             {view === 'calendar' ? (
                 <CalendarView api={api} days={days} />
@@ -307,6 +327,7 @@ function DayCard({ day, api }: { day: Day; api: HoneymoonApi }) {
     const [adding, setAdding] = useState(false);
     const [pickPlace, setPickPlace] = useState('');
     const [customLabel, setCustomLabel] = useState('');
+    const [showNotes, setShowNotes] = useState(false);
 
     const startDate = api.data?.trip.start_date ?? null;
     const realDate = formatDayDate(startDate, day.day_number);
@@ -339,6 +360,35 @@ function DayCard({ day, api }: { day: Day; api: HoneymoonApi }) {
         setPickPlace('');
         setCustomLabel('');
         setAdding(false);
+    };
+
+    /**
+     * Copy a day, structure and all, onto the end of the trip.
+     *
+     * The second beach day is mostly the first beach day. Copying it beats
+     * rebuilding it stop by stop, and it lands at the end where a new day
+     * belongs — moving it is a drag away.
+     */
+    const duplicate = async () => {
+        const next = Math.max(0, ...(api.data?.days ?? []).map((d) => d.day_number)) + 1;
+        const created = await api.createRow('days', {
+            day_number: next,
+            title: day.title ? `${day.title} (copy)` : '',
+            base_place_id: day.base_place_id,
+            notes: day.notes ?? '',
+        });
+        if (created?.id == null) return;
+        if (day.stops.length) {
+            await api.createMany('stops', day.stops.map((stop) => ({
+                day_id: created.id,
+                place_id: stop.place_id,
+                custom_label: stop.custom_label,
+                start_time: stop.start_time,
+                notes: stop.notes,
+                sort_order: stop.sort_order,
+            })));
+        }
+        await api.refresh();
     };
 
     return (
@@ -381,18 +431,38 @@ function DayCard({ day, api }: { day: Day; api: HoneymoonApi }) {
                             label: 'Add travel leg',
                             onClick: () => api.create('travel', { day_id: day.id, mode: 'flight' }),
                         },
+                        { label: 'Duplicate day', onClick: duplicate },
                         {
+                            label: showNotes ? 'Hide notes' : 'Add a note',
+                            onClick: () => setShowNotes((v) => !v),
+                        },
+                        {
+                            // No confirm: this is undoable, stops and travel legs
+                            // included, and one speed bump is enough for one hazard.
                             label: 'Delete day',
                             danger: true,
-                            onClick: () => {
-                                if (confirm(`Delete day ${day.day_number} and its ${day.stops.length} stop(s)?`)) {
-                                    api.remove('days', day.id);
-                                }
-                            },
+                            onClick: () => api.removeDay(day),
                         },
                     ]}
                 />
             </div>
+
+            {/* ---- Day notes ---- */}
+            {/* The column has been in the schema since day one with nothing to
+                write to it. Shown when there's something in it, or when asked
+                for — a permanent empty box on every card earns its space only
+                on the days that need one. */}
+            {(showNotes || day.notes) && (
+                <div className="mt-2 rounded-2xl bg-amber-50/60 border border-amber-100 px-2 py-1">
+                    <InlineText
+                        multiline
+                        value={day.notes ?? ''}
+                        placeholder="Anything about this day — pack the good camera, book ahead…"
+                        className="text-sm text-gray-700"
+                        onCommit={(notes) => api.update('days', { id: day.id, notes })}
+                    />
+                </div>
+            )}
 
             {/* ---- Base ---- */}
             <div className="mt-2 flex items-center gap-2">
@@ -433,7 +503,7 @@ function DayCard({ day, api }: { day: Day; api: HoneymoonApi }) {
                         <OverflowMenu items={[{
                             label: 'Remove leg',
                             danger: true,
-                            onClick: () => api.remove('travel', leg.id),
+                            onClick: () => api.removeRow('travel', leg, 'Removed a travel leg'),
                         }]} />
                     </div>
                     <div className="grid grid-cols-2 gap-2 mt-2">
@@ -486,6 +556,7 @@ function DayCard({ day, api }: { day: Day; api: HoneymoonApi }) {
                                         stop={stop}
                                         index={index}
                                         api={api}
+                                        dayNumber={day.day_number}
                                         hopKm={hops.find((h) => h.fromIndex === index)?.km ?? null}
                                     />
                                 ))}
@@ -541,15 +612,35 @@ function DayCard({ day, api }: { day: Day; api: HoneymoonApi }) {
     );
 }
 
-function StopRow({ stop, index, api, hopKm }: {
+function StopRow({ stop, index, api, dayNumber, hopKm }: {
     stop: Stop;
     index: number;
     api: HoneymoonApi;
+    dayNumber: number;
     hopKm: number | null;
 }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
         useSortable({ id: stop.id });
     const place = stop.place_id == null ? undefined : api.placeById.get(stop.place_id);
+    const [showNotes, setShowNotes] = useState(false);
+    const label = stop.custom_label || place?.name || 'this stop';
+
+    /**
+     * Move a stop to another day.
+     *
+     * Dragging between days would mean one DnD context spanning every card
+     * instead of one per card, and reordering within a day is the common case
+     * that arrangement serves well. A menu gets a stop to Thursday in two
+     * clicks without giving that up.
+     */
+    const moveTo = (dayId: number) => api.update('stops', {
+        id: stop.id,
+        day_id: dayId,
+        // Bottom of the destination: the API only auto-appends on insert, and
+        // keeping the old position would drop it into the middle of a day it
+        // has never been part of.
+        sort_order: 9999,
+    });
 
     return (
         <li
@@ -598,12 +689,35 @@ function StopRow({ stop, index, api, hopKm }: {
                         <span className="sr-only">{formatTime(stop.start_time)}</span>
                     )}
                 </div>
-                <OverflowMenu items={[{
-                    label: 'Remove stop',
-                    danger: true,
-                    onClick: () => api.remove('stops', stop.id),
-                }]} />
+                <OverflowMenu items={[
+                    {
+                        label: showNotes || stop.notes ? 'Hide note' : 'Add a note',
+                        onClick: () => setShowNotes((v) => !v),
+                    },
+                    ...(api.data?.days ?? [])
+                        .filter((d) => d.day_number !== dayNumber)
+                        .map((d) => ({
+                            label: `Move to day ${d.day_number}${d.title ? ` — ${d.title}` : ''}`,
+                            onClick: () => moveTo(d.id),
+                        })),
+                    {
+                        label: 'Remove stop',
+                        danger: true,
+                        onClick: () => api.removeRow('stops', stop, `Removed ${label}`),
+                    },
+                ]} />
             </div>
+            {(showNotes || stop.notes) && (
+                <div className="pl-10 pr-2">
+                    <InlineText
+                        multiline
+                        value={stop.notes ?? ''}
+                        placeholder="Booking ref, what to bring, who to ask for…"
+                        className="text-[11px] text-gray-600"
+                        onCommit={(notes) => api.update('stops', { id: stop.id, notes })}
+                    />
+                </div>
+            )}
             {hopKm != null && (
                 <div className="pl-10 py-0.5 text-[11px] text-gray-400">
                     ↓ {formatDistance(hopKm)} straight line

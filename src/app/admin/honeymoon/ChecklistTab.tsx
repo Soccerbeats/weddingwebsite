@@ -299,9 +299,7 @@ function TodoRow({ todo, api, onTicked }: {
                         {
                             label: 'Delete',
                             danger: true,
-                            onClick: () => {
-                                if (confirm(`Delete "${todo.text}"?`)) api.remove('todos', todo.id);
-                            },
+                            onClick: () => api.removeRow('todos', todo, `Deleted "${todo.text}"`),
                         },
                     ]}
                 />

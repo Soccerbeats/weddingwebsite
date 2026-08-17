@@ -91,8 +91,13 @@ export default async function RootLayout({
   const config = getSiteConfig();
   const isAdmin = await getIsAdmin();
 
+  // suppressHydrationWarning below is for the inline script in <head>, which
+  // adds `no-scrollbar-gutter` to <html> before paint on admin routes. The
+  // server cannot know the path, so that class is always a mismatch at
+  // hydration — React logged a warning on every single admin page, which is
+  // noise that hides real ones. The class is the only difference on this element.
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         {/*
           Next emits the standardised `mobile-web-app-capable`, but iOS before

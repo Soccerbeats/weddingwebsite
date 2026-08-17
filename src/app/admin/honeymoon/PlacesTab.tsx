@@ -2,14 +2,14 @@
 
 import { useMemo, useState } from 'react';
 import {
-    STATUSES, categoriesOf, hasCoords, sourceLabel, sourcesOf,
+    STATUSES, categoriesOf, countriesInUse, hasCoords, sourceLabel, sourcesOf,
     type Place, type PlaceStatus,
 } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
 import PlaceEditor from './PlaceEditor';
 import {
-    Button, Card, CategoryChip, EmptyState, OverflowMenu, SelectField, StatusChip, TextField,
-    TriToggle, type TriState,
+    BulkFieldMenu, Button, Card, CategoryChip, EmptyState, MiniSelect, OverflowMenu, SelectField,
+    StatusChip, TextField, TriToggle, type TriState,
 } from './ui';
 
 /**
@@ -73,6 +73,83 @@ export default function PlacesTab({ api }: { api: HoneymoonApi }) {
     const bulk = async (fields: Record<string, unknown>) => {
         if (!selected.size) return;
         await api.update('places', { ids: [...selected], ...fields });
+        setSelected(new Set());
+    };
+
+    /**
+     * The same fields the map's lasso can set, offered here too.
+     *
+     * Which verbs you get shouldn't depend on whether you happened to select on
+     * a map or in a list — they are the same places either way.
+     */
+    const bulkFields = useMemo(() => [
+        {
+            key: 'category',
+            label: 'Type',
+            options: (data?.categories ?? []).map((c) => ({
+                value: c.key, label: `${c.icon} ${c.label}`,
+            })),
+        },
+        {
+            key: 'region_id',
+            label: 'Region',
+            options: [
+                { value: null, label: '— no region —' },
+                ...(data?.regions ?? []).map((r) => ({
+                    value: r.id, label: r.country ? `${r.name} · ${r.country}` : r.name,
+                })),
+            ],
+        },
+        {
+            key: 'country',
+            label: 'Country',
+            options: [
+                { value: '', label: '— from region —' },
+                ...countriesInUse(data?.regions ?? [], places).map((c) => ({ value: c, label: c })),
+            ],
+        },
+        {
+            key: 'source',
+            label: 'Source',
+            options: sources.map((src) => ({ value: src, label: src })),
+        },
+        {
+            key: 'needs_review',
+            label: 'Review flag',
+            options: [
+                { value: false, label: 'Reviewed — pin is right' },
+                { value: true, label: 'Needs review' },
+            ],
+        },
+        {
+            key: 'is_excursion',
+            label: 'Excursion',
+            options: [
+                { value: true, label: 'Is an excursion' },
+                { value: false, label: 'Not an excursion' },
+            ],
+        },
+        {
+            key: 'rating',
+            label: 'Rating',
+            options: [
+                { value: 'yes', label: '\u{1F44D} Interested' },
+                { value: 'no', label: '\u{1F44E} Not interested' },
+                { value: '', label: '— unrated —' },
+            ],
+        },
+    ], [data?.categories, data?.regions, places, sources]);
+
+    /** Schedule the whole selection onto a day, skipping anything already on it. */
+    const addToDay = async (dayId: number) => {
+        const day = (data?.days ?? []).find((d) => d.id === dayId);
+        if (!day) return;
+        const already = new Set(day.stops.map((s) => s.place_id).filter((v) => v != null));
+        const rows = [...selected]
+            .filter((id) => !already.has(id))
+            .map((id) => ({ day_id: dayId, place_id: id }));
+        await api.createMany('stops', rows);
+        await api.refresh();
         setSelected(new Set());
     };
 
@@ -161,18 +238,34 @@ export default function PlacesTab({ api }: { api: HoneymoonApi }) {
                         <option value="">Set status…</option>
                         {STATUSES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
                     </SelectField>
+                    {(data?.days ?? []).length > 0 && (
+                        <MiniSelect
+                            value=""
+                            onChange={(e) => { if (e.target.value) addToDay(Number(e.target.value)); }}
+                        >
+                            <option value="">Add to day…</option>
+                            {(data?.days ?? []).map((d) => (
+                                <option key={d.id} value={d.id}>
+                                    Day {d.day_number}{d.title ? ` — ${d.title}` : ''}
+                                </option>
+                            ))}
+                        </MiniSelect>
+                    )}
+                    <BulkFieldMenu
+                        fields={bulkFields}
+                        onApply={(key, value) => bulk({ [key]: value })}
+                        label="Change a field on all selected"
+                    />
                     <Button onClick={() => bulk({ needs_review: false })}>Mark reviewed</Button>
                     <Button
                         tone="danger"
                         onClick={async () => {
-                            const ids = [...selected];
-                            const scheduled = ids.filter((id) => api.scheduledPlaceIds.has(id)).length;
-                            const warning = scheduled
-                                ? `Delete ${ids.length} place(s)? ${scheduled} of them are on your `
-                                    + 'itinerary — those stops stay put and become plain text.'
-                                : `Delete ${ids.length} place(s)?`;
-                            if (!confirm(warning)) return;
-                            await api.removeMany('places', ids);
+                            const rows = [...selected]
+                                .map((id) => api.placeById.get(id))
+                                .filter((p) => p != null);
+                            if (!rows.length) return;
+                            if (!confirm(`Delete ${rows.length} place(s)? You can undo it.`)) return;
+                            await api.removePlaces(rows);
                             setSelected(new Set());
                         }}
                     >
@@ -194,7 +287,8 @@ export default function PlacesTab({ api }: { api: HoneymoonApi }) {
                 ) : (
                     <ul className="divide-y divide-gray-100">
                         {filtered.map((place) => {
-                            const scheduled = api.scheduledPlaceIds.has(place.id);
+                            const onDays = api.dayOfPlace.get(place.id) ?? [];
+                            const scheduled = onDays.length > 0;
                             return (
                                 <li key={place.id} className="flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50">
                                     <input
@@ -224,7 +318,7 @@ export default function PlacesTab({ api }: { api: HoneymoonApi }) {
                                             )}
                                             {scheduled && (
                                                 <span className="text-[10px] text-emerald-800 bg-emerald-50 rounded-full px-1.5 py-0.5">
-                                                    scheduled
+                                                    day {onDays.join(', ')}
                                                 </span>
                                             )}
                                         </div>
@@ -260,12 +354,9 @@ export default function PlacesTab({ api }: { api: HoneymoonApi }) {
                                             {
                                                 label: 'Delete',
                                                 danger: true,
-                                                onClick: () => {
-                                                    const warning = scheduled
-                                                        ? `${place.name} is on your itinerary. Deleting it leaves the stop in place as plain text. Continue?`
-                                                        : `Delete ${place.name}?`;
-                                                    if (confirm(warning)) api.remove('places', place.id);
-                                                },
+                                                // Undoable — including the link back
+                                                // to any stop it was scheduled on.
+                                                onClick: () => api.removePlaces([place]),
                                             },
                                         ]}
                                     />

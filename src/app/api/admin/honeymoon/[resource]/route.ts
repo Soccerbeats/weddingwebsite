@@ -161,6 +161,7 @@ const TRIP_FIELDS: Record<string, Field> = {
     title: { kind: 'text' },
     focus_country: { kind: 'text', blankAsEmpty: true },
     start_date: { kind: 'date' },
+    end_date: { kind: 'date' },
     home_currency: { kind: 'text' },
     notes: { kind: 'text' },
 };
@@ -263,6 +264,43 @@ export async function POST(request: Request, { params }: Params) {
 
         const def = resolve(resource);
         if (!def) return NextResponse.json({ error: 'Unknown resource' }, { status: 404 });
+
+        /*
+         * An array inserts many rows in one transaction.
+         *
+         * Undo needs this: restoring a bulk delete of a hundred places one POST
+         * at a time is a hundred round trips and a hundred refetches, which is
+         * slow enough that you'd watch the list rebuild row by row. All or
+         * nothing, so a half-restored selection can't happen.
+         */
+        if (Array.isArray(body)) {
+            const rows = body as Record<string, unknown>[];
+            if (!rows.length) return NextResponse.json({ success: true, created: [] });
+            const client = await pool.connect();
+            try {
+                await client.query('BEGIN');
+                const created: unknown[] = [];
+                for (const row of rows) {
+                    const { columns, values } = collect(def, row);
+                    if (!columns.length) continue;
+                    defaultCategory(def, columns, values);
+                    const placeholders = columns.map((_, i) => `$${i + 1}`).join(', ');
+                    const result = await client.query(
+                        `INSERT INTO ${def.table} (${columns.join(', ')})
+                         VALUES (${placeholders}) RETURNING *`,
+                        values,
+                    );
+                    created.push(result.rows[0]);
+                }
+                await client.query('COMMIT');
+                return NextResponse.json({ success: true, created });
+            } catch (error) {
+                await client.query('ROLLBACK');
+                throw error;
+            } finally {
+                client.release();
+            }
+        }
 
         // Adding a day with no number appends to the end, so the UI can just
         // POST {} and get "the next day".

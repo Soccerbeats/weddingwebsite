@@ -4,7 +4,7 @@ import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { useMemo } from 'react';
 import {
-    currencySymbol, dateForDay, effectiveCountry, formatDayDate, hasCoords, priceValue,
+    currencySymbol, dateForDay, daysBetween, effectiveCountry, formatDayDate, hasCoords, priceValue,
 } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
 import { Card, CategoryChip } from './ui';
@@ -159,12 +159,13 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
             items.push({ label: 'No days yet — start the itinerary', href: `${BASE}/itinerary`, tone: 'info' });
         }
         if (!trip?.start_date) {
-            items.push({ label: 'No start date set', href: `${BASE}/settings`, tone: 'info' });
+            items.push({ label: 'No dates set — drag a range', href: `${BASE}/settings`, tone: 'info' });
         }
         return items;
     }, [stats, emptyDays.length, stays, excursions, days.length, trip?.start_date, todosLeft]);
 
     const lastDay = days.length ? Math.max(...days.map((d) => d.day_number)) : 0;
+    const nights = daysBetween(trip?.start_date ?? null, trip?.end_date ?? null);
     const startsIn = useMemo(() => {
         if (!trip?.start_date) return null;
         const start = dateForDay(trip.start_date, 1);
@@ -200,7 +201,11 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
                 <Stat
                     label="Countdown"
                     value={startsIn == null ? '—' : startsIn > 0 ? `${startsIn} days` : startsIn === 0 ? 'Today' : 'Under way'}
-                    hint={startsIn == null ? 'Set a start date' : 'until you fly'}
+                    hint={startsIn == null
+                        ? 'Set the dates'
+                        : nights != null
+                            ? `until you fly · ${nights} night${nights === 1 ? '' : 's'} away`
+                            : 'until you fly'}
                     href={`${BASE}/settings`}
                 />
                 <Stat

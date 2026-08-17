@@ -260,11 +260,7 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                                             {
                                                 label: 'Delete',
                                                 danger: true,
-                                                onClick: () => {
-                                                    if (confirm(`Delete ${stay.name}?`)) {
-                                                        api.remove('places', stay.id);
-                                                    }
-                                                },
+                                                onClick: () => api.removePlaces([stay]),
                                             },
                                         ]}
                                     />

@@ -306,13 +306,11 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
     const bulkDelete = async () => {
         const ids = [...lassoed];
         if (!ids.length) return;
-        const scheduled = ids.filter((id) => api.scheduledPlaceIds.has(id)).length;
-        const warning = scheduled
-            ? `Delete ${ids.length} place(s)? ${scheduled} of them are on your itinerary — `
-                + 'those stops stay put and become plain text.'
-            : `Delete ${ids.length} place(s)?`;
-        if (!confirm(warning)) return;
-        await api.removeMany('places', ids);
+        // The confirm stays for a lasso: "116 places" is worth reading twice,
+        // even with an undo behind it.
+        if (!confirm(`Delete ${ids.length} place(s)? You can undo it.`)) return;
+        const rows = ids.map((id) => api.placeById.get(id)).filter((p) => p != null);
+        await api.removePlaces(rows);
         setLassoed(new Set());
     };
 

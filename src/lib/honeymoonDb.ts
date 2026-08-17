@@ -20,6 +20,7 @@ async function createTables() {
             id INTEGER PRIMARY KEY DEFAULT 1,
             title TEXT NOT NULL DEFAULT 'Honeymoon',
             start_date DATE,
+            end_date DATE,
             home_currency TEXT NOT NULL DEFAULT 'USD',
             notes TEXT,
             focus_country TEXT NOT NULL DEFAULT '',
@@ -136,6 +137,12 @@ async function createTables() {
     await pool.query(
         "ALTER TABLE honeymoon_trip ADD COLUMN IF NOT EXISTS focus_country TEXT NOT NULL DEFAULT ''",
     );
+    // When you fly home. Nullable — a trip can be planned in relative days.
+    await pool.query('ALTER TABLE honeymoon_trip ADD COLUMN IF NOT EXISTS end_date DATE');
+    // Free-text notes on a day and on a stop: both columns shipped with the
+    // original schema, so this is only here for databases created before it.
+    await pool.query('ALTER TABLE honeymoon_days ADD COLUMN IF NOT EXISTS notes TEXT');
+    await pool.query('ALTER TABLE honeymoon_stops ADD COLUMN IF NOT EXISTS notes TEXT');
 
     // Categories are rows so they can be renamed and deleted like anything else.
     // The built-in list seeds them once; after that the database is the truth,
@@ -241,6 +248,7 @@ export async function getHoneymoonPayload(): Promise<HoneymoonPayload> {
         id: 1,
         title: tripRow.title ?? 'Honeymoon',
         start_date: isoDate(tripRow.start_date),
+        end_date: isoDate(tripRow.end_date),
         home_currency: tripRow.home_currency ?? 'USD',
         notes: tripRow.notes ?? null,
         focus_country: tripRow.focus_country ?? '',

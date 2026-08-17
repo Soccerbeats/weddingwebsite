@@ -619,6 +619,11 @@ any pins you want; everything inside is selected and gets a dark ring. A floatin
 bar then offers the same verbs as the Places tab — set status, mark reviewed,
 delete, clear.
 
+The Places tab's own selection bar carries the same verbs — **Add to day…**, the
+**⋯** field menu, mark reviewed, delete — so which ones you get doesn't depend on
+whether you happened to select on a map or in a list. A scheduled place says
+*which* day it is on, not just that it is on one.
+
 The **⋯** button on that bar, left of *Mark reviewed*, changes **any** field
 across the whole selection in two clicks: pick the field, pick the value. Type,
 region, country, status, source, review flag, excursion and rating are all there,
@@ -698,6 +703,13 @@ category would drop anything you re-typed.
 renumber, their dates follow, and each day's stops travel with it. Days have
 their own handle in the header so dragging a day never fights the stop handles
 or the inline text fields inside it.
+
+Each day also takes a **note** (via its ⋯ menu) and so does each stop — for the
+booking ref, what to bring, who to ask for. **Duplicate day** copies a day's
+structure and stops onto the end of the trip, and a stop's ⋯ menu can **move it
+to another day**. **🖨 Print** produces a clean day-by-day sheet with no admin
+chrome — every day, its travel legs, its stops and the guide notes, on paper you
+can fold into a passport. **🗓 Export** is the same `.ics` as Settings.
 
 **☰ Days / 🗓 Calendar**, top right, switches between the working list and the
 trip on a real calendar — every month it touches, Sunday-first, with the days
@@ -802,9 +814,47 @@ law, **driver contacts**, and an **Itinerary ideas** card holding the suggested
 Ubud walking route. All inline-editable, all deletable; note bodies grow to fit
 rather than scrolling inside a fixed box.
 
-**Settings tab.** Trip name and **start date**. Leave the date blank to keep
-planning in relative days; set it and every day picks up its real calendar date
-and weekday. Clearing it returns to relative days — nothing is lost either way.
+**Settings tab — drag the trip onto a calendar.** Two months are shown side by
+side: press on the first day you're away and release on the last. The range
+shades as you drag, either end can be picked up and moved afterwards, and
+**Quick set** does 7 / 10 / 14 days from the current start.
+
+Setting the range **builds the day rows to match it**, which is the point — a
+fourteen-night trip stops being fourteen presses of *+ Add day*. Moving the whole
+range shifts every date and touches nothing else. Shortening it deletes the
+trailing days, and says exactly what is on them first (*"Days 12–14 would be
+deleted, along with 7 stops and 1 travel leg"*). **Clear dates** goes back to
+relative day numbers and keeps every day.
+
+Also here: the trip's **currency** (the symbol on prices you type as a bare
+number, and on the dashboard's rough costs — nothing is converted), and two
+exports.
+
+**Take it with you.** **Add to calendar (.ics)** downloads the trip as a calendar
+file — one all-day event per day carrying its stops, plus timed events for every
+travel leg and every stop with a time. It imports into any phone with no account
+and works with no signal, which is the state you'll actually be in. **Download a
+backup (JSON)** saves the whole portal to one file; take one before any big bulk
+edit, because nothing here is versioned.
+
+**Nothing you delete is really gone for ten seconds.** Deleting a place, a day, a
+stop, a travel leg, a guide note or a to-do puts an **Undo** at the bottom of the
+screen. Undo restores the row *and* its links — a restored place is re-attached
+to the stops it was scheduled on, and a restored day comes back with its stops
+and travel legs. Hovering the toast pauses the countdown. Because of this most
+deletes no longer ask "are you sure" — a confirm you can undo is two speed bumps
+for one hazard. Deleting a whole lasso of places still asks, because "116 places"
+is worth reading twice.
+
+**⌘K finds anything.** Places, guide notes, to-dos, days and regions in one box,
+from any tab, with ↑↓ and Enter. Every kind is guaranteed a result before the rest
+fill by relevance, so two hundred places can't bury the one to-do that matches.
+Picking a place opens its editor where you stand; anything else takes you to its
+tab.
+
+**The place editor won't throw away your typing.** Escape, the ✕ and a click
+outside all ask first if you have changed anything, and stay put if you say no.
+**⌘/Ctrl+Enter** saves from anywhere in the form.
 
 Verify the portal's logic (no database or network needed):
 

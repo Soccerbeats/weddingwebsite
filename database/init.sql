@@ -170,6 +170,7 @@ CREATE TABLE IF NOT EXISTS honeymoon_trip (
   id INTEGER PRIMARY KEY DEFAULT 1,
   title TEXT NOT NULL DEFAULT 'Honeymoon',
   start_date DATE,
+  end_date DATE,
   home_currency TEXT NOT NULL DEFAULT 'USD',
   notes TEXT,
   focus_country TEXT NOT NULL DEFAULT '',

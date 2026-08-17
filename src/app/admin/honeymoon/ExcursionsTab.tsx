@@ -258,11 +258,7 @@ export default function ExcursionsTab({ api }: { api: HoneymoonApi }) {
                                                 {
                                                     label: 'Delete',
                                                     danger: true,
-                                                    onClick: () => {
-                                                        if (confirm(`Delete ${item.name}?`)) {
-                                                            api.remove('places', item.id);
-                                                        }
-                                                    },
+                                                    onClick: () => api.removePlaces([item]),
                                                 },
                                             ]}
                                         />
