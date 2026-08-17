@@ -546,8 +546,18 @@ themselves out in responsive columns instead — Itinerary shows days two or thr
 abreast, Guide does the same for regions and notes, and Settings puts its cards
 side by side rather than stretching a text input across the screen.
 
-**Every tab is its own URL** — `/admin/honeymoon`, `/itinerary`, `/places`,
-`/stays`, `/guide`, `/settings`. A refresh keeps you where you were, and each
+**Dashboard** is the landing page — the whole trip on one screen. Headline stats
+(days, countdown, places, pins to review, stays, excursions), the itinerary with
+each day's stops and empty days flagged, a **Needs attention** list, a rough cost,
+your shortlist, and a planning-progress bar. It's a read-out rather than another
+editor: every number links to the tab that does the work.
+
+The cost figure only counts entries that actually have a number in them, says how
+many it couldn't price, and ignores nights and headcount — it's a sense of scale,
+not a budget, and it says so on the card.
+
+**Every tab is its own URL** — `/admin/honeymoon`, `/map`, `/itinerary`,
+`/places`, `/stays`, `/excursions`, `/guide`, `/settings`. A refresh keeps you where you were, and each
 view is bookmarkable. One shared data load backs all six, so moving between them
 doesn't refetch.
 

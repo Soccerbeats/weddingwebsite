@@ -1,8 +1,8 @@
 'use client';
 
-import MapTab from './MapTab';
+import DashboardTab from './DashboardTab';
 import { useHoneymoonApi } from './HoneymoonContext';
 
-export default function HoneymoonMapPage() {
-    return <MapTab api={useHoneymoonApi()} />;
+export default function HoneymoonDashboardPage() {
+    return <DashboardTab api={useHoneymoonApi()} />;
 }

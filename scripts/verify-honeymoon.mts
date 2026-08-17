@@ -13,7 +13,7 @@ import {
     sourceLabel, sourcesOf, SOURCE_AMY, SOURCE_MANUAL, SOURCE_YOUTUBE,
     categoriesOf, normalizeCategoryKey,
     pointInPolygon, placesInPolygon, nameFromStayUrl, stayUrlsFromText, isStayUrl, cleanListingTitle, formatPerNight,
-    formatPrice, nameFromAnyUrl,
+    formatPrice, nameFromAnyUrl, priceValue,
     type Place, type Stop,
 } from '../src/lib/honeymoon';
 import {
@@ -386,6 +386,16 @@ console.log('\nExcursion pricing and naming');
     check('still prefers a booking slug',
         nameFromAnyUrl('https://www.booking.com/hotel/id/desa-hay.html') === 'Desa Hay');
     check('garbage yields nothing', nameFromAnyUrl('not a url') === null);
+
+    // The dashboard totals prices, so reading a number back out has to be exact.
+    check('reads a formatted price', priceValue('$120') === 120);
+    check('reads a nightly rate', priceValue('$1,200 per night') === 1200, String(priceValue('$1,200 per night')));
+    check('reads a decimal', priceValue('$250.50 per night') === 250.5);
+    check('reads a bare number', priceValue('90') === 90);
+    // "ask at the desk" is not zero — counting it as zero would understate a total.
+    check('free text is not zero', priceValue('ask at the desk') === null);
+    check('blank is not zero', priceValue('') === null && priceValue(null) === null);
+    check('a foreign symbol still yields its number', priceValue('€200') === 200);
 }
 
 console.log('\nSources');

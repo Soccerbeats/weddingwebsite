@@ -546,6 +546,21 @@ export function formatPrice(raw: string, currency?: string | null): string {
 }
 
 /**
+ * Read a number back out of a price note, for totalling on the dashboard.
+ *
+ * Returns null for anything without a plain figure — "ask at the desk" is not
+ * zero, and counting it as zero would quietly understate a total. The caller is
+ * expected to say how many entries it could actually price.
+ */
+export function priceValue(note: string | null | undefined): number | null {
+    if (!note) return null;
+    const match = note.replace(/,/g, '').match(/-?\d+(\.\d+)?/);
+    if (!match) return null;
+    const value = Number(match[0]);
+    return Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+/**
  * A usable name for any link, booking site or not.
  *
  * Falls back through the shapes that actually carry a name: a booking slug, then

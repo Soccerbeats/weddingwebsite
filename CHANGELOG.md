@@ -145,6 +145,12 @@ All notable changes to this project are documented here.
 
   **Switching country now moves the map** to that country's pins, and clearing back to all countries frames everything. Country is the one filter that is a change of *destination* rather than of what is drawn — switching to Singapore while zoomed on Bali showed an empty sea. Layer toggles still leave the viewport alone, which a regression test pins alongside this.
 
+- **Honeymoon — Dashboard landing page.** The whole trip on one screen, and now the first tab: headline stats (days, countdown to departure, places, pins to review, stays, excursions), the itinerary with each day's stops and empty days flagged, a **Needs attention** list, a rough cost, the shortlist, and a planning-progress bar. The map moved to `/admin/honeymoon/map`.
+
+  Deliberately a read-out rather than another editor — it answers "where are we up to and what needs doing", then sends you to the tab that does the work. **Every number is a link**, because a count you can't act on is trivia.
+
+  The cost figure is honest about its limits: `priceValue` returns null rather than zero for anything without a plain number, so "ask at the desk" is reported as *1 without a price* instead of being quietly counted as free. The card states that it ignores nights and headcount and is a sense of scale, not a budget.
+
 - **`npm run check:honeymoon`** — 44 assertions over the pure logic that would otherwise fail silently and wrongly: great-circle distances against known city pairs, day-number arithmetic across a month boundary, 12-hour time formatting at noon and midnight, Google Maps URL parsing in all three shapes, rejection of null island and out-of-range latitudes, hop calculation across unpinned and deleted stops, and seed-data integrity (no duplicate names, no orphan regions, no unknown categories).
 - **Finances suite (`/admin/finances`)** — replaces the `Heav & Aust Wedding Spreadsheet — Budget` tab. Five tabs: **Overview** (reporting), **Budget**, **Purchases**, **Gift Money**, **Settings**. Everything edits inline — commit on blur or Enter, revert on `Esc`, no Save button — and every derived figure recalculates from a single refetch so the grand total, percentages, both deficits and both payment plans can't disagree with each other.
 

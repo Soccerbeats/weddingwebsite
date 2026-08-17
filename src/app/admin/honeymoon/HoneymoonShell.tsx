@@ -9,7 +9,8 @@ import { useHoneymoon } from './useHoneymoon';
 const BASE = '/admin/honeymoon';
 
 const TABS = [
-    { href: BASE, label: 'Map' },
+    { href: BASE, label: 'Dashboard' },
+    { href: `${BASE}/map`, label: 'Map' },
     { href: `${BASE}/itinerary`, label: 'Itinerary' },
     { href: `${BASE}/places`, label: 'Places' },
     { href: `${BASE}/stays`, label: 'Stays' },
@@ -30,9 +31,10 @@ export default function HoneymoonShell({ children }: { children: React.ReactNode
     const pathname = usePathname();
     const { data, loading, error, saving } = api;
 
-    // The map owns the viewport and must not scroll; every other tab scrolls in
-    // its own container so the header and tabs stay put.
-    const isMap = pathname === BASE || pathname === `${BASE}/`;
+    // Only the map owns the viewport and must not scroll; every other tab —
+    // dashboard included — scrolls in its own container so the header and tabs
+    // stay put.
+    const isMap = pathname === `${BASE}/map`;
 
     if (loading) {
         return (
@@ -102,7 +104,7 @@ export default function HoneymoonShell({ children }: { children: React.ReactNode
                     <div className="flex gap-1.5 overflow-x-auto py-3 md:py-4 -mx-1 px-1">
                         {TABS.map((t) => {
                             const active = t.href === BASE
-                                ? isMap
+                                ? pathname === BASE || pathname === `${BASE}/`
                                 : pathname?.startsWith(t.href);
                             return (
                                 <Link
