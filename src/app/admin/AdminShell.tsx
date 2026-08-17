@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Changelog from '@/components/admin/Changelog';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 
@@ -99,7 +100,12 @@ export default function AdminShell({
 
                 {/* Mobile top bar — hidden on desktop */}
                 <div className="md:hidden h-14 shrink-0 bg-white border-b border-gray-200 flex items-center justify-between px-4">
-                    <span className="text-base font-serif font-bold text-gray-800">Admin Panel</span>
+                    <span className="flex items-center gap-2">
+                        <span className="text-base font-serif font-bold text-gray-800">Admin Panel</span>
+                        {/* Also here: on a phone the sidebar's own header sits
+                            behind the site's floating nav and can't be tapped. */}
+                        <Changelog />
+                    </span>
                     <button
                         onClick={() => setSidebarOpen(o => !o)}
                         className="p-2 rounded-md text-gray-600 hover:bg-gray-100 transition-colors"
@@ -133,10 +139,14 @@ export default function AdminShell({
                         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
                         md:relative md:translate-x-0 md:shrink-0
                     `}>
-                        <div className="h-16 flex items-center justify-center border-b border-gray-200 px-4 shrink-0">
+                        <div className="h-16 flex items-center justify-center gap-2 border-b
+                            border-gray-200 px-4 shrink-0">
                             <span className="text-lg font-serif font-bold text-gray-800 text-center">
                                 Admin Panel
                             </span>
+                            {/* The release notes belong where the panel is named,
+                                not only in the repository. */}
+                            <Changelog />
                         </div>
                         <nav className="p-4 flex-1">
                             {navGroups.map((group, i) => (

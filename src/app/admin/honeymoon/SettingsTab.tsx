@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { daysBetween, formatDayDate, planRange } from '@/lib/honeymoon';
+import { addDays, daysBetween, formatDayDate, planRange } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
 import DateRangePicker from './DateRangePicker';
 import { Button, Card, SelectField, TextField } from './ui';
@@ -90,7 +90,11 @@ export default function SettingsTab({ api }: { api: HoneymoonApi }) {
         URL.revokeObjectURL(url);
     };
 
-    const nights = daysBetween(trip.start_date, trip.end_date);
+    /** Where the trip ends according to the day rows, for a trip with no end_date. */
+    const impliedEnd = trip.start_date && lastDay > 0
+        ? addDays(trip.start_date, lastDay - 1)
+        : null;
+    const nights = daysBetween(trip.start_date, trip.end_date ?? impliedEnd);
 
     return (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 items-start max-w-6xl">
@@ -101,9 +105,14 @@ export default function SettingsTab({ api }: { api: HoneymoonApi }) {
                     {working && <span className="text-xs text-gray-400">Updating days…</span>}
                 </div>
 
+                {/* A trip planned before end_date existed has a start and a
+                    number of days but no stored end. Deriving one from the day
+                    rows shows the range that is actually already there, rather
+                    than an empty calendar next to a filled-in summary. The first
+                    drag then writes it down properly. */}
                 <DateRangePicker
                     start={trip.start_date}
-                    end={trip.end_date}
+                    end={trip.end_date ?? impliedEnd}
                     onChange={applyRange}
                 />
 
@@ -115,7 +124,7 @@ export default function SettingsTab({ api }: { api: HoneymoonApi }) {
                                 {lastDay > 1 && <> · day {lastDay} is {formatDayDate(trip.start_date, lastDay)}</>}
                                 {nights != null && <> · {nights} night{nights === 1 ? '' : 's'} away</>}
                             </p>
-                            {trip.end_date && lastDay !== (nights ?? 0) + 1 && (
+                            {trip.end_date && lastDay !== (daysBetween(trip.start_date, trip.end_date) ?? 0) + 1 && (
                                 <p className="text-[11px] text-amber-700 mt-1">
                                     You have {lastDay} day{lastDay === 1 ? '' : 's'} planned for a{' '}
                                     {(nights ?? 0) + 1}-day trip. Drag the range again to line them up.

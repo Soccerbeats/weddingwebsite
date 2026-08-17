@@ -54,6 +54,9 @@ RUN chown nextjs:nodejs .next
 # https://nextjs.org/docs/advanced-features/output-file-tracing
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# The admin panel's "What's new" reads this at runtime; standalone output would
+# otherwise leave it behind in the build stage.
+COPY --from=builder --chown=nextjs:nodejs /app/CHANGELOG.md ./CHANGELOG.md
 
 # Create database initialization script directly
 RUN echo '#!/bin/sh' > /app/init-db.sh && \

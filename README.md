@@ -241,6 +241,29 @@ The image's own entrypoint/cmd are correct (`docker-entrypoint.sh` + `sh -c "/ap
 
 ## Admin Panel Guide
 
+### What's new (✦ beside "Admin Panel")
+
+The project keeps a real `CHANGELOG.md` — every change, why it was made and what
+broke — and the button beside the **Admin Panel** heading reads it in the panel
+itself, so you don't need the repository to find out what moved. A dot appears
+when the newest release is one this browser hasn't opened.
+
+The newest release opens expanded and older ones are collapsed; each change shows
+its headline, and clicking one unfolds the full reasoning. It renders the file's
+markdown itself — bold, code, links, nested bullets — as React elements rather
+than HTML, so nothing in the file can ever be injected as markup.
+
+The button appears twice on purpose: once in the sidebar header and once in the
+mobile top bar, because on a phone the sidebar's own header sits behind the site's
+floating nav and can't be tapped. Both share one request.
+
+Verify the parser against the real file:
+
+```bash
+npm run check:changelog
+```
+
+
 ### Registry — Honeymoon Fund
 
 1. Go to **Admin → Registry → Honeymoon Fund**
