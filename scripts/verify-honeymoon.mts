@@ -13,6 +13,7 @@ import {
     sourceLabel, sourcesOf, SOURCE_AMY, SOURCE_MANUAL, SOURCE_YOUTUBE,
     categoriesOf, normalizeCategoryKey,
     pointInPolygon, placesInPolygon, nameFromStayUrl, stayUrlsFromText, isStayUrl, cleanListingTitle, formatPerNight,
+    formatPrice, nameFromAnyUrl,
     type Place, type Stop,
 } from '../src/lib/honeymoon';
 import {
@@ -355,6 +356,36 @@ console.log('\nNightly price formatting');
     check('unknown currency codes fall back to the code',
         f('250', 'IDR') === 'IDR 250 per night', f('250','IDR'));
     check('a GBP amount is not re-prefixed', f('£250 per night', 'GBP') === '£250 per night');
+}
+
+console.log('\nExcursion pricing and naming');
+{
+    const g = (v: string, c?: string) => formatPrice(v, c);
+    check('a bare number becomes a price', g('120') === '$120', g('120'));
+    check('thousands separate', g('1500') === '$1,500', g('1500'));
+    // No suffix is invented — an excursion might be per person, per couple or
+    // per boat, and guessing would put words in the user's mouth.
+    check('no unit is invented', g('120') === '$120');
+    check('a typed unit is left as typed', g('120 per person') === '120 per person');
+    check('re-formatting is a no-op', g(g('120')) === '$120');
+    check('free text survives', g('ask at the desk') === 'ask at the desk');
+    check('blank stays blank', g('') === '');
+    check('honours the trip currency', g('120', 'GBP') === '£120', g('120','GBP'));
+
+    // Any link needs a usable name — "Untitled" defeats the point of a list.
+    check('reads a slug from a tour url',
+        nameFromAnyUrl('https://www.getyourguide.com/bali-l376/ubud-rafting-t12345')
+        === 'Ubud Rafting T12345',
+        String(nameFromAnyUrl('https://www.getyourguide.com/bali-l376/ubud-rafting-t12345')));
+    check('skips a numeric last segment',
+        nameFromAnyUrl('https://example.com/tours/sunrise-trek/48291') === 'Sunrise Trek',
+        String(nameFromAnyUrl('https://example.com/tours/sunrise-trek/48291')));
+    check('falls back to the host when the path says nothing',
+        nameFromAnyUrl('https://masonadventures.com/') === 'Masonadventures',
+        String(nameFromAnyUrl('https://masonadventures.com/')));
+    check('still prefers a booking slug',
+        nameFromAnyUrl('https://www.booking.com/hotel/id/desa-hay.html') === 'Desa Hay');
+    check('garbage yields nothing', nameFromAnyUrl('not a url') === null);
 }
 
 console.log('\nSources');

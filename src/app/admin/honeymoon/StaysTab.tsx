@@ -1,14 +1,15 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
     RATINGS, cleanListingTitle, formatPerNight, isStayUrl, nameFromStayUrl, stayUrlsFromText,
-    type Place, type PlaceRating,
+    type Place,
 } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
 import PlaceEditor from './PlaceEditor';
+import LinkPreview from './LinkPreview';
 import {
-    Button, Card, EmptyState, InlineText, Modal, OverflowMenu, TextArea,
+    Button, Card, EmptyState, InlineText, OverflowMenu, TextArea,
 } from './ui';
 
 /**
@@ -325,15 +326,16 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
 
             {/* Keyed on the listing so each preview mounts fresh — no reset logic,
                 and the load/timeout state can't leak from one listing to the next. */}
-            <StayPreview
-                key={preview?.id ?? 'none'}
-                place={preview}
-                url={preview ? stayLink(preview) : null}
-                onClose={() => setPreview(null)}
-                onRate={(rating) => {
-                    if (preview) api.update('places', { id: preview.id, rating });
-                }}
-            />
+            {preview && (
+                <LinkPreview
+                    key={preview.id}
+                    title={preview.name}
+                    url={stayLink(preview)}
+                    rating={preview.rating}
+                    onClose={() => setPreview(null)}
+                    onRate={(rating) => api.update('places', { id: preview.id, rating })}
+                />
+            )}
 
             <PlaceEditor
                 api={api}
@@ -342,101 +344,5 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                 onClose={() => { setEditorOpen(false); setEditing(null); }}
             />
         </div>
-    );
-}
-
-/**
- * Preview a listing without leaving the portal.
- *
- * Booking.com currently sends `frame-ancestors 'none'` in *report-only* mode, so
- * framing works today but is one config flip away from not working. The frame is
- * therefore treated as best-effort: if it hasn't reported a load shortly after
- * opening, the fallback and the open-in-a-tab button take over. The button is
- * always there regardless.
- */
-function StayPreview({ place, url, onClose, onRate }: {
-    place: Place | null;
-    url: string | null;
-    onClose: () => void;
-    onRate: (rating: PlaceRating | '') => void;
-}) {
-    const [loaded, setLoaded] = useState(false);
-    const [gaveUp, setGaveUp] = useState(false);
-
-    const open = place != null && url != null;
-
-    // Patience clock only — the component is keyed by listing, so it always
-    // mounts fresh and there is no previous state to clear.
-    useEffect(() => {
-        const timer = setTimeout(() => setGaveUp(true), 6000);
-        return () => clearTimeout(timer);
-    }, []);
-
-    if (!open) return null;
-
-    return (
-        <Modal open onClose={onClose} title={place.name} wide>
-            <div className="space-y-3">
-                <div className="relative rounded-2xl overflow-hidden border border-gray-200 bg-gray-50">
-                    <iframe
-                        src={url}
-                        title={place.name}
-                        className="w-full h-[60vh]"
-                        onLoad={() => setLoaded(true)}
-                        // Same-origin is deliberately withheld: this is a third-party
-                        // page and it has no business touching this admin session.
-                        sandbox="allow-scripts allow-popups allow-forms"
-                        referrerPolicy="no-referrer"
-                    />
-                    {!loaded && gaveUp && (
-                        <div className="absolute inset-0 bg-white flex items-center justify-center p-6">
-                            <div className="text-center max-w-sm">
-                                <p className="text-sm font-medium text-gray-700">
-                                    This site won&apos;t display inside the portal
-                                </p>
-                                <p className="text-xs text-gray-500 mt-1">
-                                    Booking sites increasingly block being embedded. Open it in a
-                                    tab instead — your notes and rating stay here.
-                                </p>
-                                <a
-                                    href={url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-block mt-3 rounded-full bg-accent text-white
-                                        px-4 py-1.5 text-sm font-medium hover:opacity-90"
-                                >
-                                    Open on the booking site ↗
-                                </a>
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                    {RATINGS.map((r) => (
-                        <button
-                            key={r.key}
-                            onClick={() => { onRate(place.rating === r.key ? '' : r.key); onClose(); }}
-                            className={`rounded-full px-3 py-1.5 text-sm font-medium border transition
-                                ${place.rating === r.key
-                                ? 'text-white border-transparent'
-                                : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'}`}
-                            style={place.rating === r.key ? { backgroundColor: r.color } : undefined}
-                        >
-                            {r.icon} {r.label}
-                        </button>
-                    ))}
-                    <div className="flex-1" />
-                    <a
-                        href={url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm text-accent hover:underline"
-                    >
-                        Open in a tab ↗
-                    </a>
-                </div>
-            </div>
-        </Modal>
     );
 }

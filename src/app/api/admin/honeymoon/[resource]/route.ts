@@ -79,6 +79,7 @@ const RESOURCES: Record<string, ResourceDef> = {
             // as NULL rather than snapping to 'yes'.
             rating: { kind: 'text' },
             image_url: { kind: 'text' },
+            is_excursion: { kind: 'bool' },
             needs_review: { kind: 'bool' },
             sort_order: { kind: 'int' },
         },

@@ -627,6 +627,22 @@ There's no import of your Booking.com favourites — that would need your accoun
 credentials, which this app should never hold. Pasting a batch of links is the
 supported route.
 
+**Excursions tab.** Things to do — tours, classes, dives, day trips. Paste or drop
+**any link**, not just booking sites; the name and photo come from the page where
+it offers them, falling back to the URL when it doesn't. Each card carries:
+
+- **What it is** — the type, from the same category list as everywhere else, so a
+  custom one like *Cooking class* works here too
+- **Cost** — type `120` and it becomes **$120**. No unit is invented, because an
+  excursion might be per person, per couple or per boat; type
+  `120 per person` and it stays exactly as typed
+- Notes, a 👍/👎 rating, and a **Preview** popup
+
+Excursions are ordinary places carrying a flag, so one can also be pinned on the
+map and dropped onto a day like anything else. The flag is separate from the
+category deliberately — *what* an excursion is varies, and tying the tab to one
+category would drop anything you re-typed.
+
 **Itinerary tab.** Days are numbered (Day 1, Day 2…). Each day holds:
 - a **base** — where you're sleeping, chosen from places categorised *Stay*
 - optional **travel legs** — flight/boat/car/train/walk, with times and a

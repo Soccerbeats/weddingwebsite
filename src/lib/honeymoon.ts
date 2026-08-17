@@ -81,8 +81,16 @@ export interface Place {
     photos: string[];
     source: PlaceSource;
     needs_review: boolean;
-    /** Interested / not interested. Used by the Stays shortlist. */
+    /** Interested / not interested. Used by the Stays and Excursions shortlists. */
     rating: PlaceRating;
+    /**
+     * Shows on the Excursions tab.
+     *
+     * A flag rather than a category, because an excursion's *type* is the thing
+     * you want to record freely — a cooking class, a dive, a temple tour — and
+     * tying the tab to one category would drop anything you re-typed.
+     */
+    is_excursion: boolean;
     /** Preview image scraped from the listing's Open Graph tags. */
     image_url: string | null;
     sort_order: number;
@@ -491,14 +499,14 @@ export function currencySymbol(code: string | null | undefined): string {
  * Re-running it on its own output is a no-op, which matters because the field
  * commits on blur as well as on Enter.
  */
-export function formatPerNight(raw: string, currency?: string | null): string {
+function formatAmount(raw: string, currency: string | null | undefined, suffix: string): string {
     const trimmed = raw.trim();
     if (!trimmed) return '';
 
     const symbol = currencySymbol(currency);
 
     // Strip only what we ourselves add: our currency symbol, a bare $, thousands
-    // separators, and a trailing "per night" in its usual spellings. A foreign
+    // separators, and our own trailing suffix in its usual spellings. A foreign
     // symbol left behind means this isn't ours to reformat.
     const stripped = trimmed
         .replace(/\s*(per\s*night|\/\s*night|p\/?n)\s*$/i, '')
@@ -512,14 +520,58 @@ export function formatPerNight(raw: string, currency?: string | null): string {
     const value = Number(stripped);
     if (!Number.isFinite(value)) return trimmed;
 
-    // Keep cents only when they were typed; "$250.00 per night" reads worse.
+    // Keep cents only when they were typed; "$250.00" reads worse.
     const hasCents = stripped.includes('.') && !/\.0+$/.test(stripped);
     const shown = value.toLocaleString('en-US', {
         minimumFractionDigits: hasCents ? 2 : 0,
         maximumFractionDigits: 2,
     });
 
-    return `${symbol}${shown} per night`;
+    return `${symbol}${shown}${suffix}`;
+}
+
+export function formatPerNight(raw: string, currency?: string | null): string {
+    return formatAmount(raw, currency, ' per night');
+}
+
+/**
+ * A plain price, for things that aren't priced by the night.
+ *
+ * No suffix is appended: an excursion might be per person, per couple or per
+ * boat, and inventing one would put words in your mouth. Type "120 per person"
+ * and it is left exactly as typed, like any other free text.
+ */
+export function formatPrice(raw: string, currency?: string | null): string {
+    return formatAmount(raw, currency, '');
+}
+
+/**
+ * A usable name for any link, booking site or not.
+ *
+ * Falls back through the shapes that actually carry a name: a booking slug, then
+ * the last meaningful path segment, then the hostname. Something readable always
+ * beats "Untitled", since the whole point is to recognise it in a list later.
+ */
+export function nameFromAnyUrl(url: string): string | null {
+    const booking = nameFromStayUrl(url);
+    if (booking) return booking;
+
+    try {
+        const parsed = new URL(url);
+        const segments = parsed.pathname.split('/').filter(Boolean);
+        for (const segment of [...segments].reverse()) {
+            const cleaned = decodeURIComponent(segment)
+                .replace(/\.(html?|php|aspx)$/i, '')
+                .replace(/[-_+]+/g, ' ')
+                .trim();
+            // Skip ids and locale stubs — they name nothing.
+            if (cleaned.length < 3 || /^\d+$/.test(cleaned)) continue;
+            return titleCase(cleaned).slice(0, 80);
+        }
+        return titleCase(parsed.hostname.replace(/^www\./, '').split('.')[0]);
+    } catch {
+        return null;
+    }
 }
 
 /** Split a pasted block into one candidate URL per line. */
