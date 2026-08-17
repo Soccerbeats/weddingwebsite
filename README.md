@@ -579,6 +579,11 @@ only the categories actually on screen. Click a pin for its detail card, with an
 filter by rating, and add price and notes inline. **Preview** opens the listing
 in a popup inside the portal, with an *Open in a tab* escape hatch.
 
+Type a bare number into a stay's price field and it tidies itself on Enter —
+`250` becomes **$250 per night**, `1200` becomes **$1,200 per night**. Anything
+that isn't a plain number is left exactly as typed, so a note like
+*~500k IDR entry* survives. The symbol follows the trip's currency in Settings.
+
 Each stay shows the **listing's own photo**, pulled from its Open Graph tags when
 the link is added. Stays saved before this existed get a **Get photos for N**
 button. Price and notes are still yours to add.

@@ -361,6 +361,56 @@ export function cleanListingTitle(title: string): string | null {
     return head.length >= 2 ? head : null;
 }
 
+/** Symbols for the currencies a honeymoon is plausibly priced in. */
+const CURRENCY_SYMBOLS: Record<string, string> = {
+    USD: '$', EUR: '€', GBP: '£', AUD: 'A$', CAD: 'C$', SGD: 'S$', NZD: 'NZ$',
+};
+
+export function currencySymbol(code: string | null | undefined): string {
+    if (!code) return '$';
+    return CURRENCY_SYMBOLS[code.toUpperCase()] ?? `${code.toUpperCase()} `;
+}
+
+/**
+ * Tidy a nightly rate typed into a stay card: "250" becomes "$250 per night".
+ *
+ * Deliberately conservative. Anything that isn't a plain number is returned
+ * untouched, because price notes elsewhere in the library read like
+ * "~500k IDR entry" and rewriting those as dollars would be worse than useless.
+ * Re-running it on its own output is a no-op, which matters because the field
+ * commits on blur as well as on Enter.
+ */
+export function formatPerNight(raw: string, currency?: string | null): string {
+    const trimmed = raw.trim();
+    if (!trimmed) return '';
+
+    const symbol = currencySymbol(currency);
+
+    // Strip only what we ourselves add: our currency symbol, a bare $, thousands
+    // separators, and a trailing "per night" in its usual spellings. A foreign
+    // symbol left behind means this isn't ours to reformat.
+    const stripped = trimmed
+        .replace(/\s*(per\s*night|\/\s*night|p\/?n)\s*$/i, '')
+        .replace(new RegExp(`^${symbol.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`), '')
+        .replace(/^\$/, '')
+        .replace(/,/g, '')
+        .trim();
+
+    if (!/^\d+(\.\d+)?$/.test(stripped)) return trimmed;
+
+    const value = Number(stripped);
+    if (!Number.isFinite(value)) return trimmed;
+
+    // Keep cents only when they were typed; "$250.00 per night" reads worse.
+    const hasCents = stripped.includes('.') && !/\.0+$/.test(stripped);
+    const shown = value.toLocaleString('en-US', {
+        minimumFractionDigits: hasCents ? 2 : 0,
+        maximumFractionDigits: 2,
+    });
+
+    return `${symbol}${shown} per night`;
+}
+
 /** Split a pasted block into one candidate URL per line. */
 export function stayUrlsFromText(text: string): string[] {
     const seen = new Set<string>();

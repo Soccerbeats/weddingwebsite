@@ -93,6 +93,12 @@ All notable changes to this project are documented here.
 
   New nullable `honeymoon_places.image_url`. Images are hot-linked from the listing's CDN with `referrerPolicy="no-referrer"` and hidden on error, so an expired signed URL degrades to a card without a photo rather than a broken icon.
 
+- **Honeymoon Stays — nightly prices format themselves.** Typing `250` into a stay's price field and pressing Enter stores **$250 per night**; `1200` becomes **$1,200 per night**. The symbol follows the trip's `home_currency`, falling back to the currency code for anything without a known symbol.
+
+  Deliberately conservative: anything that isn't a plain number is returned exactly as typed, because price notes elsewhere in the library read like *~500k IDR entry* and rewriting those as dollars would be worse than leaving them alone. Ranges (`250-300`) and foreign symbols (`€200`) are left untouched for the same reason.
+
+  The formatter is **idempotent**, which matters because the field commits on blur as well as on Enter — without that, tabbing through an already-formatted value would compound it into `$$250 per night per night`. A regression test runs it over its own output three times.
+
 - **`npm run check:honeymoon`** — 44 assertions over the pure logic that would otherwise fail silently and wrongly: great-circle distances against known city pairs, day-number arithmetic across a month boundary, 12-hour time formatting at noon and midnight, Google Maps URL parsing in all three shapes, rejection of null island and out-of-range latitudes, hop calculation across unpinned and deleted stops, and seed-data integrity (no duplicate names, no orphan regions, no unknown categories).
 - **Finances suite (`/admin/finances`)** — replaces the `Heav & Aust Wedding Spreadsheet — Budget` tab. Five tabs: **Overview** (reporting), **Budget**, **Purchases**, **Gift Money**, **Settings**. Everything edits inline — commit on blur or Enter, revert on `Esc`, no Save button — and every derived figure recalculates from a single refetch so the grand total, percentages, both deficits and both payment plans can't disagree with each other.
 

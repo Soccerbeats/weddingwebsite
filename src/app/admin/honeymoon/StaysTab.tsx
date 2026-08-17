@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
-    RATINGS, cleanListingTitle, isStayUrl, nameFromStayUrl, stayUrlsFromText,
+    RATINGS, cleanListingTitle, formatPerNight, isStayUrl, nameFromStayUrl, stayUrlsFromText,
     type Place, type PlaceRating,
 } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
@@ -234,10 +234,13 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                                         />
                                         <InlineText
                                             value={stay.price_note ?? ''}
-                                            placeholder="Price / per night"
+                                            placeholder="Price per night — type 250"
                                             className="text-xs text-gray-500 -ml-2"
                                             onCommit={(price_note) => api.update('places', {
-                                                id: stay.id, price_note,
+                                                id: stay.id,
+                                                price_note: formatPerNight(
+                                                    price_note, data?.trip.home_currency,
+                                                ),
                                             })}
                                         />
                                     </div>

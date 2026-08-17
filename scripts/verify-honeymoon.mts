@@ -11,7 +11,7 @@ import {
     boundsOf, dateForDay, distanceKm, formatDayDate, formatDistance, formatTime,
     dayHops, hasCoords, categoryMeta, CATEGORIES,
     sourceLabel, sourcesOf, SOURCE_AMY, SOURCE_MANUAL, SOURCE_YOUTUBE,
-    pointInPolygon, placesInPolygon, nameFromStayUrl, stayUrlsFromText, isStayUrl, cleanListingTitle,
+    pointInPolygon, placesInPolygon, nameFromStayUrl, stayUrlsFromText, isStayUrl, cleanListingTitle, formatPerNight,
     type Place, type Stop,
 } from '../src/lib/honeymoon';
 import {
@@ -293,6 +293,42 @@ console.log('\nBooking links');
         cleanListingTitle('Hard Rock Hotel Bali') === 'Hard Rock Hotel Bali');
     check('empty title yields nothing', cleanListingTitle('') === null);
     check('a one-character title is not a name', cleanListingTitle('X, Bali') === null);
+}
+
+console.log('\nNightly price formatting');
+{
+    const f = (v: string, c?: string) => formatPerNight(v, c);
+
+    check('a bare number becomes a rate', f('250') === '$250 per night', f('250'));
+    check('thousands get separated', f('1200') === '$1,200 per night', f('1200'));
+    check('cents are kept when typed', f('250.5') === '$250.50 per night', f('250.5'));
+    check('trailing .00 is dropped', f('250.00') === '$250 per night', f('250.00'));
+    check('an existing dollar sign is not doubled', f('$250') === '$250 per night', f('$250'));
+    check('typed separators survive', f('1,200') === '$1,200 per night', f('1,200'));
+
+    // The field commits on blur as well as Enter, so running over its own output
+    // must not compound into "$$250 per night per night".
+    check('re-formatting its own output is a no-op',
+        f(f('250')) === '$250 per night', f(f('250')));
+    check('idempotent over three passes', f(f(f('1200'))) === '$1,200 per night');
+
+    check('"per night" already typed is not repeated',
+        f('250 per night') === '$250 per night', f('250 per night'));
+    check('slash-night spelling is understood',
+        f('180/night') === '$180 per night', f('180/night'));
+
+    // Free text must survive untouched: the seeded library has notes like
+    // "~500k IDR entry", and rewriting those as dollars would be plain wrong.
+    check('free text is left alone', f('~500k IDR entry') === '~500k IDR entry');
+    check('a range is left alone', f('250-300') === '250-300');
+    check('a foreign symbol is left alone', f('€200') === '€200');
+    check('blank stays blank', f('') === '' && f('   ') === '');
+
+    // The trip's own currency wins when it isn't dollars.
+    check('honours a non-USD trip currency', f('250', 'GBP') === '£250 per night', f('250','GBP'));
+    check('unknown currency codes fall back to the code',
+        f('250', 'IDR') === 'IDR 250 per night', f('250','IDR'));
+    check('a GBP amount is not re-prefixed', f('£250 per night', 'GBP') === '£250 per night');
 }
 
 console.log('\nSources');
