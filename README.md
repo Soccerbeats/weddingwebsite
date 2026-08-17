@@ -632,8 +632,9 @@ The view always fits itself to whatever is currently showing: with no
 filters it frames Singapore and Bali together; filter to a region and it zooms to
 that island; pick a day and it zooms to that day's stops and draws the route
 between them in order, numbered. Pin colour is the category, and the legend lists
-only the categories actually on screen. Click a pin for its detail card, with an
-*Open in Google Maps* link.
+only the categories actually on screen. Click a pin and its detail card opens in the
+**top-right corner**, clear of the legend and the itinerary panel, with an *Open
+in Google Maps* link.
 
 **Stays tab.** A shortlist for accommodation. Paste (or drop) **Booking.com links
 — one per line, several at once** — and each becomes a candidate. Rate them

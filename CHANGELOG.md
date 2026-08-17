@@ -175,6 +175,8 @@ All notable changes to this project are documented here.
 
   **Ticking a to-do prompts for a result** — booking reference, outcome, whatever is worth keeping. Stored on the item and shown beneath it, click to edit. The tick is saved *before* the prompt opens, so dismissing it leaves the item done rather than silently undoing the click; that is why the dismiss button says Skip rather than Cancel. Un-ticking doesn't prompt: that's a correction, not an outcome.
 
+- **Honeymoon map — the place detail card moved to the top-right.** It was bottom-right. Top-right keeps it clear of the legend (bottom-left) and the itinerary panel (top-left), and off the pin you just clicked. It is also height-capped now, so a long description scrolls inside the card rather than running off the bottom of the map.
+
 - **`npm run check:honeymoon`** — 44 assertions over the pure logic that would otherwise fail silently and wrongly: great-circle distances against known city pairs, day-number arithmetic across a month boundary, 12-hour time formatting at noon and midnight, Google Maps URL parsing in all three shapes, rejection of null island and out-of-range latitudes, hop calculation across unpinned and deleted stops, and seed-data integrity (no duplicate names, no orphan regions, no unknown categories).
 - **Finances suite (`/admin/finances`)** — replaces the `Heav & Aust Wedding Spreadsheet — Budget` tab. Five tabs: **Overview** (reporting), **Budget**, **Purchases**, **Gift Money**, **Settings**. Everything edits inline — commit on blur or Enter, revert on `Esc`, no Save button — and every derived figure recalculates from a single refetch so the grand total, percentages, both deficits and both payment plans can't disagree with each other.
 

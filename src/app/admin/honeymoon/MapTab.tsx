@@ -557,8 +557,13 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                 )}
 
                 {/* ---- Selected place, floating bottom-right ---- */}
+                {/* Top-right: clear of the legend bottom-left and the itinerary panel
+                    top-left, and it never covers the pin you just clicked in the
+                    middle of the map. Height-capped so a long description scrolls
+                    inside it rather than running off screen. */}
                 {selected && (
-                    <div className="absolute bottom-3 right-3 z-[500] w-[min(22rem,90%)]
+                    <div className="absolute top-3 right-3 z-[500] w-[min(22rem,90%)]
+                        max-h-[calc(100%-1.5rem)] overflow-auto
                         bg-white rounded-2xl shadow-lg border border-gray-200 p-4">
                         <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
