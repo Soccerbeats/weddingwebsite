@@ -450,7 +450,16 @@ export function EmptyState({ title, hint }: { title: string; hint?: string }) {
     );
 }
 
-/** Backdrop-blurred modal, matching the rest of the admin panel. */
+/**
+ * Backdrop-blurred modal, matching the rest of the admin panel.
+ *
+ * Closes on a backdrop *click*, and only when the press started on the backdrop
+ * too. A `click` fires on the common ancestor of where the pointer went down and
+ * up — so selecting text in a field and releasing past the edge of the dialog
+ * lands that click on the backdrop and used to shut the whole thing, losing what
+ * you were doing. Tracking where the press began fixes it: releasing outside is
+ * not clicking outside.
+ */
 export function Modal({ open, onClose, title, children, wide = false }: {
     open: boolean;
     onClose: () => void;
@@ -458,12 +467,20 @@ export function Modal({ open, onClose, title, children, wide = false }: {
     children: React.ReactNode;
     wide?: boolean;
 }) {
+    const pressedBackdrop = useRef(false);
+
     if (!open) return null;
     return (
         <div
             className="fixed inset-0 z-50 bg-gray-900/30 backdrop-blur-sm flex items-end md:items-center
                 justify-center p-0 md:p-4"
-            onClick={onClose}
+            onPointerDown={(e) => { pressedBackdrop.current = e.target === e.currentTarget; }}
+            onClick={(e) => {
+                if (e.target !== e.currentTarget) return;
+                if (!pressedBackdrop.current) return;
+                pressedBackdrop.current = false;
+                onClose();
+            }}
         >
             <div
                 className={`bg-white w-full ${wide ? 'md:max-w-3xl' : 'md:max-w-lg'} rounded-t-3xl md:rounded-3xl

@@ -183,6 +183,12 @@ All notable changes to this project are documented here.
 
   Days get their own drag handle in the card header rather than the whole card being draggable, so a day drag can't fight the stop handles or the inline text fields inside it, and the day sensor needs a slightly longer press than the stop sensor for the same reason.
 
+- **Fixed: dialogs closing when a drag ended outside them.** Selecting text in a field and releasing the mouse past the edge of the dialog shut it and threw away what you had typed. A `click` event fires on the **common ancestor** of where the pointer went down and where it came up — drag from inside a dialog to outside and that ancestor is the backdrop, so the release read as a backdrop click.
+
+  The shared `Modal` now records whether the press *started* on the backdrop and only closes when it did. Releasing outside is not clicking outside. This covers every dialog in the honeymoon portal — the place editor, the category and region manager, the listing preview and the to-do result prompt — since they all use the one component.
+
+  Confirmed the regression test catches it: with the fix reverted, the drag-out case fails.
+
 - **`npm run check:honeymoon`** — 44 assertions over the pure logic that would otherwise fail silently and wrongly: great-circle distances against known city pairs, day-number arithmetic across a month boundary, 12-hour time formatting at noon and midnight, Google Maps URL parsing in all three shapes, rejection of null island and out-of-range latitudes, hop calculation across unpinned and deleted stops, and seed-data integrity (no duplicate names, no orphan regions, no unknown categories).
 - **Finances suite (`/admin/finances`)** — replaces the `Heav & Aust Wedding Spreadsheet — Budget` tab. Five tabs: **Overview** (reporting), **Budget**, **Purchases**, **Gift Money**, **Settings**. Everything edits inline — commit on blur or Enter, revert on `Esc`, no Save button — and every derived figure recalculates from a single refetch so the grand total, percentages, both deficits and both payment plans can't disagree with each other.
 
