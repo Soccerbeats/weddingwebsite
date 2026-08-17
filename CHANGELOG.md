@@ -119,6 +119,18 @@ All notable changes to this project are documented here.
 
   **Selects are no longer native chrome.** `appearance-none` plus a background-SVG chevron, so they keep the same rounded shape as every other field while staying real `<select>`s — native picker on mobile, keyboard support for free. The toolbar select now shares Button's padding, text size, border and radius, so a row of pills is uniform rather than one slightly smaller odd one out.
 
+- **Honeymoon — real URLs per tab, a map that keeps your view, a saved country filter, scoped type list, and an itinerary overlay.**
+
+  **Every tab is a route now** (`/admin/honeymoon`, `/itinerary`, `/places`, `/stays`, `/guide`, `/settings`). They were local state, so a refresh always dumped you back on the map. A layout owns the data hook and hands it down through context, so six routes still share one payload rather than refetching per navigation.
+
+  **The map no longer re-frames itself when you change what's drawn.** Fitting was previously keyed off the filters, so toggling a layer threw away the view you'd lined up — infuriating mid-task. `fitKey` became `fitSignal`: the map fits on arrival and when **⤢ Fit** is pressed, and otherwise the viewport belongs to whoever is panning it. This does mean region and day filters no longer auto-zoom either, which is why Fit exists.
+
+  **Country is persisted on the trip** (`honeymoon_trip.focus_country`), not in the browser — it's a decision about the trip, so it survives refreshes, logins and devices. A place with no region is hidden while a country is set, rather than guessed at.
+
+  **The type dropdown lists only types present on the map**, computed from the filtered set *excluding* the category filter itself — otherwise picking a type would collapse the list to that one option. The count is in the label.
+
+  **🗓 Show itinerary** overlays every day at once, each in its own colour with numbered badges, plus a panel listing each day's stops in order with numbers matching the badges. `TripMap` took a single `route`; it now takes `routes[]`.
+
 - **`npm run check:honeymoon`** — 44 assertions over the pure logic that would otherwise fail silently and wrongly: great-circle distances against known city pairs, day-number arithmetic across a month boundary, 12-hour time formatting at noon and midnight, Google Maps URL parsing in all three shapes, rejection of null island and out-of-range latitudes, hop calculation across unpinned and deleted stops, and seed-data integrity (no duplicate names, no orphan regions, no unknown categories).
 - **Finances suite (`/admin/finances`)** — replaces the `Heav & Aust Wedding Spreadsheet — Budget` tab. Five tabs: **Overview** (reporting), **Budget**, **Purchases**, **Gift Money**, **Settings**. Everything edits inline — commit on blur or Enter, revert on `Esc`, no Save button — and every derived figure recalculates from a single refetch so the grand total, percentages, both deficits and both payment plans can't disagree with each other.
 

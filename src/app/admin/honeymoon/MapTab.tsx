@@ -1,10 +1,10 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import {
-    STATUSES, categoriesOf, formatDayDate, hasCoords, sourceLabel, sourcesOf,
-    type Place, type PlaceStatus,
+    STATUSES, categoriesOf, categoryMeta, formatDayDate, hasCoords, sourceLabel, sourcesOf,
+    type Day, type Place, type PlaceStatus,
 } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
 import PlaceEditor from './PlaceEditor';
@@ -45,14 +45,40 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
     // Lasso
     const [selectMode, setSelectMode] = useState(false);
     const [lassoed, setLassoed] = useState<Set<number>>(new Set());
+    const [showItinerary, setShowItinerary] = useState(false);
+    // Bumped only on purpose — never by a filter. See TripMap's fit effect.
+    const [fitSignal, setFitSignal] = useState(0);
 
     const places = useMemo(() => data?.places ?? [], [data]);
-    const days = data?.days ?? [];
+    const days = useMemo(() => data?.days ?? [], [data]);
+    const regions = useMemo(() => data?.regions ?? [], [data]);
+
+    /** The saved country filter — a trip setting, not a session preference. */
+    const country = data?.trip.focus_country ?? '';
+
+    const countries = useMemo(() => {
+        const seen = new Set<string>();
+        for (const r of regions) if (r.country) seen.add(r.country);
+        return [...seen].sort((a, b) => a.localeCompare(b));
+    }, [regions]);
+
+    /** Region id -> country, so a place can be judged by where its region is. */
+    const countryOfRegion = useMemo(() => {
+        const map = new Map<number, string>();
+        for (const r of regions) map.set(r.id, r.country ?? '');
+        return map;
+    }, [regions]);
 
     const selectedDay = dayFilter === '' ? null : days.find((d) => String(d.id) === dayFilter) ?? null;
 
-    /** Pins currently visible — this set is what the map fits itself to. */
-    const visible = useMemo(() => {
+    /**
+     * Everything the filters allow *except* the category filter.
+     *
+     * The type dropdown is built from this, so it only ever offers types that
+     * are actually on the map — and picking one doesn't collapse the list to
+     * that single option.
+     */
+    const visibleIgnoringCategory = useMemo(() => {
         if (selectedDay) {
             // A day view shows exactly that day's stops, in order, and nothing else.
             const ids = new Set(selectedDay.stops.map((s) => s.place_id).filter((id): id is number => id != null));
@@ -62,25 +88,67 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
         return places.filter((p) => {
             // Additive: off hides the unconfirmed, on shows everything.
             if (!showUnconfirmed && p.needs_review) return false;
+            // A place with no region can't be placed in a country, so a country
+            // filter hides it rather than guessing.
+            if (country && countryOfRegion.get(p.region_id ?? -1) !== country) return false;
             if (regionFilter && String(p.region_id ?? '') !== regionFilter) return false;
-            if (categoryFilter && p.category !== categoryFilter) return false;
             if (statusFilter && p.status !== statusFilter) return false;
             if (sourceFilter && sourceLabel(p.source) !== sourceFilter) return false;
             return true;
         });
-    }, [places, selectedDay, regionFilter, categoryFilter, statusFilter, sourceFilter, showUnconfirmed]);
+    }, [places, selectedDay, regionFilter, statusFilter, sourceFilter, showUnconfirmed,
+        country, countryOfRegion]);
 
-    /** The ordered polyline for a selected day. */
-    const route = useMemo(() => {
-        if (!selectedDay) return [];
-        return selectedDay.stops
-            .map((stop) => {
-                const place = stop.place_id == null ? undefined : api.placeById.get(stop.place_id);
-                if (!place || !hasCoords(place)) return null;
-                return { lat: place.lat, lng: place.lng, label: stop.custom_label || place.name };
-            })
-            .filter((p): p is { lat: number; lng: number; label: string } => p != null);
-    }, [selectedDay, api.placeById]);
+    /** Pins currently drawn. */
+    const visible = useMemo(
+        () => (categoryFilter
+            ? visibleIgnoringCategory.filter((p) => p.category === categoryFilter)
+            : visibleIgnoringCategory),
+        [visibleIgnoringCategory, categoryFilter],
+    );
+
+    /** Types actually on the map, plus whatever is selected so it can't vanish. */
+    const typeOptions = useMemo(() => {
+        const present = categoriesOf(visibleIgnoringCategory).filter(
+            (c) => visibleIgnoringCategory.some((p) => p.category === c.key),
+        );
+        if (categoryFilter && !present.some((c) => c.key === categoryFilter)) {
+            present.push(categoryMeta(categoryFilter));
+        }
+        return present;
+    }, [visibleIgnoringCategory, categoryFilter]);
+
+    /** Distinct, readable line colours for overlaid days. */
+    const DAY_COLORS = [
+        '#0f172a', '#be123c', '#0891b2', '#a16207', '#7c3aed',
+        '#059669', '#ea580c', '#db2777', '#4d7c0f', '#0284c7',
+    ];
+
+    const pointsForDay = useCallback((day: Day) => day.stops
+        .map((stop) => {
+            const place = stop.place_id == null ? undefined : api.placeById.get(stop.place_id);
+            if (!place || !hasCoords(place)) return null;
+            return { lat: place.lat, lng: place.lng, label: stop.custom_label || place.name };
+        })
+        .filter((p): p is { lat: number; lng: number; label: string } => p != null),
+    [api.placeById]);
+
+    /**
+     * Routes to draw: the selected day on its own, or every day at once when the
+     * itinerary overlay is on. Each day keeps its own colour so overlapping
+     * routes stay readable.
+     */
+    const routes = useMemo(() => {
+        const forDay = (day: Day) => ({
+            points: pointsForDay(day),
+            color: DAY_COLORS[(day.day_number - 1) % DAY_COLORS.length],
+            label: `Day ${day.day_number}${day.title ? ` — ${day.title}` : ''}`,
+        });
+        if (selectedDay) return [forDay(selectedDay)].filter((r) => r.points.length > 0);
+        if (!showItinerary) return [];
+        return days.map(forDay).filter((r) => r.points.length > 0);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedDay, showItinerary, days, pointsForDay]);
 
     const pinnedCount = visible.filter(hasCoords).length;
     const unpinnedCount = visible.length - pinnedCount;
@@ -103,9 +171,6 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
         setRegionFilter(''); setCategoryFilter(''); setStatusFilter('');
         setDayFilter(''); setShowUnconfirmed(false); setSourceFilter('');
     };
-
-    const filterKey = `${regionFilter}|${categoryFilter}|${statusFilter}|${dayFilter}`
-        + `|${showUnconfirmed}|${sourceFilter}`;
 
     /** Bulk action over the lassoed set — same verbs as the Places tab. */
     const bulk = async (fields: Record<string, unknown>) => {
@@ -151,7 +216,15 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
         <div className="h-full flex flex-col gap-2">
             {/* ---- Filters ---- */}
             <div className="shrink-0 bg-white rounded-2xl shadow-sm border border-gray-100 p-2.5">
-                <div className="grid grid-cols-2 md:grid-cols-8 gap-2">
+                <div className="grid grid-cols-2 md:grid-cols-9 gap-2">
+                    <SelectField
+                        value={country}
+                        title="Saved with the trip — it stays set across refreshes and logins"
+                        onChange={(e) => api.update('trip', { focus_country: e.target.value })}
+                    >
+                        <option value="">All countries</option>
+                        {countries.map((c) => <option key={c} value={c}>{c}</option>)}
+                    </SelectField>
                     <SelectField value={dayFilter} onChange={(e) => setDayFilter(e.target.value)}>
                         <option value="">All places</option>
                         {days.map((d) => (
@@ -183,8 +256,8 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                         onChange={(e) => setCategoryFilter(e.target.value)}
                         disabled={!!selectedDay}
                     >
-                        <option value="">All types</option>
-                        {categoriesOf(places).map((c) => (
+                        <option value="">All types ({typeOptions.length})</option>
+                        {typeOptions.map((c) => (
                             <option key={c.key} value={c.key}>{c.icon} {c.label}</option>
                         ))}
                     </SelectField>
@@ -206,6 +279,25 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                             : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}
                     >
                         {showUnconfirmed ? '⚠ Hide unconfirmed' : '⚠ Show unconfirmed'}
+                    </button>
+                    <button
+                        onClick={() => setShowItinerary((v) => !v)}
+                        disabled={!!selectedDay || days.length === 0}
+                        title="Overlay each day's stops, in order"
+                        className={`rounded-2xl px-3 py-2 text-sm font-medium border transition
+                            disabled:opacity-40 ${showItinerary
+                            ? 'bg-slate-900 border-slate-900 text-white'
+                            : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}
+                    >
+                        {showItinerary ? '🗓 Itinerary on' : '🗓 Show itinerary'}
+                    </button>
+                    <button
+                        onClick={() => setFitSignal((n) => n + 1)}
+                        title="Frame everything currently shown"
+                        className="rounded-2xl px-3 py-2 text-sm font-medium border border-gray-200
+                            bg-gray-50 text-gray-600 hover:bg-gray-100 transition"
+                    >
+                        ⤢ Fit
                     </button>
                     <button
                         onClick={() => { setEditing(null); setEditorOpen(true); }}
@@ -251,6 +343,11 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                                 {' '}· including {unconfirmedShown} unconfirmed — lasso them and Mark reviewed
                             </span>
                         )}
+                        {showItinerary && routes.length > 0 && (
+                            <span className="text-slate-700">
+                                {' '}· {routes.length} day{routes.length === 1 ? '' : 's'} overlaid
+                            </span>
+                        )}
                         {selectMode && (
                             <span className="text-slate-700">
                                 {' '}· draw a loop around the pins you want (hold Shift to add)
@@ -284,10 +381,10 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                 ) : (
                     <TripMap
                         places={visible}
-                        route={route}
+                        routes={routes}
                         selectedId={selectedId}
                         onSelect={setSelectedId}
-                        fitKey={filterKey}
+                        fitSignal={fitSignal}
                         selectMode={selectMode}
                         selectedIds={lassoed}
                         onLassoSelect={(ids, additive) => setLassoed((prev) => {
@@ -350,13 +447,50 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                     </div>
                 )}
 
+                {/* ---- What happens each day, while the overlay is on ---- */}
+                {showItinerary && routes.length > 0 && (
+                    <div className="absolute top-3 left-3 z-[500] w-[min(20rem,45%)]
+                        max-h-[70%] overflow-auto bg-white/95 backdrop-blur rounded-2xl
+                        shadow-lg border border-gray-200 p-3">
+                        <p className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold mb-2">
+                            Itinerary
+                        </p>
+                        <ul className="space-y-2.5">
+                            {routes.map((r) => (
+                                <li key={r.label}>
+                                    <div className="flex items-center gap-2">
+                                        <span
+                                            className="inline-block w-4 h-1 rounded-full shrink-0"
+                                            style={{ backgroundColor: r.color }}
+                                        />
+                                        <span className="text-xs font-semibold text-gray-800 truncate">
+                                            {r.label}
+                                        </span>
+                                    </div>
+                                    {/* The numbers match the badges on the map, so a line
+                                        on screen can be read back to a real plan. */}
+                                    <ol className="mt-1 ml-6 space-y-0.5">
+                                        {r.points.map((pt, i) => (
+                                            <li key={`${r.label}-${i}`}
+                                                className="text-[11px] text-gray-600 truncate">
+                                                <span className="text-gray-400 tabular-nums">{i + 1}.</span>{' '}
+                                                {pt.label}
+                                            </li>
+                                        ))}
+                                    </ol>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+
                 {/* ---- Legend, floating bottom-left ---- */}
                 {pinnedCount > 0 && (
                     <div className="absolute bottom-3 left-3 z-[500] bg-white/90 backdrop-blur
                         rounded-2xl shadow border border-gray-200 px-3 py-2 max-w-[45%]
                         hidden md:block pointer-events-none">
                         <div className="flex flex-wrap gap-x-3 gap-y-1">
-                            {categoriesOf(places).filter((c) => visible.some((p) => p.category === c.key && hasCoords(p)))
+                            {categoriesOf(visible).filter((c) => visible.some((p) => p.category === c.key && hasCoords(p)))
                                 .map((c) => (
                                     <span key={c.key} className="inline-flex items-center gap-1 text-[11px] text-gray-600">
                                         <span

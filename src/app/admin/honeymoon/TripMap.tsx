@@ -24,14 +24,26 @@ import { boundsOf, categoryMeta, hasCoords, placesInPolygon, type LatLng, type P
  * stops would hide the very ordering the route exists to show.
  */
 
+export interface DayRoute {
+    /** Ordered stops for one day. */
+    points: { lat: number; lng: number; label: string }[];
+    color: string;
+    label: string;
+}
+
 export interface TripMapProps {
     places: Place[];
-    /** Ordered points to draw as a day's route, if a day is selected. */
-    route?: { lat: number; lng: number; label: string }[];
+    /** Ordered routes to draw — one per day being shown. */
+    routes?: DayRoute[];
     selectedId?: number | null;
     onSelect?: (id: number) => void;
-    /** Bumped by the parent to force a re-fit after a filter change. */
-    fitKey?: string;
+    /**
+     * Change this to re-frame the map. It is a signal, not a filter key: the
+     * viewport is yours once you have panned or zoomed, and toggling what is
+     * drawn must never yank it out from under you. The parent bumps it on first
+     * load and when the fit button is pressed.
+     */
+    fitSignal?: number;
     /** While true, dragging draws a lasso instead of panning the map. */
     selectMode?: boolean;
     /** Ids currently lasso-selected, drawn with a highlight ring. */
@@ -42,7 +54,7 @@ export interface TripMapProps {
 }
 
 export default function TripMap({
-    places, route = [], selectedId = null, onSelect, fitKey = '',
+    places, routes = [], selectedId = null, onSelect, fitSignal = 0,
     selectMode = false, selectedIds, onLassoSelect, className = '',
 }: TripMapProps) {
     const containerRef = useRef<HTMLDivElement | null>(null);
@@ -73,6 +85,10 @@ export default function TripMap({
     onLassoRef.current = onLassoSelect;
     const selectModeRef = useRef(selectMode);
     selectModeRef.current = selectMode;
+
+    // Whether the map has ever been framed, and the last fit request seen.
+    const fittedRef = useRef(false);
+    const lastSignalRef = useRef(fitSignal);
 
     /* Create the map once. */
     useEffect(() => {
@@ -137,7 +153,7 @@ export default function TripMap({
 
         // Clustering is suspended while lassoing: you cannot meaningfully draw
         // around points that are hidden inside a count badge.
-        const clustered = route.length === 0 && !selectMode;
+        const clustered = routes.length === 0 && !selectMode;
         const layer = clustered
             ? L.markerClusterGroup({
                 showCoverageOnHover: false,
@@ -210,7 +226,7 @@ export default function TripMap({
             });
             marker.addTo(layer);
         }
-    }, [places, selectedId, selectedIds, route.length, selectMode, ready]);
+    }, [places, selectedId, selectedIds, routes.length, selectMode, ready]);
 
     /* Draw the selected day's route. */
     useEffect(() => {
@@ -219,34 +235,43 @@ export default function TripMap({
         if (!L || !layer) return;
 
         layer.clearLayers();
-        if (route.length < 2) return;
 
-        L.polyline(route.map((p) => [p.lat, p.lng] as [number, number]), {
-            color: '#0f172a',
-            weight: 2,
-            opacity: 0.65,
-            dashArray: '6 6',
-        }).addTo(layer);
+        for (const route of routes) {
+            if (route.points.length >= 2) {
+                L.polyline(route.points.map((p) => [p.lat, p.lng] as [number, number]), {
+                    color: route.color,
+                    weight: 3,
+                    opacity: 0.75,
+                    dashArray: '6 6',
+                }).addTo(layer);
+            }
 
-        // Numbered badges make the order readable without opening a popup.
-        route.forEach((point, index) => {
-            L.marker([point.lat, point.lng], {
-                icon: L.divIcon({
-                    className: 'honeymoon-route-step',
-                    html: `<span style="
-                        display:flex;align-items:center;justify-content:center;
-                        width:22px;height:22px;background:#0f172a;color:#fff;
-                        border:2px solid #fff;border-radius:9999px;
-                        font-size:11px;font-weight:700;line-height:1;
-                        box-shadow:0 1px 4px rgba(0,0,0,.4);
-                    ">${index + 1}</span>`,
-                    iconSize: [22, 22],
-                    iconAnchor: [11, 11],
-                }),
-                zIndexOffset: 2000,
-            }).bindPopup(`<strong>${index + 1}.</strong> ${escapeHtml(point.label)}`).addTo(layer);
-        });
-    }, [route, ready]);
+            // Numbered badges carry the order, coloured per day so overlapping
+            // itineraries stay tellable apart without clicking anything.
+            route.points.forEach((point, index) => {
+                L.marker([point.lat, point.lng], {
+                    icon: L.divIcon({
+                        className: 'honeymoon-route-step',
+                        html: `<span style="
+                            display:flex;align-items:center;justify-content:center;
+                            width:22px;height:22px;background:${route.color};color:#fff;
+                            border:2px solid #fff;border-radius:9999px;
+                            font-size:11px;font-weight:700;line-height:1;
+                            box-shadow:0 1px 4px rgba(0,0,0,.4);
+                        ">${index + 1}</span>`,
+                        iconSize: [22, 22],
+                        iconAnchor: [11, 11],
+                    }),
+                    zIndexOffset: 2000,
+                })
+                    .bindPopup(
+                        `<div style="font-weight:600">${escapeHtml(route.label)}</div>`
+                        + `<div><strong>${index + 1}.</strong> ${escapeHtml(point.label)}</div>`,
+                    )
+                    .addTo(layer);
+            });
+        }
+    }, [routes, ready]);
 
     /**
      * Freehand lasso.
@@ -339,22 +364,28 @@ export default function TripMap({
     }, [selectMode, ready]);
 
     /**
-     * Fit the view to whatever is currently showing.
+     * Frame the map — on arrival, and whenever the parent asks.
      *
-     * This is the behaviour the whole map was chosen for: all pins frames
-     * Singapore and Bali together; filter to one day or one region and it zooms
-     * itself to that island or that neighbourhood.
+     * Deliberately NOT tied to what is drawn. Re-fitting on every filter change
+     * meant toggling a layer threw away the view you had lined up, which is
+     * infuriating mid-task. The viewport belongs to whoever is panning it; the
+     * parent bumps `fitSignal` on first load and when the fit button is pressed.
      */
     useEffect(() => {
         const map = mapRef.current;
         if (!map) return;
 
-        const points = route.length
-            ? route.map((p) => ({ lat: p.lat, lng: p.lng }))
-            : places.filter(hasCoords).map((p) => ({ lat: p.lat, lng: p.lng }));
+        const asked = fitSignal !== lastSignalRef.current;
+        const firstDraw = !fittedRef.current;
+        if (!asked && !firstDraw) return;
 
+        const points = places.filter(hasCoords).map((p) => ({ lat: p.lat, lng: p.lng }));
         const bounds = boundsOf(points);
+        // Nothing to frame yet — stay unfitted so the first real data still fits.
         if (!bounds) return;
+
+        lastSignalRef.current = fitSignal;
+        fittedRef.current = true;
 
         // A frame or two of delay lets a freshly shown tab finish laying out;
         // fitting against a zero-height container produces a nonsense zoom.
@@ -363,7 +394,7 @@ export default function TripMap({
             map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
         }, 60);
         return () => clearTimeout(timer);
-    }, [places, route, fitKey, ready]);
+    }, [places, fitSignal, ready]);
 
     // The container's className must NEVER depend on state. Leaflet adds its own
     // classes (leaflet-container, leaflet-touch, drag targets…) to this element

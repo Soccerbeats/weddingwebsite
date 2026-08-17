@@ -172,6 +172,7 @@ CREATE TABLE IF NOT EXISTS honeymoon_trip (
   start_date DATE,
   home_currency TEXT NOT NULL DEFAULT 'USD',
   notes TEXT,
+  focus_country TEXT NOT NULL DEFAULT '',
   CONSTRAINT honeymoon_trip_singleton CHECK (id = 1)
 );
 
@@ -253,6 +254,7 @@ CREATE TABLE IF NOT EXISTS honeymoon_notes (
 ALTER TABLE honeymoon_notes ADD COLUMN IF NOT EXISTS source TEXT;
 ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS rating TEXT;
 ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS image_url TEXT;
+ALTER TABLE honeymoon_trip ADD COLUMN IF NOT EXISTS focus_country TEXT NOT NULL DEFAULT '';
 
 CREATE INDEX IF NOT EXISTS honeymoon_places_region_idx ON honeymoon_places (region_id);
 CREATE INDEX IF NOT EXISTS honeymoon_stops_day_idx ON honeymoon_stops (day_id);

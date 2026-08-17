@@ -136,6 +136,14 @@ export interface Trip {
     start_date: string | null;
     home_currency: string;
     notes: string | null;
+    /**
+     * Persisted country filter. Empty means every country.
+     *
+     * Stored on the trip rather than in the browser so it survives a refresh, a
+     * new login and a different device — it is a decision about the trip, not a
+     * per-session view preference.
+     */
+    focus_country: string;
 }
 
 export interface HoneymoonPayload {

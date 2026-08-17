@@ -546,6 +546,29 @@ themselves out in responsive columns instead — Itinerary shows days two or thr
 abreast, Guide does the same for regions and notes, and Settings puts its cards
 side by side rather than stretching a text input across the screen.
 
+**Every tab is its own URL** — `/admin/honeymoon`, `/itinerary`, `/places`,
+`/stays`, `/guide`, `/settings`. A refresh keeps you where you were, and each
+view is bookmarkable. One shared data load backs all six, so moving between them
+doesn't refetch.
+
+**The map keeps your view.** Toggling layers never re-frames it — pan and zoom
+are yours once you've set them. The map fits itself when you arrive at the page,
+and **⤢ Fit** re-frames on demand. (This applies to *all* filters, so changing
+region or day no longer auto-zooms either; press Fit when you want it.)
+
+**Country** is a saved trip setting, not a session preference — pick Indonesia and
+it stays picked across refreshes, logins and devices, hiding everything outside
+it. Places with no region are hidden while a country is chosen, since there's
+nothing to judge them by.
+
+**The type dropdown only lists types actually on the map**, with the count in the
+label, so it reflects what's in front of you rather than every category that
+exists.
+
+**🗓 Show itinerary** overlays every day's stops at once, each day in its own
+colour with numbered badges. A panel lists each day and its stops in order, with
+numbers matching the badges, so a line on screen reads back to a real plan.
+
 **Map tab.** The map runs **full-bleed** — it fills the whole content area edge to
 edge and top to bottom, and nothing on this tab scrolls. The filter row sits
 above it; the legend, the selected-place card and the lasso actions float *over*

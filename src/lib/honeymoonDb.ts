@@ -21,6 +21,7 @@ async function createTables() {
             start_date DATE,
             home_currency TEXT NOT NULL DEFAULT 'USD',
             notes TEXT,
+            focus_country TEXT NOT NULL DEFAULT '',
             CONSTRAINT honeymoon_trip_singleton CHECK (id = 1)
         )
     `);
@@ -110,6 +111,9 @@ async function createTables() {
     await pool.query('ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS rating TEXT');
     // Preview image scraped from a listing's Open Graph tags.
     await pool.query('ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS image_url TEXT');
+    await pool.query(
+        "ALTER TABLE honeymoon_trip ADD COLUMN IF NOT EXISTS focus_country TEXT NOT NULL DEFAULT ''",
+    );
 
     // Categories are rows so they can be renamed and deleted like anything else.
     // The built-in list seeds them once; after that the database is the truth,
@@ -216,6 +220,7 @@ export async function getHoneymoonPayload(): Promise<HoneymoonPayload> {
         start_date: isoDate(tripRow.start_date),
         home_currency: tripRow.home_currency ?? 'USD',
         notes: tripRow.notes ?? null,
+        focus_country: tripRow.focus_country ?? '',
     };
 
     const categories: CategoryRow[] = categoryRes.rows.map((r) => ({

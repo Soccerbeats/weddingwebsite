@@ -135,6 +135,7 @@ const RESOURCES: Record<string, ResourceDef> = {
 
 const TRIP_FIELDS: Record<string, Field> = {
     title: { kind: 'text' },
+    focus_country: { kind: 'text' },
     start_date: { kind: 'date' },
     home_currency: { kind: 'text' },
     notes: { kind: 'text' },
