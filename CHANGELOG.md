@@ -107,6 +107,8 @@ All notable changes to this project are documented here.
 
   Three new built-ins: **Beach**, **Hiking**, **Nature**.
 
+- **Honeymoon map — the unconfirmed toggle now adds instead of swapping.** It previously replaced the confirmed pins with the unconfirmed ones, which meant losing every landmark you were using for orientation at exactly the moment you needed it. **⚠ Show unconfirmed** now layers them on top of the confirmed set, and **⚠ Hide unconfirmed** takes them away again. The button label states which way the next click goes, and the count line reads *"including N unconfirmed"* while they're on.
+
 - **`npm run check:honeymoon`** — 44 assertions over the pure logic that would otherwise fail silently and wrongly: great-circle distances against known city pairs, day-number arithmetic across a month boundary, 12-hour time formatting at noon and midnight, Google Maps URL parsing in all three shapes, rejection of null island and out-of-range latitudes, hop calculation across unpinned and deleted stops, and seed-data integrity (no duplicate names, no orphan regions, no unknown categories).
 - **Finances suite (`/admin/finances`)** — replaces the `Heav & Aust Wedding Spreadsheet — Budget` tab. Five tabs: **Overview** (reporting), **Budget**, **Purchases**, **Gift Money**, **Settings**. Everything edits inline — commit on blur or Enter, revert on `Esc`, no Save button — and every derived figure recalculates from a single refetch so the grand total, percentages, both deficits and both payment plans can't disagree with each other.
 

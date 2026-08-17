@@ -533,9 +533,9 @@ them before you plan a day around one.
 **Unconfirmed pins are hidden from the map.** A bulk-geocoded guess renders
 exactly like a real location, so the map shows only pins you have confirmed. The
 count line always says how many are being withheld (*"12 pinned · 114 unconfirmed
-hidden"*) — the map never quietly omits things. Hit **⚠ Unconfirmed** to flip to
-showing *only* the unconfirmed ones, which is the shape the review job takes:
-see them, lasso the ones that look right, Mark reviewed. Anything you have
+hidden"*) — the map never quietly omits things. **⚠ Show unconfirmed** *adds*
+them alongside the confirmed pins rather than swapping to them, so you keep your
+bearings while reviewing: lasso the ones that look right, Mark reviewed. Anything you have
 actually scheduled on a day still shows in that day's view regardless, since
 hiding a stop you deliberately planned would break its route.
 
