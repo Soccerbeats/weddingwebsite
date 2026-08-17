@@ -83,6 +83,8 @@ export interface Place {
     needs_review: boolean;
     /** Interested / not interested. Used by the Stays shortlist. */
     rating: PlaceRating;
+    /** Preview image scraped from the listing's Open Graph tags. */
+    image_url: string | null;
     sort_order: number;
 }
 
@@ -340,6 +342,23 @@ export function nameFromStayUrl(url: string): string | null {
     return words
         .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
         .join(' ');
+}
+
+/**
+ * Tidy a listing's Open Graph title into a property name.
+ *
+ * Booking.com titles read "Desa Hay Canggu, Canggu (updated prices 2026)" —
+ * the property name, then the town, then a marketing suffix. The head before
+ * the first comma is the name; everything after is noise on a card.
+ */
+export function cleanListingTitle(title: string): string | null {
+    if (!title) return null;
+    const head = title
+        .replace(/\(updated prices?[^)]*\)/i, '')
+        .replace(/\s*[–—-]\s*(Booking\.com|Updated \d{4}).*$/i, '')
+        .split(',')[0]
+        .trim();
+    return head.length >= 2 ? head : null;
 }
 
 /** Split a pasted block into one candidate URL per line. */

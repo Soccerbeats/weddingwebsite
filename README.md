@@ -579,12 +579,17 @@ only the categories actually on screen. Click a pin for its detail card, with an
 filter by rating, and add price and notes inline. **Preview** opens the listing
 in a popup inside the portal, with an *Open in a tab* escape hatch.
 
+Each stay shows the **listing's own photo**, pulled from its Open Graph tags when
+the link is added. Stays saved before this existed get a **Get photos for N**
+button. Price and notes are still yours to add.
+
 Two limits worth knowing, both imposed by Booking.com rather than by choice:
 
-- **The name is read from the link, not fetched.** Booking.com answers
-  server-side requests with a bot challenge, so there's no title, photo or price
-  to pull in. The URL slug gives a good name (`/hotel/id/hard-rock-bali.html` →
-  *Hard Rock Bali*); price and notes are yours to add.
+- **A listing that gives nothing falls back to the URL slug for its name.**
+  Booking.com answers an ordinary server request with a bot challenge, but serves
+  full metadata to link-preview crawlers, so the title and photo do come through.
+  Airbnb gives crawlers nothing — those links save with a slug-derived name and
+  no photo.
 - **The in-portal preview is best-effort.** Booking.com currently sends
   `frame-ancestors 'none'` in *report-only* mode, so embedding works today but is
   one config change away from not. If the frame doesn't load, the popup says so

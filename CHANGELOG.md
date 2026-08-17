@@ -83,6 +83,16 @@ All notable changes to this project are documented here.
 
   **No Booking.com favourites import.** There is no public API for a user's wishlist, and the alternative — holding the account password and scraping the logged-in session — is not something this app should do. Bulk paste covers the same ground.
 
+- **Honeymoon Stays — listings now show their own photo.** Adding a booking link pulls the listing's Open Graph image and title, so a shortlist reads as a wall of hotel photos rather than a list of URLs. Stays added before this get a **Get photos for N** backfill button.
+
+  This reverses an earlier conclusion, and the correction is worth recording: the previous build reported that Booking.com couldn't be scraped, based on a plain browser user-agent getting a 202 bot challenge with no metadata. That was true but incomplete — **Booking.com serves the full Open Graph block to link-preview crawlers** (`facebookexternalhit`, `WhatsApp` → HTTP 200 with title and image; Twitterbot, Slackbot and Discordbot still get the challenge). Those tags exist precisely so links unfurl. `/api/admin/fetch-meta` now tries a normal browser agent first and falls back to a preview crawler only when the first attempt yields no metadata — which also helps the registry against any site that behaves the same way. Airbnb gives crawlers nothing, so those still fall back to the URL slug.
+
+  The listing's own title beats the slug for naming — *Hard Rock Hotel Bali* rather than *Hard Rock Bali* — after trimming the town and the "(updated prices 2026)" suffix Booking appends.
+
+  **Fixes a pre-existing bug in the shared metadata fetcher**: `extractMeta` decoded HTML entities in the title and description but not the image URL, so any multi-parameter image arrived with a literal `&amp;` in its query string, turning `&o=` into a bogus `amp;o` parameter. Entity decoding is now one shared helper applied to all three fields. This affected the registry too.
+
+  New nullable `honeymoon_places.image_url`. Images are hot-linked from the listing's CDN with `referrerPolicy="no-referrer"` and hidden on error, so an expired signed URL degrades to a card without a photo rather than a broken icon.
+
 - **`npm run check:honeymoon`** — 44 assertions over the pure logic that would otherwise fail silently and wrongly: great-circle distances against known city pairs, day-number arithmetic across a month boundary, 12-hour time formatting at noon and midnight, Google Maps URL parsing in all three shapes, rejection of null island and out-of-range latitudes, hop calculation across unpinned and deleted stops, and seed-data integrity (no duplicate names, no orphan regions, no unknown categories).
 - **Finances suite (`/admin/finances`)** — replaces the `Heav & Aust Wedding Spreadsheet — Budget` tab. Five tabs: **Overview** (reporting), **Budget**, **Purchases**, **Gift Money**, **Settings**. Everything edits inline — commit on blur or Enter, revert on `Esc`, no Save button — and every derived figure recalculates from a single refetch so the grand total, percentages, both deficits and both payment plans can't disagree with each other.
 

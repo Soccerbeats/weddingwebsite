@@ -53,6 +53,7 @@ async function createTables() {
             source TEXT NOT NULL DEFAULT 'manual',
             needs_review BOOLEAN NOT NULL DEFAULT FALSE,
             rating TEXT,
+            image_url TEXT,
             sort_order INTEGER NOT NULL DEFAULT 0,
             created_at TIMESTAMP DEFAULT NOW()
         )
@@ -106,6 +107,8 @@ async function createTables() {
     await pool.query('ALTER TABLE honeymoon_notes ADD COLUMN IF NOT EXISTS source TEXT');
     // Interested / not interested on a candidate stay.
     await pool.query('ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS rating TEXT');
+    // Preview image scraped from a listing's Open Graph tags.
+    await pool.query('ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS image_url TEXT');
 
     await pool.query(`
         INSERT INTO honeymoon_trip (id, title) VALUES (1, 'Honeymoon')
@@ -217,6 +220,7 @@ export async function getHoneymoonPayload(): Promise<HoneymoonPayload> {
         source: r.source ?? 'manual',
         needs_review: r.needs_review === true,
         rating: r.rating === 'yes' || r.rating === 'no' ? r.rating : null,
+        image_url: r.image_url ?? null,
         sort_order: r.sort_order ?? 0,
     }));
 

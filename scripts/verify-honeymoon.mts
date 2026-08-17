@@ -11,7 +11,7 @@ import {
     boundsOf, dateForDay, distanceKm, formatDayDate, formatDistance, formatTime,
     dayHops, hasCoords, categoryMeta, CATEGORIES,
     sourceLabel, sourcesOf, SOURCE_AMY, SOURCE_MANUAL, SOURCE_YOUTUBE,
-    pointInPolygon, placesInPolygon, nameFromStayUrl, stayUrlsFromText, isStayUrl,
+    pointInPolygon, placesInPolygon, nameFromStayUrl, stayUrlsFromText, isStayUrl, cleanListingTitle,
     type Place, type Stop,
 } from '../src/lib/honeymoon';
 import {
@@ -280,6 +280,19 @@ console.log('\nBooking links');
     check('splits a pasted block into urls', urls.length === 2, urls.join(' | '));
     check('drops non-urls and duplicates', !urls.includes('not-a-url'));
     check('empty text yields nothing', stayUrlsFromText('   ').length === 0);
+
+    // Booking's og:title is "Name, Town (updated prices YYYY)". Only the head is
+    // a property name; the rest is location and marketing noise on a card.
+    check('trims town and marketing suffix from a listing title',
+        cleanListingTitle('Desa Hay Canggu, Canggu (updated prices 2026)') === 'Desa Hay Canggu',
+        String(cleanListingTitle('Desa Hay Canggu, Canggu (updated prices 2026)')));
+    check('handles two location segments',
+        cleanListingTitle('The Legian Seminyak, Bali, Seminyak (updated prices 2026)')
+        === 'The Legian Seminyak');
+    check('a plain title passes through',
+        cleanListingTitle('Hard Rock Hotel Bali') === 'Hard Rock Hotel Bali');
+    check('empty title yields nothing', cleanListingTitle('') === null);
+    check('a one-character title is not a name', cleanListingTitle('X, Bali') === null);
 }
 
 console.log('\nSources');

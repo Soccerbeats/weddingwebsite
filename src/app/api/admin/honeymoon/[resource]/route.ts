@@ -65,6 +65,7 @@ const RESOURCES: Record<string, ResourceDef> = {
             // fallback, and clearing a rating back to "unrated" has to survive
             // as NULL rather than snapping to 'yes'.
             rating: { kind: 'text' },
+            image_url: { kind: 'text' },
             needs_review: { kind: 'bool' },
             sort_order: { kind: 'int' },
         },

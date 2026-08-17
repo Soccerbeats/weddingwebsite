@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
-    RATINGS, isStayUrl, nameFromStayUrl, stayUrlsFromText,
+    RATINGS, cleanListingTitle, isStayUrl, nameFromStayUrl, stayUrlsFromText,
     type Place, type PlaceRating,
 } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
@@ -18,14 +18,16 @@ import {
  * over them, because comparing accommodation is a different job from finding a
  * waterfall — you want the links, the prices and a yes/no side by side.
  *
- * Booking.com blocks server-side page fetches with a bot challenge, so there is
- * no title, image or price to scrape from a pasted link. The name is derived
- * from the URL slug instead, and everything else is yours to fill in.
+ * Booking.com answers an ordinary server-side fetch with a bot challenge, but
+ * serves the full Open Graph block to link-preview crawlers — so /api/admin/
+ * fetch-meta can pull a real name and a photo. The URL slug is the fallback for
+ * anywhere that gives us nothing.
  */
 export default function StaysTab({ api }: { api: HoneymoonApi }) {
     const { data } = api;
     const [bulk, setBulk] = useState('');
     const [adding, setAdding] = useState(false);
+    const [fetching, setFetching] = useState(0);
     const [filter, setFilter] = useState<'all' | 'yes' | 'no' | 'unrated'>('all');
     const [preview, setPreview] = useState<Place | null>(null);
     const [editing, setEditing] = useState<Place | null>(null);
@@ -50,6 +52,26 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
         unrated: stays.filter((s) => s.rating == null).length,
     }), [stays]);
 
+    /**
+     * Ask the server for a listing's preview data.
+     * Returns nothing rather than throwing — a missing photo must never stop a
+     * link being saved.
+     */
+    const previewOf = async (url: string): Promise<{ title?: string; image?: string }> => {
+        try {
+            const res = await fetch('/api/admin/fetch-meta', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url }),
+            });
+            if (!res.ok) return {};
+            const body = await res.json();
+            return { title: body.title || undefined, image: body.image || undefined };
+        } catch {
+            return {};
+        }
+    };
+
     /** Turn a pasted block of links into one stay each. */
     const addLinks = async () => {
         const urls = stayUrlsFromText(bulk);
@@ -61,17 +83,45 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
             );
             for (const url of urls) {
                 if (existing.has(url)) continue;
+                const meta = await previewOf(url);
+                // The listing's own title beats the URL slug when we can get it:
+                // "Hard Rock Hotel Bali" rather than "Hard Rock Bali".
+                const name = cleanListingTitle(meta.title ?? '')
+                    ?? nameFromStayUrl(url)
+                    ?? 'Untitled stay';
                 await api.create('places', {
-                    name: nameFromStayUrl(url) ?? 'Untitled stay',
+                    name,
                     category: 'stay',
                     status: 'idea',
                     source: 'Added by me',
+                    image_url: meta.image ?? '',
                     links: [{ label: isStayUrl(url) ? 'Booking' : 'Link', url }],
                 });
             }
             setBulk('');
         } finally {
             setAdding(false);
+        }
+    };
+
+    /** Backfill photos for stays saved before this existed, or whose link changed. */
+    const missingImages = useMemo(
+        () => stays.filter((s) => !s.image_url && s.links.length > 0),
+        [stays],
+    );
+
+    const fetchMissingImages = async () => {
+        setFetching(missingImages.length);
+        try {
+            for (const stay of missingImages) {
+                const url = stay.links[0]?.url;
+                if (!url) continue;
+                const meta = await previewOf(url);
+                if (meta.image) await api.update('places', { id: stay.id, image_url: meta.image });
+                setFetching((n) => n - 1);
+            }
+        } finally {
+            setFetching(0);
         }
     };
 
@@ -114,7 +164,7 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
             </Card>
 
             {/* ---- Filters ---- */}
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
                 {([
                     ['all', `All ${counts.all}`],
                     ['yes', `👍 Interested ${counts.yes}`],
@@ -132,6 +182,14 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                         {label}
                     </button>
                 ))}
+                <div className="flex-1" />
+                {missingImages.length > 0 && (
+                    <Button onClick={fetchMissingImages} disabled={fetching > 0}>
+                        {fetching > 0
+                            ? `Fetching… ${fetching} left`
+                            : `Get photos for ${missingImages.length}`}
+                    </Button>
+                )}
             </div>
 
             {/* ---- Cards ---- */}
@@ -149,7 +207,24 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                     {shown.map((stay) => {
                         const link = stayLink(stay);
                         return (
-                            <Card key={stay.id} className="p-4">
+                            <Card key={stay.id} className="overflow-hidden">
+                                {stay.image_url && (
+                                    // Plain <img>: the host is a third-party CDN, and
+                                    // next/image would need every booking domain
+                                    // whitelisted up front. no-referrer keeps the
+                                    // admin URL out of their logs.
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img
+                                        src={stay.image_url}
+                                        alt={stay.name}
+                                        referrerPolicy="no-referrer"
+                                        loading="lazy"
+                                        className="w-full h-40 object-cover bg-gray-100"
+                                        onClick={() => setPreview(stay)}
+                                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                    />
+                                )}
+                                <div className="p-4">
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="min-w-0 flex-1">
                                         <InlineText
@@ -238,6 +313,7 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                                         {link}
                                     </a>
                                 )}
+                                </div>
                             </Card>
                         );
                     })}
