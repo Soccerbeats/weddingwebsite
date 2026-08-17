@@ -161,6 +161,10 @@ All notable changes to this project are documented here.
 
   **Three-way filters on the Places tab.** *Review* cycles any → needs review → already reviewed, and *Pin* cycles any → not pinned → pinned. A two-state filter could only ever ask one of the two questions — there was no way to ask "what have I already reviewed". Each label states which of the three you're looking at rather than making you infer it from a colour, and a regression test asserts the two active states are exact complements.
 
+- **Honeymoon dashboard — an overview map, and a re-laid-out top row.** The headline stats now sit top-left with a **small map beside them on the right**, and **Needs attention** moved down a row to make the space. The map shows everything pinned, honours the trip's country filter with the same rule as the map page (exclude only what's known to be somewhere else), and links through to the full map.
+
+  It shows unconfirmed pins as well as confirmed ones — they already draw with a dashed ring, and an overview that hid most of the trip would misrepresent it.
+
 - **`npm run check:honeymoon`** — 44 assertions over the pure logic that would otherwise fail silently and wrongly: great-circle distances against known city pairs, day-number arithmetic across a month boundary, 12-hour time formatting at noon and midnight, Google Maps URL parsing in all three shapes, rejection of null island and out-of-range latitudes, hop calculation across unpinned and deleted stops, and seed-data integrity (no duplicate names, no orphan regions, no unknown categories).
 - **Finances suite (`/admin/finances`)** — replaces the `Heav & Aust Wedding Spreadsheet — Budget` tab. Five tabs: **Overview** (reporting), **Budget**, **Purchases**, **Gift Money**, **Settings**. Everything edits inline — commit on blur or Enter, revert on `Esc`, no Save button — and every derived figure recalculates from a single refetch so the grand total, percentages, both deficits and both payment plans can't disagree with each other.
 

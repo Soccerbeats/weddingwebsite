@@ -547,9 +547,11 @@ abreast, Guide does the same for regions and notes, and Settings puts its cards
 side by side rather than stretching a text input across the screen.
 
 **Dashboard** is the landing page — the whole trip on one screen. Headline stats
-(days, countdown, places, pins to review, stays, excursions), the itinerary with
-each day's stops and empty days flagged, a **Needs attention** list, a rough cost,
-your shortlist, and a planning-progress bar. It's a read-out rather than another
+sit top-left (days, countdown, places, pins to review, stays, to-dos,
+excursions) with a **small map** alongside them on the right showing everything
+pinned; below that the itinerary with each day's stops and empty days flagged,
+then a **Needs attention** list, a rough cost, your shortlist, and a
+planning-progress bar. It's a read-out rather than another
 editor: every number links to the tab that does the work.
 
 The cost figure only counts entries that actually have a number in them, says how

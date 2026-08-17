@@ -1,12 +1,19 @@
 'use client';
 
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { useMemo } from 'react';
 import {
     currencySymbol, dateForDay, formatDayDate, hasCoords, priceValue,
 } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
 import { Card, CategoryChip } from './ui';
+
+// Leaflet touches `window` on import, so it never joins the server bundle.
+const TripMap = dynamic(() => import('./TripMap'), {
+    ssr: false,
+    loading: () => <div className="h-full w-full bg-gray-100 animate-pulse rounded-2xl" />,
+});
 
 const BASE = '/admin/honeymoon';
 
@@ -65,6 +72,25 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
 
     const todos = useMemo(() => data?.todos ?? [], [data]);
     const todosLeft = todos.filter((t) => !t.done).length;
+
+    /**
+     * Pins for the overview map.
+     *
+     * Honours the trip's country filter using the same rule as the map page —
+     * exclude only what is known to be somewhere else — and shows unconfirmed
+     * pins too, since they already draw with a dashed ring and an overview that
+     * hid most of the trip would be misleading.
+     */
+    const mapPlaces = useMemo(() => {
+        const countryOf = new Map((data?.regions ?? []).map((r) => [r.id, r.country ?? '']));
+        const focus = trip?.focus_country ?? '';
+        return places.filter((p) => {
+            if (!hasCoords(p)) return false;
+            if (!focus) return true;
+            const its = countryOf.get(p.region_id ?? -1) ?? '';
+            return !its || its === focus;
+        });
+    }, [places, data?.regions, trip?.focus_country]);
 
     const stopCount = days.reduce((n, d) => n + d.stops.length, 0);
     const emptyDays = days.filter((d) => d.stops.length === 0);
@@ -136,8 +162,9 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
 
     return (
         <div className="space-y-4">
-            {/* ---- Headline numbers ---- */}
-            <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-2">
+            {/* ---- Headline numbers, with the map alongside ---- */}
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 items-stretch">
+            <div className="xl:col-span-2 grid grid-cols-2 md:grid-cols-4 gap-2 content-start">
                 <Stat
                     label="Trip"
                     value={days.length ? `${days.length} day${days.length === 1 ? '' : 's'}` : 'Not planned'}
@@ -186,9 +213,39 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
                 />
             </div>
 
+                {/* ---- Where it all is ---- */}
+                <Card className="p-3 flex flex-col min-h-[18rem]">
+                    <div className="flex items-baseline justify-between gap-2 mb-2">
+                        <h2 className="text-sm font-semibold text-gray-900">Where it all is</h2>
+                        <Link href={`${BASE}/map`} className="text-xs text-accent hover:underline">
+                            Open map →
+                        </Link>
+                    </div>
+                    {mapPlaces.length === 0 ? (
+                        <div className="flex-1 flex items-center justify-center rounded-2xl bg-gray-50">
+                            <p className="text-xs text-gray-400 text-center px-4">
+                                Nothing pinned yet.{' '}
+                                <Link href={`${BASE}/places`} className="text-accent hover:underline">
+                                    Pin a place
+                                </Link>.
+                            </p>
+                        </div>
+                    ) : (
+                        <TripMap places={mapPlaces} className="flex-1 min-h-[12rem] w-full" />
+                    )}
+                    <p className="text-[11px] text-gray-400 mt-2">
+                        {mapPlaces.length} pinned
+                        {stats.unconfirmed > 0 && (
+                            <span className="text-amber-600"> · {stats.unconfirmed} unconfirmed</span>
+                        )}
+                        {trip?.focus_country && <span> · {trip.focus_country}</span>}
+                    </p>
+                </Card>
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 items-start">
                 {/* ---- Itinerary ---- */}
-                <Card className="p-4 lg:col-span-2">
+                <Card className="p-4 lg:col-span-3">
                     <div className="flex items-baseline justify-between gap-2 mb-2">
                         <h2 className="text-sm font-semibold text-gray-900">Itinerary</h2>
                         <Link href={`${BASE}/itinerary`} className="text-xs text-accent hover:underline">
@@ -246,6 +303,9 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
                     )}
                 </Card>
 
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 items-start">
                 {/* ---- What needs doing ---- */}
                 <Card className="p-4">
                     <h2 className="text-sm font-semibold text-gray-900 mb-2">Needs attention</h2>
@@ -269,9 +329,7 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
                         </ul>
                     )}
                 </Card>
-            </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 items-start">
                 {/* ---- Money ---- */}
                 <Card className="p-4">
                     <h2 className="text-sm font-semibold text-gray-900 mb-2">Rough cost</h2>
@@ -312,7 +370,7 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
                 </Card>
 
                 {/* ---- Shortlist ---- */}
-                <Card className="p-4 lg:col-span-2">
+                <Card className="p-4 lg:col-span-3">
                     <div className="flex items-baseline justify-between gap-2 mb-2">
                         <h2 className="text-sm font-semibold text-gray-900">Shortlist</h2>
                         <span className="text-xs text-gray-400">everything you marked interested</span>
