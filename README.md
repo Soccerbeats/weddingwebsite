@@ -566,6 +566,12 @@ are yours once you've set them. The map fits itself when you arrive at the page,
 and **⤢ Fit** re-frames on demand. (This applies to *all* filters, so changing
 region or day no longer auto-zooms either; press Fit when you want it.)
 
+A country filter excludes only places known to be somewhere **else**. A place
+whose country is unknown — no region, or a region created without one — stays
+visible and is counted in the status line, because a filter that silently drops
+unclassified data hides the very things you need to see to fix them. Set a
+region's country on the **Guide** tab; regions without one are flagged there.
+
 **Country** is a saved trip setting, not a session preference — pick Indonesia and
 it stays picked across refreshes, logins and devices, hiding everything outside
 it. Places with no region are hidden while a country is chosen, since there's
@@ -581,6 +587,12 @@ exists.
 **🗓 Show itinerary** overlays every day's stops at once, each day in its own
 colour with numbered badges. A panel lists each day and its stops in order, with
 numbers matching the badges, so a line on screen reads back to a real plan.
+
+**To Do tab.** A checklist for everything that isn't a place — visas, jabs,
+insurance, the house-sitter. Add an item with an optional group, tick it off,
+set a due date, drag to reorder, hide what's done. Groups are whatever you type
+(earlier ones are offered as you go), because a fixed set of categories would be
+wrong for someone else's trip. Progress shows on the dashboard.
 
 **Map tab.** The map runs **full-bleed** — it fills the whole content area edge to
 edge and top to bottom, and nothing on this tab scrolls. The filter row sits

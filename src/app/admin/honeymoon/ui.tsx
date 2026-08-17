@@ -399,6 +399,48 @@ export function StatusSelect(props: React.SelectHTMLAttributes<HTMLSelectElement
     );
 }
 
+/**
+ * A filter with three states: off, then each side of a boolean.
+ *
+ * A two-state filter can only ever ask one of the two questions — "show me the
+ * unreviewed" with no way to ask "show me what I've already done". Clicking
+ * cycles off → on → inverted → off, and the label says which of the three you
+ * are looking at rather than making you infer it from a colour.
+ */
+export type TriState = 'off' | 'on' | 'inverted';
+
+export function nextTriState(current: TriState): TriState {
+    return current === 'off' ? 'on' : current === 'on' ? 'inverted' : 'off';
+}
+
+export function TriToggle({ state, onChange, offLabel, onLabel, invertedLabel, tone = 'amber' }: {
+    state: TriState;
+    onChange: (next: TriState) => void;
+    offLabel: string;
+    onLabel: string;
+    invertedLabel: string;
+    tone?: 'amber' | 'sky';
+}) {
+    const palette = {
+        amber: { on: 'bg-amber-50 border-amber-200 text-amber-800', inverted: 'bg-amber-500 border-amber-500 text-white' },
+        sky: { on: 'bg-sky-50 border-sky-200 text-sky-800', inverted: 'bg-sky-600 border-sky-600 text-white' },
+    }[tone];
+
+    const className = state === 'off'
+        ? 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+        : state === 'on' ? palette.on : palette.inverted;
+
+    return (
+        <button
+            onClick={() => onChange(nextTriState(state))}
+            title="Click to cycle: off → on → the opposite"
+            className={`rounded-2xl px-3 py-2 text-sm font-medium border transition ${className}`}
+        >
+            {state === 'off' ? offLabel : state === 'on' ? onLabel : invertedLabel}
+        </button>
+    );
+}
+
 export function EmptyState({ title, hint }: { title: string; hint?: string }) {
     return (
         <div className="text-center py-10 px-4">

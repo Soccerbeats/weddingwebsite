@@ -8,7 +8,8 @@
 import pool from './db';
 import { CATEGORIES } from './honeymoon';
 import type {
-    CategoryRow, Day, GuideNote, HoneymoonPayload, Place, Region, Stop, TravelLeg, Trip,
+    CategoryRow, Day, GuideNote, HoneymoonPayload, Place, Region, Stop, TodoItem,
+    TravelLeg, Trip,
 } from './honeymoon';
 
 let ready: Promise<void> | null = null;
@@ -94,6 +95,17 @@ async function createTables() {
             arrive_time TEXT,
             confirmation_ref TEXT,
             notes TEXT
+        )
+    `);
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS honeymoon_todos (
+            id SERIAL PRIMARY KEY,
+            text TEXT NOT NULL,
+            done BOOLEAN NOT NULL DEFAULT FALSE,
+            category TEXT,
+            due_on DATE,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT NOW()
         )
     `);
     await pool.query(`
@@ -205,7 +217,7 @@ function jsonArray<T>(value: unknown): T[] {
 export async function getHoneymoonPayload(): Promise<HoneymoonPayload> {
     await ensureHoneymoonTables();
 
-    const [tripRes, categoryRes, regionRes, placeRes, dayRes, stopRes, travelRes, noteRes]
+    const [tripRes, categoryRes, regionRes, placeRes, dayRes, stopRes, travelRes, noteRes, todoRes]
         = await Promise.all([
         pool.query('SELECT * FROM honeymoon_trip WHERE id = 1'),
         pool.query('SELECT * FROM honeymoon_categories ORDER BY sort_order, label'),
@@ -215,6 +227,7 @@ export async function getHoneymoonPayload(): Promise<HoneymoonPayload> {
         pool.query('SELECT * FROM honeymoon_stops ORDER BY day_id, sort_order, id'),
         pool.query('SELECT * FROM honeymoon_travel ORDER BY day_id, id'),
         pool.query('SELECT * FROM honeymoon_notes ORDER BY sort_order, id'),
+        pool.query('SELECT * FROM honeymoon_todos ORDER BY sort_order, id'),
     ]);
 
     const tripRow = tripRes.rows[0] ?? { id: 1, title: 'Honeymoon', home_currency: 'USD' };
@@ -318,5 +331,14 @@ export async function getHoneymoonPayload(): Promise<HoneymoonPayload> {
         sort_order: r.sort_order ?? 0,
     }));
 
-    return { trip, categories, regions, places, days, notes };
+    const todos: TodoItem[] = todoRes.rows.map((r) => ({
+        id: r.id,
+        text: r.text,
+        done: r.done === true,
+        category: r.category ?? null,
+        due_on: isoDate(r.due_on),
+        sort_order: r.sort_order ?? 0,
+    }));
+
+    return { trip, categories, regions, places, days, notes, todos };
 }

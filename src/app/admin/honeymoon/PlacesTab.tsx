@@ -9,6 +9,7 @@ import type { HoneymoonApi } from './useHoneymoon';
 import PlaceEditor from './PlaceEditor';
 import {
     Button, Card, CategoryChip, EmptyState, OverflowMenu, SelectField, StatusChip, TextField,
+    TriToggle, type TriState,
 } from './ui';
 
 /**
@@ -23,8 +24,8 @@ export default function PlacesTab({ api }: { api: HoneymoonApi }) {
     const [regionFilter, setRegionFilter] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
-    const [reviewOnly, setReviewOnly] = useState(false);
-    const [unpinnedOnly, setUnpinnedOnly] = useState(false);
+    const [reviewState, setReviewState] = useState<TriState>('off');
+    const [pinState, setPinState] = useState<TriState>('off');
     const [sourceFilter, setSourceFilter] = useState('');
     const [editing, setEditing] = useState<Place | null>(null);
     const [editorOpen, setEditorOpen] = useState(false);
@@ -42,13 +43,15 @@ export default function PlacesTab({ api }: { api: HoneymoonApi }) {
             if (regionFilter && String(p.region_id ?? '') !== regionFilter) return false;
             if (categoryFilter && p.category !== categoryFilter) return false;
             if (statusFilter && p.status !== statusFilter) return false;
-            if (reviewOnly && !p.needs_review) return false;
-            if (unpinnedOnly && hasCoords(p)) return false;
+            if (reviewState === 'on' && !p.needs_review) return false;
+            if (reviewState === 'inverted' && p.needs_review) return false;
+            if (pinState === 'on' && hasCoords(p)) return false;
+            if (pinState === 'inverted' && !hasCoords(p)) return false;
             if (sourceFilter && sourceLabel(p.source) !== sourceFilter) return false;
             return true;
         });
     }, [places, search, regionFilter, categoryFilter, statusFilter,
-        reviewOnly, unpinnedOnly, sourceFilter]);
+        reviewState, pinState, sourceFilter]);
 
     /** Built from the data, so a new batch of suggestions shows up on its own. */
     const sources = useMemo(() => sourcesOf(places), [places]);
@@ -127,22 +130,21 @@ export default function PlacesTab({ api }: { api: HoneymoonApi }) {
                         <option value="">Any status</option>
                         {STATUSES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
                     </SelectField>
-                    <button
-                        onClick={() => setReviewOnly((v) => !v)}
-                        className={`rounded-2xl px-3 py-2 text-sm font-medium border transition ${reviewOnly
-                            ? 'bg-amber-50 border-amber-200 text-amber-800'
-                            : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}
-                    >
-                        ⚠ Needs review
-                    </button>
-                    <button
-                        onClick={() => setUnpinnedOnly((v) => !v)}
-                        className={`rounded-2xl px-3 py-2 text-sm font-medium border transition ${unpinnedOnly
-                            ? 'bg-sky-50 border-sky-200 text-sky-800'
-                            : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}
-                    >
-                        Not pinned
-                    </button>
+                    <TriToggle
+                        state={reviewState}
+                        onChange={setReviewState}
+                        offLabel="⚠ Review: any"
+                        onLabel="⚠ Needs review"
+                        invertedLabel="✓ Already reviewed"
+                    />
+                    <TriToggle
+                        state={pinState}
+                        onChange={setPinState}
+                        tone="sky"
+                        offLabel="Pin: any"
+                        onLabel="Not pinned"
+                        invertedLabel="Pinned"
+                    />
                 </div>
             </Card>
 

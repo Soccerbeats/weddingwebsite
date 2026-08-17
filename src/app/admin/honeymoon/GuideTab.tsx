@@ -71,7 +71,9 @@ export default function GuideTab({ api }: { api: HoneymoonApi }) {
                                                 {region.name}
                                             </span>
                                             <span className="text-xs text-gray-400 ml-2">
-                                                {region.country} · {count} place{count === 1 ? '' : 's'}
+                                                {region.country || (
+                                                    <span className="text-sky-700">no country</span>
+                                                )} · {count} place{count === 1 ? '' : 's'}
                                             </span>
                                         </button>
                                         <span className="text-gray-300 text-xs">{open ? '▲' : '▼'}</span>
@@ -87,6 +89,28 @@ export default function GuideTab({ api }: { api: HoneymoonApi }) {
                                     </div>
                                     {open && (
                                         <div className="mt-2 pt-2 border-t border-gray-100">
+                                            {/* Country is not cosmetic: it drives the map's
+                                                country filter, and a region without one used
+                                                to make its places disappear. */}
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className="text-[11px] uppercase tracking-wide
+                                                    text-gray-400 font-semibold shrink-0">
+                                                    Country
+                                                </span>
+                                                <InlineText
+                                                    value={region.country ?? ''}
+                                                    placeholder="Indonesia"
+                                                    className="text-xs -ml-1 max-w-[14rem]"
+                                                    onCommit={(country) => api.update('regions', {
+                                                        id: region.id, country,
+                                                    })}
+                                                />
+                                                {!region.country && (
+                                                    <span className="text-[11px] text-sky-700 shrink-0">
+                                                        not set — hidden from country filters
+                                                    </span>
+                                                )}
+                                            </div>
                                             <InlineText
                                                 multiline
                                                 value={region.description ?? ''}

@@ -88,9 +88,14 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
         return places.filter((p) => {
             // Additive: off hides the unconfirmed, on shows everything.
             if (!showUnconfirmed && p.needs_review) return false;
-            // A place with no region can't be placed in a country, so a country
-            // filter hides it rather than guessing.
-            if (country && countryOfRegion.get(p.region_id ?? -1) !== country) return false;
+            // Exclude only places known to be somewhere *else*. A place whose
+            // country is simply unknown — no region, or a region created without
+            // one — stays visible: a filter that silently drops unclassified data
+            // loses things you can't see to go and fix.
+            if (country) {
+                const its = countryOfRegion.get(p.region_id ?? -1) ?? '';
+                if (its && its !== country) return false;
+            }
             if (regionFilter && String(p.region_id ?? '') !== regionFilter) return false;
             if (statusFilter && p.status !== statusFilter) return false;
             if (sourceFilter && sourceLabel(p.source) !== sourceFilter) return false;
@@ -170,6 +175,15 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
 
     const pinnedCount = visible.filter(hasCoords).length;
     const unpinnedCount = visible.length - pinnedCount;
+    /** Pins on screen whose country nobody has set — the ones worth classifying. */
+    const unclassified = useMemo(
+        () => (country
+            ? visible.filter((p) => hasCoords(p)
+                && !(countryOfRegion.get(p.region_id ?? -1) ?? '')).length
+            : 0),
+        [visible, country, countryOfRegion],
+    );
+
     /** How many of the visible pins are unconfirmed, once they're shown. */
     const unconfirmedShown = useMemo(
         () => visible.filter((p) => p.needs_review && hasCoords(p)).length,
@@ -349,6 +363,11 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                                 {formatDayDate(data?.trip.start_date ?? null, selectedDay.day_number)
                                     ? ` (${formatDayDate(data?.trip.start_date ?? null, selectedDay.day_number)})`
                                     : ''}
+                            </span>
+                        )}
+                        {unclassified > 0 && (
+                            <span className="text-sky-700">
+                                {' '}· {unclassified} with no country set
                             </span>
                         )}
                         {hiddenUnconfirmed > 0 && (

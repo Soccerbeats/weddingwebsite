@@ -138,6 +138,16 @@ export interface GuideNote {
     sort_order: number;
 }
 
+/** A checklist item — visas, jabs, insurance, the things that aren't places. */
+export interface TodoItem {
+    id: number;
+    text: string;
+    done: boolean;
+    category: string | null;
+    due_on: string | null;
+    sort_order: number;
+}
+
 export interface Trip {
     id: number;
     title: string;
@@ -156,6 +166,7 @@ export interface Trip {
 
 export interface HoneymoonPayload {
     trip: Trip;
+    todos: TodoItem[];
     categories: CategoryRow[];
     regions: Region[];
     places: Place[];

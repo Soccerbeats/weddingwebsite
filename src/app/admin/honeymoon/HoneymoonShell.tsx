@@ -15,6 +15,7 @@ const TABS = [
     { href: `${BASE}/places`, label: 'Places' },
     { href: `${BASE}/stays`, label: 'Stays' },
     { href: `${BASE}/excursions`, label: 'Excursions' },
+    { href: `${BASE}/checklist`, label: 'To Do' },
     { href: `${BASE}/guide`, label: 'Guide' },
     { href: `${BASE}/settings`, label: 'Settings' },
 ] as const;

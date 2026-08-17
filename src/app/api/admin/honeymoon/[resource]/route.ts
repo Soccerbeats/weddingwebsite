@@ -130,6 +130,17 @@ const RESOURCES: Record<string, ResourceDef> = {
         },
         required: ['day_id'],
     },
+    todos: {
+        table: 'honeymoon_todos',
+        fields: {
+            text: { kind: 'text' },
+            done: { kind: 'bool' },
+            category: { kind: 'text' },
+            due_on: { kind: 'date' },
+            sort_order: { kind: 'int' },
+        },
+        required: ['text'],
+    },
     notes: {
         table: 'honeymoon_notes',
         fields: {

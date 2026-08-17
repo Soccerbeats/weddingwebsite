@@ -5,7 +5,7 @@ import { normalizeCategoryKey, setCategoryRegistry, titleCase } from '@/lib/hone
 import type { HoneymoonPayload, Place } from '@/lib/honeymoon';
 
 export type Resource =
-    'categories' | 'regions' | 'places' | 'days' | 'stops' | 'travel' | 'notes' | 'trip';
+    'categories' | 'regions' | 'places' | 'days' | 'stops' | 'travel' | 'notes' | 'todos' | 'trip';
 
 const BASE = '/api/admin/honeymoon';
 
@@ -97,12 +97,16 @@ export function useHoneymoon() {
      * `create` only reports success, but the editor has to select the region it
      * just made, so this one reads the inserted row.
      */
-    const createRegion = useCallback(async (name: string): Promise<number | null> => {
+    const createRegion = useCallback(async (
+        name: string, country?: string,
+    ): Promise<number | null> => {
         try {
             const res = await fetch(`${BASE}/regions`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: name.trim() }),
+                // Country matters: a region created without one used to make its
+                // places invisible under any country filter.
+                body: JSON.stringify({ name: name.trim(), country: country ?? '' }),
             });
             if (!res.ok) throw new Error('Could not add that region');
             const row = await res.json();

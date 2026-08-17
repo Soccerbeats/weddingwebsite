@@ -211,7 +211,11 @@ export default function PlaceEditor({ api, place, open, onClose }: {
                                     (r) => r.name.toLowerCase() === typed.toLowerCase(),
                                 );
                                 if (existing) return String(existing.id);
-                                const created = await api.createRegion(typed);
+                                // Inherit whatever country the trip is focused on, so a
+                                // region added mid-filter isn't born invisible.
+                                const created = await api.createRegion(
+                                    typed, api.data?.trip.focus_country || '',
+                                );
                                 return created == null ? null : String(created);
                             }}
                             onManage={() => setManaging('regions')}

@@ -63,6 +63,9 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
         };
     }, [excursions]);
 
+    const todos = useMemo(() => data?.todos ?? [], [data]);
+    const todosLeft = todos.filter((t) => !t.done).length;
+
     const stopCount = days.reduce((n, d) => n + d.stops.length, 0);
     const emptyDays = days.filter((d) => d.stops.length === 0);
 
@@ -101,6 +104,12 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
                 href: `${BASE}/excursions`, tone: 'info',
             });
         }
+        if (todosLeft) {
+            items.push({
+                label: `${todosLeft} thing${todosLeft === 1 ? '' : 's'} left on the checklist`,
+                href: `${BASE}/checklist`, tone: 'info',
+            });
+        }
         if (!days.length) {
             items.push({ label: 'No days yet — start the itinerary', href: `${BASE}/itinerary`, tone: 'info' });
         }
@@ -108,7 +117,7 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
             items.push({ label: 'No start date set', href: `${BASE}/settings`, tone: 'info' });
         }
         return items;
-    }, [stats, emptyDays.length, stays, excursions, days.length, trip?.start_date]);
+    }, [stats, emptyDays.length, stays, excursions, days.length, trip?.start_date, todosLeft]);
 
     const lastDay = days.length ? Math.max(...days.map((d) => d.day_number)) : 0;
     const startsIn = useMemo(() => {
@@ -128,7 +137,7 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
     return (
         <div className="space-y-4">
             {/* ---- Headline numbers ---- */}
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2">
+            <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-2">
                 <Stat
                     label="Trip"
                     value={days.length ? `${days.length} day${days.length === 1 ? '' : 's'}` : 'Not planned'}
@@ -161,6 +170,13 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
                     value={String(stays.length)}
                     hint={`${stays.filter((s) => s.rating === 'yes').length} interested`}
                     href={`${BASE}/stays`}
+                />
+                <Stat
+                    label="To do"
+                    value={todos.length ? `${todos.length - todosLeft}/${todos.length}` : '—'}
+                    hint={todos.length ? (todosLeft ? `${todosLeft} left` : 'all done') : 'nothing listed'}
+                    tone={todos.length && !todosLeft ? 'good' : 'default'}
+                    href={`${BASE}/checklist`}
                 />
                 <Stat
                     label="Excursions"

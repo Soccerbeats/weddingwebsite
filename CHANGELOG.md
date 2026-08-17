@@ -151,6 +151,16 @@ All notable changes to this project are documented here.
 
   The cost figure is honest about its limits: `priceValue` returns null rather than zero for anything without a plain number, so "ask at the desk" is reported as *1 without a price* instead of being quietly counted as free. The card states that it ignores nights and headcount and is a sense of scale, not a budget.
 
+- **Honeymoon — To Do checklist, a map-filter bug fix, and three-way filters.**
+
+  **New To Do tab** (`/admin/honeymoon/checklist`): items with an optional group, tick-off, due dates, drag-to-reorder and a hide-done toggle, backed by a new `honeymoon_todos` table. Groups are free text with earlier ones offered as you type — a fixed set of categories would be wrong for someone else's trip. Outstanding items surface on the dashboard.
+
+  **Fixed: pins missing from the map.** Reported as "says five pinned, should be seven or eight". Production had **ten** confirmed pins; five were being hidden by the Indonesia country filter. Two belonged to regions created through *＋ Custom…*, which only ever sent a name — so they were stored with an empty country and excluded by every country filter — and one place had no region at all. The filter now excludes only places known to be in a **different** country: an unknown country keeps a place visible, and the status line reports how many need classifying. A filter that silently drops unclassified data hides exactly what you need to see to fix it.
+
+  Two supporting fixes so it can't recur: a region created while a country filter is active **inherits that country**, and a region's country is now **editable on the Guide tab**, where regions without one are called out.
+
+  **Three-way filters on the Places tab.** *Review* cycles any → needs review → already reviewed, and *Pin* cycles any → not pinned → pinned. A two-state filter could only ever ask one of the two questions — there was no way to ask "what have I already reviewed". Each label states which of the three you're looking at rather than making you infer it from a colour, and a regression test asserts the two active states are exact complements.
+
 - **`npm run check:honeymoon`** — 44 assertions over the pure logic that would otherwise fail silently and wrongly: great-circle distances against known city pairs, day-number arithmetic across a month boundary, 12-hour time formatting at noon and midnight, Google Maps URL parsing in all three shapes, rejection of null island and out-of-range latitudes, hop calculation across unpinned and deleted stops, and seed-data integrity (no duplicate names, no orphan regions, no unknown categories).
 - **Finances suite (`/admin/finances`)** — replaces the `Heav & Aust Wedding Spreadsheet — Budget` tab. Five tabs: **Overview** (reporting), **Budget**, **Purchases**, **Gift Money**, **Settings**. Everything edits inline — commit on blur or Enter, revert on `Esc`, no Save button — and every derived figure recalculates from a single refetch so the grand total, percentages, both deficits and both payment plans can't disagree with each other.
 
