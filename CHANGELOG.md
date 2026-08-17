@@ -1,8 +1,28 @@
 # Changelog
 
-All notable changes to this project are documented here.
+All notable changes to this project are documented here, newest at the top.
 
-## [Unreleased]
+> **Living document — this file is the source of truth for the app version.** The current
+> version is the topmost `vX.Y.Z` heading, and it is what the admin panel's changelog button
+> displays. Every substantive change gets an entry, stamped
+> ``## vX.Y.Z — [Unreleased] <title> (`branch`, YYYY-MM-DD HH:MM)`` — times in UTC
+> (`date -u '+%Y-%m-%d %H:%M'`). Flip `[Unreleased]` → `[Released]` once it is pushed and
+> deployed. Group changes under `### Added`, `### Changed`, `### Fixed` — the in-app viewer
+> renders those three as coloured badges. Bump the patch on every deploy, the minor when
+> asked. Entries predating this convention carry a date but no time.
+
+## v0.9.1 — [Released] Versioned changelog, and Jarvis's viewer for it (`main`, 2026-08-17 16:10)
+
+### Added
+- **Every release now carries a version, and the changelog is the source of truth for it.** All sixteen historical entries are stamped `## vX.Y.Z — [Released] <title> (date)`, oldest first: `v0.1.0` is the initial launch, same-day sessions take a patch (`v0.3.0`–`v0.3.4` are the five 2026-05-25 releases), separate days take a minor, and the honeymoon-portal release is `v0.9.0`. The convention, the bump rules and the UTC stamping are written at the top of the file. **There is no version in `package.json` to keep in step** — the topmost heading *is* the app's version, which is the convention Jarvis uses. One ordering fix came with it: a stray `## [2026-05-25]` entry sat below *Initial launch*, breaking newest-first, and now sits with the rest of its day.
+- **The changelog viewer is Jarvis's, carried over class-for-class** (`/admin/changelog`): a sticky version nav down the left — version, Released/Unreleased pill and title per item — beside a reading pane of cards, each with a version pill, a tag pill, its date, and `Added`/`Changed`/`Fixed` rendered as coloured badges. A **scrollspy** highlights the version you are reading and scrolls the *nav* to keep it visible, never the pane. Clicking a version jumps to it. Inter for titles and DM Mono for versions, loaded lazily so the font request belongs to this view rather than the whole panel. The nav hides below a 640px **container** width, not viewport width, because the admin sidebar eats 256px of the window and the pane is what matters. Only the palette is translated: Jarvis's `--primary` is this site's accent, its `--card` white, its `--border` grey-200.
+- **The button beside "Admin Panel" is the version.** It reads `v0.9.1` in DM Mono rather than an icon, so the panel says which build you are looking at without opening anything, and it links to the viewer. The unread dot compares the newest version against `localStorage`, so it appears on a deploy and clears when you open it. Before the version has loaded the button shows `···` rather than inventing a number.
+
+### Changed
+- The changelog is a **page**, not a dialog — two columns and a scrollspy need the width, and this is something you read rather than dismiss. `/admin/changelog` joins seating and honeymoon as full-bleed so it owns its own scrolling, which its scrollspy needs a named root for.
+- `GET /api/admin/changelog?latest=1` now answers with the version and its tag, which is all the button needs.
+
+## v0.9.0 — [Released] Honeymoon portal, dashboard insights, mailing-list export and PWA install (2026-08-17)
 
 ### Added
 - **Honeymoon portal (`/admin/honeymoon`)** — a private planning tool for the Bali + Singapore trip. Admin-only by design: no public route, no WIP toggle, nothing guest-facing. Five tabs: **Map**, **Itinerary**, **Places**, **Guide**, **Settings**.
@@ -228,7 +248,7 @@ All notable changes to this project are documented here.
 - **Finances card on the dashboard** — budget, paid, still owed and gift money as headline stats, a budget-progress bar with *left for you two to cover*, the four biggest sections with paid/budgeted bars, an unearmarked-gift-money footnote, and a red/amber banner for overdue or due-soon payments naming the next one. Sourced from the same `buildSummary()` the finances suite uses, so the two can't disagree; unlike `GET /api/admin/finances` the dashboard deliberately does **not** write a daily snapshot — opening the dashboard shouldn't count as taking a reading of the budget. Falls back to an *Open Finances* empty state when there are no budget lines, and to *Finance data unavailable* if the query fails, both inside the same try/catch that keeps a finance error off the rest of the page.
 - **Installable as a proper PWA — fixes iOS dropping its in-app browser chrome on every navigation** — added to the iPhone Home Screen, the site launched standalone but the moment you navigated off the page you started on, iOS pasted its in-app browser UI on top (a **✕** top-left, a back/forward bar bottom-left). The site had **no Web App Manifest at all**, so iOS had no `scope` to compare against and treated every in-app navigation as leaving the app. New `src/app/manifest.ts` declares `scope: '/'`, `start_url: '/'`, `display: 'standalone'` and `id: '/'`, generated per-request so name, description and `theme_color` follow `site.json`. Next emits only the standardised `mobile-web-app-capable`, so `apple-mobile-web-app-capable` is added by hand in the root layout — iOS before 16.4 honours only the apple-prefixed name and would otherwise open the icon in a normal Safari tab. `apple-mobile-web-app-status-bar-style` is `default` and `viewport-fit: cover` is deliberately *not* set, so iOS insets the viewport itself and the fixed nav can't slide under the clock and Dynamic Island — no `env(safe-area-inset-*)` padding needed anywhere. New `GET /api/app-icon?size=` renders square PNGs at 180/192/256/512/1024 with sharp, padding the couple's uploaded `weddingLogo` onto the accent colour, falling back to a heart drawn as an SVG **path** — no text anywhere, because Alpine ships no fonts and anything font-dependent would rasterise to blank boxes in the production image. Without an `apple-touch-icon` iOS uses a screenshot of the page as the Home Screen icon. **iOS reads the manifest only when the icon is added, so an existing Home Screen icon must be deleted and re-added.**
 - **Separate "Add to Home Screen" target for the admin panel** — adding `/admin` to the Home Screen produced an icon that opened the public home page. iOS uses the linked manifest's `start_url` and ignores the page you were actually on, so the single site-wide manifest sent every install to `/`. (Before the manifest existed iOS fell back to the current URL, so this was a regression introduced with it.) There are now two variants from one route: the default, and `?app=admin` with `start_url: '/admin'`, `id: '/admin'`, name *Wedding Admin*, short_name *Admin*. `scope` stays `/` in both, so either icon can reach any page without iOS pasting its in-app browser chrome on top. Implemented as a route handler at `src/app/manifest.webmanifest/route.ts` rather than the `app/manifest.ts` convention, whose export receives no request and so can only ever emit one manifest. The admin variant is linked by a new server `src/app/admin/layout.tsx` — a nested layout's `manifest` field wins over the root's — with the existing client shell moved to `AdminShell.tsx` since client components cannot export metadata. The `apple-touch-icon` and `appleWebApp` block are re-declared there too: on iOS the apple-touch-icon takes precedence over the manifest's `icons`, and Next replaces rather than merges `appleWebApp`, so omitting a field would silently drop it. `GET /api/app-icon?variant=admin` grounds the same logo on light grey (`#e5e7eb`) instead of the accent colour. Light rather than dark on purpose — the wedding logo is black calligraphy on transparency and all but vanished against the dark slate first tried; the fallback heart's fill follows the ground for the same reason, or the admin variant would have drawn white on light grey.
-- **Admin panel — "What's new", beside the panel's own name.** The project keeps a real `CHANGELOG.md` — every change, why it was made and what broke — and the only way to read it was to open the repository. A ✦ button beside the **Admin Panel** heading now reads it in the panel, with a dot when the newest release is one this browser hasn't opened. The newest release opens expanded, older ones collapsed; each change shows its headline and unfolds to the full reasoning on click. New `src/lib/changelog.ts` parses the file (releases, `### Added` groups, nested bullets, wrapped prose joined back onto its bullet) and tokenises inline markup — **bold**, `code`, *italics* and links — which the renderer turns into **React elements, never `dangerouslySetInnerHTML`**, so nothing in the file can be injected as markup. Bold wrapping code is common in this file (`**Portal (`/admin/x`)**`), so strong/em contents are re-tokenised rather than printed with their backticks. Releases are keyed by a synthetic id because the file has four separate `## [2026-05-25]` headings and a version alone can't identify one. The Dockerfile now copies `CHANGELOG.md` into the production image — standalone output would otherwise leave it in the build stage — and `GET /api/admin/changelog?latest=1` answers "is there anything new" in one string, so the unread dot costs no more than that on a page load. The button renders in the sidebar *and* the mobile top bar, sharing one request, because on a phone the sidebar's header sits behind the site's floating nav and cannot be tapped. 44 assertions in `npm run check:changelog`, run against the real file as well as fixtures.
+- **Admin panel — "What's new", beside the panel's own name.** The project keeps a real `CHANGELOG.md` — every change, why it was made and what broke — and the only way to read it was to open the repository. A ✦ button beside the **Admin Panel** heading now reads it in the panel, with a dot when the newest release is one this browser hasn't opened. The newest release opens expanded, older ones collapsed; each change shows its headline and unfolds to the full reasoning on click. New `src/lib/changelog.ts` parses the file (releases, `### Added` groups, nested bullets, wrapped prose joined back onto its bullet) and tokenises inline markup — **bold**, `code`, *italics* and links — which the renderer turns into **React elements, never `dangerouslySetInnerHTML`**, so nothing in the file can be injected as markup. Bold wrapping a code span is common in this file, so strong/em contents are re-tokenised rather than printed with their backticks still showing. Releases are keyed by a synthetic id because the file has four separate `## [2026-05-25]` headings and a version alone can't identify one. The Dockerfile now copies `CHANGELOG.md` into the production image — standalone output would otherwise leave it in the build stage — and `GET /api/admin/changelog?latest=1` answers "is there anything new" in one string, so the unread dot costs no more than that on a page load. The button renders in the sidebar *and* the mobile top bar, sharing one request, because on a phone the sidebar's header sits behind the site's floating nav and cannot be tapped. 44 assertions in `npm run check:changelog`, run against the real file as well as fixtures.
 - **The admin panel has one dialog implementation.** `Modal` moved from the honeymoon folder to `src/components/admin/Modal.tsx`, since the changelog needs the same three hard-won behaviours (portalled above the site nav, closing only on a press that *began* on the backdrop, and Escape). Re-exported from its old home, so every existing import is unchanged.
 - **Honeymoon Settings — a trip with a start date but no end shows its range anyway.** `end_date` is new, so an existing trip has a start and a number of days but nothing stored for the end, which left the calendar blank next to a summary that read "day 1 is Oct 19 · day 10 is Oct 28". The picker now derives the end from the day rows when there isn't one; the first drag writes it down properly.
 - **Honeymoon portal — the trip's dates are a range you drag on a calendar.** Settings had a bare `<input type="date">` for the start and **no end date at all** — the trip's length was however many `honeymoon_days` rows happened to exist, built one *+ Add day* at a time. Now two months sit side by side and you press on the first day away and release on the last: the range shades live, either end can be picked up and moved afterwards (grabbing the start moves the start; grabbing the end moves the end), and it works dragged in either direction. New `honeymoon_trip.end_date`, kept **alongside** the day rows rather than derived from them, because the two answer different questions — `end_date` is when you fly home, the day rows are how much of it you have planned. **Setting a range reconciles the rows to it**, which is the point of the feature: extending creates the missing days, shortening deletes the trailing ones but only after a confirm naming exactly what is on them ("Days 12–14 would be deleted, along with 7 stops and 1 travel leg"), and moving the whole range shifts every date without touching a row. The arithmetic is a pure `planRange()` returning a plan rather than performing one, so the UI can state the consequences before anything is written; `calendarMonths()` was refactored onto a `monthMatrix(year, month, dayNumberOf)` primitive so the picker can show any month, including for a trip with no dates yet. Quick-set buttons for 7 / 10 / 14 days, because that is how people actually decide.
@@ -257,7 +277,7 @@ All notable changes to this project are documented here.
 - **Portainer "Pull and redeploy" 500 — actually diagnosed and fixed.** Docker Compose discovers a project's containers by filtering on the *presence* of the `com.docker.compose.config-hash` label, which compose writes **only on containers it creates itself**. `wedding-web-prod` had been recreated by hand with `docker run`, so it could never carry that label — compose saw **zero** containers for service `web`, tried to create a fresh one, and collided with the pinned `container_name`. The pull always succeeded, so the site silently kept serving the old image. The 2026-07-27 diagnosis (missing `oneoff`/`container-number`) was wrong and its fix never worked; labels are immutable on an existing container, so **no `docker run` recipe can fix this** — the container must be created by compose. Recreated it via `docker compose … up -d --no-deps web` against a mirror of the stack files at Portainer's own paths; `up -d --dry-run` now reports both containers as `Running` instead of `Creating`. The README's manual-deploy recipe was rewritten to use `docker compose` (the old `docker run` recipe was the cause, not the workaround).
 - **Database left down by the failed redeploy** — a failed swap leaves `wedding-db-prod` created-but-never-started, so the web container fails DNS on `db` (`EAI_AGAIN`) while still returning 200 on pages that don't touch the DB. Started it; all data intact (90 guests, 9 RSVPs, 16 donations).
 
-## [2026-07-27] — RSVP attendance choice, party-member login, guest table repair, rapid check-off
+## v0.8.0 — [Released] RSVP attendance choice, party-member login, guest table repair, rapid check-off (2026-07-27)
 
 ### Added
 - **Explicit attending / not attending per guest (public RSVP)** — Every party member now has **two mutually-exclusive checkboxes** (ticking one clears the other; clicking a ticked box clears it back to unanswered), and **the RSVP cannot be sent until every guest has one ticked**. Unanswered cards are highlighted amber, a live line reads "*N guests still need to be marked attending or not attending*", and Send RSVP is disabled with a server-side check behind it naming the specific person. A bolded note under the welcome banner explains the requirement. Card attendance became a tri-state (`'yes' | 'no' | null`) instead of a boolean — previously an unticked box was indistinguishable from "not answered yet", so anyone the submitter forgot to tick was **silently counted as declined and the party under-counted with no warning**. The primary guest stays locked to Attending (already answered by the "Will you be attending?" select; declining there covers the whole party).
@@ -280,7 +300,7 @@ All notable changes to this project are documented here.
 ### Verification
 Built a Playwright harness driving the app in a real browser (no test framework in this repo, and no local Postgres — API responses stubbed via `page.route`). The guest table passes at **all 12 widths from 375–1920px**: no clipped-unreachable cells, no stacked action buttons, Name always present, no page h-scroll, uniform 78px rows, stable under ±1px resize. The RSVP flow was verified for a simulated family of four (mutual exclusivity, submit genuinely blocked with no POST fired, correct `guestCount` vs `resolvedMembers` on submit) and the guest-verification SQL was tested **read-only against production data** — "Kenzie Miller", "KENZIE MILLER" and "  max kulik  " all resolve to Max Kulik; unknown names still fail.
 
-## [2026-07-06 session 2] — Home page section styling: shadows, larger radius, rounded FAQ card
+## v0.7.1 — [Released] Home page section styling: shadows, larger radius, rounded FAQ card (2026-07-06)
 
 ### Added
 - **Drop shadows on all home page bands** — Each stacked section below the hero (Intro/Countdown, About header, How We Met, Venue, FAQ) now carries an **upward-casting** shadow (`shadow-[0_-8px_24px_-4px_rgba(0,0,0,0.12)]`). Upward is intentional: each band pulls up `-mt-8` over the one above it, so a normal downward shadow would be buried under the next band. This makes each section's rounded top edge lift off the section above it.
@@ -293,7 +313,7 @@ Built a Playwright harness driving the app in a real browser (no test framework 
 ### Fixed
 - **Pink strip above the Explore section** — A `mb-14` gap that had been added under the FAQ card exposed a full-width strip of the blush home-page background (`bgColor`, which intentionally peeks through the rounded-corner notches of each white band). Removed the gap; the white Explore section now tucks flush under the FAQ (`-mt-10`), with the FAQ layered on top (`z-10`) so its rounded bottom + shadow render against white instead of the pink background.
 
-## [2026-07-06] — Photo display fix, admin photo UX, dashboard RSVP deadline stat
+## v0.7.0 — [Released] Photo display fix, admin photo UX, dashboard RSVP deadline stat (2026-07-06)
 
 ### Fixed
 - **Admin & public gallery photos not displaying** — The admin photo grid (and its hero previews) and the public `PhotoGallery` were the only components still referencing images via the raw `/photos/<file>` static path (through Next's image optimizer). Next.js standalone's static file handler only serves `public/` files that existed when the container **started**, so any photo uploaded to the volume afterward returned 404 there (and a 400 from `/_next/image`), leaving the admin card showing just the filename placeholder. Root cause confirmed with live `curl` inside the container: `/photos/<new>` → 404, `/_next/image?url=/photos/<new>` → 400, `/api/photos/<new>` → 200. Both files now route through the `fs`-based `/api/photos/<file>` route used everywhere else, so runtime-uploaded photos always display and future uploads never regress.
@@ -303,7 +323,7 @@ Built a Playwright harness driving the app in a real browser (no test framework 
 - **Scroll-to-top button (admin photos)** — Small fixed **↑** button (bottom-right) that smooth-scrolls the photo management page back to the top.
 - **RSVP Deadline stat (dashboard)** — New count stat in the **RSVPs & Guests** card showing days left before the RSVP deadline (`siteConfig.rsvpDeadline`). Amber within 7 days, red once passed, "—" when no deadline is set. `GET /api/admin/dashboard` now returns `countdown.rsvpDaysLeft`.
 
-## [2026-06-01 session 2] — Mobile hero polish: scroll hijack, padding, UX fixes
+## v0.6.1 — [Released] Mobile hero polish: scroll hijack, padding, UX fixes (2026-06-01)
 
 ### Added
 - **Mobile hero scroll hijack** — Outer section is 200svh with sticky inner, mirroring the desktop pattern. Any downward touch/wheel is consumed entirely by the collapse animation; after completion `window.scrollTo` jumps past the section so normal scroll begins immediately. Upward scroll back to section boundary auto-triggers expand (including during iOS momentum via `scroll` event listener). Wheel handler added alongside touch so phone-sized desktop browser windows work identically.
@@ -323,7 +343,7 @@ Built a Playwright harness driving the app in a real browser (no test framework 
 - **Slideshow dots** — Raised 10px in hero mode (bottom: 66px); lowered 30px in collage mode (bottom: 36px), animated continuously.
 - **Scroll hint / dots overlap** — Dots at bottom: 66px, pre-collapse hint at bottom: 20px — no overlap.
 
-## [2026-06-01] — Mobile hero collapse animation + about image tilt fix
+## v0.6.0 — [Released] Mobile hero collapse animation and about image tilt fix (2026-06-01)
 
 ### Added
 - **Mobile hero collapse animation** — On first swipe-up the full-screen hero squishes vertically into the center third while a second photo slides down from above and a third rises up from below, all in the same 900ms cubic ease-in-out as desktop. Swipe down when collapsed to reverse the animation and restore the full hero. Dispatches the same `hero-collapsing` / `hero-expanded` CustomEvents as desktop so the nav pill transition fires simultaneously. Particle burst (gold sparks, white sparks, rose petals) fires at the strip-seam lines at ~70% through both collapse and expand.
@@ -331,7 +351,7 @@ Built a Playwright harness driving the app in a real browser (no test framework 
 ### Fixed
 - **About section image tilt on mobile** — The couple photo in the "How We Met" section was always rotated 2°. Now the tilt only applies on `md` breakpoint and above (`md:rotate-2`); on mobile the image sits perfectly straight.
 
-## [2026-05-31] — RSVP dietary restrictions overhaul, party member cards, dashboard fixes, nav cards
+## v0.5.0 — [Released] RSVP dietary restrictions overhaul, party member cards, dashboard fixes, nav cards (2026-05-31)
 
 ### Added
 - **Per-guest dietary restriction cards** — Each guest in the RSVP form now gets their own card with checkboxes: Vegetarian, Vegan, Gluten Free, Nut Allergy, Other. "Other" reveals a required text field; submission is blocked until it's filled in.
@@ -357,7 +377,7 @@ Built a Playwright harness driving the app in a real browser (no test framework 
 - **Nav card images are grayscale** — CSS `grayscale` filter applied to all nav card images (both custom and defaults).
 - **Admin nav card thumbnails** — Now show real photo previews (custom or default) instead of a gradient placeholder box.
 
-## [2026-05-27] — Venue photo + Get Directions button
+## v0.4.1 — [Released] Venue photo and Get Directions button (2026-05-27)
 
 ### Added
 - **Venue photo** — A photo can now be assigned to the Venue section on the home page. Go to **Admin → Photos**, hover any photo, and click **"Set Venue Photo"**; the image renders below the venue description as a full-width rounded card (`h-72` mobile / `h-96` desktop). The current assignment is previewed in the photo admin assignments strip alongside Home Hero, About Hero, Footer, and Wedding Logo. Config key: `venuePhoto` in `site.json`.
@@ -365,7 +385,7 @@ Built a Playwright harness driving the app in a real browser (no test framework 
 ### Changed
 - **"Get Directions" link → pill button** — When a venue address is configured, the plain underline link is now a solid accent-colored rounded pill button (matching the RSVP/FAQ CTA style) with an inline map-pin icon; `uppercase tracking-widest text-sm font-bold shadow-lg hover:shadow-xl`.
 
-## [2026-05-27] — UI animations, hero collapse, nav island, About merged into Home
+## v0.4.0 — [Released] UI animations, hero collapse, nav island, About merged into Home (2026-05-27)
 
 ### Added
 - **HeroCollapse component** — Desktop: full-screen hero slideshow that animates into a condensed vertical strip on first scroll; scattered polaroid-style photos fly in from off-screen left/right with staggered easing; single wheel event triggers full 900ms RAF animation (not scroll-position-driven); state machine (`full | animating | collapsed`); mobile renders a static non-collapsing hero. Files: `src/components/HeroCollapse.tsx`
@@ -386,7 +406,7 @@ Built a Playwright harness driving the app in a real browser (no test framework 
 - **`whitespace-nowrap` on nav links** — "Wedding Party" no longer word-wraps to two lines in island mode.
 - **About hero image path** — Was using `/photos/` (broken in Docker volume setup); updated to `/api/photos/` to go through the dynamic photo-serving route.
 
-## [2026-05-25] — "Likely Not Coming" guest status
+## v0.3.4 — [Released] "Likely Not Coming" guest status (2026-05-25)
 
 ### Added
 - **"Likely Not Coming" RSVP status** (`rsvp_status = 'likely_not_coming'`) — admin-only status for guests you know probably won't attend but still want to invite
@@ -399,7 +419,7 @@ Built a Playwright harness driving the app in a real browser (no test framework 
 - **Seating chart exclusion** — `likely_not_coming` guests are filtered out of the seating chart sidebar entirely
 - **Public RSVP override** — if a guest submits an RSVP (attending or declined), it overwrites `likely_not_coming` with their actual response
 
-## [2026-05-25] — Target registry bookmarklet import
+## v0.3.3 — [Released] Target registry bookmarklet import (2026-05-25)
 
 ### Added
 - **Target registry bookmarklet import** — Target locks their API, so a browser bookmarklet scrapes items from the rendered Manage Registry page and downloads a CSV. Admin panel has an expandable instructions card (🎯 red) with a draggable bookmarklet link, step-by-step instructions, and an Upload CSV button
@@ -407,7 +427,7 @@ Built a Playwright harness driving the app in a real browser (no test framework 
 - **CLAUDE.md "document everything" convention** — README + CHANGELOG + vault + git push + Docker push
 - **CHANGELOG.md** — this file
 
-## [2026-05-25] — Seating chart overhaul + registry imports
+## v0.3.2 — [Released] Seating chart overhaul and registry imports (2026-05-25)
 
 ### Added
 - **Amazon registry CSV import** — Upload `.csv` from Amazon registry export; each row imports as a separate item with ASIN-based image URLs. Skips duplicates by title. (`/api/admin/registry-items/import`)
@@ -426,7 +446,7 @@ Built a Playwright harness driving the app in a real browser (no test framework 
 
 ---
 
-## [2026-05-25] — Registry redesign + admin panel additions
+## v0.3.1 — [Released] Registry redesign and admin panel additions (2026-05-25)
 
 ### Added
 - **Registry page** — Redesigned with two tabs: Honeymoon Fund and Registry (product grid)
@@ -445,7 +465,14 @@ Built a Playwright harness driving the app in a real browser (no test framework 
 
 ---
 
-## [2026-05-24] — Guest list CSV import fixes
+## v0.3.0 — [Released] Seating chart sidebar scroll and MiniMap visibility (2026-05-25)
+
+### Fixed
+- **Seating chart sidebar scroll broken**: Guest list never scrolled — the `div` wrapping `<ReactFlowProvider>` in `SeatingPage` was a flex item but not a flex container, so `SeatingCanvas`'s `flex-1` had no effect and the component grew to full content height (~1611px). The sidebar inherited that height and had `scrollHeight == clientHeight`, making scroll impossible. Fix: added `flex flex-col` to the wrapper div.
+- **Seating chart MiniMap and Controls not visible**: Same root cause — ReactFlow canvas inflated to 1563px, putting Controls and MiniMap (positioned `bottom: 28px`) at y≈1750px, far below the 900px viewport and clipped by `overflow: hidden`. Fixed by the same one-line change above.
+- **Previous attempt (`min-h-0` on list div, removing MiniMap style prop) was a no-op** for both bugs because the height chain was broken two levels up; those changes are kept as correct belt-and-suspenders hygiene but weren't the actual fix.
+
+## v0.2.0 — [Released] Guest list CSV import fixes (2026-05-24)
 
 ### Added
 - `address` field to `guest_list` table and admin UI
@@ -459,17 +486,10 @@ Built a Playwright harness driving the app in a real browser (no test framework 
 
 ---
 
-## [2025-12-31] — Initial launch
+## v0.1.0 — [Released] Initial launch (2025-12-31)
 
 ### Added
 - Public site: Home (countdown), About, Timeline, Wedding Party, Schedule, Photos, RSVP
 - Admin panel: RSVP management, guest list, photo upload/reorder/heart, timeline editor, content editors, settings
 - PostgreSQL database with Docker volumes for persistence
 - Docker multi-stage build → GitHub Container Registry → Portainer deployment
-
-## [2026-05-25]
-
-### Fixed
-- **Seating chart sidebar scroll broken**: Guest list never scrolled — the `div` wrapping `<ReactFlowProvider>` in `SeatingPage` was a flex item but not a flex container, so `SeatingCanvas`'s `flex-1` had no effect and the component grew to full content height (~1611px). The sidebar inherited that height and had `scrollHeight == clientHeight`, making scroll impossible. Fix: added `flex flex-col` to the wrapper div.
-- **Seating chart MiniMap and Controls not visible**: Same root cause — ReactFlow canvas inflated to 1563px, putting Controls and MiniMap (positioned `bottom: 28px`) at y≈1750px, far below the 900px viewport and clipped by `overflow: hidden`. Fixed by the same one-line change above.
-- **Previous attempt (`min-h-0` on list div, removing MiniMap style prop) was a no-op** for both bugs because the height chain was broken two levels up; those changes are kept as correct belt-and-suspenders hygiene but weren't the actual fix.

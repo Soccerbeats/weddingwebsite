@@ -241,28 +241,47 @@ The image's own entrypoint/cmd are correct (`docker-entrypoint.sh` + `sh -c "/ap
 
 ## Admin Panel Guide
 
-### What's new (✦ beside "Admin Panel")
+### Versions and the changelog
 
-The project keeps a real `CHANGELOG.md` — every change, why it was made and what
-broke — and the button beside the **Admin Panel** heading reads it in the panel
-itself, so you don't need the repository to find out what moved. A dot appears
-when the newest release is one this browser hasn't opened.
+**`CHANGELOG.md` is the source of truth for the app's version.** The topmost
+`vX.Y.Z` heading *is* the version — there is no number in `package.json` to keep in
+step. The button beside the **Admin Panel** heading shows it, so the panel always
+says which build you are looking at, and a dot appears when that version is one
+this browser hasn't opened.
 
-The newest release opens expanded and older ones are collapsed; each change shows
-its headline, and clicking one unfolds the full reasoning. It renders the file's
-markdown itself — bold, code, links, nested bullets — as React elements rather
-than HTML, so nothing in the file can ever be injected as markup.
+Every entry is stamped:
 
-The button appears twice on purpose: once in the sidebar header and once in the
-mobile top bar, because on a phone the sidebar's own header sits behind the site's
-floating nav and can't be tapped. Both share one request.
+```
+## vX.Y.Z — [Released|Unreleased] <title> (`branch`, YYYY-MM-DD HH:MM)
+```
 
+Times are UTC (`date -u '+%Y-%m-%d %H:%M'`), entries are newest-first, and changes
+go under `### Added` / `### Changed` / `### Fixed` — the viewer renders those three
+as coloured badges. Bump the patch on every deploy, the minor when asked. Flip
+`[Unreleased]` → `[Released]` when it ships. Entries predating the convention carry
+a date but no time.
+
+**The viewer is `/admin/changelog`**, and it is Jarvis's changelog view carried
+over class-for-class: a sticky version nav down the left — version, tag and title
+per item — beside a reading pane of cards, each with a version pill, a
+Released/Unreleased pill, its date and badged groups. A **scrollspy** highlights
+the version you are reading and scrolls the *nav* to keep it visible, never the
+reading pane; clicking a version jumps to it. Inter for titles, DM Mono for
+versions. The nav hides below a 640px **container** width rather than viewport
+width, because the admin sidebar eats 256px of the window and the pane is what
+matters.
+
+The version button appears in the sidebar and in the mobile top bar, sharing one
+request, because on a phone the sidebar's own header sits behind the site's
+floating nav and can't be tapped.
+
+Markdown is parsed into tokens and rendered as React elements — never
+`dangerouslySetInnerHTML` — so nothing in the file can be injected as markup.
 Verify the parser against the real file:
 
 ```bash
 npm run check:changelog
 ```
-
 
 ### Registry — Honeymoon Fund
 

@@ -29,7 +29,10 @@ export async function GET(request: Request) {
         if (new URL(request.url).searchParams.has('latest')) {
             const newest = releases[0];
             return NextResponse.json({
-                latest: newest ? newest.id : null,
+                // The version *is* the app's version — the changelog is the only
+                // place it is written down, exactly as in Jarvis.
+                latest: newest ? newest.version : null,
+                tag: newest ? newest.tag : null,
                 count: newest ? newest.count : 0,
             });
         }

@@ -38,7 +38,10 @@ export default function AdminShell({
     // gave no clue that Finances and Seating are the same kind of job as RSVPs
     // while Colour and WIP are not.
     const isFullBleed = pathname?.startsWith('/admin/seating')
-        || pathname?.startsWith('/admin/honeymoon');
+        || pathname?.startsWith('/admin/honeymoon')
+        // The changelog owns its own scrolling: its version nav is sticky and
+        // its scrollspy needs a scroll container it can name as the root.
+        || pathname?.startsWith('/admin/changelog');
 
     const navGroups: { title?: string; items: { href: string; label: string }[] }[] = [
         { items: [{ href: '/admin/dashboard', label: '⌂ Dashboard' }] },

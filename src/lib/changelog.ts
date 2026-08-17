@@ -26,26 +26,21 @@ export interface ChangelogGroup {
 }
 
 export interface ChangelogRelease {
-    /**
-     * Unique across the file, unlike `version`.
-     *
-     * The changelog has four separate `## [2026-05-25]` headings — different
-     * sessions on one day, written without a qualifier — so the version alone
-     * cannot identify a release or key a list.
-     */
-    id: string;
-    /** The bracketed part: "Unreleased", "2026-07-27", "2026-06-01 session 2". */
+    /** `v1.2.3`. Also the id — versions are unique by construction. */
     version: string;
-    /** The em-dashed summary after it, if the release has one. */
+    /** Released or Unreleased, as written in the heading. */
+    tag: 'Released' | 'Unreleased';
+    /** The summary after the tag, with any trailing `(branch, date)` peeled off. */
     title: string;
-    /** `YYYY-MM-DD` when the version starts with a date, else null. */
-    date: string | null;
+    /** Whatever was in the trailing brackets: `2026-07-27`, or `main, 2026-08-17 16:05`. */
+    date: string;
     groups: ChangelogGroup[];
     /** Every bullet across every group — for a count without walking the tree. */
     count: number;
 }
 
-const RELEASE = /^##\s+\[([^\]]+)\]\s*(?:[—-]\s*(.*))?$/;
+// `## vX.Y.Z — [Released|Unreleased] <title> (`branch`, YYYY-MM-DD HH:MM)`
+const RELEASE = /^##\s+(v\d+\.\d+\.\d+)\s*—\s*\[(Released|Unreleased)\]\s*(.*)$/;
 const GROUP = /^###\s+(.+)$/;
 const BULLET = /^-\s+(.*)$/;
 const NESTED = /^\s{2,}-\s+(.*)$/;
@@ -58,19 +53,24 @@ export function parseChangelog(markdown: string): ChangelogRelease[] {
     let group: ChangelogGroup | null = null;
     let entry: ChangelogEntry | null = null;
 
-    const seenVersions = new Map<string, number>();
-
     for (const raw of markdown.split(/\r?\n/)) {
         const releaseMatch = RELEASE.exec(raw);
         if (releaseMatch) {
-            const version = releaseMatch[1].trim();
-            const nth = (seenVersions.get(version) ?? 0) + 1;
-            seenVersions.set(version, nth);
+            // Peel the trailing "(`branch`, date)" decoration off the title, the
+            // way Jarvis's viewer does — the heading carries three separate facts
+            // and only the middle one is prose.
+            let title = releaseMatch[3].trim();
+            let date = '';
+            const deco = /\(([^)]*)\)\s*$/.exec(title);
+            if (deco) {
+                title = title.slice(0, deco.index).trim();
+                date = deco[1].replace(/`/g, '').trim();
+            }
             release = {
-                id: nth === 1 ? version : `${version} #${nth}`,
-                version,
-                title: (releaseMatch[2] ?? '').trim(),
-                date: /^\d{4}-\d{2}-\d{2}/.test(version) ? version.slice(0, 10) : null,
+                version: releaseMatch[1],
+                tag: releaseMatch[2] as 'Released' | 'Unreleased',
+                title,
+                date,
                 groups: [],
                 count: 0,
             };
@@ -218,15 +218,23 @@ export function plainOf(line: string): string {
         .join('');
 }
 
-/** "17 Aug 2026" from `YYYY-MM-DD`; anything else is passed through. */
-export function formatReleaseDate(version: string, date: string | null): string {
-    if (!date) return version;
-    const parsed = new Date(`${date}T00:00:00Z`);
-    if (Number.isNaN(parsed.getTime())) return version;
-    const nice = parsed.toLocaleDateString('en-US', {
+/**
+ * The date out of a heading's trailing decoration, written for a person.
+ *
+ * The decoration is whatever was in the brackets: a bare `2026-07-27` on the
+ * older entries, or `main, 2026-08-17 16:05` on ones written since the branch
+ * and time were added. Anything unparseable is shown as-is rather than hidden —
+ * a heading is hand-written and being wrong about it is worse than being plain.
+ */
+export function formatReleaseDate(date: string): string {
+    if (!date) return '';
+    const iso = /(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}:\d{2}))?/.exec(date);
+    if (!iso) return date;
+    const parsed = new Date(`${iso[1]}T${iso[2] ?? '00:00'}:00Z`);
+    if (Number.isNaN(parsed.getTime())) return date;
+    const day = parsed.toLocaleDateString('en-US', {
         day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC',
     });
-    // "2026-06-01 session 2" keeps its qualifier.
-    const extra = version.slice(10).trim();
-    return extra ? `${nice} · ${extra}` : nice;
+    return iso[2] ? `${day} · ${iso[2]} UTC` : day;
 }
+

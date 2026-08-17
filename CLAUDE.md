@@ -5,7 +5,7 @@
 When Austin says **"document everything"** after completing a feature, it means:
 
 1. **Update `README.md`** in the project root — add or update the relevant section under Admin Panel Guide with step-by-step usage instructions for the new feature
-2. **Update `CHANGELOG.md`** in the project root — add an entry under `[Unreleased]` (or today's date) with ### Added / ### Fixed / ### Changed bullets describing exactly what changed
+2. **Update `CHANGELOG.md`** in the project root — add a **version-stamped** entry at the top (see *Changelog & Versioning* below) with ### Added / ### Changed / ### Fixed bullets describing exactly what changed
 3. **Update the vault** at `/home/austin/vault/wiki/entities/wedding-website.md`:
    - Add the feature to the relevant admin features section
    - Add a dated bullet to the **Decisions & History** section summarising what was built
@@ -18,6 +18,43 @@ When Austin says **"document everything"** after completing a feature, it means:
    ```
 
 Do all five steps — don't skip any. README, CHANGELOG, and vault updates should all happen before the git commit so they're included.
+
+---
+
+## Changelog & Versioning — the changelog is the source of truth
+
+The app's version (`vX.Y.Z`) comes from **`CHANGELOG.md`**, not from git tags or
+`package.json`. The **current version is the topmost `vX.Y.Z` heading** (the file is
+newest-first), and it is what the admin panel's version button displays. This mirrors
+Jarvis's convention, and the in-app viewer is Jarvis's view carried over.
+
+### Entry format
+
+```
+## vX.Y.Z — [Released|Unreleased] <title> (`branch`, YYYY-MM-DD HH:MM)
+```
+
+- Times are **UTC** — stamp with `date -u '+%Y-%m-%d %H:%M'`.
+- Group changes under `### Added`, `### Changed`, `### Fixed` — the viewer renders
+  those three as coloured badges; any other `###` heading renders plain.
+- Flip `[Unreleased]` → `[Released]` when it is pushed and deployed.
+- Entries predating this convention carry a date but no time — do not backfill.
+
+### Bump rules
+
+| Change | Bump | Example |
+|--------|------|---------|
+| Every deploy (default) | patch | `0.9.1 → 0.9.2` |
+| Austin says "minor" | minor (patch resets) | `0.9.5 → 0.10.0` |
+| Austin says "major" | major | `0.9.0 → 1.0.0` |
+
+### Two things the file will punish you for
+
+- **Never nest backticks inside a code span** (`` `**a (`b`) **` ``). It cannot parse,
+  and the result is raw `**` on screen in the viewer. `npm run check:changelog`
+  asserts no bullet renders raw markers, so run it after editing the file.
+- **Versions must be unique and descend down the file.** The viewer keys its list by
+  version and treats the topmost as current; the same check enforces both.
 
 ---
 

@@ -248,3 +248,223 @@ html {
 .tab-scroller::-webkit-scrollbar {
   display: none;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Changelog viewer (/admin/changelog)
+ *
+ * The same two-column design as Jarvis's #changelog view — a version nav down
+ * the left beside a reading pane — carried over class-for-class so the two apps
+ * read the same way. What is translated is only the palette: Jarvis's --primary
+ * is this site's accent, its --card is white, its --border grey-200.
+ *
+ * The nav is sticky, scrolls independently, and disappears on a narrow pane so
+ * the reading pane takes the full width. `container-type` on the scope makes
+ * that respond to the PANE, not the window — the admin sidebar eats 256px of it.
+ * ───────────────────────────────────────────────────────────────────────────── */
+.cl-scope {
+  container-type: inline-size;
+  --cl-primary: var(--accent);
+  --cl-card: #ffffff;
+  --cl-border: #e5e7eb;
+  --cl-muted: #6b7280;
+  --cl-fg: #111827;
+  --cl-released: #059669;
+  --cl-unreleased: #d97706;
+  --cl-info: #0284c7;
+  --cl-mono: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --cl-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.cl-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cl-back {
+  border: none;
+  background: none;
+  color: var(--cl-primary);
+  font-size: 30px;
+  line-height: 1;
+  padding: 0 6px 0 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.cl-loading,
+.cl-error {
+  padding: 40px 16px;
+  text-align: center;
+  color: var(--cl-muted);
+  font-size: 14px;
+}
+
+.cl-error { color: #e11d48; }
+
+.cl-body {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 22px;
+  align-items: start;
+  padding: 6px 0 90px;
+  max-width: 100%;
+}
+
+.cl-toc {
+  position: sticky;
+  top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: calc(100dvh - 190px);
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.cl-toc::-webkit-scrollbar { display: none; }
+
+.cl-toc-item {
+  text-align: left;
+  background: var(--cl-card);
+  border: 1px solid var(--cl-border);
+  border-radius: 10px;
+  padding: 9px 11px;
+  cursor: pointer;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color .15s, background .15s;
+}
+
+.cl-toc-item:hover { border-color: var(--cl-primary); }
+
+.cl-toc-item.active {
+  border-color: var(--cl-primary);
+  background: color-mix(in srgb, var(--cl-primary) 10%, var(--cl-card));
+}
+
+.cl-toc-ver {
+  font-family: var(--cl-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cl-primary);
+}
+
+.cl-toc-title {
+  flex-basis: 100%;
+  font-size: 11.5px;
+  color: var(--cl-muted);
+  line-height: 1.3;
+}
+
+.cl-toc-tag,
+.cl-tag-pill {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 20px;
+}
+
+.cl-toc-tag.released,
+.cl-tag-pill.released {
+  background: color-mix(in oklab, var(--cl-released) 20%, transparent);
+  color: var(--cl-released);
+}
+
+.cl-toc-tag.unreleased,
+.cl-tag-pill.unreleased {
+  background: color-mix(in oklab, var(--cl-unreleased) 22%, transparent);
+  color: var(--cl-unreleased);
+}
+
+.cl-pane {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.cl-entry {
+  background: var(--cl-card);
+  border: 1px solid var(--cl-border);
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(9, 30, 66, 0.08), 0 0 1px rgba(9, 30, 66, 0.10);
+  padding: 20px 22px;
+  scroll-margin-top: 16px;
+}
+
+.cl-entry-titleline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.cl-ver-pill {
+  font-family: var(--cl-mono);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #ffffff;
+  background: var(--cl-primary);
+  padding: 2px 9px;
+  border-radius: 20px;
+}
+
+.cl-entry-date {
+  font-size: 11px;
+  color: var(--cl-muted);
+  font-family: var(--cl-mono);
+  margin-left: auto;
+}
+
+.cl-entry-title {
+  font-family: var(--cl-sans);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.3;
+  margin: 0 0 12px;
+  color: var(--cl-fg);
+}
+
+/* An entry's body. `overflow-wrap: anywhere` is deliberate — these entries are
+   full of long unbroken identifiers and paths. */
+.cl-entry-content {
+  font-size: 13px;
+  color: var(--cl-fg);
+  line-height: 1.55;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.cl-entry-content p { font-size: 13px; line-height: 1.6; color: var(--cl-muted); }
+.cl-entry-content li { font-size: 13px; line-height: 1.55; }
+
+/* A changelog group heading is a section label, not a document heading. */
+.cl-group {
+  font-family: var(--cl-sans);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  margin: 14px 0 8px;
+  color: var(--cl-muted);
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 20px;
+}
+
+.cl-group.added   { background: color-mix(in oklab, var(--cl-released) 18%, transparent); color: var(--cl-released); }
+.cl-group.changed { background: color-mix(in oklab, var(--cl-info) 20%, transparent); color: var(--cl-info); }
+.cl-group.fixed   { background: color-mix(in oklab, var(--cl-unreleased) 20%, transparent); color: var(--cl-unreleased); }
+
+/* Below this the nav has nowhere to live and the pane needs the room. */
+@container (max-width: 640px) {
+  .cl-body { grid-template-columns: 1fr; }
+  .cl-toc { display: none; }
+}
