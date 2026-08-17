@@ -11,6 +11,13 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.4 — [Released] The live site is the README's first image (`main`, 2026-08-17 19:19)
+
+### Changed
+- **The image at the top of the README is now the live site** rather than the demo — Austin's own screenshot of the Heaven & Austin home page, resized to 1600px and encoded at 92KB (down from 1.2MB). The demo's home page moves into the Screenshots gallery beside Our Story, so nothing is orphaned, and the public-site section is now four tidy pairs instead of two pairs and a stray full-width shot.
+- Tidied the `&nbsp;` left behind in the phone section after the mobile itinerary shot was removed — a separator with nothing left to separate. `docs/images/mobile-itinerary.jpg` is now unreferenced and kept on disk rather than deleted unasked.
+- **The "everything here is fictional" note was corrected rather than left to lie.** It claimed every screenshot on the page came from the demo, which stopped being true the moment the hero changed; it now says the hero is the live site and scopes the fictional-data note to the gallery below it. A note like that is worth more than the screenshots it describes, and only while it is accurate.
+
 ## v0.9.3 — [Released] Screenshots in the README (`main`, 2026-08-17 19:08)
 
 ### Added

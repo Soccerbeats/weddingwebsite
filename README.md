@@ -2,29 +2,31 @@
 
 A beautiful, customizable wedding website built with Next.js 16. Features include photo galleries, a relationship timeline, RSVP management, a tabbed registry (honeymoon fund + product registry), seating chart builder, and a comprehensive admin panel for content management.
 
-<img src="docs/images/home.jpg" width="820" alt="The home page: a full-bleed hero slideshow with the couple's names and a countdown">
+<img src="docs/images/hero.jpg" width="820" alt="The live site: a full-bleed monochrome hero photograph with the couple's names, the date and RSVP buttons">
 
-> Every screenshot on this page comes from the **demo instance**, so the couple,
-> the guests, the budget and the honeymoon are all fictional. See
-> [The demo instance](#the-demo-instance).
+*The live site.*
+
+> Everything under **Screenshots** below comes from the [demo instance](#the-demo-instance)
+> instead, so the couple, guests, budget and honeymoon in those are fictional.
 
 ## Screenshots
 
 ### The public site
 
-| Our Story | Wedding Party |
+| Home | Our Story |
 |---|---|
-| <img src="docs/images/our-story.jpg" alt="A vertical timeline of milestones, photographs alternating left and right"> | <img src="docs/images/wedding-party.jpg" alt="Wedding party member cards with photographs and how each person is known to the couple"> |
-| A vertical timeline that alternates sides, with tilted photographs | Cards for each side of the party |
+| <img src="docs/images/home.jpg" alt="The home page: a full-bleed hero slideshow with the couple's names and a countdown"> | <img src="docs/images/our-story.jpg" alt="A vertical timeline of milestones, photographs alternating left and right"> |
+| The hero slideshow, countdown and intro | A vertical timeline that alternates sides |
 
-| Schedule | Registry |
+| Wedding Party | Schedule |
 |---|---|
-| <img src="docs/images/schedule.jpg" alt="The wedding day schedule, each event with a time, a description and a location"> | <img src="docs/images/registry.jpg" alt="The registry page with honeymoon fund items showing progress bars, and a product grid"> |
-| The day in order, with times and locations | A honeymoon fund with progress, plus a product registry |
+| <img src="docs/images/wedding-party.jpg" alt="Wedding party member cards with photographs and how each person is known to the couple"> | <img src="docs/images/schedule.jpg" alt="The wedding day schedule, each event with a time, a description and a location"> |
+| Cards for each side of the party | The day in order, with times and locations |
 
-<img src="docs/images/photos.jpg" width="820" alt="The photo gallery: a grid of hearted photographs that opens into a lightbox">
-
-*The gallery shows only the photographs you have hearted in the admin panel.*
+| Registry | Photos |
+|---|---|
+| <img src="docs/images/registry.jpg" alt="The registry page with honeymoon fund items showing progress bars, and a product grid"> | <img src="docs/images/photos.jpg" alt="The photo gallery: a grid of hearted photographs that opens into a lightbox"> |
+| A honeymoon fund with progress, plus a product registry | The gallery, which shows only your hearted photographs |
 
 ### The admin panel
 
@@ -63,10 +65,7 @@ Private planning for the trip — admin-only, with no public page.
 
 ### On a phone
 
-<p>
-  <img src="docs/images/mobile-home.jpg" width="290" alt="The home page on a phone">
-  &nbsp;
-</p>
+<img src="docs/images/mobile-home.jpg" width="290" alt="The home page on a phone">
 
 
 ## Features
