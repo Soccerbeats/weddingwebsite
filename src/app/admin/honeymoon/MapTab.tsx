@@ -248,8 +248,9 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
         <div className="h-full flex flex-col gap-2">
             {/* ---- Filters ---- */}
             <div className="shrink-0 bg-white rounded-2xl shadow-sm border border-gray-100 p-2.5">
-                <div className="grid grid-cols-2 md:grid-cols-9 gap-2">
+                <div className="flex flex-wrap 2xl:flex-nowrap items-center gap-1.5">
                     <SelectField
+                        className="flex-1 min-w-[7rem] !py-1.5 !px-2.5 !text-sm"
                         value={country}
                         title="Saved with the trip — it stays set across refreshes and logins"
                         onChange={(e) => api.update('trip', { focus_country: e.target.value })}
@@ -257,7 +258,11 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                         <option value="">All countries</option>
                         {countries.map((c) => <option key={c} value={c}>{c}</option>)}
                     </SelectField>
-                    <SelectField value={dayFilter} onChange={(e) => setDayFilter(e.target.value)}>
+                    <SelectField
+                        className="flex-1 min-w-[7rem] !py-1.5 !px-2.5 !text-sm"
+                        value={dayFilter}
+                        onChange={(e) => setDayFilter(e.target.value)}
+                    >
                         <option value="">All places</option>
                         {days.map((d) => (
                             <option key={d.id} value={d.id}>
@@ -266,6 +271,7 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                         ))}
                     </SelectField>
                     <SelectField
+                        className="flex-1 min-w-[7rem] !py-1.5 !px-2.5 !text-sm"
                         value={sourceFilter}
                         onChange={(e) => setSourceFilter(e.target.value)}
                         disabled={!!selectedDay}
@@ -274,6 +280,7 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                         {sourcesOf(places).map((src) => <option key={src} value={src}>{src}</option>)}
                     </SelectField>
                     <SelectField
+                        className="flex-1 min-w-[7rem] !py-1.5 !px-2.5 !text-sm"
                         value={regionFilter}
                         onChange={(e) => setRegionFilter(e.target.value)}
                         disabled={!!selectedDay}
@@ -284,6 +291,7 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                         ))}
                     </SelectField>
                     <SelectField
+                        className="flex-1 min-w-[7rem] !py-1.5 !px-2.5 !text-sm"
                         value={categoryFilter}
                         onChange={(e) => setCategoryFilter(e.target.value)}
                         disabled={!!selectedDay}
@@ -294,6 +302,7 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                         ))}
                     </SelectField>
                     <SelectField
+                        className="flex-1 min-w-[7rem] !py-1.5 !px-2.5 !text-sm"
                         value={statusFilter}
                         onChange={(e) => setStatusFilter(e.target.value)}
                         disabled={!!selectedDay}
@@ -305,50 +314,50 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                         onClick={() => setShowUnconfirmed((v) => !v)}
                         disabled={!!selectedDay}
                         title="Unconfirmed pins are hidden from the map. Turn this on to work through them."
-                        className={`rounded-2xl px-3 py-2 text-sm font-medium border transition
+                        className={`shrink-0 rounded-2xl px-2.5 py-1.5 text-sm font-medium border transition
                             disabled:opacity-40 ${showUnconfirmed
                             ? 'bg-amber-500 border-amber-500 text-white'
                             : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}
                     >
-                        {showUnconfirmed ? '⚠ Hide unconfirmed' : '⚠ Show unconfirmed'}
+                        {showUnconfirmed ? '⚠ Hide' : '⚠ Unconfirmed'}
                     </button>
                     <button
                         onClick={() => setShowItinerary((v) => !v)}
                         disabled={!!selectedDay || days.length === 0}
                         title="Overlay each day's stops, in order"
-                        className={`rounded-2xl px-3 py-2 text-sm font-medium border transition
+                        className={`shrink-0 rounded-2xl px-2.5 py-1.5 text-sm font-medium border transition
                             disabled:opacity-40 ${showItinerary
                             ? 'bg-slate-900 border-slate-900 text-white'
                             : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}
                     >
-                        {showItinerary ? '🗓 Itinerary on' : '🗓 Show itinerary'}
+                        {showItinerary ? '🗓 On' : '🗓 Itinerary'}
                     </button>
                     <button
                         onClick={() => setFitSignal((n) => n + 1)}
                         title="Frame everything currently shown"
-                        className="rounded-2xl px-3 py-2 text-sm font-medium border border-gray-200
-                            bg-gray-50 text-gray-600 hover:bg-gray-100 transition"
+                        className="shrink-0 rounded-2xl px-2.5 py-1.5 text-sm font-medium border
+                            border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100 transition"
                     >
                         ⤢ Fit
                     </button>
                     <button
                         onClick={() => { setEditing(null); setEditorOpen(true); }}
-                        className="rounded-2xl px-3 py-2 text-sm font-medium border border-transparent
-                            bg-accent text-white hover:opacity-90 transition"
+                        className="shrink-0 rounded-2xl px-2.5 py-1.5 text-sm font-medium border
+                            border-transparent bg-accent text-white hover:opacity-90 transition"
                     >
-                        + Add place
+                        + Add
                     </button>
                     <button
                         onClick={() => {
                             if (selectMode) setLassoed(new Set());
                             setSelectMode((v) => !v);
                         }}
-                        className={`rounded-2xl px-3 py-2 text-sm font-medium border transition
+                        className={`shrink-0 rounded-2xl px-2.5 py-1.5 text-sm font-medium border transition
                             ${selectMode
                             ? 'bg-slate-900 border-slate-900 text-white'
                             : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}
                     >
-                        {selectMode ? '◯ Drawing' : '◯ Lasso select'}
+                        {selectMode ? '◯ Drawing' : '◯ Lasso'}
                     </button>
                 </div>
 

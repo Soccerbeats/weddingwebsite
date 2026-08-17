@@ -9,7 +9,7 @@ import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-
 import { CSS } from '@dnd-kit/utilities';
 import type { TodoItem } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
-import { Button, Card, EmptyState, InlineText, OverflowMenu, TextField } from './ui';
+import { Button, Card, EmptyState, InlineText, Modal, OverflowMenu, TextArea, TextField } from './ui';
 
 /**
  * Everything that has to happen before you go, that isn't a place.
@@ -23,6 +23,8 @@ export default function ChecklistTab({ api }: { api: HoneymoonApi }) {
     const [text, setText] = useState('');
     const [group, setGroup] = useState('');
     const [hideDone, setHideDone] = useState(false);
+    /** The item whose outcome we're asking about, right after it was ticked. */
+    const [asking, setAsking] = useState<TodoItem | null>(null);
 
     const todos = useMemo(() => data?.todos ?? [], [data]);
 
@@ -156,7 +158,12 @@ export default function ChecklistTab({ api }: { api: HoneymoonApi }) {
                                     </div>
                                     <ul>
                                         {items.map((todo) => (
-                                            <TodoRow key={todo.id} todo={todo} api={api} />
+                                            <TodoRow
+                                                key={todo.id}
+                                                todo={todo}
+                                                api={api}
+                                                onTicked={setAsking}
+                                            />
                                         ))}
                                     </ul>
                                 </Card>
@@ -165,11 +172,67 @@ export default function ChecklistTab({ api }: { api: HoneymoonApi }) {
                     </SortableContext>
                 </DndContext>
             )}
+
+            {asking && (
+                <ResultPrompt
+                    key={asking.id}
+                    todo={asking}
+                    onClose={() => setAsking(null)}
+                    onSave={(result) => {
+                        api.update('todos', { id: asking.id, result });
+                        setAsking(null);
+                    }}
+                />
+            )}
         </div>
     );
 }
 
-function TodoRow({ todo, api }: { todo: TodoItem; api: HoneymoonApi }) {
+/**
+ * Asks what happened, straight after an item is ticked.
+ *
+ * The tick already saved — this only captures the outcome, so closing it without
+ * typing leaves the item done rather than undoing your click. That is why there
+ * is a Skip rather than a Cancel.
+ */
+function ResultPrompt({ todo, onClose, onSave }: {
+    todo: TodoItem;
+    onClose: () => void;
+    onSave: (result: string) => void;
+}) {
+    const [text, setText] = useState(todo.result ?? '');
+
+    return (
+        <Modal open onClose={onClose} title={todo.text}>
+            <div className="space-y-3">
+                <label className="block text-xs font-semibold text-gray-500">
+                    How did it go? Booking reference, outcome, anything worth remembering.
+                </label>
+                <TextArea
+                    autoFocus
+                    rows={4}
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    onKeyDown={(e) => {
+                        // Enter alone would be a nuisance in a multi-line note.
+                        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) onSave(text.trim());
+                    }}
+                    placeholder="Booked with Garuda, ref XY12AB — paid in full"
+                />
+                <div className="flex justify-end gap-2">
+                    <Button onClick={onClose}>Skip</Button>
+                    <Button tone="primary" onClick={() => onSave(text.trim())}>Save</Button>
+                </div>
+            </div>
+        </Modal>
+    );
+}
+
+function TodoRow({ todo, api, onTicked }: {
+    todo: TodoItem;
+    api: HoneymoonApi;
+    onTicked: (todo: TodoItem) => void;
+}) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
         useSortable({ id: todo.id });
 
@@ -192,7 +255,13 @@ function TodoRow({ todo, api }: { todo: TodoItem; api: HoneymoonApi }) {
                 <input
                     type="checkbox"
                     checked={todo.done}
-                    onChange={(e) => api.update('todos', { id: todo.id, done: e.target.checked })}
+                    onChange={(e) => {
+                        const done = e.target.checked;
+                        api.update('todos', { id: todo.id, done });
+                        // Ask only on the way in. Un-ticking is a correction, not
+                        // an outcome worth writing up.
+                        if (done) onTicked(todo);
+                    }}
                     aria-label={todo.text}
                     className="w-5 h-5 rounded accent-emerald-600 shrink-0 cursor-pointer"
                 />
@@ -205,6 +274,16 @@ function TodoRow({ todo, api }: { todo: TodoItem; api: HoneymoonApi }) {
                             if (clean && clean !== todo.text) api.update('todos', { id: todo.id, text: clean });
                         }}
                     />
+                    {todo.result && (
+                        <button
+                            onClick={() => onTicked(todo)}
+                            className="block text-left text-[11px] text-gray-500 px-2 -mt-0.5
+                                hover:text-gray-800 truncate max-w-full"
+                            title="Edit this note"
+                        >
+                            ↳ {todo.result}
+                        </button>
+                    )}
                 </div>
                 <input
                     type="date"

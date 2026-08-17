@@ -247,6 +247,7 @@ CREATE TABLE IF NOT EXISTS honeymoon_todos (
   id SERIAL PRIMARY KEY,
   text TEXT NOT NULL,
   done BOOLEAN NOT NULL DEFAULT FALSE,
+  result TEXT,
   category TEXT,
   due_on DATE,
   sort_order INTEGER NOT NULL DEFAULT 0,
@@ -266,6 +267,7 @@ ALTER TABLE honeymoon_notes ADD COLUMN IF NOT EXISTS source TEXT;
 ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS rating TEXT;
 ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS image_url TEXT;
 ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS is_excursion BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE honeymoon_todos ADD COLUMN IF NOT EXISTS result TEXT;
 ALTER TABLE honeymoon_trip ADD COLUMN IF NOT EXISTS focus_country TEXT NOT NULL DEFAULT '';
 
 CREATE INDEX IF NOT EXISTS honeymoon_places_region_idx ON honeymoon_places (region_id);

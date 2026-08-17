@@ -102,6 +102,7 @@ async function createTables() {
             id SERIAL PRIMARY KEY,
             text TEXT NOT NULL,
             done BOOLEAN NOT NULL DEFAULT FALSE,
+            result TEXT,
             category TEXT,
             due_on DATE,
             sort_order INTEGER NOT NULL DEFAULT 0,
@@ -127,6 +128,7 @@ async function createTables() {
     await pool.query(
         'ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS is_excursion BOOLEAN NOT NULL DEFAULT FALSE',
     );
+    await pool.query('ALTER TABLE honeymoon_todos ADD COLUMN IF NOT EXISTS result TEXT');
     await pool.query(
         "ALTER TABLE honeymoon_trip ADD COLUMN IF NOT EXISTS focus_country TEXT NOT NULL DEFAULT ''",
     );
@@ -335,6 +337,7 @@ export async function getHoneymoonPayload(): Promise<HoneymoonPayload> {
         id: r.id,
         text: r.text,
         done: r.done === true,
+        result: r.result ?? null,
         category: r.category ?? null,
         due_on: isoDate(r.due_on),
         sort_order: r.sort_order ?? 0,

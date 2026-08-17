@@ -143,6 +143,8 @@ export interface TodoItem {
     id: number;
     text: string;
     done: boolean;
+    /** What happened when you ticked it — the booking ref, the outcome, the why. */
+    result: string | null;
     category: string | null;
     due_on: string | null;
     sort_order: number;

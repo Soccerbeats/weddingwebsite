@@ -76,21 +76,40 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
     /**
      * Pins for the overview map.
      *
-     * Honours the trip's country filter using the same rule as the map page —
-     * exclude only what is known to be somewhere else — and shows unconfirmed
-     * pins too, since they already draw with a dashed ring and an overview that
-     * hid most of the trip would be misleading.
+     * Confirmed pins only, and honouring the trip's country filter with the same
+     * rule as the map page — exclude only what is known to be somewhere else.
+     * An unconfirmed pin is a guess; an overview built from guesses is worse
+     * than a smaller honest one.
      */
     const mapPlaces = useMemo(() => {
         const countryOf = new Map((data?.regions ?? []).map((r) => [r.id, r.country ?? '']));
         const focus = trip?.focus_country ?? '';
         return places.filter((p) => {
-            if (!hasCoords(p)) return false;
+            if (!hasCoords(p) || p.needs_review) return false;
             if (!focus) return true;
             const its = countryOf.get(p.region_id ?? -1) ?? '';
             return !its || its === focus;
         });
     }, [places, data?.regions, trip?.focus_country]);
+
+    /** Each day's stops, drawn over the overview map in its own colour. */
+    const DAY_COLORS = [
+        '#0f172a', '#be123c', '#0891b2', '#a16207', '#7c3aed',
+        '#059669', '#ea580c', '#db2777', '#4d7c0f', '#0284c7',
+    ];
+    const mapRoutes = useMemo(() => days.map((day) => ({
+        points: day.stops
+            .map((stop) => {
+                const place = stop.place_id == null ? undefined : api.placeById.get(stop.place_id);
+                if (!place || !hasCoords(place)) return null;
+                return { lat: place.lat, lng: place.lng, label: stop.custom_label || place.name };
+            })
+            .filter((pt): pt is { lat: number; lng: number; label: string } => pt != null),
+        color: DAY_COLORS[(day.day_number - 1) % DAY_COLORS.length],
+        label: `Day ${day.day_number}${day.title ? ` — ${day.title}` : ''}`,
+    })).filter((r) => r.points.length > 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [days, api.placeById]);
 
     const stopCount = days.reduce((n, d) => n + d.stops.length, 0);
     const emptyDays = days.filter((d) => d.stops.length === 0);
@@ -160,11 +179,16 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
         [stays, excursions],
     );
 
+    // Fills the viewport rather than scrolling: two flexible bands plus a thin
+    // footer. Each card owns its own overflow, so a long list scrolls inside its
+    // card instead of pushing the page taller. min-h is the floor — below that
+    // nothing can fit and the shell's scrollbar takes over.
     return (
-        <div className="space-y-4">
-            {/* ---- Headline numbers, with the map alongside ---- */}
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 items-stretch">
-            <div className="xl:col-span-2 grid grid-cols-2 md:grid-cols-4 gap-2 content-start">
+        <div className="h-full min-h-[34rem] flex flex-col gap-3">
+            {/* ---- Stats and the map ---- */}
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 flex-[3] min-h-0">
+            <div className="xl:col-span-2 flex flex-col gap-3 min-h-0">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 shrink-0">
                 <Stat
                     label="Trip"
                     value={days.length ? `${days.length} day${days.length === 1 ? '' : 's'}` : 'Not planned'}
@@ -213,8 +237,66 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
                 />
             </div>
 
+            {/* ---- Itinerary, filling what's left on the left ---- */}
+            <Card className="p-4 flex flex-col min-h-0 flex-1">
+                <div className="flex items-baseline justify-between gap-2 mb-2 shrink-0">
+                    <h2 className="text-sm font-semibold text-gray-900">Itinerary</h2>
+                    <Link href={`${BASE}/itinerary`} className="text-xs text-accent hover:underline">
+                        Open →
+                    </Link>
+                </div>
+                {days.length === 0 ? (
+                    <p className="text-sm text-gray-500">
+                        No days yet. <Link href={`${BASE}/itinerary`} className="text-accent hover:underline">
+                            Add the first one
+                        </Link>.
+                    </p>
+                ) : (
+                    <>
+                        <p className="text-xs text-gray-400 mb-1 shrink-0">
+                            {stopCount} stop{stopCount === 1 ? '' : 's'} across {days.length} day
+                            {days.length === 1 ? '' : 's'}
+                            {emptyDays.length > 0 && (
+                                <span className="text-amber-600"> · {emptyDays.length} still empty</span>
+                            )}
+                        </p>
+                        <ul className="divide-y divide-gray-100 overflow-auto min-h-0 flex-1">
+                            {days.map((day) => (
+                                <li key={day.id} className="py-1.5 flex items-baseline gap-3">
+                                    <span className="text-xs font-semibold text-gray-700 shrink-0 w-14">
+                                        Day {day.day_number}
+                                    </span>
+                                    <span className="text-xs text-gray-400 shrink-0 w-24 hidden sm:block">
+                                        {formatDayDate(trip?.start_date ?? null, day.day_number) ?? ''}
+                                    </span>
+                                    <span className="text-sm text-gray-700 truncate flex-1">
+                                        {day.title || <span className="text-gray-400">Untitled</span>}
+                                        {day.stops.length > 0 && (
+                                            <span className="text-gray-400">
+                                                {' — '}
+                                                {day.stops
+                                                    .map((s) => (s.place_id != null
+                                                        ? api.placeById.get(s.place_id)?.name
+                                                        : s.custom_label) || 'stop')
+                                                    .slice(0, 3)
+                                                    .join(', ')}
+                                                {day.stops.length > 3 && ` +${day.stops.length - 3}`}
+                                            </span>
+                                        )}
+                                    </span>
+                                    <span className={`text-xs shrink-0 ${day.stops.length ? 'text-gray-400' : 'text-amber-600'}`}>
+                                        {day.stops.length || 'empty'}
+                                    </span>
+                                </li>
+                            ))}
+                        </ul>
+                    </>
+                )}
+            </Card>
+            </div>
+
                 {/* ---- Where it all is ---- */}
-                <Card className="p-3 flex flex-col min-h-[18rem]">
+                <Card className="p-3 flex flex-col min-h-0">
                     <div className="flex items-baseline justify-between gap-2 mb-2">
                         <h2 className="text-sm font-semibold text-gray-900">Where it all is</h2>
                         <Link href={`${BASE}/map`} className="text-xs text-accent hover:underline">
@@ -231,88 +313,31 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
                             </p>
                         </div>
                     ) : (
-                        <TripMap places={mapPlaces} className="flex-1 min-h-[12rem] w-full" />
+                        <TripMap
+                            places={mapPlaces}
+                            routes={mapRoutes}
+                            className="flex-1 min-h-0 w-full"
+                        />
                     )}
                     <p className="text-[11px] text-gray-400 mt-2">
-                        {mapPlaces.length} pinned
+                        {mapPlaces.length} confirmed
                         {stats.unconfirmed > 0 && (
-                            <span className="text-amber-600"> · {stats.unconfirmed} unconfirmed</span>
+                            <span className="text-amber-600"> · {stats.unconfirmed} unconfirmed hidden</span>
                         )}
+                        {mapRoutes.length > 0 && <span> · {mapRoutes.length} day{mapRoutes.length === 1 ? '' : 's'} drawn</span>}
                         {trip?.focus_country && <span> · {trip.focus_country}</span>}
                     </p>
                 </Card>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 items-start">
-                {/* ---- Itinerary ---- */}
-                <Card className="p-4 lg:col-span-3">
-                    <div className="flex items-baseline justify-between gap-2 mb-2">
-                        <h2 className="text-sm font-semibold text-gray-900">Itinerary</h2>
-                        <Link href={`${BASE}/itinerary`} className="text-xs text-accent hover:underline">
-                            Open →
-                        </Link>
-                    </div>
-                    {days.length === 0 ? (
-                        <p className="text-sm text-gray-500">
-                            No days yet. <Link href={`${BASE}/itinerary`} className="text-accent hover:underline">
-                                Add the first one
-                            </Link>.
-                        </p>
-                    ) : (
-                        <>
-                            <p className="text-xs text-gray-400 mb-2">
-                                {stopCount} stop{stopCount === 1 ? '' : 's'} across {days.length} day
-                                {days.length === 1 ? '' : 's'}
-                                {emptyDays.length > 0 && (
-                                    <span className="text-amber-600">
-                                        {' '}· {emptyDays.length} still empty
-                                    </span>
-                                )}
-                            </p>
-                            <ul className="divide-y divide-gray-100">
-                                {days.map((day) => (
-                                    <li key={day.id} className="py-2 flex items-baseline gap-3">
-                                        <span className="text-xs font-semibold text-gray-700 shrink-0 w-16">
-                                            Day {day.day_number}
-                                        </span>
-                                        <span className="text-xs text-gray-400 shrink-0 w-24 hidden sm:block">
-                                            {formatDayDate(trip?.start_date ?? null, day.day_number) ?? ''}
-                                        </span>
-                                        <span className="text-sm text-gray-700 truncate flex-1">
-                                            {day.title || <span className="text-gray-400">Untitled</span>}
-                                            {day.stops.length > 0 && (
-                                                <span className="text-gray-400">
-                                                    {' — '}
-                                                    {day.stops
-                                                        .map((s) => (s.place_id != null
-                                                            ? api.placeById.get(s.place_id)?.name
-                                                            : s.custom_label) || 'stop')
-                                                        .slice(0, 3)
-                                                        .join(', ')}
-                                                    {day.stops.length > 3 && ` +${day.stops.length - 3}`}
-                                                </span>
-                                            )}
-                                        </span>
-                                        <span className={`text-xs shrink-0 ${day.stops.length ? 'text-gray-400' : 'text-amber-600'}`}>
-                                            {day.stops.length || 'empty'}
-                                        </span>
-                                    </li>
-                                ))}
-                            </ul>
-                        </>
-                    )}
-                </Card>
-
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 items-start">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 flex-[2] min-h-0">
                 {/* ---- What needs doing ---- */}
-                <Card className="p-4">
-                    <h2 className="text-sm font-semibold text-gray-900 mb-2">Needs attention</h2>
+                <Card className="p-4 flex flex-col min-h-0">
+                    <h2 className="text-sm font-semibold text-gray-900 mb-2 shrink-0">Needs attention</h2>
                     {todo.length === 0 ? (
                         <p className="text-sm text-emerald-700">Nothing outstanding. </p>
                     ) : (
-                        <ul className="space-y-1.5">
+                        <ul className="space-y-1.5 overflow-auto min-h-0 flex-1">
                             {todo.map((item) => (
                                 <li key={item.label}>
                                     <Link
@@ -331,8 +356,8 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
                 </Card>
 
                 {/* ---- Money ---- */}
-                <Card className="p-4">
-                    <h2 className="text-sm font-semibold text-gray-900 mb-2">Rough cost</h2>
+                <Card className="p-4 flex flex-col min-h-0 overflow-auto">
+                    <h2 className="text-sm font-semibold text-gray-900 mb-2 shrink-0">Rough cost</h2>
                     <dl className="space-y-2">
                         <div>
                             <dt className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold">
@@ -370,8 +395,8 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
                 </Card>
 
                 {/* ---- Shortlist ---- */}
-                <Card className="p-4 lg:col-span-3">
-                    <div className="flex items-baseline justify-between gap-2 mb-2">
+                <Card className="p-4 flex flex-col min-h-0">
+                    <div className="flex items-baseline justify-between gap-2 mb-2 shrink-0">
                         <h2 className="text-sm font-semibold text-gray-900">Shortlist</h2>
                         <span className="text-xs text-gray-400">everything you marked interested</span>
                     </div>
@@ -385,7 +410,7 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
                             </Link>.
                         </p>
                     ) : (
-                        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 overflow-auto min-h-0 flex-1">
                             {shortlist.map((item) => (
                                 <li key={item.id}
                                     className="flex items-center gap-2 rounded-xl border border-gray-100 p-2">
@@ -419,7 +444,7 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
             </div>
 
             {/* ---- Progress ---- */}
-            <Card className="p-4">
+            <Card className="p-3 shrink-0">
                 <div className="flex items-baseline justify-between gap-2 mb-2">
                     <h2 className="text-sm font-semibold text-gray-900">Planning progress</h2>
                     <span className="text-xs text-gray-400">

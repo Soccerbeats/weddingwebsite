@@ -165,6 +165,16 @@ All notable changes to this project are documented here.
 
   It shows unconfirmed pins as well as confirmed ones — they already draw with a dashed ring, and an overview that hid most of the trip would misrepresent it.
 
+- **Honeymoon — dashboard fits the window, map controls fit one row, and ticking a to-do asks what happened.**
+
+  **The dashboard now fills the viewport with no scrollbar and no dead space**, verified at 1920×1080, 1600×1000, 1440×900 and 1280×800. Two flexible bands plus a thin footer; every card owns its overflow so a long itinerary or shortlist scrolls *inside its card* rather than pushing the page taller. A `min-h` floor is the honest limit — at 1100×600 nothing could fit, so it scrolls instead of crushing the content.
+
+  **The dashboard map shows confirmed pins only**, and now draws **the itinerary** over them, each day in its own colour with numbered stops. It previously included unconfirmed pins; an overview built from guesses is worse than a smaller honest one, and the caption states how many are hidden.
+
+  **All eleven map-page controls now sit on one row.** A fixed grid wrapped Add place and Lasso onto a second line; the bar is now a flex row where the six selects shrink and the five buttons keep their size, with shorter labels to match.
+
+  **Ticking a to-do prompts for a result** — booking reference, outcome, whatever is worth keeping. Stored on the item and shown beneath it, click to edit. The tick is saved *before* the prompt opens, so dismissing it leaves the item done rather than silently undoing the click; that is why the dismiss button says Skip rather than Cancel. Un-ticking doesn't prompt: that's a correction, not an outcome.
+
 - **`npm run check:honeymoon`** — 44 assertions over the pure logic that would otherwise fail silently and wrongly: great-circle distances against known city pairs, day-number arithmetic across a month boundary, 12-hour time formatting at noon and midnight, Google Maps URL parsing in all three shapes, rejection of null island and out-of-range latitudes, hop calculation across unpinned and deleted stops, and seed-data integrity (no duplicate names, no orphan regions, no unknown categories).
 - **Finances suite (`/admin/finances`)** — replaces the `Heav & Aust Wedding Spreadsheet — Budget` tab. Five tabs: **Overview** (reporting), **Budget**, **Purchases**, **Gift Money**, **Settings**. Everything edits inline — commit on blur or Enter, revert on `Esc`, no Save button — and every derived figure recalculates from a single refetch so the grand total, percentages, both deficits and both payment plans can't disagree with each other.
 

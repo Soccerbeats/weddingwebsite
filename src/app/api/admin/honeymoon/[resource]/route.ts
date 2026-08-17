@@ -135,6 +135,7 @@ const RESOURCES: Record<string, ResourceDef> = {
         fields: {
             text: { kind: 'text' },
             done: { kind: 'bool' },
+            result: { kind: 'text' },
             category: { kind: 'text' },
             due_on: { kind: 'date' },
             sort_order: { kind: 'int' },

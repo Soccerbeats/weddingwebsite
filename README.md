@@ -546,7 +546,15 @@ themselves out in responsive columns instead — Itinerary shows days two or thr
 abreast, Guide does the same for regions and notes, and Settings puts its cards
 side by side rather than stretching a text input across the screen.
 
-**Dashboard** is the landing page — the whole trip on one screen. Headline stats
+**Dashboard** is the landing page — the whole trip on one screen, and it is
+literally one screen: the layout fills the window with no scrollbar and no dead
+space, at any resolution down to a 1280×800 laptop. Cards flex to the space
+available and long lists scroll *inside* their own card. Below the point where
+nothing could fit, the page scrolls rather than crushing everything.
+
+Its map shows **confirmed pins only** — an unconfirmed pin is a guess, and an
+overview built from guesses is worse than a smaller honest one — with **your
+itinerary drawn over it**, each day in its own colour with numbered stops. Headline stats
 sit top-left (days, countdown, places, pins to review, stays, to-dos,
 excursions) with a **small map** alongside them on the right showing everything
 pinned; below that the itinerary with each day's stops and empty days flagged,
@@ -591,7 +599,11 @@ colour with numbered badges. A panel lists each day and its stops in order, with
 numbers matching the badges, so a line on screen reads back to a real plan.
 
 **To Do tab.** A checklist for everything that isn't a place — visas, jabs,
-insurance, the house-sitter. Add an item with an optional group, tick it off,
+insurance, the house-sitter. **Ticking an item asks what happened** — a booking
+reference, an outcome, anything worth remembering — and the note shows under the
+item afterwards (click it to edit). The tick saves first, so skipping the note
+leaves the item done rather than undoing your click. Add an item with an
+optional group, tick it off,
 set a due date, drag to reorder, hide what's done. Groups are whatever you type
 (earlier ones are offered as you go), because a fixed set of categories would be
 wrong for someone else's trip. Progress shows on the dashboard.
