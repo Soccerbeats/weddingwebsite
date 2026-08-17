@@ -139,6 +139,12 @@ All notable changes to this project are documented here.
 
   The listing-preview popup moved out of the Stays tab into a shared `LinkPreview` rather than being copied.
 
+- **Honeymoon map — fixes "failed to update trip" when clearing the country, and re-frames on a country switch.**
+
+  Selecting *All countries* sends an empty string, and text coercion turns an empty string into NULL — but `focus_country` is `NOT NULL`, so clearing the filter failed against the constraint every time. Text nulling out when cleared is right for an optional note and wrong for a NOT NULL column whose empty value is meaningful, so `Field` gained `blankAsEmpty` for exactly that case.
+
+  **Switching country now moves the map** to that country's pins, and clearing back to all countries frames everything. Country is the one filter that is a change of *destination* rather than of what is drawn — switching to Singapore while zoomed on Bali showed an empty sea. Layer toggles still leave the viewport alone, which a regression test pins alongside this.
+
 - **`npm run check:honeymoon`** — 44 assertions over the pure logic that would otherwise fail silently and wrongly: great-circle distances against known city pairs, day-number arithmetic across a month boundary, 12-hour time formatting at noon and midnight, Google Maps URL parsing in all three shapes, rejection of null island and out-of-range latitudes, hop calculation across unpinned and deleted stops, and seed-data integrity (no duplicate names, no orphan regions, no unknown categories).
 - **Finances suite (`/admin/finances`)** — replaces the `Heav & Aust Wedding Spreadsheet — Budget` tab. Five tabs: **Overview** (reporting), **Budget**, **Purchases**, **Gift Money**, **Settings**. Everything edits inline — commit on blur or Enter, revert on `Esc`, no Save button — and every derived figure recalculates from a single refetch so the grand total, percentages, both deficits and both payment plans can't disagree with each other.
 

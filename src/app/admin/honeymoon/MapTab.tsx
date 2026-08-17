@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import {
     STATUSES, categoriesOf, categoryMeta, formatDayDate, hasCoords, sourceLabel, sourcesOf,
@@ -106,6 +106,24 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
             : visibleIgnoringCategory),
         [visibleIgnoringCategory, categoryFilter],
     );
+
+    /**
+     * Changing country re-frames the map.
+     *
+     * This is the one filter that is a change of *destination* rather than a
+     * change of what is drawn — switching to Singapore and staying zoomed on
+     * Bali would show an empty sea. Layer toggles still leave the view alone;
+     * clearing back to all countries frames everything again.
+     *
+     * Skipped on the first run so arriving at the page fits once, not twice.
+     */
+    const lastCountryRef = useRef<string | null>(null);
+    useEffect(() => {
+        if (lastCountryRef.current === null) { lastCountryRef.current = country; return; }
+        if (lastCountryRef.current === country) return;
+        lastCountryRef.current = country;
+        setFitSignal((n) => n + 1);
+    }, [country]);
 
     /** Types actually on the map, plus whatever is selected so it can't vanish. */
     const typeOptions = useMemo(() => {

@@ -22,6 +22,15 @@ interface Field {
      * accommodation. Falling back to the neutral option is safer.
      */
     fallback?: string;
+    /**
+     * Keep an empty string as '' instead of turning it into NULL.
+     *
+     * Text normally nulls out when cleared, which is right for an optional note.
+     * It is wrong for a NOT NULL column whose empty value is meaningful — the
+     * country filter's "all countries" is exactly that, and nulling it made
+     * clearing the filter fail against the constraint.
+     */
+    blankAsEmpty?: boolean;
 }
 
 interface ResourceDef {
@@ -136,7 +145,7 @@ const RESOURCES: Record<string, ResourceDef> = {
 
 const TRIP_FIELDS: Record<string, Field> = {
     title: { kind: 'text' },
-    focus_country: { kind: 'text' },
+    focus_country: { kind: 'text', blankAsEmpty: true },
     start_date: { kind: 'date' },
     home_currency: { kind: 'text' },
     notes: { kind: 'text' },
@@ -154,7 +163,8 @@ function parseNumber(raw: unknown): number | null {
 function coerce(field: Field, raw: unknown): unknown {
     switch (field.kind) {
         case 'text':
-            return raw == null || raw === '' ? null : String(raw);
+            if (raw == null || raw === '') return field.blankAsEmpty ? '' : null;
+            return String(raw);
         case 'number':
             return parseNumber(raw) ?? 0;
         case 'int': {

@@ -559,7 +559,10 @@ region or day no longer auto-zooms either; press Fit when you want it.)
 **Country** is a saved trip setting, not a session preference — pick Indonesia and
 it stays picked across refreshes, logins and devices, hiding everything outside
 it. Places with no region are hidden while a country is chosen, since there's
-nothing to judge them by.
+nothing to judge them by. **Switching country re-frames the map** to that
+country's pins, and clearing back to *All countries* frames everything again —
+it's a change of destination, unlike the layer toggles, which still leave your
+view exactly where you put it.
 
 **The type dropdown only lists types actually on the map**, with the count in the
 label, so it reflects what's in front of you rather than every category that
