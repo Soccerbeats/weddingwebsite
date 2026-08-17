@@ -11,6 +11,17 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.5 — [Released] The README is a front page again; the rest is a wiki (`main`, 2026-08-17 19:40)
+
+### Changed
+- **The README went from 1,083 lines to 135.** It now carries what a front page is for: what the thing is, the screenshots, a quick start, and an index. Everything technical moved to the repository wiki — **15 pages**, split by what you would be trying to do rather than by where it happened to be written.
+- **The move was mechanical, not retyped.** A script partitioned the README by section and wrote each to its page verbatim, shifting only heading levels, then checked that every substantive line of the old README exists in either the new one or a wiki page. Four lines did not survive by design: the old marketing intro, one anchor link that became a wiki URL, and two bare section headings that became pages.
+- Pages: Installation, Deployment, The demo instance, Guests and RSVPs, Registry, Finances, Honeymoon portal, Content and settings, Features, Architecture, Versions and the changelog, Development, Troubleshooting, plus a Home index and a `_Sidebar` that GitHub renders on every page.
+- **Cross-references were checked rather than assumed.** Every "see *X* below" was verified to still point within its own page, every wiki link resolves to a page that exists, and every page is reachable from both the README and the sidebar.
+
+### Added
+- **The Development page is new writing.** It was one line pointing at `CLAUDE.md`; it now covers running the app locally, all nine check scripts and what each actually catches, both seeds, and the four conventions most likely to trip someone up — the changelog as version source, `init.sql` as the only schema, `/api/photos/…` rather than `/photos/…`, and where the working agreements live.
+
 ## v0.9.4 — [Released] The live site is the README's first image (`main`, 2026-08-17 19:19)
 
 ### Changed
