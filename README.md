@@ -646,6 +646,16 @@ input:
 Right-clicking a pin in Google Maps copies the coordinates, which is the most
 reliable route for anywhere the search can't find.
 
+**Categories and regions can be added on the spot.** Both dropdowns end with
+**＋ Custom…** — pick it, type the new one, press Enter. A new category is used
+immediately and joins the filter lists and the map legend with its own colour; a
+new region is created as a real region (so it gets a write-up on the Guide tab)
+and is reused rather than duplicated if the name already exists.
+
+Built-in categories: Stay, Beach Club, Bar, Nightlife, Restaurant, Cafe,
+Waterfall, **Beach**, **Hiking**, **Nature**, Temple, Attraction, Activity, Spa,
+Hair & Nails, Gym, Cowork, Shopping, Transport, Other.
+
 **A pasted or dropped Google Maps link fills in the rest.** It resolves as soon
 as it lands — no need to press Find — and sets the **name** (from the link's
 place segment), the **address** (reverse-geocoded from the coordinates, so it's a

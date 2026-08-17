@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import {
-    CATEGORIES, STATUSES, formatDayDate, hasCoords, sourceLabel, sourcesOf,
+    STATUSES, categoriesOf, formatDayDate, hasCoords, sourceLabel, sourcesOf,
     type Place, type PlaceStatus,
 } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
@@ -159,7 +159,7 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                         disabled={!!selectedDay}
                     >
                         <option value="">All types</option>
-                        {CATEGORIES.map((c) => (
+                        {categoriesOf(places).map((c) => (
                             <option key={c.key} value={c.key}>{c.icon} {c.label}</option>
                         ))}
                     </SelectField>
@@ -316,7 +316,7 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                         rounded-2xl shadow border border-gray-200 px-3 py-2 max-w-[45%]
                         hidden md:block pointer-events-none">
                         <div className="flex flex-wrap gap-x-3 gap-y-1">
-                            {CATEGORIES.filter((c) => visible.some((p) => p.category === c.key && hasCoords(p)))
+                            {categoriesOf(places).filter((c) => visible.some((p) => p.category === c.key && hasCoords(p)))
                                 .map((c) => (
                                     <span key={c.key} className="inline-flex items-center gap-1 text-[11px] text-gray-600">
                                         <span

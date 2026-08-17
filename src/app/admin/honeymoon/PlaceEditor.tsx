@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import { SOURCE_MANUAL, sourceLabel, sourcesOf, type Place, type PlaceLink, type PlaceStatus } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
 import {
-    Button, CategorySelect, Modal, SelectField, StatusSelect, TextArea, TextField,
+    Button, CategorySelect, CustomisableSelect, Modal, StatusSelect, TextArea, TextField,
 } from './ui';
 
 // Leaflet reaches for `window` at import time, so the preview map never joins
@@ -181,16 +181,37 @@ export default function PlaceEditor({ api, place, open, onClose }: {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div>
                         <label className="block text-xs font-semibold text-gray-500 mb-1">Category</label>
-                        <CategorySelect value={category} onChange={(e) => setCategory(e.target.value)} />
+                        <CategorySelect
+                            value={category}
+                            places={api.data?.places ?? []}
+                            onChange={setCategory}
+                        />
                     </div>
                     <div>
                         <label className="block text-xs font-semibold text-gray-500 mb-1">Region</label>
-                        <SelectField value={regionId} onChange={(e) => setRegionId(e.target.value)}>
-                            <option value="">— none —</option>
-                            {(api.data?.regions ?? []).map((r) => (
-                                <option key={r.id} value={r.id}>{r.name}</option>
-                            ))}
-                        </SelectField>
+                        <CustomisableSelect
+                            label="Region"
+                            value={regionId}
+                            placeholder="Nusa Penida, Gili Islands…"
+                            options={[
+                                { key: '', label: '— none —' },
+                                ...(api.data?.regions ?? []).map((r) => ({
+                                    key: String(r.id), label: r.name,
+                                })),
+                            ]}
+                            onChange={setRegionId}
+                            onCreate={async (typed) => {
+                                // A region is a real row, so it has to exist before it
+                                // can be selected. Reuse an existing one on a name
+                                // match rather than creating a near-duplicate.
+                                const existing = (api.data?.regions ?? []).find(
+                                    (r) => r.name.toLowerCase() === typed.toLowerCase(),
+                                );
+                                if (existing) return String(existing.id);
+                                const created = await api.createRegion(typed);
+                                return created == null ? null : String(created);
+                            }}
+                        />
                     </div>
                     <div>
                         <label className="block text-xs font-semibold text-gray-500 mb-1">Status</label>

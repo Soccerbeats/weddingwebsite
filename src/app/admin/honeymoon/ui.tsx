@@ -1,7 +1,10 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { CATEGORIES, STATUSES, categoryMeta, type PlaceStatus } from '@/lib/honeymoon';
+import {
+    STATUSES, categoriesOf, categoryMeta, normalizeCategoryKey,
+    type CategoryMeta, type PlaceStatus,
+} from '@/lib/honeymoon';
 
 export function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
     return (
@@ -187,13 +190,99 @@ export function StatusChip({ status }: { status: PlaceStatus }) {
     );
 }
 
-export function CategorySelect(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
+const CUSTOM = '__custom__';
+
+/**
+ * A select that can grow a new option.
+ *
+ * Choosing "＋ Custom…" swaps the control for a text box; committing adds the
+ * value and selects it. The list keeps whatever is currently selected even if
+ * it isn't one of the offered options, so an existing custom value never
+ * silently reverts to the first item when the editor reopens.
+ */
+export function CustomisableSelect({ value, options, onChange, onCreate, placeholder, label }: {
+    value: string;
+    options: { key: string; label: string }[];
+    onChange: (next: string) => void;
+    /** Returns the value to select; async so a region can be created first. */
+    onCreate: (typed: string) => Promise<string | null> | string | null;
+    placeholder: string;
+    label: string;
+}) {
+    const [typing, setTyping] = useState(false);
+    const [draft, setDraft] = useState('');
+    const [busy, setBusy] = useState(false);
+
+    const commit = async () => {
+        const typed = draft.trim();
+        if (!typed) { setTyping(false); setDraft(''); return; }
+        setBusy(true);
+        try {
+            const next = await onCreate(typed);
+            if (next) onChange(next);
+        } finally {
+            setBusy(false);
+            setTyping(false);
+            setDraft('');
+        }
+    };
+
+    if (typing) {
+        return (
+            <div className="flex gap-1.5">
+                <TextField
+                    autoFocus
+                    value={draft}
+                    placeholder={placeholder}
+                    aria-label={label}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') { e.preventDefault(); commit(); }
+                        if (e.key === 'Escape') { setTyping(false); setDraft(''); }
+                    }}
+                />
+                <Button tone="primary" className="!px-3 shrink-0" onClick={commit} disabled={busy}>
+                    {busy ? '…' : 'Add'}
+                </Button>
+            </div>
+        );
+    }
+
     return (
-        <SelectField {...props}>
-            {CATEGORIES.map((c) => (
-                <option key={c.key} value={c.key}>{c.icon} {c.label}</option>
-            ))}
+        <SelectField
+            value={value}
+            aria-label={label}
+            onChange={(e) => {
+                if (e.target.value === CUSTOM) { setTyping(true); return; }
+                onChange(e.target.value);
+            }}
+        >
+            {options.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+            <option value={CUSTOM}>＋ Custom…</option>
         </SelectField>
+    );
+}
+
+/** Category picker, including any custom categories already in use. */
+export function CategorySelect({ value, places, onChange }: {
+    value: string;
+    places: { category: string }[];
+    onChange: (next: string) => void;
+}) {
+    const options: CategoryMeta[] = categoriesOf(places);
+    // The current value may be a custom category that nothing else uses yet.
+    const known = options.some((o) => o.key === value);
+    const all = known ? options : [...options, categoryMeta(value)];
+
+    return (
+        <CustomisableSelect
+            label="Category"
+            value={value}
+            placeholder="Beach club, hot springs…"
+            options={all.map((c) => ({ key: c.key, label: `${c.icon} ${c.label}` }))}
+            onChange={onChange}
+            onCreate={(typed) => normalizeCategoryKey(typed)}
+        />
     );
 }
 

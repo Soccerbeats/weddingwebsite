@@ -85,6 +85,29 @@ export function useHoneymoon() {
         () => fetch(`${BASE}/${resource}?id=${id}`, { method: 'DELETE' }),
     ), [run]);
 
+    /**
+     * Create a region and hand back its id.
+     *
+     * `create` only reports success, but the editor has to select the region it
+     * just made, so this one reads the inserted row.
+     */
+    const createRegion = useCallback(async (name: string): Promise<number | null> => {
+        try {
+            const res = await fetch(`${BASE}/regions`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name.trim() }),
+            });
+            if (!res.ok) throw new Error('Could not add that region');
+            const row = await res.json();
+            await refresh();
+            return typeof row?.id === 'number' ? row.id : null;
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'Could not add that region');
+            return null;
+        }
+    }, [refresh]);
+
     /** Delete a whole selection in one request rather than N. */
     const removeMany = useCallback((resource: Resource, ids: number[]) => run(
         () => fetch(`${BASE}/${resource}?ids=${ids.join(',')}`, { method: 'DELETE' }),
@@ -115,7 +138,7 @@ export function useHoneymoon() {
 
     return {
         data, loading, error, saving: busy > 0,
-        refresh, create, update, reorder, remove, removeMany,
+        refresh, create, update, reorder, remove, removeMany, createRegion,
         placeById, regionById, scheduledPlaceIds,
         clearError: () => setError(''),
     };

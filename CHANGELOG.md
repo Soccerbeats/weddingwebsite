@@ -99,6 +99,14 @@ All notable changes to this project are documented here.
 
   The formatter is **idempotent**, which matters because the field commits on blur as well as on Enter — without that, tabbing through an already-formatted value would compound it into `$$250 per night per night`. A regression test runs it over its own output three times.
 
+- **Honeymoon — custom categories and regions, plus Beach, Hiking and Nature.** Both dropdowns in the place editor end with **＋ Custom…**: pick it, type the name, press Enter. A custom category is used immediately; a custom region is created as a real region row (so it can carry a Guide write-up) and an existing region with the same name is reused rather than duplicated.
+
+  `category` changed from a fixed enum to **free text**, the same move `source` needed earlier — an enum would silently coerce anything typed to `misc`. A blank category is floored to `misc` server-side on every write path, since text coercion turns `''` into NULL and a null category would break the map's colour lookup and every filter.
+
+  `categoryMeta()` no longer collapses an unknown key into "Other": a custom category keeps its own name and gets a **stable colour derived from that name**, so it reads correctly in the map legend and doesn't change on reload. Filter dropdowns and the legend now list built-ins plus whichever custom categories are actually in use.
+
+  Three new built-ins: **Beach**, **Hiking**, **Nature**.
+
 - **`npm run check:honeymoon`** — 44 assertions over the pure logic that would otherwise fail silently and wrongly: great-circle distances against known city pairs, day-number arithmetic across a month boundary, 12-hour time formatting at noon and midnight, Google Maps URL parsing in all three shapes, rejection of null island and out-of-range latitudes, hop calculation across unpinned and deleted stops, and seed-data integrity (no duplicate names, no orphan regions, no unknown categories).
 - **Finances suite (`/admin/finances`)** — replaces the `Heav & Aust Wedding Spreadsheet — Budget` tab. Five tabs: **Overview** (reporting), **Budget**, **Purchases**, **Gift Money**, **Settings**. Everything edits inline — commit on blur or Enter, revert on `Esc`, no Save button — and every derived figure recalculates from a single refetch so the grand total, percentages, both deficits and both payment plans can't disagree with each other.
 

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import {
-    CATEGORIES, STATUSES, hasCoords, sourceLabel, sourcesOf,
+    STATUSES, categoriesOf, hasCoords, sourceLabel, sourcesOf,
     type Place, type PlaceStatus,
 } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
@@ -119,7 +119,9 @@ export default function PlacesTab({ api }: { api: HoneymoonApi }) {
                     </SelectField>
                     <SelectField value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
                         <option value="">All types</option>
-                        {CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.icon} {c.label}</option>)}
+                        {categoriesOf(places).map((c) => (
+                            <option key={c.key} value={c.key}>{c.icon} {c.label}</option>
+                        ))}
                     </SelectField>
                     <SelectField value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
                         <option value="">Any status</option>

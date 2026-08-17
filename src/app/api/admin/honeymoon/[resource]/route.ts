@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { ensureHoneymoonTables } from '@/lib/honeymoonDb';
-import { CATEGORY_KEYS } from '@/lib/honeymoon';
 
 /**
  * Generic CRUD for the honeymoon tables.
@@ -49,7 +48,10 @@ const RESOURCES: Record<string, ResourceDef> = {
         fields: {
             region_id: { kind: 'ref' },
             name: { kind: 'text' },
-            category: { kind: 'enum', values: CATEGORY_KEYS, fallback: 'misc' },
+            // Free text, like source: a category you type in the editor has to
+            // survive. An enum would silently coerce it to 'misc'. Blank is
+            // normalised to 'misc' below rather than becoming NULL.
+            category: { kind: 'text' },
             lat: { kind: 'coord' },
             lng: { kind: 'coord' },
             address: { kind: 'text' },
@@ -185,6 +187,16 @@ function collect(def: ResourceDef, body: Record<string, unknown>) {
     return { columns, values };
 }
 
+/**
+ * A place must always have a category. Text coercion turns '' into NULL, which
+ * would break the map's colour lookup and every category filter.
+ */
+function defaultCategory(def: ResourceDef, columns: string[], values: unknown[]) {
+    if (def.table !== 'honeymoon_places') return;
+    const at = columns.indexOf('category');
+    if (at >= 0 && (values[at] == null || values[at] === '')) values[at] = 'misc';
+}
+
 function resolve(resource: string): ResourceDef | null {
     return Object.prototype.hasOwnProperty.call(RESOURCES, resource) ? RESOURCES[resource] : null;
 }
@@ -242,6 +254,7 @@ export async function POST(request: Request, { params }: Params) {
 
         const { columns, values } = collect(def, body);
         if (!columns.length) return NextResponse.json({ error: 'No fields provided' }, { status: 400 });
+        defaultCategory(def, columns, values);
 
         const placeholders = columns.map((_, i) => `$${i + 1}`).join(', ');
         const result = await pool.query(
@@ -310,6 +323,7 @@ export async function PATCH(request: Request, { params }: Params) {
             if (!ids.length) return NextResponse.json({ error: 'No valid ids' }, { status: 400 });
             const { columns, values } = collect(def, body);
             if (!columns.length) return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
+            defaultCategory(def, columns, values);
             const sets = columns.map((c, i) => `${c} = $${i + 1}`).join(', ');
             const result = await pool.query(
                 `UPDATE ${def.table} SET ${sets} WHERE id = ANY($${columns.length + 1})`,
@@ -325,6 +339,7 @@ export async function PATCH(request: Request, { params }: Params) {
 
         const { columns, values } = collect(def, body);
         if (!columns.length) return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
+        defaultCategory(def, columns, values);
 
         const sets = columns.map((c, i) => `${c} = $${i + 1}`).join(', ');
         const result = await pool.query(

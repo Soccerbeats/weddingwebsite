@@ -11,6 +11,7 @@ import {
     boundsOf, dateForDay, distanceKm, formatDayDate, formatDistance, formatTime,
     dayHops, hasCoords, categoryMeta, CATEGORIES,
     sourceLabel, sourcesOf, SOURCE_AMY, SOURCE_MANUAL, SOURCE_YOUTUBE,
+    categoriesOf, normalizeCategoryKey,
     pointInPolygon, placesInPolygon, nameFromStayUrl, stayUrlsFromText, isStayUrl, cleanListingTitle, formatPerNight,
     type Place, type Stop,
 } from '../src/lib/honeymoon';
@@ -211,7 +212,32 @@ console.log('\nSeed data');
     check('notes carry a body', SEED_NOTES.every((n) => n.body.trim().length > 20));
     check('regions carry a search hint', SEED_REGIONS.every((r) => r.searchHint.trim().length > 0));
 
-    check('unknown categories fall back to Other', categoryMeta('nonsense').key === 'misc');
+    // A custom category is something someone typed, not a mistake — it must keep
+    // its own name rather than collapsing into "Other".
+    const custom = categoryMeta('hot springs');
+    check('a custom category keeps its name', custom.label === 'Hot Springs', custom.label);
+    check('a custom category gets its own colour', custom.color !== categoryMeta('misc').color);
+    check('a custom colour is stable across calls',
+        categoryMeta('hot springs').color === custom.color);
+    check('two custom categories differ',
+        categoryMeta('hot springs').color !== categoryMeta('night market').color);
+    check('blank still falls back to Other', categoryMeta('').key === 'misc');
+    check('a built-in still wins', categoryMeta('waterfall').label === 'Waterfall');
+
+    check('beach, hiking and nature exist',
+        ['beach', 'hiking', 'nature'].every((k) => CATEGORIES.some((c) => c.key === k)));
+
+    check('typed names normalise to one key',
+        normalizeCategoryKey('  Hot   Springs ') === 'hot springs',
+        normalizeCategoryKey('  Hot   Springs '));
+
+    const listed = categoriesOf([{ category: 'hot springs' }, { category: 'waterfall' }]);
+    check('custom categories in use are offered as filters',
+        listed.some((c) => c.key === 'hot springs'));
+    check('built-ins are still offered when unused',
+        listed.some((c) => c.key === 'temple'));
+    check('a category in use is not duplicated',
+        listed.filter((c) => c.key === 'waterfall').length === 1);
 }
 
 console.log('\nLasso geometry');

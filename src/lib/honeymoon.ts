@@ -162,6 +162,9 @@ export const CATEGORIES = [
     { key: 'restaurant', label: 'Restaurant', color: '#ea580c', icon: '🍽️' },
     { key: 'cafe', label: 'Cafe', color: '#a16207', icon: '☕' },
     { key: 'waterfall', label: 'Waterfall', color: '#0284c7', icon: '💦' },
+    { key: 'beach', label: 'Beach', color: '#f59e0b', icon: '🏝️' },
+    { key: 'hiking', label: 'Hiking', color: '#65a30d', icon: '🥾' },
+    { key: 'nature', label: 'Nature', color: '#15803d', icon: '🌿' },
     { key: 'temple', label: 'Temple', color: '#b45309', icon: '🛕' },
     { key: 'attraction', label: 'Attraction', color: '#059669', icon: '📍' },
     { key: 'activity', label: 'Activity', color: '#16a34a', icon: '🎯' },
@@ -178,10 +181,75 @@ export type CategoryKey = typeof CATEGORIES[number]['key'];
 
 export const CATEGORY_KEYS = CATEGORIES.map((c) => c.key) as unknown as string[];
 
-const CATEGORY_BY_KEY = new Map(CATEGORIES.map((c) => [c.key as string, c]));
+export interface CategoryMeta {
+    key: string;
+    label: string;
+    color: string;
+    icon: string;
+}
 
-export function categoryMeta(key: string) {
-    return CATEGORY_BY_KEY.get(key) ?? CATEGORY_BY_KEY.get('misc')!;
+const CATEGORY_BY_KEY = new Map<string, CategoryMeta>(
+    CATEGORIES.map((c) => [c.key as string, { ...c } as CategoryMeta]),
+);
+
+/** Stable key for a typed category name, so "Hot Springs" and "hot springs" agree. */
+export function normalizeCategoryKey(input: string): string {
+    return input.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+export function titleCase(value: string): string {
+    return value
+        .split(' ')
+        .filter(Boolean)
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' ');
+}
+
+/**
+ * A colour for a category nobody predefined.
+ *
+ * Derived from the name so it is stable across reloads and distinct between
+ * categories — a custom category that changed colour on every render would be
+ * useless as a map legend. Fixed saturation and lightness keep it readable
+ * against OSM's beige-and-green tiles, same as the built-in palette.
+ */
+function colorForCustom(key: string): string {
+    let hash = 0;
+    for (let i = 0; i < key.length; i += 1) hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+    return `hsl(${hash % 360}, 62%, 42%)`;
+}
+
+/**
+ * Metadata for a category, built-in or custom.
+ *
+ * An unknown key is a category someone typed, not a mistake, so it keeps its own
+ * name and gets a stable colour rather than collapsing into "Other".
+ */
+export function categoryMeta(key: string): CategoryMeta {
+    const known = CATEGORY_BY_KEY.get(key);
+    if (known) return known;
+    const trimmed = (key ?? '').trim();
+    if (!trimmed) return CATEGORY_BY_KEY.get('misc')!;
+    return {
+        key: trimmed,
+        label: titleCase(trimmed),
+        color: colorForCustom(trimmed),
+        icon: '●',
+    };
+}
+
+/** Built-in categories plus any custom ones actually in use, for a filter list. */
+export function categoriesOf(places: { category: string }[]): CategoryMeta[] {
+    const extra = new Map<string, CategoryMeta>();
+    for (const place of places) {
+        const key = place.category;
+        if (!key || CATEGORY_BY_KEY.has(key)) continue;
+        if (!extra.has(key)) extra.set(key, categoryMeta(key));
+    }
+    return [
+        ...CATEGORIES.map((c) => ({ ...c } as CategoryMeta)),
+        ...[...extra.values()].sort((a, b) => a.label.localeCompare(b.label)),
+    ];
 }
 
 export const STATUSES: { key: PlaceStatus; label: string; color: string }[] = [
