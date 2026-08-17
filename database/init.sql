@@ -207,6 +207,7 @@ CREATE TABLE IF NOT EXISTS honeymoon_places (
   rating TEXT,
   image_url TEXT,
   is_excursion BOOLEAN NOT NULL DEFAULT FALSE,
+  country TEXT NOT NULL DEFAULT '',
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMP DEFAULT NOW()
 );
@@ -268,6 +269,7 @@ ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS rating TEXT;
 ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS image_url TEXT;
 ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS is_excursion BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE honeymoon_todos ADD COLUMN IF NOT EXISTS result TEXT;
+ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS country TEXT NOT NULL DEFAULT '';
 ALTER TABLE honeymoon_trip ADD COLUMN IF NOT EXISTS focus_country TEXT NOT NULL DEFAULT '';
 
 CREATE INDEX IF NOT EXISTS honeymoon_places_region_idx ON honeymoon_places (region_id);

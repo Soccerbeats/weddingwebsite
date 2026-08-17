@@ -93,6 +93,11 @@ export interface Place {
     is_excursion: boolean;
     /** Preview image scraped from the listing's Open Graph tags. */
     image_url: string | null;
+    /**
+     * Country override for this one place. Empty means "whatever its region
+     * says" — most places should inherit, and only the odd one out needs this.
+     */
+    country: string;
     sort_order: number;
 }
 
@@ -437,6 +442,33 @@ export function placesInPolygon(places: Place[], polygon: LatLng[]): number[] {
 
 /** Hosts whose URLs carry a usable property name in the path. */
 const STAY_HOSTS = /booking\.com|airbnb\.[a-z.]+|agoda\.com|expedia\.[a-z.]+|hotels\.com/i;
+
+/**
+ * The country a place actually counts as.
+ *
+ * Its own value wins, then its region's. A place can sit outside any region — or
+ * in a region nobody gave a country — and then it has no country at all, which
+ * the map treats as "unknown" rather than "somewhere else".
+ */
+export function effectiveCountry(
+    place: { country?: string; region_id: number | null },
+    regionCountry: Map<number, string>,
+): string {
+    const own = (place.country ?? '').trim();
+    if (own) return own;
+    return regionCountry.get(place.region_id ?? -1) ?? '';
+}
+
+/** Every country in play, from regions and from per-place overrides. */
+export function countriesInUse(
+    regions: { country: string }[],
+    places: { country?: string }[],
+): string[] {
+    const seen = new Set<string>();
+    for (const r of regions) if (r.country?.trim()) seen.add(r.country.trim());
+    for (const p of places) if (p.country?.trim()) seen.add(p.country.trim());
+    return [...seen].sort((a, b) => a.localeCompare(b));
+}
 
 export function isStayUrl(url: string): boolean {
     return /^https?:\/\//i.test(url) && STAY_HOSTS.test(url);

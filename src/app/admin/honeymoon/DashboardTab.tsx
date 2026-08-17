@@ -4,7 +4,7 @@ import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { useMemo } from 'react';
 import {
-    currencySymbol, dateForDay, formatDayDate, hasCoords, priceValue,
+    currencySymbol, dateForDay, effectiveCountry, formatDayDate, hasCoords, priceValue,
 } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
 import { Card, CategoryChip } from './ui';
@@ -87,7 +87,7 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
         return places.filter((p) => {
             if (!hasCoords(p) || p.needs_review) return false;
             if (!focus) return true;
-            const its = countryOf.get(p.region_id ?? -1) ?? '';
+            const its = effectiveCountry(p, countryOf);
             return !its || its === focus;
         });
     }, [places, data?.regions, trip?.focus_country]);

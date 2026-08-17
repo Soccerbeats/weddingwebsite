@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { SOURCE_MANUAL, sourceLabel, sourcesOf, type Place, type PlaceLink, type PlaceStatus } from '@/lib/honeymoon';
+import {
+    SOURCE_MANUAL, countriesInUse, sourceLabel, sourcesOf,
+    type Place, type PlaceLink, type PlaceStatus,
+} from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
 import {
     Button, CategorySelect, CustomisableSelect, ManageListModal, Modal, StatusSelect,
@@ -58,6 +61,7 @@ export default function PlaceEditor({ api, place, open, onClose }: {
     const [needsReview, setNeedsReview] = useState(false);
     const [links, setLinks] = useState<PlaceLink[]>([]);
     const [source, setSource] = useState(SOURCE_MANUAL);
+    const [country, setCountry] = useState('');
     const [managing, setManaging] = useState<'categories' | 'regions' | null>(null);
 
     const [query, setQuery] = useState('');
@@ -81,10 +85,15 @@ export default function PlaceEditor({ api, place, open, onClose }: {
         setNeedsReview(place?.needs_review ?? false);
         setLinks(place?.links ?? []);
         setSource(place ? sourceLabel(place.source) : SOURCE_MANUAL);
+        setCountry(place?.country ?? '');
         setQuery('');
         setHits([]);
         setLookupError('');
     }, [open, place]);
+
+    /** What this place would count as if it just followed its region. */
+    const inheritedCountry = (api.data?.regions ?? [])
+        .find((r) => String(r.id) === regionId)?.country?.trim() ?? '';
 
     const lookup = useCallback(async (raw: string) => {
         const term = raw.trim();
@@ -160,6 +169,7 @@ export default function PlaceEditor({ api, place, open, onClose }: {
             needs_review: needsReview,
             links: links.filter((l) => l.url.trim()),
             source: source.trim() || SOURCE_MANUAL,
+            country: country.trim(),
         };
         const ok = editing
             ? await api.update('places', { id: place.id, ...payload })
@@ -180,7 +190,7 @@ export default function PlaceEditor({ api, place, open, onClose }: {
                     />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
                     <div>
                         <label className="block text-xs font-semibold text-gray-500 mb-1">Category</label>
                         <CategorySelect
@@ -191,6 +201,33 @@ export default function PlaceEditor({ api, place, open, onClose }: {
                         />
                     </div>
                     <div>
+                        <label className="block text-xs font-semibold text-gray-500 mb-1">Country</label>
+                        <CustomisableSelect
+                            label="Country"
+                            value={country}
+                            placeholder="Indonesia, Singapore…"
+                            options={[
+                                {
+                                    key: '',
+                                    // Named rather than blank so it is obvious this is
+                                    // inheritance, not "no country".
+                                    label: inheritedCountry
+                                        ? `— from region (${inheritedCountry}) —`
+                                        : '— none —',
+                                },
+                                ...countriesInUse(api.data?.regions ?? [], api.data?.places ?? [])
+                                    .map((c) => ({ key: c, label: c })),
+                            ]}
+                            onChange={setCountry}
+                            onCreate={(typed) => typed.trim()}
+                        />
+                        {country && inheritedCountry && country !== inheritedCountry && (
+                            <p className="text-[11px] text-amber-700 mt-1">
+                                Overrides its region ({inheritedCountry}).
+                            </p>
+                        )}
+                    </div>
+                    <div>
                         <label className="block text-xs font-semibold text-gray-500 mb-1">Region</label>
                         <CustomisableSelect
                             label="Region"
@@ -199,7 +236,8 @@ export default function PlaceEditor({ api, place, open, onClose }: {
                             options={[
                                 { key: '', label: '— none —' },
                                 ...(api.data?.regions ?? []).map((r) => ({
-                                    key: String(r.id), label: r.name,
+                                    key: String(r.id),
+                                    label: r.country ? `${r.name} · ${r.country}` : `${r.name} · no country`,
                                 })),
                             ]}
                             onChange={setRegionId}

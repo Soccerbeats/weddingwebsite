@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import {
-    STATUSES, categoriesOf, categoryMeta, formatDayDate, hasCoords, sourceLabel, sourcesOf,
+    STATUSES, categoriesOf, categoryMeta, countriesInUse, effectiveCountry, formatDayDate,
+    hasCoords, sourceLabel, sourcesOf,
     type Day, type Place, type PlaceStatus,
 } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
@@ -56,11 +57,9 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
     /** The saved country filter — a trip setting, not a session preference. */
     const country = data?.trip.focus_country ?? '';
 
-    const countries = useMemo(() => {
-        const seen = new Set<string>();
-        for (const r of regions) if (r.country) seen.add(r.country);
-        return [...seen].sort((a, b) => a.localeCompare(b));
-    }, [regions]);
+    // Includes per-place overrides, so a country only a single place claims is
+    // still selectable.
+    const countries = useMemo(() => countriesInUse(regions, places), [regions, places]);
 
     /** Region id -> country, so a place can be judged by where its region is. */
     const countryOfRegion = useMemo(() => {
@@ -93,7 +92,7 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
             // one — stays visible: a filter that silently drops unclassified data
             // loses things you can't see to go and fix.
             if (country) {
-                const its = countryOfRegion.get(p.region_id ?? -1) ?? '';
+                const its = effectiveCountry(p, countryOfRegion);
                 if (its && its !== country) return false;
             }
             if (regionFilter && String(p.region_id ?? '') !== regionFilter) return false;
@@ -178,8 +177,7 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
     /** Pins on screen whose country nobody has set — the ones worth classifying. */
     const unclassified = useMemo(
         () => (country
-            ? visible.filter((p) => hasCoords(p)
-                && !(countryOfRegion.get(p.region_id ?? -1) ?? '')).length
+            ? visible.filter((p) => hasCoords(p) && !effectiveCountry(p, countryOfRegion)).length
             : 0),
         [visible, country, countryOfRegion],
     );

@@ -58,6 +58,7 @@ async function createTables() {
             rating TEXT,
             image_url TEXT,
             is_excursion BOOLEAN NOT NULL DEFAULT FALSE,
+            country TEXT NOT NULL DEFAULT '',
             sort_order INTEGER NOT NULL DEFAULT 0,
             created_at TIMESTAMP DEFAULT NOW()
         )
@@ -129,6 +130,9 @@ async function createTables() {
         'ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS is_excursion BOOLEAN NOT NULL DEFAULT FALSE',
     );
     await pool.query('ALTER TABLE honeymoon_todos ADD COLUMN IF NOT EXISTS result TEXT');
+    await pool.query(
+        "ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS country TEXT NOT NULL DEFAULT ''",
+    );
     await pool.query(
         "ALTER TABLE honeymoon_trip ADD COLUMN IF NOT EXISTS focus_country TEXT NOT NULL DEFAULT ''",
     );
@@ -279,6 +283,7 @@ export async function getHoneymoonPayload(): Promise<HoneymoonPayload> {
         rating: r.rating === 'yes' || r.rating === 'no' ? r.rating : null,
         image_url: r.image_url ?? null,
         is_excursion: r.is_excursion === true,
+        country: r.country ?? '',
         sort_order: r.sort_order ?? 0,
     }));
 

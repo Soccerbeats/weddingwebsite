@@ -13,7 +13,7 @@ import {
     sourceLabel, sourcesOf, SOURCE_AMY, SOURCE_MANUAL, SOURCE_YOUTUBE,
     categoriesOf, normalizeCategoryKey,
     pointInPolygon, placesInPolygon, nameFromStayUrl, stayUrlsFromText, isStayUrl, cleanListingTitle, formatPerNight,
-    formatPrice, nameFromAnyUrl, priceValue,
+    formatPrice, nameFromAnyUrl, priceValue, effectiveCountry, countriesInUse,
     type Place, type Stop,
 } from '../src/lib/honeymoon';
 import {
@@ -396,6 +396,33 @@ console.log('\nExcursion pricing and naming');
     check('free text is not zero', priceValue('ask at the desk') === null);
     check('blank is not zero', priceValue('') === null && priceValue(null) === null);
     check('a foreign symbol still yields its number', priceValue('€200') === 200);
+}
+
+console.log('\nPlace country');
+{
+    const regions = new Map<number, string>([[1, 'Indonesia'], [2, 'Singapore'], [3, '']]);
+    const at = (region: number | null, own = '') => ({ region_id: region, country: own });
+
+    check('inherits its region', effectiveCountry(at(1), regions) === 'Indonesia');
+    check('its own value wins over the region',
+        effectiveCountry(at(1, 'Singapore'), regions) === 'Singapore');
+    // A region with no country is not a country — it must stay "unknown" so the
+    // map keeps showing it rather than filtering it away.
+    check('a country-less region yields unknown', effectiveCountry(at(3), regions) === '');
+    check('no region at all yields unknown', effectiveCountry(at(null), regions) === '');
+    check('own value rescues a region-less place',
+        effectiveCountry(at(null, 'Indonesia'), regions) === 'Indonesia');
+    check('own value rescues a country-less region',
+        effectiveCountry(at(3, 'Indonesia'), regions) === 'Indonesia');
+    check('whitespace is not a country', effectiveCountry(at(null, '   '), regions) === '');
+
+    const list = countriesInUse(
+        [{ country: 'Indonesia' }, { country: '' }, { country: 'Singapore' }],
+        [{ country: 'Japan' }, { country: 'Indonesia' }, { country: '' }],
+    );
+    check('countries come from regions and places', list.join(',') === 'Indonesia,Japan,Singapore',
+        list.join(','));
+    check('blanks are not offered as a country', !list.includes(''));
 }
 
 console.log('\nSources');

@@ -580,7 +580,8 @@ A country filter excludes only places known to be somewhere **else**. A place
 whose country is unknown — no region, or a region created without one — stays
 visible and is counted in the status line, because a filter that silently drops
 unclassified data hides the very things you need to see to fix them. Set a
-region's country on the **Guide** tab; regions without one are flagged there.
+region's country on the **Guide** tab, or set the country on the place itself in
+its editor; regions without one are flagged on the Guide tab.
 
 **Country** is a saved trip setting, not a session preference — pick Indonesia and
 it stays picked across refreshes, logins and devices, hiding everything outside
@@ -729,6 +730,15 @@ input:
 
 Right-clicking a pin in Google Maps copies the coordinates, which is the most
 reliable route for anywhere the search can't find.
+
+**Country sits between Category and Region**, and is normally left alone: it
+reads *— from region (Indonesia) —* and follows whatever region you pick, so
+there's nothing to keep in sync. Set it explicitly when a place has no region at
+all (a one-off with nowhere to file it) or genuinely sits outside its region's
+country — the editor says *Overrides its region* when it does. Clear it back to
+the inherit option and it follows the region again. The region dropdown shows
+each region's country beside its name, so an unset one is visible at the point
+you'd notice.
 
 **Categories and regions are yours to manage.** Both dropdowns end with
 **＋ Custom…** and **✎ Edit / remove…** — pick it, type the new one, press Enter. A new category is used
