@@ -66,7 +66,6 @@ Private planning for the trip — admin-only, with no public page.
 <p>
   <img src="docs/images/mobile-home.jpg" width="290" alt="The home page on a phone">
   &nbsp;
-  <img src="docs/images/mobile-itinerary.jpg" width="290" alt="The honeymoon itinerary on a phone">
 </p>
 
 
