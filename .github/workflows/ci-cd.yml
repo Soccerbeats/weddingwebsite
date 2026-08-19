@@ -23,7 +23,7 @@
 # a "pull and redeploy" as before — except the image now appears here
 # automatically after a merge instead of from a laptop.
 
-name: CI/CD
+name: "Wedding Planner"
 
 on:
   push:
@@ -42,7 +42,7 @@ permissions:
 
 jobs:
   build:
-    name: Build & verify
+    name: "Wedding Planner · check the build"
     runs-on: ubuntu-latest
     steps:
       - name: Check out the code
@@ -71,7 +71,7 @@ jobs:
         run: npm run check:changelog
 
   docker:
-    name: Docker image
+    name: "Wedding Planner · pack & publish the image"
     runs-on: ubuntu-latest
     needs: build
     steps:
