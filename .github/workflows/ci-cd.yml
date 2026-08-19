@@ -1,0 +1,128 @@
+# CI/CD for the wedding website.
+#
+# On every push to a tracked branch (and every pull request) this:
+#   1. Installs dependencies and runs a real `next build`, so a broken
+#      commit is caught before anyone has to docker-build it by hand.
+#   2. Runs the changelog format check (CHANGELOG.md is the source of
+#      truth for the app version, so its shape is part of the contract).
+#   3. Builds the production Docker image (same `--target production`
+#      that deploy.md prescribes).
+#
+# Publishing to the registry:
+#   - Pull requests (including from forks): image is built but never
+#     pushed — no credentials are needed for a PR run.
+#   - Pushes to `main` and `v*` tags: the image is pushed to GitHub
+#     Container Registry as
+#         ghcr.io/soccerbeats/weddingwebsite:latest   (main only)
+#         ghcr.io/soccerbeats/weddingwebsite:v<CHANGELOG version>
+#         ghcr.io/soccerbeats/weddingwebsite:sha-<short sha>
+#     The version comes from the topmost vX.Y.Z heading in CHANGELOG.md,
+#     mirroring how the admin panel decides which version it is.
+#
+# The Portainer stack keeps pointing at ...:latest, so deployments stay
+# a "pull and redeploy" as before — except the image now appears here
+# automatically after a merge instead of from a laptop.
+
+name: "Wedding Planner"
+
+on:
+  push:
+    branches: [main, develop]
+    tags: ['v*']
+  pull_request:
+
+# One run per branch at a time; a stale build is replaced by a fresh one.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    name: "Wedding Planner · check the build"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      # The same build the Dockerfile runs. If this fails, the image
+      # would not have built either — but we find out faster and with
+      # no registry involved.
+      - name: Next.js production build
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+
+      # Enforces the changelog conventions (unique, descending,
+      # version-stamped entries) that `npm run check:changelog` documents.
+      - name: Changelog check
+        run: npm run check:changelog
+
+  docker:
+    name: "Wedding Planner · pack & publish the image"
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Work out the image tags
+        id: meta
+        run: |
+          set -euo pipefail
+          # Topmost "## vX.Y.Z —" heading is the current version.
+          VERSION="$(sed -n 's/^## v\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\) —.*/\1/p' CHANGELOG.md | head -n1)"
+          if [ -z "$VERSION" ]; then
+            echo "::error::Could not read a vX.Y.Z version from CHANGELOG.md"
+            exit 1
+          fi
+          SHORT_SHA="${GITHUB_SHA:0:7}"
+          IMAGE="ghcr.io/soccerbeats/weddingwebsite"
+          TAGS="$IMAGE:sha-$SHORT_SHA,$IMAGE:v$VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          # `latest` only tracks main; tags get their own vX.Y.Z tag,
+          # and pushes to main are what move the tag Portainer pulls.
+          if [ "$GITHUB_EVENT_NAME" = "push" ] && { [ "$GITHUB_REF" = "refs/heads/main" ] || case "$GITHUB_REF" in refs/tags/v*) true ;; *) false ;; esac; }; then
+            TAGS="$TAGS,$IMAGE:latest"
+            echo "push=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
+          echo "Image: $IMAGE — version v$VERSION (sha $SHORT_SHA)"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Only main pushes and v* tags publish anything, so pull-request
+      # runs (even from forks) need no credentials at all.
+      - name: Log in to GitHub Container Registry
+        if: steps.meta.outputs.push == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push the production image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          # Same target deploy.md always uses for the production image.
+          target: production
+          push: ${{ steps.meta.outputs.push == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          # Cache the npm install and Next.js build layers between runs.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
