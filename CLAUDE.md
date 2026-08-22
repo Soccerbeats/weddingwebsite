@@ -11,11 +11,11 @@ When Austin says **"document everything"** after completing a feature, it means:
    - Add a dated bullet to the **Decisions & History** section summarising what was built
    - Add any new API endpoints, config keys, or data formats to the appropriate sub-sections
 4. **Commit and push to GitHub** (`git add -A && git commit && git push`)
-5. **Build and push the Docker image** so it can be pulled from Portainer:
-   ```bash
-   docker build -t ghcr.io/soccerbeats/weddingwebsite:latest --target production .
-   docker push ghcr.io/soccerbeats/weddingwebsite:latest
-   ```
+5. **Build and push the Docker image** so it can be pulled from Portainer (the Dockerfile lives in `docker/`):
+    ```bash
+    docker build -t ghcr.io/soccerbeats/weddingwebsite:latest --target production -f docker/Dockerfile .
+    docker push ghcr.io/soccerbeats/weddingwebsite:latest
+    ```
 
 Do all five steps — don't skip any. README, CHANGELOG, and vault updates should all happen before the git commit so they're included.
 
@@ -69,10 +69,10 @@ git add -A && git commit -m "describe the change"   # if not already committed
 git push origin main
 ```
 
-2. **Build and push the Docker image** so Austin can pull and redeploy from Portainer:
+2. **Build and push the Docker image** so Austin can pull and redeploy from Portainer (the Dockerfile lives in `docker/`):
 
 ```bash
-docker build -t ghcr.io/soccerbeats/weddingwebsite:latest --target production .
+docker build -t ghcr.io/soccerbeats/weddingwebsite:latest --target production -f docker/Dockerfile .
 docker push ghcr.io/soccerbeats/weddingwebsite:latest
 ```
 
@@ -316,8 +316,8 @@ npm run dev  # Starts on localhost:3000
 **CRITICAL**: Always use the image name `ghcr.io/soccerbeats/weddingwebsite:latest` - NEVER use any other name!
 
 ```bash
-# 1. Build production image
-docker build -t ghcr.io/soccerbeats/weddingwebsite:latest --target production .
+# 1. Build production image (Dockerfile lives in docker/)
+docker build -t ghcr.io/soccerbeats/weddingwebsite:latest --target production -f docker/Dockerfile .
 
 # 2. Push to GitHub Container Registry
 docker push ghcr.io/soccerbeats/weddingwebsite:latest

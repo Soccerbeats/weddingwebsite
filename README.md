@@ -98,7 +98,7 @@ Full list: **[Features](https://github.com/Soccerbeats/weddingwebsite/wiki/Featu
 The image is on GitHub Container Registry, so there is nothing to build:
 
 ```bash
-docker compose up -d      # see the wiki for the compose file and env vars
+docker compose -f docker/docker-compose.yml up -d   # see the wiki for the compose file and env vars
 ```
 
 Then open `http://localhost:3000`, and `/admin` with the password you set.

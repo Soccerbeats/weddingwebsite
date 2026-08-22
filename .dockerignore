@@ -11,9 +11,9 @@ public/photos/*
 !public/photos/.gitkeep
 public/config/site.json
 
-# Docker files
-docker-compose*.yml
-Dockerfile
+# Docker files — the build context is the repository root, so they live in
+# docker/ (this file must stay at the context root to be read by the builder)
+docker/
 
 # Development files
 .vscode

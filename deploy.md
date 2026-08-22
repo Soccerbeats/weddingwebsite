@@ -19,7 +19,7 @@ docker build \
   --cache-from ghcr.io/soccerbeats/weddingwebsite:latest \
   --target production \
   -t ghcr.io/soccerbeats/weddingwebsite:latest \
-  . && \
+  -f docker/Dockerfile . && \
 docker push ghcr.io/soccerbeats/weddingwebsite:latest
 ```
 
