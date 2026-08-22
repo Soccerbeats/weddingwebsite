@@ -11,6 +11,14 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.7 — [Unreleased] The agent docs consolidate into AGENTS.md (`agents-md-consolidation`, 2026-08-22 22:52)
+
+### Changed
+- **CLAUDE.md, IMPLEMENTATION_PLAN.md and SEATING_CHART_PLAN.md become one file: AGENTS.md**, in the [agents.md](https://agents.md) open format — a single predictable place any coding agent (Claude Code, Codex, Cursor, Copilot, …) reads for the working agreements. CLAUDE.md is now a **symlink** to it, so tooling that looks for CLAUDE.md still finds the full document; nothing is duplicated and there is one file to keep true.
+- **What was kept** is the living knowledge: the changelog-as-version-source rules (entry format, UTC stamping, the no-nested-backticks trap), init.sql as the only committed schema (including which tables are runtime-created by `financeDb.ts` / `honeymoonDb.ts` / the donations route), the `/api/photos/…` rule, the sacred image name, the auto-deploy loop, "document everything", setup and all nine check scripts, the deploy checklist, the SMTP env vars, architecture (storage strategy, auth, photo serving, Docker boot behaviour), code style, common tasks and debugging.
+- **What was cut** was history, not knowledge: IMPLEMENTATION_PLAN.md described the project at inception (Next.js 14, `tailwind.config.js`, a `photos.json`-only photo workflow, an "admin dashboard" still listed as a future idea) and its "next steps" are all done; SEATING_CHART_PLAN.md is a finished plan (every phase shipped months ago) whose SQL had already drifted — the real schema gained `floor_plan_room` and `floor_plan_walls` and lives in `database/init.sql`, which the consolidated doc points at instead of re-quoting. What survives of the seating plan is one paragraph of still-true behaviour: React Flow canvas, a party being a guest with `plus_one_name` set, split parties flagged.
+- `deploy.md`'s pointer from "CLAUDE.md → After Every Code Change" now points at AGENTS.md.
+
 ## v0.9.6 — [Unreleased] The Docker files move into docker/ (`docker-folder-cleanup`, 2026-08-22 21:57)
 
 ### Changed
