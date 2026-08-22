@@ -118,6 +118,9 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          # The Dockerfile lives in docker/ (the "Docker files move into
+          # docker/" PR); the build context stays at the repository root.
+          file: docker/Dockerfile
           # Same target deploy.md always uses for the production image.
           target: production
           push: ${{ steps.meta.outputs.push == 'true' }}
