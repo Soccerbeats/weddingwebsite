@@ -1025,17 +1025,25 @@ function RankRow({ stay, position, picked, onPick, cardRefs }: {
                     loading="lazy"
                     onClick={onPick}
                     title={`Show ${stay.name} on the map`}
-                    // 3:2 at 96px tall — the aspect the listings' own images come
-                    // in, so nothing is cropped to fit the box. Unrounded because
-                    // it touches the row's top and bottom: a rounded corner there
-                    // shows a notch of row behind it.
-                    className="w-36 h-24 object-cover bg-gray-100 shrink-0 cursor-pointer"
+                    // Twice the width at the same 96px height, so the photo is
+                    // the biggest thing it can be without making every row
+                    // taller. That is a 3:1 window onto a 3:2 photo, so
+                    // object-cover keeps the middle band and crops the sky and
+                    // the floor — the part of a hotel picture worth seeing.
+                    //
+                    // It steps back to 144px once the list itself is under 42rem
+                    // (drag the map wide enough and it gets there): a 288px photo
+                    // in a 360px column leaves nothing for the name.
+                    // Unrounded because it touches the row's top and bottom, and
+                    // a rounded corner there shows a notch of row behind it.
+                    className="w-36 @2xl/stays:w-72 h-24 object-cover bg-gray-100 shrink-0
+                        cursor-pointer"
                     onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
                 />
             ) : (
                 // Same footprint, so the names line up whether or not a listing
                 // gave us a photo.
-                <div className="w-36 h-24 bg-gray-50 shrink-0" />
+                <div className="w-36 @2xl/stays:w-72 h-24 bg-gray-50 shrink-0" />
             )}
             <button onClick={onPick} className="min-w-0 flex-1 self-center text-left py-2">
                 <div className="text-sm font-medium text-gray-900 truncate">{stay.name}</div>

@@ -11,6 +11,12 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.20 — [Released] Wider photos in the ranking rows (`main`, 2026-08-23 20:03)
+
+### Changed
+- **The ranking photos are twice as wide — 288px instead of 144 — at the same 96px row height.** The rows are exactly as tall as they were; the picture just gets twice the area. It is a 3:1 window onto a 3:2 photo, so `object-cover` keeps the middle band and crops the sky and the floor, which is the part of a hotel picture worth looking at anyway.
+- It steps back to 144px once the list column itself is under 42rem — drag the map wide enough and it gets there — because a 288px photo in a 360px column leaves nothing for the name.
+
 ## v0.9.19 — [Released] The ranking is on the pins too (`main`, 2026-08-23 19:58)
 
 ### Added
