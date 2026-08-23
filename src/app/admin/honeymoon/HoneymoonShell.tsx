@@ -15,6 +15,7 @@ const TABS = [
     { href: BASE, label: 'Dashboard' },
     { href: `${BASE}/map`, label: 'Map' },
     { href: `${BASE}/itinerary`, label: 'Itinerary' },
+    { href: `${BASE}/travel`, label: 'Travel' },
     { href: `${BASE}/places`, label: 'Places' },
     { href: `${BASE}/stays`, label: 'Stays' },
     { href: `${BASE}/excursions`, label: 'Excursions' },
@@ -149,7 +150,7 @@ export default function HoneymoonShell({ children }: { children: React.ReactNode
                         </div>
                     )}
 
-                    {/* Nine tabs don't fit a phone, so the strip scrolls — with a
+                    {/* Ten tabs don't fit a phone, so the strip scrolls — with a
                         fade on the right so it's visibly scrollable rather than
                         looking like the tabs simply end at Stays. Wrapping to
                         three rows instead would cost 100px of height on the one

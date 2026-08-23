@@ -11,6 +11,16 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.22 — [Released] A Travel tab (`main`, 2026-08-23 21:43)
+
+### Added
+- **A Travel tab: every flight, boat, car, train and walk of the trip in one list**, in trip order, each with the day it leaves on, its real date, its times, the day it lands, and whether the map can draw it yet. Booking travel is its own afternoon — you sit down with six confirmation emails — and doing that through the itinerary meant opening six day cards.
+- **Add a leg from there**: pick the day it leaves on, pick how you are travelling, press **+ Add leg**. It lands on that day's card in the itinerary at the same moment.
+- Counts by mode at the top, so *"two flights and a boat"* is visible without reading the list.
+
+### Changed
+- **The legs are still on the itinerary, and still editable there.** This is a second *view* of the same rows, not a second store: the leg editor was lifted into its own module and both tabs render it over the same record, so an edit in either place is the same edit. Verified both directions — rename a leg's From on the Travel tab and the itinerary shows it; do it on the itinerary and the Travel tab shows it; delete it from either and it is gone from both.
+
 ## v0.9.21 — [Released] A flight can land on another day (`main`, 2026-08-23 21:36)
 
 ### Added
