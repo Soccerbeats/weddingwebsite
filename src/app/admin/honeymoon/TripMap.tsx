@@ -420,7 +420,25 @@ export default function TripMap({
         // fitting against a zero-height container produces a nonsense zoom.
         const timer = setTimeout(() => {
             map.invalidateSize();
-            map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
+            const options = { padding: [40, 40] as [number, number], maxZoom: 15 };
+            if (firstDraw) {
+                // Arriving at the page: be where you asked to be. Flying in from
+                // a default view of the Java Sea is a second of animation nobody
+                // asked for, every single time the tab is opened.
+                map.fitBounds(bounds, options);
+            } else {
+                /*
+                 * Asked for while the map is already somewhere: fly.
+                 *
+                 * flyToBounds interpolates zoom and centre together, which pulls
+                 * back far enough to show both the old and new positions before
+                 * settling — so jumping from one day to another reads as a move
+                 * across the island rather than a cut to somewhere unrecognisable.
+                 * That arc is the point, not decoration: it is what tells you
+                 * *where* you just went.
+                 */
+                map.flyToBounds(bounds, { ...options, duration: 1.4, easeLinearity: 0.25 });
+            }
         }, 60);
         return () => clearTimeout(timer);
     }, [places, fitSignal, ready]);

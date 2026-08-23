@@ -11,6 +11,18 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.12 — [Released] Stays land on the map, and the map flies there (`main`, 2026-08-23 18:48)
+
+### Added
+- **A booking link now gives up its address and its map pin.** `fetch-meta` reads the listing's JSON-LD — Booking.com publishes a `Hotel` block with a full postal address — plus the map centre it drops its own pin on, which is where the coordinates come from since their JSON-LD carries no `geo`. A pasted link therefore arrives on the shortlist already knowing where it is, and appears on the map immediately.
+- **A `Get locations for N` button on the Stays tab** for the shortlist you already have: it walks every stay whose listing hasn't been asked yet, fills in the address and the pin, and reports how many it found. Stays with a location show it on the card (📍) and those without say **no pin**, so it is obvious which ones the map is still missing.
+- Coordinates that come from a listing are marked **reviewed**, not "needs review". They are the listing's own location rather than a geocoder's guess at a name, so they belong on the map straight away instead of behind the map's unconfirmed filter — which would have made a lookup look like it did nothing.
+- **The map flies rather than cuts.** Pressing a day's ◎ Map button, or ⤢ Fit, now animates from wherever the map is to where it is going, pulling back through wider zooms on the way and settling in — measured mid-flight zooming out to z4–8 before returning to z13. That arc is what tells you *where* you just went; a cut leaves you somewhere unrecognisable. Arriving at the page still frames instantly: nobody wants a second of animation every time they open the tab.
+
+### Fixed
+- The address builder no longer produces *"Strand, Westminster Borough, London, WC2R 0EU, United Kingdom, Greater London, UK"*. Booking's `streetAddress` is usually the whole address already; three or more comma-separated parts is the tell that it needs nothing appended.
+- Only a JSON-LD node whose `@type` is a place is read. Booking.com also embeds **its own corporate address** — 82 rue Henri Farman, Issy-les-Moulineaux — in a trader-info block, and a naive scan for `address` finds that instead and pins every hotel in the Paris suburbs.
+
 ## v0.9.11 — [Released] Changing the trip dates no longer deletes days (`main`, 2026-08-23 18:35)
 
 ### Fixed

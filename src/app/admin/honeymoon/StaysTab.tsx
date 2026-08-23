@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
-    RATINGS, cleanListingTitle, formatPerNight, isStayUrl, nameFromStayUrl, priceValue,
+    RATINGS, cleanListingTitle, formatPerNight, hasCoords, isStayUrl, nameFromStayUrl, priceValue,
     stayUrlsFromText,
     type Place, type PlaceStatus,
 } from '@/lib/honeymoon';
@@ -44,6 +44,9 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
     const [bulk, setBulk] = useState('');
     const [adding, setAdding] = useState(false);
     const [fetching, setFetching] = useState(0);
+    /** How many listings are still to look up, and what the last run found. */
+    const [locating, setLocating] = useState(0);
+    const [located, setLocated] = useState<number | null>(null);
     const [filter, setFilter] = useState<'all' | 'yes' | 'no' | 'unrated'>('all');
     /**
      * Newest first by default: a shortlist is worked from the top, and the thing
@@ -122,12 +125,20 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
         unrated: stays.filter((s) => s.rating == null).length,
     }), [stays]);
 
+    interface Meta {
+        title?: string;
+        image?: string;
+        address?: string;
+        lat?: number | null;
+        lng?: number | null;
+    }
+
     /**
      * Ask the server for a listing's preview data.
      * Returns nothing rather than throwing — a missing photo must never stop a
      * link being saved.
      */
-    const previewOf = async (url: string): Promise<{ title?: string; image?: string }> => {
+    const previewOf = async (url: string): Promise<Meta> => {
         try {
             const res = await fetch('/api/admin/fetch-meta', {
                 method: 'POST',
@@ -136,7 +147,13 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
             });
             if (!res.ok) return {};
             const body = await res.json();
-            return { title: body.title || undefined, image: body.image || undefined };
+            return {
+                title: body.title || undefined,
+                image: body.image || undefined,
+                address: body.address || undefined,
+                lat: typeof body.lat === 'number' ? body.lat : null,
+                lng: typeof body.lng === 'number' ? body.lng : null,
+            };
         } catch {
             return {};
         }
@@ -165,6 +182,12 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                     status: 'idea',
                     source: 'Added by me',
                     image_url: meta.image ?? '',
+                    address: meta.address ?? '',
+                    // The listing's own coordinates, so a pasted link is on the
+                    // map immediately rather than after a round of geocoding.
+                    ...(meta.lat != null && meta.lng != null
+                        ? { lat: meta.lat, lng: meta.lng, needs_review: false }
+                        : {}),
                     links: [{ label: isStayUrl(url) ? 'Booking' : 'Link', url }],
                 });
             }
@@ -179,6 +202,54 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
         () => stays.filter((s) => !s.image_url && s.links.length > 0),
         [stays],
     );
+
+    /**
+     * Stays whose listing could tell us where they are, and hasn't been asked.
+     *
+     * Every stay saved before the listing's address was read is in here — which
+     * is why this is a button rather than something that only happens to new
+     * links: the shortlist you already have is the one you want on the map.
+     */
+    const missingLocation = useMemo(
+        () => stays.filter((s) => s.links.length > 0 && (!hasCoords(s) || !s.address)),
+        [stays],
+    );
+
+    /**
+     * Read the address and coordinates off each listing.
+     *
+     * Booking.com publishes both: a JSON-LD `Hotel` block with a full postal
+     * address, and the map centre it drops its own pin on. A stay that gets
+     * coordinates is marked reviewed — it is the listing's own location, not a
+     * geocoder's guess at a name, so it belongs on the map straight away rather
+     * than behind the map's unconfirmed filter.
+     */
+    const fetchMissingLocations = async () => {
+        setLocating(missingLocation.length);
+        let found = 0;
+        try {
+            for (const stay of missingLocation) {
+                const url = stay.links.find((l) => isStayUrl(l.url))?.url ?? stay.links[0]?.url;
+                if (!url) { setLocating((n) => n - 1); continue; }
+                const meta = await previewOf(url);
+                const fields: Record<string, unknown> = {};
+                if (meta.address && !stay.address) fields.address = meta.address;
+                if (meta.lat != null && meta.lng != null && !hasCoords(stay)) {
+                    fields.lat = meta.lat;
+                    fields.lng = meta.lng;
+                    fields.needs_review = false;
+                }
+                if (Object.keys(fields).length) {
+                    await api.update('places', { id: stay.id, ...fields });
+                    found += 1;
+                }
+                setLocating((n) => n - 1);
+            }
+            setLocated(found);
+        } finally {
+            setLocating(0);
+        }
+    };
 
     const fetchMissingImages = async () => {
         setFetching(missingImages.length);
@@ -261,6 +332,17 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                 >
                     {SORTS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
                 </MiniSelect>
+                {missingLocation.length > 0 && (
+                    <Button
+                        onClick={fetchMissingLocations}
+                        disabled={locating > 0}
+                        title="Read the address and map pin off each booking link, so these stays show on the map"
+                    >
+                        {locating > 0
+                            ? `Looking up… ${locating} left`
+                            : `Get locations for ${missingLocation.length}`}
+                    </Button>
+                )}
                 {missingImages.length > 0 && (
                     <Button onClick={fetchMissingImages} disabled={fetching > 0}>
                         {fetching > 0
@@ -269,6 +351,16 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                     </Button>
                 )}
             </div>
+
+            {located != null && locating === 0 && (
+                <p className="text-[11px] text-gray-500 px-1">
+                    {located > 0
+                        ? `Found a location for ${located} stay${located === 1 ? '' : 's'}. `
+                            + 'They are on the map now.'
+                        : 'No new locations found — those listings did not publish one. '
+                            + 'Open a stay and use Find to pin it by hand.'}
+                </p>
+            )}
 
             {/* ---- Cards ---- */}
             {shown.length === 0 ? (
@@ -330,6 +422,24 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                                                 ),
                                             })}
                                         />
+                                        {/* Where it is, and whether the map knows.
+                                            "no pin" is the honest state of a stay
+                                            that will not appear on the map yet. */}
+                                        {(stay.address || !hasCoords(stay)) && (
+                                            <div className="flex items-center gap-1.5 flex-wrap px-2">
+                                                {stay.address && (
+                                                    <span className="text-[11px] text-gray-400 truncate">
+                                                        📍 {stay.address}
+                                                    </span>
+                                                )}
+                                                {!hasCoords(stay) && (
+                                                    <span className="text-[10px] text-sky-700 bg-sky-50
+                                                        rounded-full px-1.5 py-0.5 shrink-0">
+                                                        no pin
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                     <OverflowMenu
                                         items={[
