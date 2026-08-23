@@ -217,7 +217,8 @@ order, before the commit:
 - **Photo serving** — admin uploads land in the `public/photos` volume;
   `GET /api/photos/[filename]` serves them (with thumbs and resizing). Every
   `<Image>` uses `src=/api/photos/…` plus `unoptimized` (required for volume
-  photos).
+  photos). The public gallery shows **only the hearted photos**, in the `order`
+  the admin's drag-and-drop set — both fields live in `photos.json`.
 - **Docker** — multi-stage (deps → dev | builder → production), standalone
   output, non-root `nextjs:nodejs` (UID 1001). On every boot `init-db.sh`
   waits for Postgres, then applies `database/init.sql`. Volumes hold
@@ -228,7 +229,8 @@ order, before the commit:
   seats. A "party" is a guest with `plus_one_name` set — dragging one
   auto-fills the adjacent seat — and split parties are flagged in the UI.
 - **Honeymoon portal** (`/admin/honeymoon`) — a private planner (map via
-  Leaflet, day-by-day itinerary, places/stays/excursions, guide notes).
+  Leaflet, day-by-day itinerary, travel legs, places/stays/excursions, guide
+  notes).
   Admin-only by design: no public route, no WIP toggle.
 
 ## Code style
