@@ -11,6 +11,13 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.19 — [Released] The ranking is on the pins too (`main`, 2026-08-23 19:58)
+
+### Added
+- **In the ranking view, each map pin carries its position** — #1 in the circle for your favourite, and so on down the list. The map becomes the same ordered list as the rows beside it, which is the point of having both on screen: you can see whether your top three are on the same side of the island. Labelled pins get a couple more pixels so the digits do not touch the ring.
+- Only in that view. In the card view the rank is already on the card, and a number in every circle would be noise on a map whose job there is "where is *this* one".
+- **A drag renumbers the pins with the rows**, immediately. The optimistic order moved up from the list into the tab so the two read from one source — two copies of "what order are these in" would have shown the list renumbered while the map sat stale for the length of a round trip.
+
 ## v0.9.18 — [Released] Ranking rows show a real photo (`main`, 2026-08-23 19:55)
 
 ### Changed

@@ -231,13 +231,50 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
     );
 
     /**
+     * The order on screen while a save is in flight.
+     *
+     * Held here rather than inside the list because the map's pin numbers read
+     * from it too: two copies of "what order are these in" would show the list
+     * renumbered and the map still stale for as long as the round trip takes.
+     *
+     * It stops being used the moment the server's own order agrees, or the set
+     * of stays changes underneath — worked out during render, so it never
+     * becomes a second source of truth.
+     */
+    const [pendingOrder, setPendingOrder] = useState<number[] | null>(null);
+    const rankedRows = useMemo(() => {
+        const byId = new Map(ranking.map((r) => [r.id, r]));
+        const usable = pendingOrder
+            && pendingOrder.length === ranking.length
+            && pendingOrder.every((id) => byId.has(id))
+            && pendingOrder.join(',') !== ranking.map((r) => r.id).join(',');
+        if (!usable || !pendingOrder) return ranking;
+        return pendingOrder.map((id) => byId.get(id)).filter((r): r is Place => r != null);
+    }, [ranking, pendingOrder]);
+
+    /**
      * Save a new ranking.
      *
      * Every row is written, not just the two that moved: the first drag on an
      * unranked shortlist has to give everything a number, or you end up with one
      * ranked stay and a tail of nulls that sorts arbitrarily.
      */
-    const applyRanking = (ids: number[]) => api.rankPlaces(ids);
+    const applyRanking = (ids: number[]) => {
+        setPendingOrder(ids);
+        return api.rankPlaces(ids);
+    };
+
+    /**
+     * The number to draw inside each pin, while ranking.
+     *
+     * Only in that view: in the card view the rank is on the card, and putting
+     * digits in every circle would be noise on a map whose job there is "where
+     * is this one".
+     */
+    const pinLabels = useMemo(() => {
+        if (view !== 'ranking') return undefined;
+        return new Map(rankedRows.map((stay, index) => [stay.id, String(index + 1)]));
+    }, [view, rankedRows]);
 
     const clearRanking = async () => {
         const ranked = stays.filter((s) => s.rank != null);
@@ -563,7 +600,7 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
             {/* ---- Ranking ---- */}
             {view === 'ranking' ? (
                 <RankingList
-                    stays={ranking}
+                    stays={rankedRows}
                     pickedId={picked?.id ?? null}
                     onPick={pickFromList}
                     onReorder={applyRanking}
@@ -804,6 +841,7 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                             // one you just clicked a photo to find.
                             cluster={false}
                             panToSelected
+                            pinLabels={pinLabels}
                             className="h-full w-full border border-gray-100 shadow-sm"
                         />
                     )}
@@ -883,25 +921,9 @@ function RankingList({ stays, pickedId, onPick, onReorder, cardRefs }: {
         useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 6 } }),
     );
 
-    /**
-     * The order on screen while the save is in flight.
-     *
-     * Stops being used the moment the server's own order agrees with it, or the
-     * moment the set of stays changes underneath — worked out during render
-     * rather than in an effect, so it never becomes a second source of truth and
-     * costs no extra pass. It only covers the gap between the drop and the
-     * refetch; a drag that waited for a round trip before landing feels broken.
-     */
-    const [pending, setPending] = useState<number[] | null>(null);
-    const byId = new Map(stays.map((s) => [s.id, s]));
-    const serverOrder = stays.map((s) => s.id).join(',');
-    const usable = pending
-        && pending.length === stays.length
-        && pending.every((id) => byId.has(id))
-        && pending.join(',') !== serverOrder;
-    const rows = usable && pending
-        ? pending.map((id) => byId.get(id)).filter((row): row is Place => row != null)
-        : stays;
+    // Already in the order to draw — including the optimistic one mid-save, which
+    // the tab owns so the map's pin numbers can read the same list.
+    const rows = stays;
 
     if (!stays.length) {
         return (
@@ -922,7 +944,6 @@ function RankingList({ stays, pickedId, onPick, onReorder, cardRefs }: {
         const to = ids.indexOf(Number(over.id));
         if (from < 0 || to < 0) return;
         ids.splice(to, 0, ids.splice(from, 1)[0]);
-        setPending(ids);
         onReorder(ids);
     };
 

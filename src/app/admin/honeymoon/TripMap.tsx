@@ -75,6 +75,14 @@ export interface TripMapProps {
      */
     fitPoints?: { lat: number; lng: number }[] | null;
     /**
+     * Short text to draw inside a pin, by place id.
+     *
+     * The stays ranking uses it to put the position in the circle, so the map
+     * reads as the same ordered list as the rows beside it. Anything longer than
+     * two characters will not fit and should not be attempted.
+     */
+    pinLabels?: Map<number, string>;
+    /**
      * Group nearby pins into counts. On by default.
      *
      * A shortlist map turns it off: five hotels in Canggu collapsing into a "5"
@@ -100,7 +108,7 @@ export interface TripMapProps {
 
 export default function TripMap({
     places, routes = [], legs = [], selectedId = null, onSelect, fitSignal = 0, fitPoints = null,
-    cluster = true, panToSelected = false,
+    cluster = true, panToSelected = false, pinLabels,
     selectMode = false, selectedIds, onLassoSelect, className = '',
 }: TripMapProps) {
     const containerRef = useRef<HTMLDivElement | null>(null);
@@ -253,18 +261,23 @@ export default function TripMap({
                     ? 'border-style:dashed;border-color:#f59e0b;border-width:2px;'
                     : `border-style:solid;border-color:#fff;border-width:${selected ? 3 : 2}px;`;
 
+            // A pin carrying a number needs a couple more pixels to hold it
+            // without the digits touching the ring.
+            const label = pinLabels?.get(place.id) ?? '';
+            const size = selected ? 28 : (label ? 24 : 20);
             const icon = L.divIcon({
                 className: 'honeymoon-pin',
                 html: `<span style="
                     display:flex;align-items:center;justify-content:center;
-                    width:${selected ? 26 : 20}px;height:${selected ? 26 : 20}px;
+                    width:${size}px;height:${size}px;
                     background:${meta.color};${ring}
                     border-radius:9999px;
                     box-shadow:0 1px 4px rgba(0,0,0,.4);
-                    font-size:${selected ? 13 : 10}px;line-height:1;
-                "></span>`,
-                iconSize: [selected ? 26 : 20, selected ? 26 : 20],
-                iconAnchor: [selected ? 13 : 10, selected ? 13 : 10],
+                    color:#fff;font-weight:700;
+                    font-size:${selected ? 13 : 11}px;line-height:1;
+                ">${escapeHtml(label)}</span>`,
+                iconSize: [size, size],
+                iconAnchor: [size / 2, size / 2],
             });
 
             const marker = L.marker([place.lat, place.lng], {
@@ -305,7 +318,7 @@ export default function TripMap({
             });
             marker.addTo(layer);
         }
-    }, [places, selectedId, selectedIds, routes.length, selectMode, cluster, ready]);
+    }, [places, selectedId, selectedIds, routes.length, selectMode, cluster, pinLabels, ready]);
 
     /* Keep the selected pin on screen, when the parent asks for that. */
     useEffect(() => {
