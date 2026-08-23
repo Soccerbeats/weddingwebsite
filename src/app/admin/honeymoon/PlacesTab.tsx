@@ -18,7 +18,15 @@ import {
  * This is the tab that has to stay usable at 200+ rows, so it leads with search
  * and filters rather than the list.
  */
-export default function PlacesTab({ api }: { api: HoneymoonApi }) {
+/**
+ * @param panel Rendered as a narrow column beside the map rather than as the
+ *   whole page: the five count cards go (the shell header already carries those
+ *   numbers) and the filters stack two-up, so the list keeps the height.
+ */
+export default function PlacesTab({ api, panel = false }: {
+    api: HoneymoonApi;
+    panel?: boolean;
+}) {
     const { data } = api;
     const [search, setSearch] = useState('');
     const [regionFilter, setRegionFilter] = useState('');
@@ -156,6 +164,7 @@ export default function PlacesTab({ api }: { api: HoneymoonApi }) {
     return (
         <div className="space-y-3">
             {/* ---- Counts ---- */}
+            {!panel && (
             <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
                 {[
                     { label: 'Places', value: counts.total },
@@ -175,6 +184,7 @@ export default function PlacesTab({ api }: { api: HoneymoonApi }) {
                     </Card>
                 ))}
             </div>
+            )}
 
             {/* ---- Search & filters ---- */}
             <Card className="p-3 space-y-2">
@@ -188,7 +198,7 @@ export default function PlacesTab({ api }: { api: HoneymoonApi }) {
                         + Add
                     </Button>
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
+                <div className={`grid gap-2 ${panel ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-6'}`}>
                     <SelectField value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}>
                         <option value="">All sources</option>
                         {sources.map((src) => <option key={src} value={src}>{src}</option>)}

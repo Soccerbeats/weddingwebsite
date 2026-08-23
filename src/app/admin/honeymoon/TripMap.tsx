@@ -93,6 +93,7 @@ export default function TripMap({
     /* Create the map once. */
     useEffect(() => {
         let cancelled = false;
+        let observer: ResizeObserver | null = null;
 
         (async () => {
             const L = (await import('leaflet')).default;
@@ -125,10 +126,20 @@ export default function TripMap({
             // The container is often still sizing when the map initialises
             // (tab switch, modal open), which leaves grey tiles until a resize.
             setTimeout(() => map.invalidateSize(), 50);
+
+            // Leaflet only watches the *window*. The map's box also changes
+            // without one — dragging a panel divider on the split view resizes
+            // it every frame — and a map that isn't told renders the new space
+            // as grey tiles.
+            if (typeof ResizeObserver !== 'undefined' && containerRef.current) {
+                observer = new ResizeObserver(() => map.invalidateSize());
+                observer.observe(containerRef.current);
+            }
         })();
 
         return () => {
             cancelled = true;
+            observer?.disconnect();
             mapRef.current?.remove();
             mapRef.current = null;
             layerRef.current = null;

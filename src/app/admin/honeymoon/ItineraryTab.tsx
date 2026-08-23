@@ -24,7 +24,16 @@ type View = 'list' | 'calendar';
 
 const VIEW_KEY = 'honeymoon.itinerary.view';
 
-export default function ItineraryTab({ api }: { api: HoneymoonApi }) {
+/**
+ * @param panel Rendered as a narrow column beside the map rather than as the
+ *   whole page. Everything that needs width or belongs to the page — the
+ *   calendar view, print, export, the hint line — is dropped, and the days
+ *   stack in one column whatever the window is doing.
+ */
+export default function ItineraryTab({ api, panel = false }: {
+    api: HoneymoonApi;
+    panel?: boolean;
+}) {
     const { data } = api;
     const days = data?.days ?? [];
 
@@ -39,6 +48,8 @@ export default function ItineraryTab({ api }: { api: HoneymoonApi }) {
         // eslint-disable-next-line react-hooks/set-state-in-effect
         if (saved === 'calendar' || saved === 'list') setView(saved);
     }, []);
+    /** A column this narrow has no room for a month grid. */
+    const shownView: View = panel ? 'list' : view;
     const chooseView = (next: View) => {
         setView(next);
         localStorage.setItem(VIEW_KEY, next);
@@ -82,6 +93,7 @@ export default function ItineraryTab({ api }: { api: HoneymoonApi }) {
     // read as a wall of days you can scan than as a single tall strip.
     return (
         <div className="space-y-3">
+            {!panel && (
             <div className="flex items-center justify-between gap-3 px-1">
                 <p className="text-xs text-gray-400">
                     {view === 'list'
@@ -107,16 +119,20 @@ export default function ItineraryTab({ api }: { api: HoneymoonApi }) {
                     <ViewToggle view={view} onChange={chooseView} />
                 </div>
             </div>
+            )}
 
-            {/* Invisible on screen; the only thing on the page in print. */}
-            <PrintSheet api={api} />
+            {/* Invisible on screen; the only thing on the page in print. Never in
+                a panel: two copies on one page would print the trip twice. */}
+            {!panel && <PrintSheet api={api} />}
 
-            {view === 'calendar' ? (
+            {shownView === 'calendar' ? (
                 <CalendarView api={api} days={days} />
             ) : (
                 <DndContext sensors={daySensors} collisionDetection={closestCenter} onDragEnd={onDayDragEnd}>
                     <SortableContext items={days.map((d) => d.id)} strategy={rectSortingStrategy}>
-                        <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3 items-start">
+                        <div className={`grid gap-3 items-start ${panel
+                            ? 'grid-cols-1'
+                            : 'grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3'}`}>
                             {days.map((day) => <DayCard key={day.id} day={day} api={api} />)}
                         </div>
                     </SortableContext>

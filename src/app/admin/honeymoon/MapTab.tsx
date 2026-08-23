@@ -2,12 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import {
     STATUSES, categoriesOf, categoryMeta, countriesInUse, effectiveCountry, formatDayDate,
     hasCoords, sourceLabel, sourcesOf,
     type Day, type Place, type PlaceStatus,
 } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
+import ItineraryTab from './ItineraryTab';
+import PlacesTab from './PlacesTab';
 import PlaceEditor from './PlaceEditor';
 import {
     BulkFieldMenu, Button, CategoryChip, EmptyState, MiniSelect, SelectField, StatusChip,
@@ -20,12 +23,27 @@ const TripMap = dynamic(() => import('./TripMap'), {
     loading: () => <div className="h-full w-full bg-gray-100 animate-pulse rounded-2xl" />,
 });
 
+const SPLIT_KEY = 'honeymoon.map.split';
+const WIDTHS_KEY = 'honeymoon.map.splitWidths';
+
+/** Narrowest a side column may be dragged, and the width the map keeps. */
+const MIN_PANEL = 240;
+const MIN_MAP = 320;
+/** Side columns only exist from lg up — below that the map takes the screen. */
+const WIDE_QUERY = '(min-width: 1024px)';
+
 /**
  * Full-height map view.
  *
  * The map fills every pixel the shell gives it and nothing on this tab scrolls;
  * the filter row is fixed above it and everything else — legend, selected place,
  * lasso actions — floats over the map rather than stealing height from it.
+ *
+ * Split view (the ⊞ button) puts the itinerary down the left and the place
+ * library down the right, each a single column, with the map still holding the
+ * middle. It is the three tabs at once for the planning you can only do with all
+ * three in view — dragging a place onto a day while watching where it actually
+ * is. Both dividers drag, so any one of the three can be given the room.
  */
 export default function MapTab({ api }: { api: HoneymoonApi }) {
     const { data } = api;
@@ -51,6 +69,71 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
     const [showItinerary, setShowItinerary] = useState(false);
     // Bumped only on purpose — never by a filter. See TripMap's fit effect.
     const [fitSignal, setFitSignal] = useState(0);
+
+    /**
+     * Split view, and how wide each side column is.
+     *
+     * Both are remembered per browser rather than saved with the trip: how you
+     * like to lay out a screen is about your screen, and the person planning on
+     * a laptop shouldn't reshuffle the desktop's layout. Read after mount — the
+     * server has no localStorage, and seeding state from it directly renders one
+     * layout on the server and another on the client.
+     */
+    const [split, setSplit] = useState(false);
+    // 400/340: the width at which a stop row shows a full place name rather
+    // than truncating it, and a place row fits its chips on two lines.
+    const [widths, setWidths] = useState({ left: 400, right: 340 });
+    const [wide, setWide] = useState(false);
+    const areaRef = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        if (localStorage.getItem(SPLIT_KEY) === '1') setSplit(true);
+        const saved = localStorage.getItem(WIDTHS_KEY);
+        if (!saved) return;
+        try {
+            const parsed = JSON.parse(saved) as { left?: number; right?: number };
+            const left = Number(parsed.left);
+            const right = Number(parsed.right);
+            if (Number.isFinite(left) && Number.isFinite(right)) {
+                setWidths({ left: Math.max(MIN_PANEL, left), right: Math.max(MIN_PANEL, right) });
+            }
+        } catch { /* a corrupt entry just means the defaults */ }
+    }, []);
+
+    // Three columns need a desktop. Below lg the button is gone and the map has
+    // the screen to itself, whatever was last saved.
+    useEffect(() => {
+        const mq = window.matchMedia(WIDE_QUERY);
+        const apply = () => setWide(mq.matches);
+        apply();
+        mq.addEventListener('change', apply);
+        return () => mq.removeEventListener('change', apply);
+    }, []);
+
+    const showPanels = split && wide;
+
+    const toggleSplit = () => setSplit((on) => {
+        localStorage.setItem(SPLIT_KEY, on ? '0' : '1');
+        return !on;
+    });
+
+    /**
+     * Drag one divider.
+     *
+     * Deltas rather than absolute positions, so the grab point never drifts from
+     * the handle, and each column is clamped against the *other* one so the map
+     * can always be squeezed down to MIN_MAP but never out of existence.
+     */
+    const resize = (side: 'left' | 'right', dx: number) => setWidths((prev) => {
+        const total = areaRef.current?.clientWidth ?? 1280;
+        const other = side === 'left' ? prev.right : prev.left;
+        // Two dividers' worth of gutter, so the clamp matches what is on screen.
+        const max = Math.max(MIN_PANEL, total - other - MIN_MAP - 24);
+        const next = Math.min(max, Math.max(MIN_PANEL, prev[side] + (side === 'left' ? dx : -dx)));
+        const merged = { ...prev, [side]: next };
+        localStorage.setItem(WIDTHS_KEY, JSON.stringify(merged));
+        return merged;
+    });
 
     const places = useMemo(() => data?.places ?? [], [data]);
     const days = useMemo(() => data?.days ?? [], [data]);
@@ -410,6 +493,20 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                     >
                         ⤢ Fit
                     </button>
+                    {/* Desktop only: three columns in 900px would leave nothing
+                        worth calling a map. */}
+                    {wide && (
+                        <button
+                            onClick={toggleSplit}
+                            title="Itinerary on the left, places on the right, map in the middle — drag the dividers to resize"
+                            className={`shrink-0 rounded-2xl px-2.5 py-1.5 text-sm font-medium border transition
+                                ${split
+                                ? 'bg-slate-900 border-slate-900 text-white'
+                                : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}
+                        >
+                            {split ? '⊞ Split on' : '⊞ Split'}
+                        </button>
+                    )}
                     <button
                         onClick={() => { setEditing(null); setEditorOpen(true); }}
                         className="shrink-0 rounded-2xl px-2.5 py-1.5 text-sm font-medium border
@@ -476,8 +573,26 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                 </div>
             </div>
 
-            {/* ---- Map ---- */}
-            <div className="relative flex-1 min-h-0">
+            {/* ---- Map, with a column either side of it in split view ---- */}
+            <div ref={areaRef} className="flex-1 min-h-0 flex items-stretch">
+                {showPanels && (
+                    <>
+                        <SidePanel
+                            title="Itinerary"
+                            href="/admin/honeymoon/itinerary"
+                            width={widths.left}
+                        >
+                            <ItineraryTab api={api} panel />
+                        </SidePanel>
+                        <ColumnDivider
+                            label="Resize the itinerary column"
+                            onDrag={(dx) => resize('left', dx)}
+                        />
+                    </>
+                )}
+
+                {/* The map keeps the middle and takes whatever the columns leave. */}
+                <div className="relative flex-1 min-h-0 min-w-0">
                 {pinnedCount === 0 ? (
                     <div className="h-full bg-white rounded-2xl shadow-sm border border-gray-100
                         flex items-center justify-center">
@@ -698,6 +813,23 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                         )}
                     </div>
                 )}
+                </div>
+
+                {showPanels && (
+                    <>
+                        <ColumnDivider
+                            label="Resize the places column"
+                            onDrag={(dx) => resize('right', dx)}
+                        />
+                        <SidePanel
+                            title="Places"
+                            href="/admin/honeymoon/places"
+                            width={widths.right}
+                        >
+                            <PlacesTab api={api} panel />
+                        </SidePanel>
+                    </>
+                )}
             </div>
 
             <PlaceEditor
@@ -705,6 +837,92 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                 place={editing}
                 open={editorOpen}
                 onClose={() => { setEditorOpen(false); setEditing(null); }}
+            />
+        </div>
+    );
+}
+
+/**
+ * One of the two columns beside the map.
+ *
+ * Deliberately not a card: the tab inside it already renders its own cards, and
+ * a panel-shaped box around them reads as a box in a box. All this adds is a
+ * label, a way out to the full tab, and its own scrollbar — the columns scroll
+ * independently, which is the whole point of having the map pinned between them.
+ */
+function SidePanel({ title, href, width, children }: {
+    title: string;
+    href: string;
+    width: number;
+    children: React.ReactNode;
+}) {
+    return (
+        <section
+            style={{ width }}
+            className="shrink-0 min-w-0 h-full flex flex-col"
+            aria-label={title}
+        >
+            <header className="shrink-0 flex items-baseline justify-between gap-2 px-1 pb-1.5">
+                <h2 className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold">
+                    {title}
+                </h2>
+                <Link
+                    href={href}
+                    className="text-[11px] text-gray-400 hover:text-gray-700 shrink-0"
+                    title={`Open the full ${title.toLowerCase()} tab`}
+                >
+                    Full tab ↗
+                </Link>
+            </header>
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-0.5 pb-1">
+                {children}
+            </div>
+        </section>
+    );
+}
+
+/**
+ * A draggable gutter between two columns.
+ *
+ * Reports movement as a delta rather than a position: the parent clamps, and a
+ * clamped absolute position would leave the pointer somewhere the handle isn't.
+ * Pointer capture means the drag survives the cursor crossing the map — without
+ * it, Leaflet would swallow the move events the moment you left this 12px strip.
+ * Arrow keys move it too, in 24px steps, so it isn't mouse-only.
+ */
+function ColumnDivider({ label, onDrag }: { label: string; onDrag: (dx: number) => void }) {
+    const lastX = useRef(0);
+
+    return (
+        <div
+            role="separator"
+            aria-label={label}
+            aria-orientation="vertical"
+            tabIndex={0}
+            title={`${label} — drag, or use the arrow keys`}
+            onPointerDown={(e) => {
+                e.preventDefault();
+                e.currentTarget.setPointerCapture(e.pointerId);
+                lastX.current = e.clientX;
+            }}
+            onPointerMove={(e) => {
+                if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+                const dx = e.clientX - lastX.current;
+                if (dx === 0) return;
+                lastX.current = e.clientX;
+                onDrag(dx);
+            }}
+            onPointerUp={(e) => e.currentTarget.releasePointerCapture(e.pointerId)}
+            onKeyDown={(e) => {
+                if (e.key === 'ArrowLeft') { e.preventDefault(); onDrag(-24); }
+                if (e.key === 'ArrowRight') { e.preventDefault(); onDrag(24); }
+            }}
+            className="group shrink-0 w-3 self-stretch flex items-center justify-center
+                cursor-col-resize touch-none focus:outline-none"
+        >
+            <span
+                className="h-12 w-1 rounded-full bg-gray-200 transition
+                    group-hover:bg-accent group-focus:bg-accent group-active:bg-accent"
             />
         </div>
     );

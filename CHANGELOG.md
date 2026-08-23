@@ -11,6 +11,21 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.6 — [Released] The map, the itinerary and the places at once (`main`, 2026-08-23 17:20)
+
+### Added
+- **A ⊞ Split button on the honeymoon map** that turns the map tab into all three planning tabs at once: the itinerary down the left in a single column, the place library down the right in a single column, and the map still holding the middle. It is for the part of planning you cannot do one tab at a time — putting a place on a day while looking at where it actually is, and seeing the day you just changed redraw on the map beside it.
+- **Both dividers drag.** Grab the gutter either side of the map and any of the three columns can be given the room; each column is clamped against the other so the map can be squeezed down to 320px but never out of existence. Arrow keys move a focused divider in 24px steps, so it isn't mouse-only.
+- Split state and both column widths are **remembered per browser** — how you like to lay out a screen is about your screen, not about the trip, so it is `localStorage` rather than a trip setting. Below 1024px the columns are suppressed and the map keeps the screen, whatever was last saved.
+- The two side columns are **the real tabs, not summaries of them**: everything works in the panel exactly as it does on its own page — inline edits, drag-to-reorder days and stops, the overflow menus, bulk selection, the place editor. Each panel scrolls independently of the other and of the map, and carries a `Full tab ↗` link out to the whole page.
+
+### Changed
+- `ItineraryTab` and `PlacesTab` take a `panel` prop for the narrow rendering: days stack one-up whatever the window is doing (rather than the page's two- and three-column grid), the calendar view and print/export controls are dropped, and Places loses its five count cards — the portal header already carries those numbers — with the filters stacking two-up so the list keeps the height.
+- Defaults are 400px for the itinerary and 340px for places: the widths at which a stop row shows a full place name instead of truncating it.
+
+### Fixed
+- **The map now watches its own box, not just the window.** Leaflet only ever invalidated its size on a window resize, so any layout change that moved the map's edges without moving the window's — dragging a divider, most obviously — painted the new space as grey tiles until something else forced a redraw. A `ResizeObserver` on the container fixes it for every case, including the panel-open animation.
+
 ## v0.9.5 — [Released] The README is a front page again; the rest is a wiki (`main`, 2026-08-17 19:40)
 
 ### Changed
