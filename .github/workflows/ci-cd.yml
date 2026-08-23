@@ -92,11 +92,24 @@ jobs:
           IMAGE="ghcr.io/soccerbeats/weddingwebsite"
           TAGS="$IMAGE:sha-$SHORT_SHA,$IMAGE:v$VERSION"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          # `latest` only tracks main; tags get their own vX.Y.Z tag,
-          # and pushes to main are what move the tag Portainer pulls.
-          if [ "$GITHUB_EVENT_NAME" = "push" ] && { [ "$GITHUB_REF" = "refs/heads/main" ] || case "$GITHUB_REF" in refs/tags/v*) true ;; *) false ;; esac; }; then
-            TAGS="$TAGS,$IMAGE:latest"
-            echo "push=true" >> "$GITHUB_OUTPUT"
+          # Two separate decisions, deliberately not one condition: whether to
+          # publish at all, and whether `latest` moves.
+          #
+          # `latest` is the tag Portainer pulls, and only main may move it. A
+          # tag is how you mark a *past* release — `git tag v0.9.5 <old sha>` —
+          # and if that moved `latest` too, the next pull in Portainer would
+          # quietly deploy old code, from an action nobody expects to touch
+          # production.
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            case "$GITHUB_REF" in
+              refs/heads/main)
+                TAGS="$TAGS,$IMAGE:latest"
+                echo "push=true" >> "$GITHUB_OUTPUT"
+                ;;
+              refs/tags/v*)
+                echo "push=true" >> "$GITHUB_OUTPUT"
+                ;;
+            esac
           fi
           echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
           echo "Image: $IMAGE — version v$VERSION (sha $SHORT_SHA)"
