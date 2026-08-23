@@ -11,6 +11,17 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.11 — [Released] Changing the trip dates no longer deletes days (`main`, 2026-08-23 18:35)
+
+### Fixed
+- **Shortening the trip's dates deleted the days that fell past the new end, and their stops and travel legs with them.** It asked first — but that is the wrong trade at any level of warning: dragging a date range is an ordinary, exploratory edit, and an hour of planning should not be one mis-drag and one reflexive OK away from gone. Setting the dates is now non-destructive in both directions. A 14-day trip re-dated to 6 days keeps all 14 days, their stops, legs and notes, and they take their new dates from the new start.
+- Days that now fall past the end of the trip are **flagged in red instead of removed**: a rose ring and a line on each day card saying why, red cells in the calendar view, a banner at the top of the Itinerary, a note on the Settings card naming the days and saying *nothing was deleted*, and a red **N days past the end** in the portal header — a link, from every tab, to the itinerary that needs fixing. Move their stops onto earlier days, delete the days you don't want, or drag the range back out; the flags clear themselves the moment the dates cover the days again.
+
+### Changed
+- A **longer** range still builds the days it is missing, exactly as before — that half was never destructive and is the thing that makes the calendar worth dragging.
+- `RangePlan.remove` is now `RangePlan.beyond`: the tail is named so the UI can flag it, not so a caller can delete it. New pure helpers `tripLength()` and `daysBeyondRange()` decide what is out of range, with seven checks over them in `npm run check:honeymoon` — including that a trip with no end date flags nothing.
+- Settings' old *"you have 14 days planned for a 6-day trip, drag the range again to line them up"* note is gone; dragging the range no longer lines them up by deletion, so it said the wrong thing. The two real cases now speak for themselves: days past the end (red, with what to do), or a range longer than the days planned (amber, drag again to fill it in).
+
 ## v0.9.10 — [Released] The stays shortlist sorts (`main`, 2026-08-23 18:26)
 
 ### Added

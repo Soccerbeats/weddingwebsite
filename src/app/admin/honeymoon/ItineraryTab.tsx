@@ -10,8 +10,8 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
-    SPREAD_WARNING_KM, TRAVEL_MODES, calendarMonths, dayHops, formatDayDate, formatDistance,
-    formatTime, hasCoords,
+    SPREAD_WARNING_KM, TRAVEL_MODES, calendarMonths, dayHops, daysBeyondRange, formatDate,
+    formatDayDate, formatDistance, formatTime, hasCoords,
     type CalendarCell, type Day, type Place, type Stop, type TravelMode,
 } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
@@ -42,7 +42,9 @@ export default function ItineraryTab({ api, panel = false, onFocusDay }: {
     onFocusDay?: (day: Day) => void;
 }) {
     const { data } = api;
-    const days = data?.days ?? [];
+    // Stable identity: a fresh `?? []` per render would make the memo below
+    // recompute on every keystroke anywhere on the page.
+    const days = useMemo(() => data?.days ?? [], [data]);
 
     // Remembered like the other view preferences, but locally: which way you
     // like to read the trip is about you and this browser, not about the trip.
@@ -64,6 +66,22 @@ export default function ItineraryTab({ api, panel = false, onFocusDay }: {
         // eslint-disable-next-line react-hooks/set-state-in-effect
         if (saved === 'calendar' || saved === 'list') setView(saved);
     }, []);
+    /**
+     * Days that sit past the end of the trip's dates.
+     *
+     * Shortening the range in Settings no longer deletes them — it leaves them
+     * here, holding everything you had planned, and they are flagged in red
+     * until you either move their stops onto earlier days or put the dates back.
+     */
+    const beyond = useMemo(
+        () => new Set(daysBeyondRange(
+            days.map((d) => d.day_number),
+            data?.trip.start_date ?? null,
+            data?.trip.end_date ?? null,
+        )),
+        [days, data?.trip.start_date, data?.trip.end_date],
+    );
+
     /** A column this narrow has no room for a month grid. */
     const shownView: View = panel ? 'list' : view;
     const chooseView = (next: View) => {
@@ -137,6 +155,20 @@ export default function ItineraryTab({ api, panel = false, onFocusDay }: {
             </div>
             )}
 
+            {beyond.size > 0 && (
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2.5">
+                    <p className="text-xs text-rose-800">
+                        <strong className="font-semibold">
+                            {beyond.size} day{beyond.size === 1 ? '' : 's'} past the end of the trip.
+                        </strong>{' '}
+                        The dates now stop at {formatDate(data?.trip.end_date)}, and the days below
+                        marked in red fall after it. Nothing was deleted — move their stops onto
+                        earlier days, delete the days you don&apos;t need, or set the dates back in
+                        Settings.
+                    </p>
+                </div>
+            )}
+
             {/* Invisible on screen; the only thing on the page in print. Never in
                 a panel: two copies on one page would print the trip twice. */}
             {!panel && <PrintSheet api={api} />}
@@ -147,6 +179,7 @@ export default function ItineraryTab({ api, panel = false, onFocusDay }: {
                     days={days}
                     onEditPlace={setEditingPlace}
                     onFocusDay={onFocusDay}
+                    beyond={beyond}
                 />
             ) : (
                 <DndContext sensors={daySensors} collisionDetection={closestCenter} onDragEnd={onDayDragEnd}>
@@ -161,6 +194,7 @@ export default function ItineraryTab({ api, panel = false, onFocusDay }: {
                                     api={api}
                                     onEditPlace={setEditingPlace}
                                     onFocusDay={onFocusDay}
+                                    beyondRange={beyond.has(day.day_number)}
                                 />
                             ))}
                         </div>
@@ -225,11 +259,13 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
  * the list view uses, so there is one place a day is edited and no second
  * implementation to keep in step.
  */
-function CalendarView({ api, days, onEditPlace, onFocusDay }: {
+function CalendarView({ api, days, onEditPlace, onFocusDay, beyond }: {
     api: HoneymoonApi;
     days: Day[];
     onEditPlace: (place: Place) => void;
     onFocusDay?: (day: Day) => void;
+    /** Day numbers past the end of the trip's dates. */
+    beyond: Set<number>;
 }) {
     const startDate = api.data?.trip.start_date ?? null;
     const [openDayId, setOpenDayId] = useState<number | null>(null);
@@ -283,6 +319,7 @@ function CalendarView({ api, days, onEditPlace, onFocusDay }: {
                                         cell={cell}
                                         day={day}
                                         api={api}
+                                        beyondRange={day != null && beyond.has(day.day_number)}
                                         onOpen={() => day && setOpenDayId(day.id)}
                                     />
                                 );
@@ -310,6 +347,7 @@ function CalendarView({ api, days, onEditPlace, onFocusDay }: {
                                 api={api}
                                 onEditPlace={onEditPlace}
                                 onFocusDay={onFocusDay}
+                                beyondRange={beyond.has(openDay.day_number)}
                             />
                         </SortableContext>
                     </DndContext>
@@ -319,10 +357,11 @@ function CalendarView({ api, days, onEditPlace, onFocusDay }: {
     );
 }
 
-function CalendarCellBox({ cell, day, api, onOpen }: {
+function CalendarCellBox({ cell, day, api, beyondRange, onOpen }: {
     cell: CalendarCell;
     day: Day | null;
     api: HoneymoonApi;
+    beyondRange: boolean;
     onOpen: () => void;
 }) {
     // Outside the trip: a real date, greyed, so the shape of the trip against
@@ -344,13 +383,16 @@ function CalendarCellBox({ cell, day, api, onOpen }: {
     return (
         <button
             onClick={onOpen}
-            className="min-h-[5.5rem] rounded-xl border border-accent/30 bg-accent/5 p-1.5
-                text-left hover:bg-accent/10 hover:border-accent/50 transition
-                focus:outline-none focus:ring-2 focus:ring-accent/30 overflow-hidden"
+            title={beyondRange ? 'This day falls past the end of the trip' : undefined}
+            className={`min-h-[5.5rem] rounded-xl border p-1.5 text-left transition
+                focus:outline-none focus:ring-2 overflow-hidden ${beyondRange
+                ? 'border-rose-300 bg-rose-50 hover:bg-rose-100 hover:border-rose-400 focus:ring-rose-300'
+                : 'border-accent/30 bg-accent/5 hover:bg-accent/10 hover:border-accent/50 focus:ring-accent/30'}`}
         >
             <div className="flex items-baseline justify-between gap-1">
                 <span className="text-[11px] tabular-nums text-gray-500">{cell.dayOfMonth}</span>
-                <span className="text-[10px] font-semibold text-accent shrink-0">
+                <span className={`text-[10px] font-semibold shrink-0
+                    ${beyondRange ? 'text-rose-700' : 'text-accent'}`}>
                     Day {day.day_number}
                 </span>
             </div>
@@ -383,11 +425,13 @@ function CalendarCellBox({ cell, day, api, onOpen }: {
     );
 }
 
-function DayCard({ day, api, onEditPlace, onFocusDay }: {
+function DayCard({ day, api, onEditPlace, onFocusDay, beyondRange = false }: {
     day: Day;
     api: HoneymoonApi;
     onEditPlace: (place: Place) => void;
     onFocusDay?: (day: Day) => void;
+    /** This day is numbered past the end of the trip's dates. */
+    beyondRange?: boolean;
 }) {
     const {
         attributes: dayAttributes, listeners: dayListeners, setNodeRef: setDayRef,
@@ -499,9 +543,21 @@ function DayCard({ day, api, onEditPlace, onFocusDay }: {
         <div
             ref={setDayRef}
             style={{ transform: CSS.Transform.toString(dayTransform), transition: dayTransition }}
-            className={dayDragging ? 'opacity-60' : ''}
+            // The ring goes on the wrapper rather than the Card: Card sets its own
+            // border colour, and two same-specificity border classes leave which
+            // one wins up to the order Tailwind happened to emit them in.
+            className={`${dayDragging ? 'opacity-60' : ''}
+                ${beyondRange ? 'rounded-2xl ring-2 ring-rose-300' : ''}`}
         >
         <Card className="p-4">
+            {beyondRange && (
+                <p className="mb-2 rounded-xl bg-rose-50 border border-rose-200 px-2.5 py-1.5
+                    text-[11px] text-rose-700">
+                    Past the end of the trip{formatDate(api.data?.trip.end_date)
+                        ? ` (${formatDate(api.data?.trip.end_date)})` : ''}. Move these stops onto an
+                    earlier day, or extend the dates in Settings.
+                </p>
+            )}
             {/* ---- Day header ---- */}
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">

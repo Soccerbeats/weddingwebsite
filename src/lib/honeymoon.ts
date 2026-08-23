@@ -672,6 +672,16 @@ export function dateForDay(startDate: string | null, dayNumber: number): Date | 
     return parsed;
 }
 
+/** One `YYYY-MM-DD` as "Sat, Sep 12". UTC, so it never drifts by a timezone. */
+export function formatDate(date: string | null | undefined): string | null {
+    if (!date) return null;
+    const parsed = new Date(`${date}T00:00:00Z`);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed.toLocaleDateString('en-US', {
+        weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC',
+    });
+}
+
 export function formatDayDate(startDate: string | null, dayNumber: number): string | null {
     const date = dateForDay(startDate, dayNumber);
     if (!date) return null;
@@ -816,19 +826,25 @@ export interface RangePlan {
     length: number;
     /** Day numbers to create, in order. */
     add: number[];
-    /** Day numbers that would no longer exist. */
-    remove: number[];
-    /** True when only the dates move and every day row survives. */
+    /**
+     * Day numbers that would fall past the end of the new range.
+     *
+     * They are *not* deleted — shortening a trip must never throw away a day
+     * you have planned. They are named so the UI can flag them and let you move
+     * their stops or put the dates back.
+     */
+    beyond: number[];
+    /** True when only the dates move: nothing to add and nothing left outside. */
     shiftOnly: boolean;
 }
 
 /**
  * What setting a date range would do to the day rows.
  *
- * Pure on purpose: dropping days deletes their stops and travel legs, so the
- * caller has to be able to say exactly what is about to be lost *before*
- * anything is written. Returning a plan rather than performing one makes that
- * possible and makes the arithmetic testable without a database.
+ * Pure on purpose, and non-destructive by design: a shorter range adds nothing
+ * and removes nothing, it just leaves a tail of days outside the trip for the
+ * UI to flag. Returning a plan rather than performing one keeps the arithmetic
+ * testable without a database.
  */
 export function planRange(
     from: string,
@@ -841,9 +857,39 @@ export function planRange(
     const have = new Set(existingDayNumbers);
     const add: number[] = [];
     for (let n = 1; n <= length; n += 1) if (!have.has(n)) add.push(n);
-    const remove = existingDayNumbers.filter((n) => n > length).sort((a, b) => a - b);
+    const beyond = existingDayNumbers.filter((n) => n > length).sort((a, b) => a - b);
 
-    return { start, end, length, add, remove, shiftOnly: !add.length && !remove.length };
+    return { start, end, length, add, beyond, shiftOnly: !add.length && !beyond.length };
+}
+
+/**
+ * How many days the trip's saved dates cover, or null without a full range.
+ *
+ * One-based, like the day numbers it is compared against: a start and end on the
+ * same date is a one-day trip, not a zero-day one.
+ */
+export function tripLength(start: string | null, end: string | null): number | null {
+    const between = daysBetween(start, end);
+    if (between == null) return null;
+    return Math.max(1, between + 1);
+}
+
+/**
+ * Which of these days sit past the end of the trip's dates.
+ *
+ * The itinerary is allowed to be longer than the dates — that is what happens
+ * the moment you shorten a trip you have already planned, and losing the plan
+ * would be far worse than being out of range for a while. This is what the red
+ * flags on those days are driven from.
+ *
+ * A trip with no end date has nothing to be outside of, so nothing is flagged.
+ */
+export function daysBeyondRange(
+    dayNumbers: number[], start: string | null, end: string | null,
+): number[] {
+    const length = tripLength(start, end);
+    if (length == null) return [];
+    return dayNumbers.filter((n) => n > length).sort((a, b) => a - b);
 }
 
 /* ------------------------------------------------------------------ */

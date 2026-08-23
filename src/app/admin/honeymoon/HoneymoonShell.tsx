@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { daysBetween, hasCoords } from '@/lib/honeymoon';
+import { daysBeyondRange, daysBetween, hasCoords } from '@/lib/honeymoon';
 import { HoneymoonProvider } from './HoneymoonContext';
 import SearchPalette from './SearchPalette';
 import { UndoToast } from './ui';
@@ -88,6 +88,16 @@ export default function HoneymoonShell({ children }: { children: React.ReactNode
     const pinned = data.places.filter(hasCoords).length;
     const review = data.places.filter((p) => p.needs_review).length;
     const nights = daysBetween(data.trip.start_date, data.trip.end_date);
+    /**
+     * Days planned past the end of the trip's dates.
+     *
+     * Surfaced here because shortening the range leaves them behind on purpose,
+     * and the only other sign is red cards on the Itinerary — which is a tab you
+     * might not open for a week.
+     */
+    const beyond = daysBeyondRange(
+        data.days.map((d) => d.day_number), data.trip.start_date, data.trip.end_date,
+    );
 
     return (
         <HoneymoonProvider api={api}>
@@ -102,6 +112,15 @@ export default function HoneymoonShell({ children }: { children: React.ReactNode
                                 {data.places.length} place{data.places.length === 1 ? '' : 's'} ·{' '}
                                 {pinned} pinned
                                 {review > 0 && <span className="text-amber-600"> · {review} to review</span>}
+                                {beyond.length > 0 && (
+                                    <Link
+                                        href={`${BASE}/itinerary`}
+                                        className="text-rose-600 hover:underline"
+                                    >
+                                        {' '}· {beyond.length} day{beyond.length === 1 ? '' : 's'} past
+                                        the end
+                                    </Link>
+                                )}
                             </p>
                         </div>
                         <div className="flex items-center gap-3">

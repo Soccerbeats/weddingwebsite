@@ -14,7 +14,8 @@ import {
     categoriesOf, normalizeCategoryKey,
     pointInPolygon, placesInPolygon, nameFromStayUrl, stayUrlsFromText, isStayUrl, cleanListingTitle, formatPerNight,
     formatPrice, nameFromAnyUrl, priceValue, effectiveCountry, countriesInUse, calendarMonths,
-    monthMatrix, planRange, daysBetween, addDays, isoOf, buildIcs, tripEvents, searchHoneymoon,
+    monthMatrix, planRange, daysBeyondRange, tripLength, daysBetween, addDays, isoOf, buildIcs,
+    tripEvents, searchHoneymoon,
     type Day, type GuideNote, type Region, type TodoItem,
     type Place, type Stop,
 } from '../src/lib/honeymoon';
@@ -549,7 +550,7 @@ console.log('\nTrip range');
     const fresh = planRange('2026-09-28', '2026-10-07', []);
     check('a ten-day range is ten days', fresh.length === 10, String(fresh.length));
     check('creates all of them', fresh.add.length === 10 && fresh.add[9] === 10);
-    check('removes nothing', fresh.remove.length === 0);
+    check('leaves nothing outside', fresh.beyond.length === 0);
     check('is not a shift', !fresh.shiftOnly);
 
     // Dragged right-to-left means the same trip.
@@ -566,13 +567,15 @@ console.log('\nTrip range');
     const longer = planRange('2026-09-28', '2026-10-11', [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     check('extending adds only the new days',
         longer.add.join(',') === '11,12,13,14', longer.add.join(','));
-    check('extending removes nothing', longer.remove.length === 0);
+    check('extending leaves nothing outside', longer.beyond.length === 0);
 
-    // Shorter: the tail is named so the UI can say what would be lost.
+    // Shorter: the tail is named so the UI can flag it. Nothing is deleted —
+    // shortening a planned trip must never throw a day away.
     const shorter = planRange('2026-09-28', '2026-10-04', [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-    check('shortening names the days to drop',
-        shorter.remove.join(',') === '8,9,10', shorter.remove.join(','));
+    check('shortening names the days now outside the range',
+        shorter.beyond.join(',') === '8,9,10', shorter.beyond.join(','));
     check('shortening adds nothing', shorter.add.length === 0);
+    check('and is not a plain shift', !shorter.shiftOnly);
 
     // A single day is a real trip, not a zero-length one.
     const single = planRange('2026-09-28', '2026-09-28', []);
@@ -581,7 +584,18 @@ console.log('\nTrip range');
     // Gaps left by deleting a day in the middle are filled, not ignored.
     const gappy = planRange('2026-09-28', '2026-10-02', [1, 2, 5]);
     check('fills a gap in the middle', gappy.add.join(',') === '3,4', gappy.add.join(','));
-    check('and keeps day 5', !gappy.remove.includes(5));
+    check('and keeps day 5', !gappy.beyond.includes(5));
+
+    // The saved range, against the days that actually exist.
+    check('a full range has a one-based length', tripLength('2026-09-28', '2026-10-07') === 10);
+    check('one date is not a range', tripLength('2026-09-28', null) === null);
+    check('a single date is a one-day trip', tripLength('2026-09-28', '2026-09-28') === 1);
+    check('days past the end are flagged',
+        daysBeyondRange([1, 2, 3, 4, 5, 6, 7, 8], '2026-09-28', '2026-10-01').join(',') === '5,6,7,8');
+    check('a trip inside its dates flags nothing',
+        daysBeyondRange([1, 2, 3], '2026-09-28', '2026-10-01').length === 0);
+    check('no end date flags nothing',
+        daysBeyondRange([1, 2, 3, 99], '2026-09-28', null).length === 0);
 }
 
 console.log('\nCalendar export');
