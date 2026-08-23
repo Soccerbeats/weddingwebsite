@@ -8,6 +8,7 @@
  * where a pin lands and what date a day shows.
  */
 import {
+    arcPoints, legEnds, travelModeMeta,
     boundsOf, dateForDay, distanceKm, formatDayDate, formatDistance, formatTime,
     dayHops, hasCoords, categoryMeta, CATEGORIES,
     sourceLabel, sourcesOf, SOURCE_AMY, SOURCE_MANUAL, SOURCE_YOUTUBE,
@@ -598,6 +599,54 @@ console.log('\nTrip range');
         daysBeyondRange([1, 2, 3, 99], '2026-09-28', null).length === 0);
 }
 
+console.log('\nTravel legs');
+{
+    const leg = {
+        id: 1, day_id: 1, mode: 'flight' as const, from_text: 'DPS', to_text: 'SIN',
+        depart_time: '14:05', arrive_time: '16:50', confirmation_ref: null, notes: null,
+        from_lat: -8.7465, from_lng: 115.1674, to_lat: 1.3576, to_lng: 103.9885,
+    };
+    const ends = legEnds(leg);
+    check('a pinned leg has two ends', ends?.from.lat === -8.7465 && ends?.to.lng === 103.9885);
+    check('half a leg has none', legEnds({ ...leg, to_lat: null }) === null);
+    check('an unlooked-up leg has none', legEnds({ ...leg, from_lat: null, from_lng: null }) === null);
+
+    const arc = arcPoints(ends!.from, ends!.to, 0.22, 24);
+    check('the arc starts and ends on the leg',
+        arc[0].lat === ends!.from.lat && arc[0].lng === ends!.from.lng
+        && arc[arc.length - 1].lat === ends!.to.lat && arc[arc.length - 1].lng === ends!.to.lng);
+    check('and is sampled into the steps asked for', arc.length === 25, String(arc.length));
+
+    // The middle must be off the straight line — that is the whole point.
+    const midpoint = { lat: (ends!.from.lat + ends!.to.lat) / 2, lng: (ends!.from.lng + ends!.to.lng) / 2 };
+    const apex = arc[12];
+    const bowed = distanceKm(apex, midpoint);
+    check('the middle bows away from the straight line', bowed > 100, `${Math.round(bowed)} km`);
+
+    // A flatter curve bows less; a straight one barely at all.
+    const flat = arcPoints(ends!.from, ends!.to, 0.05, 24);
+    const flatBow = distanceKm(flat[12], midpoint);
+    check('a smaller curve bows less', flatBow < bowed, `${Math.round(flatBow)} km vs ${Math.round(bowed)} km`);
+
+    // Reversing the leg bows to the other side, so an outbound and a return
+    // separate instead of drawing over each other.
+    const back = arcPoints(ends!.to, ends!.from, 0.22, 24);
+    const apart = distanceKm(apex, back[12]);
+    check('the return leg arcs the other way', apart > 100, `${Math.round(apart)} km apart`);
+
+    // Degenerate input must not produce NaN points.
+    const same = arcPoints({ lat: 1, lng: 2 }, { lat: 1, lng: 2 });
+    check('two points in the same place are a line, not a NaN',
+        same.length === 2 && same.every((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng)));
+
+    check('every mode has a style',
+        ['flight', 'boat', 'car', 'train', 'walk']
+            .every((m) => travelModeMeta(m).dash.length > 0 && travelModeMeta(m).curve > 0));
+    check('an unknown mode falls back to flight', travelModeMeta('teleport').key === 'flight');
+    check('a flight bows more than a walk',
+        travelModeMeta('flight').curve > travelModeMeta('walk').curve);
+}
+
 console.log('\nCalendar export');
 {
     const stamp = '20260817T120000Z';
@@ -644,6 +693,7 @@ console.log('\nCalendar export');
         travel: [{
             id: 7, day_id: 4, mode: 'car', from_text: 'Canggu', to_text: 'Ubud',
             depart_time: '08:00', arrive_time: '09:15', confirmation_ref: 'XY12', notes: null,
+            from_lat: null, from_lng: null, to_lat: null, to_lng: null,
         }],
     };
     const events = tripEvents({ start_date: '2026-09-28', title: 'T' }, [day],

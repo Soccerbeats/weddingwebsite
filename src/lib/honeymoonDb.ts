@@ -125,6 +125,12 @@ async function createTables() {
     await pool.query('ALTER TABLE honeymoon_notes ADD COLUMN IF NOT EXISTS source TEXT');
     // Interested / not interested on a candidate stay.
     await pool.query('ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS rating TEXT');
+    // Coordinates for a travel leg's two ends — see database/init.sql.
+    for (const column of ['from_lat', 'from_lng', 'to_lat', 'to_lng']) {
+        await pool.query(
+            `ALTER TABLE honeymoon_travel ADD COLUMN IF NOT EXISTS ${column} DOUBLE PRECISION`,
+        );
+    }
     // Preview image scraped from a listing's Open Graph tags.
     await pool.query('ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS image_url TEXT');
     await pool.query(
@@ -325,6 +331,10 @@ export async function getHoneymoonPayload(): Promise<HoneymoonPayload> {
             arrive_time: r.arrive_time ?? null,
             confirmation_ref: r.confirmation_ref ?? null,
             notes: r.notes ?? null,
+            from_lat: num(r.from_lat),
+            from_lng: num(r.from_lng),
+            to_lat: num(r.to_lat),
+            to_lng: num(r.to_lng),
         };
         const list = travelByDay.get(leg.day_id);
         if (list) list.push(leg); else travelByDay.set(leg.day_id, [leg]);

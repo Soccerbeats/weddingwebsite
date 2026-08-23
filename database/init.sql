@@ -307,5 +307,13 @@ ALTER TABLE honeymoon_todos ADD COLUMN IF NOT EXISTS result TEXT;
 ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS country TEXT NOT NULL DEFAULT '';
 ALTER TABLE honeymoon_trip ADD COLUMN IF NOT EXISTS focus_country TEXT NOT NULL DEFAULT '';
 
+-- Where a travel leg starts and ends, once it has been looked up. Nullable: a
+-- leg is useful as "DPS -> SIN, 14:05" long before anyone pins it, and the map
+-- simply doesn't draw the ones it cannot place.
+ALTER TABLE honeymoon_travel ADD COLUMN IF NOT EXISTS from_lat DOUBLE PRECISION;
+ALTER TABLE honeymoon_travel ADD COLUMN IF NOT EXISTS from_lng DOUBLE PRECISION;
+ALTER TABLE honeymoon_travel ADD COLUMN IF NOT EXISTS to_lat DOUBLE PRECISION;
+ALTER TABLE honeymoon_travel ADD COLUMN IF NOT EXISTS to_lng DOUBLE PRECISION;
+
 CREATE INDEX IF NOT EXISTS honeymoon_places_region_idx ON honeymoon_places (region_id);
 CREATE INDEX IF NOT EXISTS honeymoon_stops_day_idx ON honeymoon_stops (day_id);

@@ -131,6 +131,17 @@ export interface TravelLeg {
     arrive_time: string | null;
     confirmation_ref: string | null;
     notes: string | null;
+    /**
+     * Where the leg starts and ends, once looked up.
+     *
+     * Nullable, and independent of the text: a leg is useful as "DPS → SIN,
+     * 14:05" long before anyone pins it, so the text stays the thing you type
+     * and these are what the map draws when they are there.
+     */
+    from_lat: number | null;
+    from_lng: number | null;
+    to_lat: number | null;
+    to_lng: number | null;
 }
 
 export interface Day {
@@ -346,13 +357,95 @@ export const STATUSES: { key: PlaceStatus; label: string; color: string }[] = [
     { key: 'booked', label: 'Booked', color: '#059669' },
 ];
 
-export const TRAVEL_MODES: { key: TravelMode; label: string; icon: string }[] = [
-    { key: 'flight', label: 'Flight', icon: '✈️' },
-    { key: 'boat', label: 'Boat', icon: '⛴️' },
-    { key: 'car', label: 'Car', icon: '🚗' },
-    { key: 'train', label: 'Train', icon: '🚆' },
-    { key: 'walk', label: 'Walk', icon: '🚶' },
+/**
+ * How each mode is drawn on the map, as well as named.
+ *
+ * `curve` is how far the arc bows out from the straight line, as a fraction of
+ * its length: a flight bows the most because that is what reads as "flew over
+ * this", and a walk is nearly straight because it is a hundred metres and
+ * pretending otherwise would be a lie about the route. `dash` keeps every leg
+ * visibly *not* a road — a leg is a hop between two points, not a path anyone
+ * drove — while still telling the modes apart.
+ */
+export const TRAVEL_MODES: {
+    key: TravelMode; label: string; icon: string; color: string; dash: string; curve: number;
+}[] = [
+    { key: 'flight', label: 'Flight', icon: '✈️', color: '#0369a1', dash: '2 8', curve: 0.28 },
+    { key: 'boat', label: 'Boat', icon: '⛴️', color: '#0891b2', dash: '6 6', curve: 0.2 },
+    { key: 'car', label: 'Car', icon: '🚗', color: '#b45309', dash: '10 6', curve: 0.10 },
+    { key: 'train', label: 'Train', icon: '🚆', color: '#6d28d9', dash: '12 4 2 4', curve: 0.10 },
+    { key: 'walk', label: 'Walk', icon: '🚶', color: '#4d7c0f', dash: '1 6', curve: 0.05 },
 ];
+
+/** The mode's drawing style, falling back to flight for anything unknown. */
+export function travelModeMeta(mode: string) {
+    return TRAVEL_MODES.find((m) => m.key === mode) ?? TRAVEL_MODES[0];
+}
+
+/** Both ends of a leg, or null when either has not been looked up. */
+export function legEnds(leg: TravelLeg): {
+    from: { lat: number; lng: number }; to: { lat: number; lng: number };
+} | null {
+    if (leg.from_lat == null || leg.from_lng == null) return null;
+    if (leg.to_lat == null || leg.to_lng == null) return null;
+    return {
+        from: { lat: leg.from_lat, lng: leg.from_lng },
+        to: { lat: leg.to_lat, lng: leg.to_lng },
+    };
+}
+
+/**
+ * A leg as a curve, not a straight line.
+ *
+ * A quadratic Bézier whose control point is pushed out perpendicular to the
+ * midpoint, sampled into `steps` segments — Leaflet draws polylines, so the
+ * curve has to arrive as points. Two reasons it bows rather than going straight:
+ * a straight line between two pins is indistinguishable from the day routes
+ * already on the map, and two legs between the same pair of places (out on the
+ * Monday, back on the Friday) would otherwise sit exactly on top of each other.
+ *
+ * The bow is always to the same side of the direction of travel, so an outbound
+ * and a return leg arc away from each other and read as two journeys.
+ *
+ * Longitude is scaled by cos(latitude) while offsetting, so the arc looks like
+ * an arc on a Mercator map instead of flattening out near the equator and
+ * ballooning near the poles.
+ */
+export function arcPoints(
+    from: { lat: number; lng: number },
+    to: { lat: number; lng: number },
+    curve = 0.2,
+    steps = 48,
+): { lat: number; lng: number }[] {
+    const midLat = (from.lat + to.lat) / 2;
+    const midLng = (from.lng + to.lng) / 2;
+
+    // The straight line, in degrees, with longitude squeezed to match latitude.
+    const scale = Math.max(0.2, Math.cos((midLat * Math.PI) / 180));
+    const dLat = to.lat - from.lat;
+    const dLng = (to.lng - from.lng) * scale;
+    const length = Math.hypot(dLat, dLng);
+
+    // Two points in the same place have no direction to bow away from.
+    if (length === 0) return [{ ...from }, { ...to }];
+
+    // Perpendicular to the direction of travel, right-hand side.
+    const offset = length * curve;
+    const controlLat = midLat + (dLng / length) * offset;
+    const controlLng = midLng - ((dLat / length) * offset) / scale;
+
+    const points: { lat: number; lng: number }[] = [];
+    const count = Math.max(2, Math.round(steps));
+    for (let i = 0; i <= count; i += 1) {
+        const t = i / count;
+        const inverse = 1 - t;
+        points.push({
+            lat: inverse * inverse * from.lat + 2 * inverse * t * controlLat + t * t * to.lat,
+            lng: inverse * inverse * from.lng + 2 * inverse * t * controlLng + t * t * to.lng,
+        });
+    }
+    return points;
+}
 
 /* ------------------------------------------------------------------ */
 /* Geo                                                                 */

@@ -4,7 +4,10 @@ import { useEffect, useRef, useState } from 'react';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
 import type * as LeafletNS from 'leaflet';
-import { boundsOf, categoryMeta, hasCoords, placesInPolygon, type LatLng, type Place } from '@/lib/honeymoon';
+import {
+    arcPoints, boundsOf, categoryMeta, hasCoords, placesInPolygon,
+    type LatLng, type Place,
+} from '@/lib/honeymoon';
 
 /**
  * The trip map.
@@ -31,10 +34,28 @@ export interface DayRoute {
     label: string;
 }
 
+/** One travel leg, ready to draw: two ends and how it should look. */
+export interface TravelArc {
+    id: number;
+    from: LatLng;
+    to: LatLng;
+    color: string;
+    /** SVG dash pattern — every leg is dashed, differently per mode. */
+    dash: string;
+    /** How far the arc bows out, as a fraction of its length. */
+    curve: number;
+    /** Emoji for the mode, drawn at the top of the arc. */
+    icon: string;
+    /** Popup text: "Flight · DPS → SIN · Day 3". */
+    label: string;
+}
+
 export interface TripMapProps {
     places: Place[];
     /** Ordered routes to draw — one per day being shown. */
     routes?: DayRoute[];
+    /** Travel legs to draw as curved dashed arcs. */
+    legs?: TravelArc[];
     selectedId?: number | null;
     onSelect?: (id: number) => void;
     /**
@@ -63,7 +84,7 @@ export interface TripMapProps {
 }
 
 export default function TripMap({
-    places, routes = [], selectedId = null, onSelect, fitSignal = 0, fitPoints = null,
+    places, routes = [], legs = [], selectedId = null, onSelect, fitSignal = 0, fitPoints = null,
     selectMode = false, selectedIds, onLassoSelect, className = '',
 }: TripMapProps) {
     const containerRef = useRef<HTMLDivElement | null>(null);
@@ -295,7 +316,55 @@ export default function TripMap({
                     .addTo(layer);
             });
         }
-    }, [routes, ready]);
+
+        /*
+         * Travel legs, as curved dashed arcs.
+         *
+         * Curved on purpose. A straight line between two pins is exactly what a
+         * day route looks like, and two legs between the same pair of airports
+         * — out on the Monday, back on the Friday — would sit on top of each
+         * other and read as one. The bow is always to the same side of the
+         * direction of travel, so an outbound and a return separate themselves.
+         */
+        for (const leg of legs) {
+            const points = arcPoints(leg.from, leg.to, leg.curve)
+                .map((p) => [p.lat, p.lng] as [number, number]);
+            const line = L.polyline(points, {
+                color: leg.color,
+                weight: 2.5,
+                opacity: 0.9,
+                dashArray: leg.dash,
+                // Round caps make a sparse dash read as dots rather than ticks.
+                lineCap: 'round',
+            }).addTo(layer);
+            line.bindPopup(`<div style="font-weight:600">${escapeHtml(leg.label)}</div>`);
+
+            // The mode, at the top of the arc: the curve says "a journey", this
+            // says which kind, without a legend to look up.
+            const apex = points[Math.floor(points.length / 2)];
+            if (apex) {
+                L.marker(apex, {
+                    icon: L.divIcon({
+                        className: 'honeymoon-leg-mode',
+                        html: `<span style="
+                            display:flex;align-items:center;justify-content:center;
+                            width:24px;height:24px;background:#fff;
+                            border:2px solid ${leg.color};border-radius:9999px;
+                            font-size:12px;line-height:1;
+                            box-shadow:0 1px 4px rgba(0,0,0,.3);
+                        ">${leg.icon}</span>`,
+                        iconSize: [24, 24],
+                        iconAnchor: [12, 12],
+                    }),
+                    // Under the numbered day badges: which stop is third matters
+                    // more than which mode got you there.
+                    zIndexOffset: 1500,
+                })
+                    .bindPopup(`<div style="font-weight:600">${escapeHtml(leg.label)}</div>`)
+                    .addTo(layer);
+            }
+        }
+    }, [routes, legs, ready]);
 
     /**
      * Freehand lasso.

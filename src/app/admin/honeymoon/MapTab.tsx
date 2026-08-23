@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import {
     STATUSES, categoriesOf, categoryMeta, countriesInUse, effectiveCountry, formatDayDate,
-    hasCoords, sourceLabel, sourcesOf,
+    hasCoords, legEnds, sourceLabel, sourcesOf, travelModeMeta,
     type Day, type Place, type PlaceStatus,
 } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
@@ -304,6 +304,41 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
         }
         setFitSignal((n) => n + 1);
     }, [pointsForDay, dayFilter]);
+
+    /**
+     * Travel legs to draw, from the same days as the routes.
+     *
+     * A leg only appears once both ends have been looked up — half a leg is a
+     * line to nowhere. They follow the itinerary overlay rather than having a
+     * toggle of their own: "show me the days" and "show me how I get between
+     * them" are one question.
+     */
+    const legs = useMemo(() => {
+        const forDay = (day: Day) => day.travel.flatMap((leg) => {
+            const ends = legEnds(leg);
+            if (!ends) return [];
+            const meta = travelModeMeta(leg.mode);
+            const route = [leg.from_text, leg.to_text].filter(Boolean).join(' → ');
+            return [{
+                id: leg.id,
+                from: ends.from,
+                to: ends.to,
+                color: meta.color,
+                dash: meta.dash,
+                curve: meta.curve,
+                icon: meta.icon,
+                label: [
+                    meta.label,
+                    route,
+                    `Day ${day.day_number}`,
+                    leg.depart_time ?? '',
+                ].filter(Boolean).join(' · '),
+            }];
+        });
+        if (selectedDay) return forDay(selectedDay);
+        if (!showItinerary) return [];
+        return days.flatMap(forDay);
+    }, [selectedDay, showItinerary, days]);
 
     const pinnedCount = visible.filter(hasCoords).length;
     const unpinnedCount = visible.length - pinnedCount;
@@ -610,6 +645,11 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                                 {' '}· {routes.length} day{routes.length === 1 ? '' : 's'} overlaid
                             </span>
                         )}
+                        {legs.length > 0 && (
+                            <span className="text-sky-700">
+                                {' '}· {legs.length} travel leg{legs.length === 1 ? '' : 's'}
+                            </span>
+                        )}
                         {selectMode && (
                             <span className="text-slate-700">
                                 {' '}· draw a loop around the pins you want (hold Shift to add)
@@ -662,6 +702,7 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                     <TripMap
                         places={visible}
                         routes={routes}
+                        legs={legs}
                         selectedId={selectedId}
                         onSelect={setSelectedId}
                         fitSignal={fitSignal}

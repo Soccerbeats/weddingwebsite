@@ -11,8 +11,8 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import {
     SPREAD_WARNING_KM, TRAVEL_MODES, calendarMonths, dayHops, daysBeyondRange, formatDate,
-    formatDayDate, formatDistance, formatTime, hasCoords,
-    type CalendarCell, type Day, type Place, type Stop, type TravelMode,
+    formatDayDate, formatDistance, formatTime, hasCoords, legEnds, travelModeMeta,
+    type CalendarCell, type Day, type Place, type Stop, type TravelLeg, type TravelMode,
 } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
 import PlaceEditor from './PlaceEditor';
@@ -700,35 +700,40 @@ function DayCard({ day, api, onEditPlace, onFocusDay, beyondRange = false }: {
                             onClick: () => api.removeRow('travel', leg, 'Removed a travel leg'),
                         }]} />
                     </div>
-                    <div className="grid grid-cols-2 gap-2 mt-2">
+                    <div className="mt-2 space-y-2">
+                        <LegEnd leg={leg} end="from" api={api} />
+                        <LegEnd leg={leg} end="to" api={api} />
+                        <div className="grid grid-cols-2 gap-2">
+                            <TextField
+                                type="time"
+                                defaultValue={leg.depart_time ?? ''}
+                                onBlur={(e) => api.update('travel', {
+                                    id: leg.id, depart_time: e.target.value,
+                                })}
+                            />
+                            <TextField
+                                type="time"
+                                defaultValue={leg.arrive_time ?? ''}
+                                onBlur={(e) => api.update('travel', {
+                                    id: leg.id, arrive_time: e.target.value,
+                                })}
+                            />
+                        </div>
                         <TextField
-                            defaultValue={leg.from_text ?? ''}
-                            placeholder="From — SIN Changi T3"
-                            onBlur={(e) => api.update('travel', { id: leg.id, from_text: e.target.value })}
-                        />
-                        <TextField
-                            defaultValue={leg.to_text ?? ''}
-                            placeholder="To — DPS Denpasar"
-                            onBlur={(e) => api.update('travel', { id: leg.id, to_text: e.target.value })}
-                        />
-                        <TextField
-                            type="time"
-                            defaultValue={leg.depart_time ?? ''}
-                            onBlur={(e) => api.update('travel', { id: leg.id, depart_time: e.target.value })}
-                        />
-                        <TextField
-                            type="time"
-                            defaultValue={leg.arrive_time ?? ''}
-                            onBlur={(e) => api.update('travel', { id: leg.id, arrive_time: e.target.value })}
-                        />
-                        <TextField
-                            className="col-span-2"
                             defaultValue={leg.confirmation_ref ?? ''}
                             placeholder="Confirmation ref"
                             onBlur={(e) => api.update('travel', {
                                 id: leg.id, confirmation_ref: e.target.value,
                             })}
                         />
+                        {/* Both ends found: say so once, on the leg, rather than
+                            twice on the fields. */}
+                        {legEnds(leg) && (
+                            <p className="text-[11px] text-sky-700">
+                                {travelModeMeta(leg.mode).icon} Drawn on the map — turn on
+                                {' '}🗓 Itinerary there to see it.
+                            </p>
+                        )}
                     </div>
                 </div>
             ))}
@@ -937,5 +942,152 @@ function StopRow({ stop, index, api, dayNumber, hopKm, onEditPlace }: {
                 </div>
             )}
         </li>
+    );
+}
+
+/** One end of a travel leg: what you type, and where that turned out to be. */
+interface Hit { label: string; lat: number; lng: number; kind?: string }
+
+/**
+ * The From or To of a travel leg, with a lookup.
+ *
+ * The text and the coordinates are deliberately separate. Finding a place does
+ * **not** overwrite what you typed: "DPS" is the right label for a leg and
+ * "Ngurah Rai International Airport, Jalan Cucak Rowo, Tuban, Denpasar, Badung,
+ * Bali, Indonesia" is not, so the search result becomes the pin and your text
+ * stays your text. The one exception is a pasted link, which is nobody's idea of
+ * a label — there the found name takes over.
+ *
+ * The mode goes with the query: a leg's From is looked up as an airport when the
+ * leg is a flight and as a ferry terminal when it is a boat, which is the whole
+ * reason "DPS" resolves to Bali's airport rather than a boundary in China.
+ */
+function LegEnd({ leg, end, api }: {
+    leg: TravelLeg;
+    end: 'from' | 'to';
+    api: HoneymoonApi;
+}) {
+    const text = end === 'from' ? leg.from_text : leg.to_text;
+    const lat = end === 'from' ? leg.from_lat : leg.to_lat;
+    const lng = end === 'from' ? leg.from_lng : leg.to_lng;
+
+    const [draft, setDraft] = useState(text ?? '');
+    const [searching, setSearching] = useState(false);
+    const [hits, setHits] = useState<Hit[]>([]);
+    const [error, setError] = useState('');
+
+    const meta = travelModeMeta(leg.mode);
+    const pinned = lat != null && lng != null;
+
+    const save = (fields: Record<string, unknown>) => api.update('travel', { id: leg.id, ...fields });
+
+    const lookup = async () => {
+        const term = draft.trim();
+        if (!term) return;
+        setSearching(true);
+        setError('');
+        setHits([]);
+        try {
+            const res = await fetch(
+                `/api/admin/honeymoon/geocode?q=${encodeURIComponent(term)}&mode=${leg.mode}`,
+            );
+            const body = await res.json();
+            const found: Hit[] = body.results ?? [];
+            if (!found.length) {
+                setError(body.error ?? `Nothing found for "${term}".`);
+                return;
+            }
+            // One answer is an answer; several need a choice, because the second
+            // hit for an airport code is regularly a hotel next to the runway.
+            if (found.length === 1) applyHit(found[0]);
+            else setHits(found.slice(0, 5));
+        } catch {
+            setError('Lookup failed.');
+        } finally {
+            setSearching(false);
+        }
+    };
+
+    const applyHit = (hit: Hit) => {
+        const isLink = /^https?:\/\//i.test(draft.trim());
+        // Nominatim's display_name is an address; its first segment is the name.
+        const name = hit.label.split(',')[0]?.trim() || draft.trim();
+        const label = isLink || !draft.trim() ? name : draft.trim();
+        setDraft(label);
+        setHits([]);
+        save({
+            [`${end}_text`]: label,
+            [`${end}_lat`]: hit.lat,
+            [`${end}_lng`]: hit.lng,
+        });
+    };
+
+    return (
+        <div>
+            <div className="flex items-center gap-1.5">
+                <span className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold
+                    w-9 shrink-0">
+                    {end === 'from' ? 'From' : 'To'}
+                </span>
+                <TextField
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onBlur={() => { if ((text ?? '') !== draft) save({ [`${end}_text`]: draft }); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') lookup(); }}
+                    placeholder={end === 'from'
+                        ? `${meta.label} from — DPS, or a place name`
+                        : `${meta.label} to — SIN, or a place name`}
+                />
+                <Button onClick={lookup} disabled={searching || !draft.trim()} className="!px-3">
+                    {searching ? '…' : 'Find'}
+                </Button>
+            </div>
+
+            <div className="flex items-center gap-2 pl-10 mt-0.5 flex-wrap">
+                {pinned ? (
+                    <>
+                        <span
+                            className="text-[11px] text-emerald-700 tabular-nums"
+                            title="Looked up — this end is on the map"
+                        >
+                            📍 {lat.toFixed(4)}, {lng.toFixed(4)}
+                        </span>
+                        <button
+                            onClick={() => save({ [`${end}_lat`]: null, [`${end}_lng`]: null })}
+                            className="text-[11px] text-gray-400 hover:text-rose-600"
+                            title="Forget where this is"
+                        >
+                            clear
+                        </button>
+                    </>
+                ) : (
+                    <span className="text-[11px] text-gray-400">
+                        Not looked up — press Find to put it on the map
+                    </span>
+                )}
+            </div>
+
+            {error && <p className="text-[11px] text-amber-700 pl-10 mt-0.5">{error}</p>}
+
+            {hits.length > 0 && (
+                <ul className="mt-1 ml-10 divide-y divide-gray-100 rounded-2xl border
+                    border-gray-200 bg-white overflow-hidden">
+                    {hits.map((hit, i) => (
+                        <li key={`${hit.lat},${hit.lng},${i}`}>
+                            <button
+                                onClick={() => applyHit(hit)}
+                                className="w-full text-left px-2.5 py-1.5 hover:bg-gray-50 transition"
+                            >
+                                <div className="text-[11px] text-gray-800 line-clamp-2">{hit.label}</div>
+                                <div className="text-[10px] text-gray-400 tabular-nums">
+                                    {hit.kind ? `${hit.kind} · ` : ''}
+                                    {hit.lat.toFixed(4)}, {hit.lng.toFixed(4)}
+                                </div>
+                            </button>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </div>
     );
 }

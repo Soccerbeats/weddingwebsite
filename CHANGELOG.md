@@ -11,6 +11,18 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.14 — [Released] Travel legs know where they are, and the map draws them (`main`, 2026-08-23 19:10)
+
+### Added
+- **A travel leg's From and To can be looked up.** Each end gets a **Find** next to it, and the search goes out *with the leg's mode*: a flight's ends are looked up as airports, a boat's as ferry terminals, a train's as stations. That is what makes **DPS** resolve to Ngurah Rai International rather than — as Nominatim answers a bare three-letter code — a boundary in China. Several hits are offered as a list with their type and coordinates, since the second result for an airport code is regularly a hotel by the runway.
+- **Finding a place does not overwrite what you typed.** `DPS → SIN` is the right label for a leg; *"Ngurah Rai International Airport, Jalan Cucak Rowo, Tuban, Denpasar, Badung, Bali, Indonesia"* is not. The lookup sets the pin and leaves the text alone — the exception being a pasted link, which is nobody's idea of a label. Each end shows its coordinates once found, with a **clear** to forget them.
+- **Legs are drawn on the map as curved dashed arcs**, in the mode's own colour and dash, with the mode's icon at the top of the arc: a flight is a fine dotted bow in blue, a boat a longer dash in cyan, a car amber, a train violet, a walk a near-straight green stipple. They follow the 🗓 Itinerary overlay rather than having a toggle of their own — "show me the days" and "show me how I get between them" are one question — and the counts line says how many are drawn.
+- **The curve is load-bearing, not decoration.** A straight line between two pins is exactly what a day route looks like, and two legs between the same pair of airports — out on the Monday, back on the Friday — would sit on top of each other and read as one. The bow is always to the same side of the direction of travel, so an outbound and a return separate themselves. A flight bows most, a walk barely at all: a hundred-metre stroll drawn as an arc would be a lie about the route.
+- New columns on `honeymoon_travel` — `from_lat`, `from_lng`, `to_lat`, `to_lng`, all nullable, applied by `init.sql` and mirrored at runtime. A leg stays useful as *"DPS → SIN, 14:05"* long before anyone pins it; the map simply doesn't draw the ones it can't place. Twelve new checks in `npm run check:honeymoon` cover the arc maths — endpoints, curvature, that a return leg bows the other way, and that two points in the same place produce a line rather than NaN.
+
+### Fixed
+- Widening a lookup can find nothing at all — *"Sanur ferry terminal"* matches no such object while *"Sanur"* finds the place. The geocoder now retries the original query when the widened one comes back empty, so adding a word can never make somewhere un-findable.
+
 ## v0.9.13 — [Released] Mid tier (`main`, 2026-08-23 18:58)
 
 ### Added
