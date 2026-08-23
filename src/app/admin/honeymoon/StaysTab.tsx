@@ -17,7 +17,8 @@ import type { HoneymoonApi } from './useHoneymoon';
 import PlaceEditor from './PlaceEditor';
 import LinkPreview from './LinkPreview';
 import {
-    Button, Card, EmptyState, InlineText, MiniSelect, OverflowMenu, StatusChip, TextArea,
+    Button, Card, ColumnDivider, EmptyState, InlineText, MiniSelect, OverflowMenu, StatusChip,
+    TextArea,
 } from './ui';
 
 // Leaflet reaches for `window` on import, so the map is never in the server
@@ -33,6 +34,13 @@ type SortKey = 'rank' | 'added' | 'price' | 'name' | 'status';
 type View = 'cards' | 'ranking';
 
 const VIEW_KEY = 'honeymoon.stays.view';
+const MAP_WIDTH_KEY = 'honeymoon.stays.mapWidth';
+
+/** Narrowest the map may be dragged, and the room the list keeps. */
+const MIN_MAP = 260;
+const MIN_LIST = 360;
+/** The two-column layout only exists from xl up — below that the map stacks. */
+const WIDE_QUERY = '(min-width: 1280px)';
 
 const SORTS: { key: SortKey; label: string }[] = [
     { key: 'rank', label: 'My ranking' },
@@ -113,6 +121,43 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
     const [picked, setPicked] = useState<{ id: number; from: 'list' | 'map' } | null>(null);
     /** Card elements by stay id, so a map click can scroll to one. */
     const cardRefs = useRef(new Map<number, HTMLElement>());
+
+    /**
+     * How wide the map column is, and whether there is room for one beside the
+     * list at all. Remembered per browser — how you split a screen is about
+     * your screen, not about the trip.
+     */
+    const [mapWidth, setMapWidth] = useState(384);
+    const [wide, setWide] = useState(false);
+    const splitRef = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        const saved = Number(localStorage.getItem(MAP_WIDTH_KEY));
+        if (Number.isFinite(saved) && saved >= MIN_MAP) setMapWidth(saved);
+    }, []);
+
+    useEffect(() => {
+        const mq = window.matchMedia(WIDE_QUERY);
+        const apply = () => setWide(mq.matches);
+        apply();
+        mq.addEventListener('change', apply);
+        return () => mq.removeEventListener('change', apply);
+    }, []);
+
+    /**
+     * Drag the divider.
+     *
+     * Deltas rather than absolute positions, so the grab point never drifts from
+     * the handle, and clamped against the list's minimum so the cards can always
+     * be read. Dragging left makes the map bigger, which is why the sign flips.
+     */
+    const resizeMap = (dx: number) => setMapWidth((prev) => {
+        const total = splitRef.current?.clientWidth ?? 1280;
+        const max = Math.max(MIN_MAP, total - MIN_LIST - 12);
+        const next = Math.min(max, Math.max(MIN_MAP, prev - dx));
+        localStorage.setItem(MAP_WIDTH_KEY, String(next));
+        return next;
+    });
     const [editing, setEditing] = useState<Place | null>(null);
     const [editorOpen, setEditorOpen] = useState(false);
 
@@ -407,8 +452,12 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
             inside the window. Put it beside only the cards and it starts halfway
             down the page, runs off the bottom, and a pin down there eats the
             click that should have selected it. */}
-        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_24rem] gap-3 items-start">
-        <div className="min-w-0 space-y-3">
+        <div ref={splitRef} className="flex flex-col xl:flex-row gap-3 items-stretch">
+        {/* A container, not a media query: with a draggable divider the cards
+            have to answer to the width of *this column*, not the window's — the
+            same 1600px screen holds one column of cards or three depending on
+            where you put the divider. */}
+        <div className="@container/stays min-w-0 xl:flex-1 space-y-3">
             {/* ---- Paste links ---- */}
             <Card className="p-3">
                 <label className="block text-xs font-semibold text-gray-500 mb-1">
@@ -530,7 +579,8 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                     />
                 </Card>
             ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
+                <div className="grid grid-cols-1 @2xl/stays:grid-cols-2 @5xl/stays:grid-cols-3
+                    gap-3 items-start">
                     {shown.map((stay) => {
                         const link = stayLink(stay);
                         const active = picked?.id === stay.id;
@@ -721,7 +771,17 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
             {/* Sticky, so the list scrolls past a map that stays put: the whole
                 point is comparing a card against where it is. Below xl it drops
                 under the list rather than squeezing both into half a screen. */}
-            <aside className="xl:sticky xl:top-0">
+            {wide && (
+                <ColumnDivider
+                    label="Resize the map"
+                    onDrag={resizeMap}
+                />
+            )}
+
+            <aside
+                style={wide ? { width: mapWidth } : undefined}
+                className="xl:shrink-0 xl:sticky xl:top-0 self-start"
+            >
                 <div className="h-[22rem] xl:h-[calc(100vh-15rem)] min-h-[18rem]">
                     {mapped.length === 0 ? (
                         <Card className="h-full flex items-center justify-center">

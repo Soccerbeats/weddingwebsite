@@ -11,6 +11,15 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.17 — [Released] Three columns of stays, and a divider to drag (`main`, 2026-08-23 19:46)
+
+### Fixed
+- **The stays cards were stuck at two columns however wide the window got.** Adding the map column had capped them at `lg:grid-cols-2`; they now go up to three.
+- The cards answer to the width of **their own column** rather than the window's, which is the only thing that can be right once the divider moves: the same 1600px screen holds one column of cards or three depending on where you put it. One column under 42rem, two to 64rem, three above — measured on the list, not the viewport.
+
+### Added
+- **The divider between the list and the map drags**, left and right, with the same handle the map tab's split view uses — now shared rather than copied. The map is clamped so the list keeps 360px, arrow keys move a focused divider in 24px steps, and the width is remembered per browser. Below 1280px there is no divider: the map stacks under the list, where a 260px-wide map would have been no use to anybody.
+
 ## v0.9.16 — [Released] Rank the stays by dragging them (`main`, 2026-08-23 19:40)
 
 ### Added
