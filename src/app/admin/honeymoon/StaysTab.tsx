@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import {
     RATINGS, cleanListingTitle, formatPerNight, hasCoords, isStayUrl, nameFromStayUrl, priceValue,
     stayUrlsFromText,
@@ -12,6 +13,13 @@ import LinkPreview from './LinkPreview';
 import {
     Button, Card, EmptyState, InlineText, MiniSelect, OverflowMenu, StatusChip, TextArea,
 } from './ui';
+
+// Leaflet reaches for `window` on import, so the map is never in the server
+// bundle. Same treatment as the map tab.
+const TripMap = dynamic(() => import('./TripMap'), {
+    ssr: false,
+    loading: () => <div className="h-full w-full bg-gray-100 animate-pulse rounded-2xl" />,
+});
 
 type SortKey = 'added' | 'price' | 'name' | 'status';
 
@@ -64,6 +72,17 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
         localStorage.setItem(SORT_KEY, next);
     };
     const [preview, setPreview] = useState<Place | null>(null);
+    /**
+     * The stay being pointed at, and which side pointed at it.
+     *
+     * The side matters: a pick made in the list needs no scrolling — you are
+     * already looking at the card — while a pick made on the map has to bring
+     * its card to you. Storing where it came from is what keeps those apart
+     * without the two sides fighting each other.
+     */
+    const [picked, setPicked] = useState<{ id: number; from: 'list' | 'map' } | null>(null);
+    /** Card elements by stay id, so a map click can scroll to one. */
+    const cardRefs = useRef(new Map<number, HTMLElement>());
     const [editing, setEditing] = useState<Place | null>(null);
     const [editorOpen, setEditorOpen] = useState(false);
 
@@ -117,6 +136,54 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
         }
         return sorted;
     }, [stays, filter, sort]);
+
+    /**
+     * What the map draws: the stays that have somewhere to be drawn.
+     *
+     * Deliberately every pinned stay rather than only the filtered ones — the
+     * map is there to answer "where are these, relative to each other", and a
+     * map that empties out when you tick 👍 Interested cannot. The filter's job
+     * is the list; the map highlights rather than hides.
+     */
+    const mapped = useMemo(() => stays.filter(hasCoords), [stays]);
+
+    /**
+     * Frame all the stays — on arrival, and whenever the set of them changes.
+     *
+     * Keyed on the ids rather than a count, so locating one stay and deleting
+     * another in the same breath still re-frames. Not on every data change: the
+     * viewport is yours once you have panned it, and re-fitting on each
+     * keystroke in a notes field would be unusable.
+     */
+    const mappedKey = mapped.map((s) => s.id).join(',');
+    const [fitSignal, setFitSignal] = useState(0);
+    useEffect(() => {
+        setFitSignal((n) => n + 1);
+    }, [mappedKey]);
+
+    /** Clicking a photo points the map at that stay; clicking it again lets go. */
+    const pickFromList = (stay: Place) => setPicked((prev) => (
+        prev?.id === stay.id ? null : { id: stay.id, from: 'list' }
+    ));
+
+    /**
+     * Clicking a pin brings its card to you.
+     *
+     * If the current filter hides that stay there would be no card to scroll
+     * to, so the filter gives way: you asked for that one specifically, and
+     * silently doing nothing is the worst of the three options.
+     */
+    const pickFromMap = (id: number) => {
+        if (!stays.some((s) => s.id === id)) return;
+        if (!shown.some((s) => s.id === id)) setFilter('all');
+        setPicked({ id, from: 'map' });
+    };
+
+    // Scroll to the card a map click chose, once there is a card to scroll to.
+    useEffect(() => {
+        if (!picked || picked.from !== 'map') return;
+        cardRefs.current.get(picked.id)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, [picked, shown]);
 
     const counts = useMemo(() => ({
         all: stays.length,
@@ -271,7 +338,13 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
         place.links.find((l) => isStayUrl(l.url))?.url ?? place.links[0]?.url ?? null;
 
     return (
-        <div className="space-y-3">
+        <>
+        {/* Two columns for the whole tab, not just the list: the map has to fit
+            inside the window. Put it beside only the cards and it starts halfway
+            down the page, runs off the bottom, and a pin down there eats the
+            click that should have selected it. */}
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_24rem] gap-3 items-start">
+        <div className="min-w-0 space-y-3">
             {/* ---- Paste links ---- */}
             <Card className="p-3">
                 <label className="block text-xs font-semibold text-gray-500 mb-1">
@@ -375,11 +448,24 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                     />
                 </Card>
             ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3 items-start">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
                     {shown.map((stay) => {
                         const link = stayLink(stay);
+                        const active = picked?.id === stay.id;
                         return (
-                            <Card key={stay.id} className="overflow-hidden">
+                            <div
+                                key={stay.id}
+                                // The ring lives on a wrapper: Card owns its own
+                                // border colour, and two same-specificity border
+                                // classes leave the winner up to emission order.
+                                ref={(node) => {
+                                    if (node) cardRefs.current.set(stay.id, node);
+                                    else cardRefs.current.delete(stay.id);
+                                }}
+                                className={`rounded-2xl transition
+                                    ${active ? 'ring-2 ring-accent' : ''}`}
+                            >
+                            <Card className="overflow-hidden">
                                 {stay.image_url && (
                                     // Plain <img>: the host is a third-party CDN, and
                                     // next/image would need every booking domain
@@ -391,8 +477,16 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                                         alt={stay.name}
                                         referrerPolicy="no-referrer"
                                         loading="lazy"
-                                        className="w-full h-40 object-cover bg-gray-100"
-                                        onClick={() => setPreview(stay)}
+                                        title={hasCoords(stay)
+                                            ? `Show ${stay.name} on the map`
+                                            : `${stay.name} has no location yet`}
+                                        // The photo points the map at this stay.
+                                        // It used to open the listing preview;
+                                        // that is what the Preview button below
+                                        // is for, and pointing at the map is the
+                                        // thing you do far more often.
+                                        className="w-full h-40 object-cover bg-gray-100 cursor-pointer"
+                                        onClick={() => pickFromList(stay)}
                                         onError={(e) => { e.currentTarget.style.display = 'none'; }}
                                     />
                                 )}
@@ -427,6 +521,14 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                                         {/* Where it is, and whether the map knows.
                                             "no pin" is the honest state of a stay
                                             that will not appear on the map yet. */}
+                                        {!stay.image_url && hasCoords(stay) && (
+                                            <button
+                                                onClick={() => pickFromList(stay)}
+                                                className="text-[11px] text-accent hover:underline px-2"
+                                            >
+                                                {active ? '◉ On the map' : '◎ Show on the map'}
+                                            </button>
+                                        )}
                                         {(stay.address || !hasCoords(stay)) && (
                                             <div className="flex items-center gap-1.5 flex-wrap px-2">
                                                 {stay.address && (
@@ -513,10 +615,50 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                                 )}
                                 </div>
                             </Card>
+                            </div>
                         );
                     })}
                 </div>
             )}
+            </div>
+
+            {/* ---- The map ---- */}
+            {/* Sticky, so the list scrolls past a map that stays put: the whole
+                point is comparing a card against where it is. Below xl it drops
+                under the list rather than squeezing both into half a screen. */}
+            <aside className="xl:sticky xl:top-0">
+                <div className="h-[22rem] xl:h-[calc(100vh-15rem)] min-h-[18rem]">
+                    {mapped.length === 0 ? (
+                        <Card className="h-full flex items-center justify-center">
+                            <EmptyState
+                                title="No stays on the map yet"
+                                hint={stays.length
+                                    ? 'Press "Get locations" above and the shortlist puts itself on '
+                                        + 'the map.'
+                                    : 'Paste a booking link and its location comes with it.'}
+                            />
+                        </Card>
+                    ) : (
+                        <TripMap
+                            places={mapped}
+                            selectedId={picked?.id ?? null}
+                            onSelect={pickFromMap}
+                            fitSignal={fitSignal}
+                            // A shortlist is small and every pin has to stay
+                            // clickable: a "5" badge over Canggu would hide the
+                            // one you just clicked a photo to find.
+                            cluster={false}
+                            panToSelected
+                            className="h-full w-full border border-gray-100 shadow-sm"
+                        />
+                    )}
+                </div>
+                <p className="text-[11px] text-gray-400 px-1 pt-1.5">
+                    {mapped.length} of {stays.length} on the map
+                    {mapped.length > 0 && ' · click a pin to jump to its card'}
+                </p>
+            </aside>
+        </div>
 
             {/* Keyed on the listing so each preview mounts fresh — no reset logic,
                 and the load/timeout state can't leak from one listing to the next. */}
@@ -537,6 +679,6 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                 open={editorOpen}
                 onClose={() => { setEditorOpen(false); setEditing(null); }}
             />
-        </div>
+        </>
     );
 }

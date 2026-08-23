@@ -74,6 +74,21 @@ export interface TripMapProps {
      * bumped signal does.
      */
     fitPoints?: { lat: number; lng: number }[] | null;
+    /**
+     * Group nearby pins into counts. On by default.
+     *
+     * A shortlist map turns it off: five hotels in Canggu collapsing into a "5"
+     * badge would hide the very pin you clicked a photo to highlight.
+     */
+    cluster?: boolean;
+    /**
+     * Bring the selected pin into view when it changes, without changing zoom.
+     *
+     * `panInside` moves the minimum amount needed and does nothing at all if the
+     * pin is already on screen — so a selection made *on* the map never shifts
+     * the ground under the click that made it.
+     */
+    panToSelected?: boolean;
     /** While true, dragging draws a lasso instead of panning the map. */
     selectMode?: boolean;
     /** Ids currently lasso-selected, drawn with a highlight ring. */
@@ -85,6 +100,7 @@ export interface TripMapProps {
 
 export default function TripMap({
     places, routes = [], legs = [], selectedId = null, onSelect, fitSignal = 0, fitPoints = null,
+    cluster = true, panToSelected = false,
     selectMode = false, selectedIds, onLassoSelect, className = '',
 }: TripMapProps) {
     const containerRef = useRef<HTMLDivElement | null>(null);
@@ -198,7 +214,7 @@ export default function TripMap({
 
         // Clustering is suspended while lassoing: you cannot meaningfully draw
         // around points that are hidden inside a count badge.
-        const clustered = routes.length === 0 && !selectMode;
+        const clustered = cluster && routes.length === 0 && !selectMode;
         const layer = clustered
             ? L.markerClusterGroup({
                 showCoverageOnHover: false,
@@ -255,6 +271,24 @@ export default function TripMap({
                 icon,
                 title: place.name,
                 zIndexOffset: selected ? 1000 : 0,
+                /*
+                 * Not focusable, and this is load-bearing.
+                 *
+                 * Leaflet's default gives every marker a tabIndex. Clicking a
+                 * focusable element focuses it, and focusing an element that is
+                 * partly outside its scroll container makes the browser scroll it
+                 * into view — which moves the pin out from under the cursor
+                 * between mousedown and mouseup. The click event then lands on
+                 * the nearest common ancestor, the map container, and the
+                 * marker's own click handler never runs. On any layout where the
+                 * map runs past the bottom of the window, pins in the lower part
+                 * of it silently stop responding.
+                 *
+                 * The trade is tab-to-a-pin, on a map that regularly holds two
+                 * hundred of them; the keyboard route to a place is the list on
+                 * the Places tab, which is a better one anyway.
+                 */
+                keyboard: false,
             });
 
             const reviewNote = place.needs_review
@@ -271,7 +305,17 @@ export default function TripMap({
             });
             marker.addTo(layer);
         }
-    }, [places, selectedId, selectedIds, routes.length, selectMode, ready]);
+    }, [places, selectedId, selectedIds, routes.length, selectMode, cluster, ready]);
+
+    /* Keep the selected pin on screen, when the parent asks for that. */
+    useEffect(() => {
+        if (!panToSelected || selectedId == null) return;
+        const map = mapRef.current;
+        if (!map) return;
+        const place = places.find((p) => p.id === selectedId);
+        if (!place || !hasCoords(place)) return;
+        map.panInside([place.lat, place.lng], { padding: [48, 48] });
+    }, [selectedId, panToSelected, places, ready]);
 
     /* Draw the selected day's route. */
     useEffect(() => {

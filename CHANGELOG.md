@@ -11,6 +11,19 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.15 — [Released] The stays shortlist gets a map, and pins stop eating clicks (`main`, 2026-08-23 19:31)
+
+### Added
+- **A map down the right-hand side of the Stays tab**, holding every stay that has a location and framing all of them. It re-frames when the set of stays changes — locating one, deleting another — but never on an ordinary edit, because the viewport is yours once you have panned it.
+- **Click a stay's photo and its pin lights up**: bigger, ringed, raised above the others, and panned into view if it was off the edge — by the smallest amount that works, so a pin already on screen never moves. Click the photo again to let go. A stay with no photo gets a **◎ Show on the map** link instead, so the two are not different features.
+- **Click a pin and its card comes to you**: scrolled to the middle of the list and ringed. If the current filter was hiding that stay the filter gives way — you asked for that one specifically, and doing nothing silently is the worst of the three options.
+- The map is deliberately **not filtered** with the list: it answers "where are these, relative to each other", which a map that empties out when you tick 👍 Interested cannot. Filtering narrows the list; the map highlights. It also doesn't cluster — a "5" badge over Canggu would hide the very pin you clicked a photo to find.
+- The photo now selects rather than opening the listing preview. **Preview** is still its own button on the card, and pointing at the map is the thing you do far more often.
+
+### Fixed
+- **Pins in the lower part of a map that ran past the bottom of the window silently did nothing when clicked.** Leaflet gives every marker a `tabIndex`; clicking a focusable element focuses it, and focusing something partly out of view makes the browser scroll it into view — which moved the pin out from under the cursor between mousedown and mouseup. The click event then landed on the nearest common ancestor, the map container, and the marker's own handler never ran. Markers are no longer focusable, which costs tab-to-a-pin on a map that regularly holds two hundred of them and buys back clicks that work. Found while building the stays map, but it was latent on the map tab too, on any window short enough.
+- The stays map is sized to the window rather than to the space below the paste box, so the whole map is always on screen — and the browser test now asserts that, so a future layout change that reintroduces the overflow fails loudly instead of quietly breaking every pin below the fold.
+
 ## v0.9.14 — [Released] Travel legs know where they are, and the map draws them (`main`, 2026-08-23 19:10)
 
 ### Added
