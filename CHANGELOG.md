@@ -11,6 +11,15 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.8 — [Released] Insert a day where you need it; the map's itinerary starts out of the way (`main`, 2026-08-23 18:06)
+
+### Added
+- **A day can be added before or after any other day**, from that day's `⋯` menu — *Add a day before day 4* / *Add a day after day 4*. Until now the only way to make a day was to append one to the end and drag it up the trip. The insert reuses the reorder the drag handle uses, so the trip renumbers around it and every following day's date shifts along; the days either side keep their stops, travel legs and notes.
+
+### Changed
+- **The map's itinerary overlay now opens minimised.** Pressing 🗓 asks for the routes *on the map*, and a panel that immediately covered the top-left corner of them was in the way of the thing it was describing. The corner keeps a **🗓 Itinerary · N days** button instead; clicking it opens the list of days and stops, and the panel has a — to put it back. Switching the overlay off and on starts collapsed again.
+- Both the button and the panel sit at `left-14` rather than `left-3`, clear of Leaflet's zoom control — the panel used to cover the **+**, so you could not zoom in while reading the days.
+
 ## v0.9.7 — [Released] A place is editable from the day it is on (`main`, 2026-08-23 17:55)
 
 ### Added

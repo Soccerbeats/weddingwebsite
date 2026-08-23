@@ -67,6 +67,16 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
     const [selectMode, setSelectMode] = useState(false);
     const [lassoed, setLassoed] = useState<Set<number>>(new Set());
     const [showItinerary, setShowItinerary] = useState(false);
+    /**
+     * Whether the itinerary overlay is expanded.
+     *
+     * Starts collapsed every time the overlay is switched on: what you asked for
+     * by pressing 🗓 is the *routes on the map*, and a panel that immediately
+     * covers the top-left corner of them is in the way of the thing it is
+     * describing. The corner keeps a button instead, and opening it is one click
+     * whenever you do want to read the stops in order.
+     */
+    const [routeListOpen, setRouteListOpen] = useState(false);
     // Bumped only on purpose — never by a filter. See TripMap's fit effect.
     const [fitSignal, setFitSignal] = useState(0);
 
@@ -475,7 +485,7 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                         {showUnconfirmed ? '⚠ Hide' : '⚠ Unconfirmed'}
                     </button>
                     <button
-                        onClick={() => setShowItinerary((v) => !v)}
+                        onClick={() => { setShowItinerary((v) => !v); setRouteListOpen(false); }}
                         disabled={!!selectedDay || days.length === 0}
                         title="Overlay each day's stops, in order"
                         className={`shrink-0 rounded-2xl px-2.5 py-1.5 text-sm font-medium border transition
@@ -684,13 +694,46 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                 )}
 
                 {/* ---- What happens each day, while the overlay is on ---- */}
-                {showItinerary && routes.length > 0 && (
-                    <div className="absolute top-3 left-3 z-[500] w-[min(20rem,45%)]
+                {/* Collapsed: a pill in the top-left corner, carrying the day
+                    count so it still says how much is on screen.
+
+                    left-14 rather than left-3 for both states: Leaflet's zoom
+                    buttons own that corner, and the panel used to cover the +
+                    so you could not zoom in while reading the days. */}
+                {showItinerary && routes.length > 0 && !routeListOpen && (
+                    <button
+                        onClick={() => setRouteListOpen(true)}
+                        title="Show the stops of each day, in order"
+                        className="absolute top-3 left-14 z-[500] inline-flex items-center gap-1.5
+                            bg-white/95 backdrop-blur rounded-2xl shadow-lg border border-gray-200
+                            px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900
+                            hover:bg-white transition"
+                    >
+                        <span aria-hidden>🗓</span>
+                        Itinerary
+                        <span className="text-gray-400 tabular-nums">
+                            {routes.length} day{routes.length === 1 ? '' : 's'}
+                        </span>
+                        <span className="text-gray-300" aria-hidden>▸</span>
+                    </button>
+                )}
+                {showItinerary && routes.length > 0 && routeListOpen && (
+                    <div className="absolute top-3 left-14 z-[500] w-[min(20rem,45%)]
                         max-h-[70%] overflow-auto bg-white/95 backdrop-blur rounded-2xl
                         shadow-lg border border-gray-200 p-3">
-                        <p className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold mb-2">
-                            Itinerary
-                        </p>
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                            <p className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold">
+                                Itinerary
+                            </p>
+                            <button
+                                onClick={() => setRouteListOpen(false)}
+                                title="Minimise back to the corner"
+                                aria-label="Minimise the itinerary list"
+                                className="text-gray-300 hover:text-gray-700 leading-none px-1 -mr-1"
+                            >
+                                &minus;
+                            </button>
+                        </div>
                         <ul className="space-y-2.5">
                             {routes.map((r) => (
                                 <li key={r.label}>

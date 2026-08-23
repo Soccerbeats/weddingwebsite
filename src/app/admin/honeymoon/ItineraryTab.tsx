@@ -415,6 +415,29 @@ function DayCard({ day, api, onEditPlace }: {
     };
 
     /**
+     * Put a fresh day immediately before or after this one.
+     *
+     * The API only ever appends — `POST {}` gets you "the next day" — so this
+     * creates it at the end and then reorders the whole trip with the new id
+     * spliced into place. That is the same call the drag handle makes, which
+     * renumbers every day and carries their dates with them, so inserting a day
+     * in the middle of a trip shifts the rest along rather than leaving a hole.
+     *
+     * The whole list is sent, not just the moved part: day_number is UNIQUE, and
+     * a day left out of the reorder keeps its old number and collides.
+     */
+    const insertDay = async (side: 'before' | 'after') => {
+        const created = await api.createRow('days', {});
+        if (created?.id == null) return;
+        // `createRow` deliberately doesn't refetch, so this list is the trip as
+        // it was — which is exactly what we want to splice into.
+        const ids = (api.data?.days ?? []).map((d) => d.id).filter((id) => id !== created.id);
+        const at = ids.indexOf(day.id) + (side === 'after' ? 1 : 0);
+        ids.splice(Math.max(0, at), 0, created.id);
+        await api.reorder('days', ids);
+    };
+
+    /**
      * Copy a day, structure and all, onto the end of the trip.
      *
      * The second beach day is mostly the first beach day. Copying it beats
@@ -479,6 +502,14 @@ function DayCard({ day, api, onEditPlace }: {
                 </div>
                 <OverflowMenu
                     items={[
+                        {
+                            label: `Add a day before day ${day.day_number}`,
+                            onClick: () => insertDay('before'),
+                        },
+                        {
+                            label: `Add a day after day ${day.day_number}`,
+                            onClick: () => insertDay('after'),
+                        },
                         {
                             label: 'Add travel leg',
                             onClick: () => api.create('travel', { day_id: day.id, mode: 'flight' }),
