@@ -1,7 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { addDays, daysBetween, formatDayDate, planRange } from '@/lib/honeymoon';
+import Link from 'next/link';
+import {
+    addDays, daysBeyondRange, daysBetween, formatDate, formatDayDate, planRange,
+} from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
 import DateRangePicker from './DateRangePicker';
 import { Button, Card, SelectField, TextField } from './ui';
@@ -26,44 +29,39 @@ export default function SettingsTab({ api }: { api: HoneymoonApi }) {
     const lastDay = days.length ? Math.max(...days.map((d) => d.day_number)) : 0;
 
     /**
-     * Make the day rows match the dates you just drew.
+     * Days that now sit past the end of the trip.
      *
-     * This is the part that earns the calendar: the range *is* the trip length,
-     * so setting it builds the days rather than leaving you to press "+ Add day"
-     * fourteen times. Dropping days is destructive — it cascades their stops and
-     * travel legs — so it says exactly what would go before it goes, and the day
-     * rows are only touched once you agree.
+     * Shortening the range leaves these behind rather than deleting them, so
+     * this card has to say so — otherwise the only sign would be red cards on
+     * another tab you might not open.
+     */
+    const beyond = daysBeyondRange(
+        days.map((d) => d.day_number), trip.start_date, trip.end_date,
+    );
+
+    /**
+     * Set the trip's dates, and grow the day rows to fill a longer range.
+     *
+     * Changing the dates is **not** destructive, in either direction. A longer
+     * range is the part that earns the calendar — the range *is* the trip
+     * length, so it builds the missing days rather than leaving you to press
+     * "+ Add day" fourteen times. A shorter range writes the dates and stops
+     * there: the days you have already planned keep their stops, travel legs and
+     * notes, take their new dates from the new start, and the ones that now fall
+     * past the end are flagged in red on the Itinerary for you to deal with.
+     *
+     * It used to delete that tail behind a confirm, which is the wrong trade at
+     * any level of warning: dragging a date is an ordinary, exploratory edit, and
+     * an hour of planning should not be one mis-drag and one reflexive OK away
+     * from being gone.
      */
     const applyRange = async (start: string, end: string) => {
         const plan = planRange(start, end, days.map((d) => d.day_number));
-
-        if (plan.remove.length) {
-            const doomed = days.filter((d) => plan.remove.includes(d.day_number));
-            const stops = doomed.reduce((n, d) => n + d.stops.length, 0);
-            const legs = doomed.reduce((n, d) => n + d.travel.length, 0);
-            const spans = plan.remove.length === 1
-                ? `Day ${plan.remove[0]}`
-                : `Days ${plan.remove[0]}–${plan.remove[plan.remove.length - 1]}`;
-            const carrying = [
-                stops ? `${stops} stop${stops === 1 ? '' : 's'}` : '',
-                legs ? `${legs} travel leg${legs === 1 ? '' : 's'}` : '',
-            ].filter(Boolean).join(' and ');
-            const message = carrying
-                ? `That shortens the trip to ${plan.length} days. ${spans} would be deleted, `
-                    + `along with ${carrying}. Continue?`
-                : `That shortens the trip to ${plan.length} days. ${spans} would be deleted. Continue?`;
-            if (!confirm(message)) return;
-        }
-
         setWorking(true);
         try {
             await api.update('trip', { start_date: plan.start, end_date: plan.end });
             for (const dayNumber of plan.add) {
                 await api.create('days', { day_number: dayNumber });
-            }
-            for (const dayNumber of plan.remove) {
-                const day = days.find((d) => d.day_number === dayNumber);
-                if (day) await api.remove('days', day.id);
             }
         } finally {
             setWorking(false);
@@ -124,12 +122,27 @@ export default function SettingsTab({ api }: { api: HoneymoonApi }) {
                                 {lastDay > 1 && <> · day {lastDay} is {formatDayDate(trip.start_date, lastDay)}</>}
                                 {nights != null && <> · {nights} night{nights === 1 ? '' : 's'} away</>}
                             </p>
-                            {trip.end_date && lastDay !== (daysBetween(trip.start_date, trip.end_date) ?? 0) + 1 && (
-                                <p className="text-[11px] text-amber-700 mt-1">
-                                    You have {lastDay} day{lastDay === 1 ? '' : 's'} planned for a{' '}
-                                    {(nights ?? 0) + 1}-day trip. Drag the range again to line them up.
+                            {beyond.length > 0 ? (
+                                <p className="text-[11px] text-rose-700 bg-rose-50 border border-rose-200
+                                    rounded-xl px-2.5 py-1.5 mt-1.5">
+                                    {beyond.length === 1
+                                        ? `Day ${beyond[0]} now falls`
+                                        : `Days ${beyond[0]}–${beyond[beyond.length - 1]} now fall`}
+                                    {' '}past {formatDate(trip.end_date)}, the end of the trip.{' '}
+                                    <strong className="font-semibold">Nothing was deleted</strong> — they
+                                    keep their stops and travel legs, and are flagged in red on the{' '}
+                                    <Link href="/admin/honeymoon/itinerary" className="underline">
+                                        Itinerary
+                                    </Link>. Move their stops onto earlier days, delete the days you
+                                    don&apos;t need, or drag the range back out.
                                 </p>
-                            )}
+                            ) : trip.end_date
+                                && lastDay < (daysBetween(trip.start_date, trip.end_date) ?? 0) + 1 ? (
+                                    <p className="text-[11px] text-amber-700 mt-1">
+                                        The dates cover {(nights ?? 0) + 1} days and you have {lastDay}{' '}
+                                        planned. Drag the range again to fill in the rest.
+                                    </p>
+                                ) : null}
                             <Button className="mt-2" onClick={clearDates}>Clear dates</Button>
                         </>
                     ) : (

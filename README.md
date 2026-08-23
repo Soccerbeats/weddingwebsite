@@ -59,10 +59,13 @@ Full list: **[Features](https://github.com/Soccerbeats/weddingwebsite/wiki/Featu
 The image is on GitHub Container Registry, so there is nothing to build:
 
 ```bash
-docker compose -f docker/docker-compose.yml up -d   # see the wiki for the compose file and env vars
+cp docker/.env.example docker/.env        # set POSTGRES_PASSWORD and ADMIN_PASSWORD
+docker compose -f docker/docker-compose.prod.yml up -d
 ```
 
 Then open `http://localhost:3000`, and `/admin` with the password you set.
+(`docker/docker-compose.yml` is the development stack — it builds from source
+instead of pulling the image.)
 
 - **[Installation](https://github.com/Soccerbeats/weddingwebsite/wiki/Installation)** — Portainer, plain Compose, or local
 - **[Deployment](https://github.com/Soccerbeats/weddingwebsite/wiki/Deployment)** — building, pushing and redeploying

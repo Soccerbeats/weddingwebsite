@@ -10,12 +10,15 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
-    SPREAD_WARNING_KM, TRAVEL_MODES, calendarMonths, dayHops, formatDayDate, formatDistance,
-    formatTime,
-    type CalendarCell, type Day, type Stop, type TravelMode,
+    SPREAD_WARNING_KM, arrivalsOn, calendarMonths, dayHops, daysBeyondRange,
+    formatDate, formatDayDate, formatDistance, formatTime, hasCoords, legIsOvernight,
+    travelModeMeta,
+    type CalendarCell, type Day, type Place, type Stop, type TravelLeg,
 } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
+import PlaceEditor from './PlaceEditor';
 import PrintSheet from './PrintSheet';
+import TravelLegCard from './TravelLeg';
 import {
     Button, Card, CategoryChip, EmptyState, InlineText, Modal, OverflowMenu, SelectField, TextField,
 } from './ui';
@@ -24,9 +27,26 @@ type View = 'list' | 'calendar';
 
 const VIEW_KEY = 'honeymoon.itinerary.view';
 
-export default function ItineraryTab({ api }: { api: HoneymoonApi }) {
+/**
+ * @param panel Rendered as a narrow column beside the map rather than as the
+ *   whole page. Everything that needs width or belongs to the page — the
+ *   calendar view, print, export, the hint line — is dropped, and the days
+ *   stack in one column whatever the window is doing.
+ */
+export default function ItineraryTab({ api, panel = false, onFocusDay }: {
+    api: HoneymoonApi;
+    panel?: boolean;
+    /**
+     * Given by the map's split view: frame the map on this day. Absent on the
+     * Itinerary tab proper, where there is no map to move, and the button that
+     * calls it is simply not rendered.
+     */
+    onFocusDay?: (day: Day) => void;
+}) {
     const { data } = api;
-    const days = data?.days ?? [];
+    // Stable identity: a fresh `?? []` per render would make the memo below
+    // recompute on every keystroke anywhere on the page.
+    const days = useMemo(() => data?.days ?? [], [data]);
 
     // Remembered like the other view preferences, but locally: which way you
     // like to read the trip is about you and this browser, not about the trip.
@@ -34,11 +54,38 @@ export default function ItineraryTab({ api }: { api: HoneymoonApi }) {
     // localStorage, so seeding from it directly would render one view on the
     // server and the other on the client and blow up hydration.
     const [view, setView] = useState<View>('list');
+
+    /**
+     * The place a stop points at, opened for editing.
+     *
+     * Held here rather than in the stop row so there is one editor for the whole
+     * tab — and so it works identically in the map's split view, where this same
+     * component is the left-hand column.
+     */
+    const [editingPlace, setEditingPlace] = useState<Place | null>(null);
     useEffect(() => {
         const saved = localStorage.getItem(VIEW_KEY);
         // eslint-disable-next-line react-hooks/set-state-in-effect
         if (saved === 'calendar' || saved === 'list') setView(saved);
     }, []);
+    /**
+     * Days that sit past the end of the trip's dates.
+     *
+     * Shortening the range in Settings no longer deletes them — it leaves them
+     * here, holding everything you had planned, and they are flagged in red
+     * until you either move their stops onto earlier days or put the dates back.
+     */
+    const beyond = useMemo(
+        () => new Set(daysBeyondRange(
+            days.map((d) => d.day_number),
+            data?.trip.start_date ?? null,
+            data?.trip.end_date ?? null,
+        )),
+        [days, data?.trip.start_date, data?.trip.end_date],
+    );
+
+    /** A column this narrow has no room for a month grid. */
+    const shownView: View = panel ? 'list' : view;
     const chooseView = (next: View) => {
         setView(next);
         localStorage.setItem(VIEW_KEY, next);
@@ -82,6 +129,7 @@ export default function ItineraryTab({ api }: { api: HoneymoonApi }) {
     // read as a wall of days you can scan than as a single tall strip.
     return (
         <div className="space-y-3">
+            {!panel && (
             <div className="flex items-center justify-between gap-3 px-1">
                 <p className="text-xs text-gray-400">
                     {view === 'list'
@@ -107,17 +155,51 @@ export default function ItineraryTab({ api }: { api: HoneymoonApi }) {
                     <ViewToggle view={view} onChange={chooseView} />
                 </div>
             </div>
+            )}
 
-            {/* Invisible on screen; the only thing on the page in print. */}
-            <PrintSheet api={api} />
+            {beyond.size > 0 && (
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2.5">
+                    <p className="text-xs text-rose-800">
+                        <strong className="font-semibold">
+                            {beyond.size} day{beyond.size === 1 ? '' : 's'} past the end of the trip.
+                        </strong>{' '}
+                        The dates now stop at {formatDate(data?.trip.end_date)}, and the days below
+                        marked in red fall after it. Nothing was deleted — move their stops onto
+                        earlier days, delete the days you don&apos;t need, or set the dates back in
+                        Settings.
+                    </p>
+                </div>
+            )}
 
-            {view === 'calendar' ? (
-                <CalendarView api={api} days={days} />
+            {/* Invisible on screen; the only thing on the page in print. Never in
+                a panel: two copies on one page would print the trip twice. */}
+            {!panel && <PrintSheet api={api} />}
+
+            {shownView === 'calendar' ? (
+                <CalendarView
+                    api={api}
+                    days={days}
+                    onEditPlace={setEditingPlace}
+                    onFocusDay={onFocusDay}
+                    beyond={beyond}
+                />
             ) : (
                 <DndContext sensors={daySensors} collisionDetection={closestCenter} onDragEnd={onDayDragEnd}>
                     <SortableContext items={days.map((d) => d.id)} strategy={rectSortingStrategy}>
-                        <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3 items-start">
-                            {days.map((day) => <DayCard key={day.id} day={day} api={api} />)}
+                        <div className={`grid gap-3 items-start ${panel
+                            ? 'grid-cols-1'
+                            : 'grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3'}`}>
+                            {days.map((day) => (
+                                <DayCard
+                                    key={day.id}
+                                    day={day}
+                                    api={api}
+                                    onEditPlace={setEditingPlace}
+                                    onFocusDay={onFocusDay}
+                                    beyondRange={beyond.has(day.day_number)}
+                                    arrivals={arrivalsOn(days, day.day_number)}
+                                />
+                            ))}
                         </div>
                     </SortableContext>
                 </DndContext>
@@ -128,6 +210,15 @@ export default function ItineraryTab({ api }: { api: HoneymoonApi }) {
                     + Add day {days.length + 1}
                 </Button>
             </div>
+
+            {/* Never `place={null}`: a null place means "create new" to the
+                editor, and the itinerary has no reason to offer that. */}
+            <PlaceEditor
+                api={api}
+                place={editingPlace}
+                open={editingPlace != null}
+                onClose={() => setEditingPlace(null)}
+            />
         </div>
     );
 }
@@ -171,7 +262,14 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
  * the list view uses, so there is one place a day is edited and no second
  * implementation to keep in step.
  */
-function CalendarView({ api, days }: { api: HoneymoonApi; days: Day[] }) {
+function CalendarView({ api, days, onEditPlace, onFocusDay, beyond }: {
+    api: HoneymoonApi;
+    days: Day[];
+    onEditPlace: (place: Place) => void;
+    onFocusDay?: (day: Day) => void;
+    /** Day numbers past the end of the trip's dates. */
+    beyond: Set<number>;
+}) {
     const startDate = api.data?.trip.start_date ?? null;
     const [openDayId, setOpenDayId] = useState<number | null>(null);
 
@@ -224,6 +322,8 @@ function CalendarView({ api, days }: { api: HoneymoonApi; days: Day[] }) {
                                         cell={cell}
                                         day={day}
                                         api={api}
+                                        beyondRange={day != null && beyond.has(day.day_number)}
+                                        arrivals={day ? arrivalsOn(days, day.day_number) : []}
                                         onOpen={() => day && setOpenDayId(day.id)}
                                     />
                                 );
@@ -246,7 +346,14 @@ function CalendarView({ api, days }: { api: HoneymoonApi; days: Day[] }) {
                 {openDay && (
                     <DndContext collisionDetection={closestCenter} onDragEnd={() => {}}>
                         <SortableContext items={[openDay.id]} strategy={rectSortingStrategy}>
-                            <DayCard day={openDay} api={api} />
+                            <DayCard
+                                day={openDay}
+                                api={api}
+                                onEditPlace={onEditPlace}
+                                onFocusDay={onFocusDay}
+                                beyondRange={beyond.has(openDay.day_number)}
+                                arrivals={arrivalsOn(days, openDay.day_number)}
+                            />
                         </SortableContext>
                     </DndContext>
                 )}
@@ -255,10 +362,13 @@ function CalendarView({ api, days }: { api: HoneymoonApi; days: Day[] }) {
     );
 }
 
-function CalendarCellBox({ cell, day, api, onOpen }: {
+function CalendarCellBox({ cell, day, api, beyondRange, arrivals, onOpen }: {
     cell: CalendarCell;
     day: Day | null;
     api: HoneymoonApi;
+    beyondRange: boolean;
+    /** Legs landing on this day, having left on an earlier one. */
+    arrivals: { leg: TravelLeg; fromDay: Day }[];
     onOpen: () => void;
 }) {
     // Outside the trip: a real date, greyed, so the shape of the trip against
@@ -280,23 +390,37 @@ function CalendarCellBox({ cell, day, api, onOpen }: {
     return (
         <button
             onClick={onOpen}
-            className="min-h-[5.5rem] rounded-xl border border-accent/30 bg-accent/5 p-1.5
-                text-left hover:bg-accent/10 hover:border-accent/50 transition
-                focus:outline-none focus:ring-2 focus:ring-accent/30 overflow-hidden"
+            title={beyondRange ? 'This day falls past the end of the trip' : undefined}
+            className={`min-h-[5.5rem] rounded-xl border p-1.5 text-left transition
+                focus:outline-none focus:ring-2 overflow-hidden ${beyondRange
+                ? 'border-rose-300 bg-rose-50 hover:bg-rose-100 hover:border-rose-400 focus:ring-rose-300'
+                : 'border-accent/30 bg-accent/5 hover:bg-accent/10 hover:border-accent/50 focus:ring-accent/30'}`}
         >
             <div className="flex items-baseline justify-between gap-1">
                 <span className="text-[11px] tabular-nums text-gray-500">{cell.dayOfMonth}</span>
-                <span className="text-[10px] font-semibold text-accent shrink-0">
+                <span className={`text-[10px] font-semibold shrink-0
+                    ${beyondRange ? 'text-rose-700' : 'text-accent'}`}>
                     Day {day.day_number}
                 </span>
             </div>
             {day.title && (
                 <p className="text-[11px] font-medium text-gray-800 truncate">{day.title}</p>
             )}
+            {/* Landing here from an earlier day, before this day's own departures:
+                you arrive before you leave again. */}
+            {arrivals.map(({ leg }) => (
+                <p key={`in-${leg.id}`} className="text-[10px] text-slate-500 truncate">
+                    ↓ {travelModeMeta(leg.mode).icon}{' '}
+                    {leg.arrive_time ? formatTime(leg.arrive_time) : ''} {leg.to_text ?? ''}
+                </p>
+            ))}
             {day.travel.map((leg) => (
                 <p key={leg.id} className="text-[10px] text-slate-500 truncate">
-                    {TRAVEL_MODES.find((m) => m.key === leg.mode)?.icon ?? '→'}{' '}
+                    {travelModeMeta(leg.mode).icon}{' '}
                     {leg.depart_time ? formatTime(leg.depart_time) : ''} {leg.to_text ?? ''}
+                    {legIsOvernight(leg) && (
+                        <span className="font-semibold"> +{leg.arrive_day_offset}d</span>
+                    )}
                 </p>
             ))}
             {/* Three, then a count: any more and the cell sets the row height for
@@ -319,7 +443,16 @@ function CalendarCellBox({ cell, day, api, onOpen }: {
     );
 }
 
-function DayCard({ day, api }: { day: Day; api: HoneymoonApi }) {
+function DayCard({ day, api, onEditPlace, onFocusDay, beyondRange = false, arrivals = [] }: {
+    day: Day;
+    api: HoneymoonApi;
+    onEditPlace: (place: Place) => void;
+    onFocusDay?: (day: Day) => void;
+    /** This day is numbered past the end of the trip's dates. */
+    beyondRange?: boolean;
+    /** Legs that left on an earlier day and land on this one. */
+    arrivals?: { leg: TravelLeg; fromDay: Day }[];
+}) {
     const {
         attributes: dayAttributes, listeners: dayListeners, setNodeRef: setDayRef,
         transform: dayTransform, transition: dayTransition, isDragging: dayDragging,
@@ -331,6 +464,18 @@ function DayCard({ day, api }: { day: Day; api: HoneymoonApi }) {
 
     const startDate = api.data?.trip.start_date ?? null;
     const realDate = formatDayDate(startDate, day.day_number);
+    /** The stay this day is based at, if one is set — editable like any stop. */
+    const base = day.base_place_id == null ? null : api.placeById.get(day.base_place_id) ?? null;
+    /**
+     * Whether there is anything on this day the map could actually fly to.
+     *
+     * A day of unpinned stops has no bounds, so the button is disabled and says
+     * why rather than looking broken when nothing moves.
+     */
+    const pinnedStops = day.stops.some((stop) => {
+        const place = stop.place_id == null ? undefined : api.placeById.get(stop.place_id);
+        return place != null && hasCoords(place);
+    });
     const hops = dayHops(day.stops, api.placeById);
     const longest = hops.reduce((max, hop) => Math.max(max, hop.km), 0);
 
@@ -360,6 +505,29 @@ function DayCard({ day, api }: { day: Day; api: HoneymoonApi }) {
         setPickPlace('');
         setCustomLabel('');
         setAdding(false);
+    };
+
+    /**
+     * Put a fresh day immediately before or after this one.
+     *
+     * The API only ever appends — `POST {}` gets you "the next day" — so this
+     * creates it at the end and then reorders the whole trip with the new id
+     * spliced into place. That is the same call the drag handle makes, which
+     * renumbers every day and carries their dates with them, so inserting a day
+     * in the middle of a trip shifts the rest along rather than leaving a hole.
+     *
+     * The whole list is sent, not just the moved part: day_number is UNIQUE, and
+     * a day left out of the reorder keeps its old number and collides.
+     */
+    const insertDay = async (side: 'before' | 'after') => {
+        const created = await api.createRow('days', {});
+        if (created?.id == null) return;
+        // `createRow` deliberately doesn't refetch, so this list is the trip as
+        // it was — which is exactly what we want to splice into.
+        const ids = (api.data?.days ?? []).map((d) => d.id).filter((id) => id !== created.id);
+        const at = ids.indexOf(day.id) + (side === 'after' ? 1 : 0);
+        ids.splice(Math.max(0, at), 0, created.id);
+        await api.reorder('days', ids);
     };
 
     /**
@@ -395,9 +563,21 @@ function DayCard({ day, api }: { day: Day; api: HoneymoonApi }) {
         <div
             ref={setDayRef}
             style={{ transform: CSS.Transform.toString(dayTransform), transition: dayTransition }}
-            className={dayDragging ? 'opacity-60' : ''}
+            // The ring goes on the wrapper rather than the Card: Card sets its own
+            // border colour, and two same-specificity border classes leave which
+            // one wins up to the order Tailwind happened to emit them in.
+            className={`${dayDragging ? 'opacity-60' : ''}
+                ${beyondRange ? 'rounded-2xl ring-2 ring-rose-300' : ''}`}
         >
         <Card className="p-4">
+            {beyondRange && (
+                <p className="mb-2 rounded-xl bg-rose-50 border border-rose-200 px-2.5 py-1.5
+                    text-[11px] text-rose-700">
+                    Past the end of the trip{formatDate(api.data?.trip.end_date)
+                        ? ` (${formatDate(api.data?.trip.end_date)})` : ''}. Move these stops onto an
+                    earlier day, or extend the dates in Settings.
+                </p>
+            )}
             {/* ---- Day header ---- */}
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
@@ -425,8 +605,30 @@ function DayCard({ day, api }: { day: Day; api: HoneymoonApi }) {
                         onCommit={(title) => api.update('days', { id: day.id, title })}
                     />
                 </div>
+                {onFocusDay && (
+                    <button
+                        onClick={() => onFocusDay(day)}
+                        disabled={!pinnedStops}
+                        title={pinnedStops
+                            ? `Move the map to day ${day.day_number}'s stops, and show the route`
+                            : 'Nothing on this day is pinned yet'}
+                        className="shrink-0 rounded-full border border-gray-200 bg-gray-50 px-2 py-1
+                            text-[11px] font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900
+                            disabled:opacity-40 disabled:hover:bg-gray-50 transition"
+                    >
+                        ◎ Map
+                    </button>
+                )}
                 <OverflowMenu
                     items={[
+                        {
+                            label: `Add a day before day ${day.day_number}`,
+                            onClick: () => insertDay('before'),
+                        },
+                        {
+                            label: `Add a day after day ${day.day_number}`,
+                            onClick: () => insertDay('after'),
+                        },
                         {
                             label: 'Add travel leg',
                             onClick: () => api.create('travel', { day_id: day.id, mode: 'flight' }),
@@ -464,6 +666,25 @@ function DayCard({ day, api }: { day: Day; api: HoneymoonApi }) {
                 </div>
             )}
 
+            {/* ---- What lands here ---- */}
+            {/* A red-eye belongs to the day it departs, but the day it lands is
+                not a free morning — without this, day 4 looks empty when you
+                actually touch down on it at six. */}
+            {arrivals.map(({ leg, fromDay }) => (
+                <p
+                    key={`in-${leg.id}`}
+                    className="mt-2 rounded-2xl bg-slate-100 border border-slate-200 px-2.5 py-1.5
+                        text-[11px] text-slate-700"
+                >
+                    {travelModeMeta(leg.mode).icon} Arrives
+                    {leg.arrive_time ? ` ${formatTime(leg.arrive_time)}` : ''}
+                    {leg.to_text ? ` at ${leg.to_text}` : ''} — the{' '}
+                    {travelModeMeta(leg.mode).label.toLowerCase()} that left on day{' '}
+                    {fromDay.day_number}
+                    {leg.depart_time ? ` at ${formatTime(leg.depart_time)}` : ''}.
+                </p>
+            ))}
+
             {/* ---- Base ---- */}
             <div className="mt-2 flex items-center gap-2">
                 <span className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold shrink-0">
@@ -482,60 +703,26 @@ function DayCard({ day, api }: { day: Day; api: HoneymoonApi }) {
                         .filter((p) => p.category === 'stay' || p.id === day.base_place_id)
                         .map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </SelectField>
+                {/* The base is a place too — the same one you booked and will want
+                    to add a confirmation number to. */}
+                {base && (
+                    <button
+                        onClick={() => onEditPlace(base)}
+                        title={`Edit ${base.name}`}
+                        aria-label={`Edit ${base.name}`}
+                        className="shrink-0 text-gray-300 hover:text-accent px-1 leading-none"
+                    >
+                        ✎
+                    </button>
+                )}
             </div>
 
             {/* ---- Travel legs ---- */}
+            {/* The same editor the Travel tab uses — a leg can be worked on from
+                either end, and one form means they cannot drift apart. */}
             {day.travel.map((leg) => (
-                <div key={leg.id} className="mt-2 rounded-2xl bg-slate-50 border border-slate-200 p-2.5">
-                    <div className="flex items-center gap-2">
-                        <SelectField
-                            className="max-w-[7.5rem]"
-                            value={leg.mode}
-                            onChange={(e) => api.update('travel', {
-                                id: leg.id, mode: e.target.value as TravelMode,
-                            })}
-                        >
-                            {TRAVEL_MODES.map((m) => (
-                                <option key={m.key} value={m.key}>{m.icon} {m.label}</option>
-                            ))}
-                        </SelectField>
-                        <div className="flex-1" />
-                        <OverflowMenu items={[{
-                            label: 'Remove leg',
-                            danger: true,
-                            onClick: () => api.removeRow('travel', leg, 'Removed a travel leg'),
-                        }]} />
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 mt-2">
-                        <TextField
-                            defaultValue={leg.from_text ?? ''}
-                            placeholder="From — SIN Changi T3"
-                            onBlur={(e) => api.update('travel', { id: leg.id, from_text: e.target.value })}
-                        />
-                        <TextField
-                            defaultValue={leg.to_text ?? ''}
-                            placeholder="To — DPS Denpasar"
-                            onBlur={(e) => api.update('travel', { id: leg.id, to_text: e.target.value })}
-                        />
-                        <TextField
-                            type="time"
-                            defaultValue={leg.depart_time ?? ''}
-                            onBlur={(e) => api.update('travel', { id: leg.id, depart_time: e.target.value })}
-                        />
-                        <TextField
-                            type="time"
-                            defaultValue={leg.arrive_time ?? ''}
-                            onBlur={(e) => api.update('travel', { id: leg.id, arrive_time: e.target.value })}
-                        />
-                        <TextField
-                            className="col-span-2"
-                            defaultValue={leg.confirmation_ref ?? ''}
-                            placeholder="Confirmation ref"
-                            onBlur={(e) => api.update('travel', {
-                                id: leg.id, confirmation_ref: e.target.value,
-                            })}
-                        />
-                    </div>
+                <div key={leg.id} className="mt-2">
+                    <TravelLegCard leg={leg} day={day} api={api} />
                 </div>
             ))}
 
@@ -558,6 +745,7 @@ function DayCard({ day, api }: { day: Day; api: HoneymoonApi }) {
                                         api={api}
                                         dayNumber={day.day_number}
                                         hopKm={hops.find((h) => h.fromIndex === index)?.km ?? null}
+                                        onEditPlace={onEditPlace}
                                     />
                                 ))}
                             </ul>
@@ -612,12 +800,13 @@ function DayCard({ day, api }: { day: Day; api: HoneymoonApi }) {
     );
 }
 
-function StopRow({ stop, index, api, dayNumber, hopKm }: {
+function StopRow({ stop, index, api, dayNumber, hopKm, onEditPlace }: {
     stop: Stop;
     index: number;
     api: HoneymoonApi;
     dayNumber: number;
     hopKm: number | null;
+    onEditPlace: (place: Place) => void;
 }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
         useSortable({ id: stop.id });
@@ -674,12 +863,22 @@ function StopRow({ stop, index, api, dayNumber, hopKm }: {
                 />
                 <div className="min-w-0 flex-1">
                     {place ? (
-                        <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm text-gray-900 truncate">
+                        // The name is the way in: a stop is the place, so clicking
+                        // it opens the same editor the Places tab opens. Before
+                        // this, a wrong address or a missing pin noticed while
+                        // reading the day meant leaving the day to go and fix it.
+                        <button
+                            onClick={() => onEditPlace(place)}
+                            title={`Edit ${place.name}`}
+                            className="flex items-center gap-2 flex-wrap text-left group/place w-full min-w-0"
+                        >
+                            <span className="text-sm text-gray-900 truncate
+                                group-hover/place:text-accent group-hover/place:underline
+                                decoration-dotted underline-offset-2">
                                 {stop.custom_label || place.name}
                             </span>
                             <CategoryChip category={place.category} />
-                        </div>
+                        </button>
                     ) : (
                         <InlineText
                             value={stop.custom_label ?? ''}
@@ -693,6 +892,10 @@ function StopRow({ stop, index, api, dayNumber, hopKm }: {
                     )}
                 </div>
                 <OverflowMenu items={[
+                    ...(place ? [{
+                        label: `Edit ${place.name}`,
+                        onClick: () => onEditPlace(place),
+                    }] : []),
                     {
                         label: showNotes || stop.notes ? 'Hide note' : 'Add a note',
                         onClick: () => setShowNotes((v) => !v),
