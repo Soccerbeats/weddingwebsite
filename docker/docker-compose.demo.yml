@@ -5,14 +5,24 @@
 # demo can reach the real guest list — which is the whole reason it exists as a
 # stack rather than as a "demo mode" inside the running site.
 #
-# Fill it with `npm run seed:demo` (see README → The demo instance). The seed is
-# destructive by design and refuses to run without --yes-wipe.
+# It seeds itself. The one-shot `seed` service waits for the database and, only
+# when the guest list is empty, fills the demo — the fictional wedding, the
+# photos, the budget, the seating, the honeymoon — writing the config and
+# photos straight into the demo volumes. A fresh stack is complete after
+# `up -d`; a redeploy finds a non-empty guest list and skips, so a demo
+# someone has been clicking around in is never wiped.
 #
 #   docker compose -f docker/docker-compose.demo.yml up -d
 #
-# The database port is published on 5433 so the seed can reach it over an SSH
-# tunnel from a machine that has the repository. Close it afterwards if you would
-# rather not have Postgres listening.
+# The seed image (ghcr.io/soccerbeats/weddingwebsite-seeder:latest) is the
+# "seeder" stage of docker/Dockerfile, published by the "Demo Instance"
+# workflow on every push to main. To seed by hand instead, run the seed in a
+# throwaway container: `npm run seed:demo -- --yes-wipe` (destructive by
+# design, refuses to run without the flag).
+#
+# The database port is published on 5433 in case a hand run of the seed needs
+# to reach it from another machine. Close it afterwards if you would rather
+# not have Postgres listening.
 
 # `name` pins the project, so the stack keeps the name the old `-p weddingdemo`
 # flag gave it.
@@ -36,6 +46,24 @@ services:
       - demo_config:/app/public/config
     depends_on:
       - db
+
+  # One-shot. Runs on every `up`, exits after one pass. It mounts the same
+  # config and photo volumes as the web service, so what it writes is what
+  # the site serves — no docker cp step. See the seeder stage of the
+  # Dockerfile for what the entrypoint does (and when it refuses to).
+  seed:
+    image: ghcr.io/soccerbeats/weddingwebsite-seeder:latest
+    container_name: wedding-seed-demo
+    environment:
+      - DATABASE_URL=postgresql://demo:demo@db:5432/demo
+      - CONFIG_DIR=/data/config
+      - PHOTO_DIR=/data/photos
+    volumes:
+      - demo_config:/data/config
+      - demo_photos:/data/photos
+    depends_on:
+      - db
+    restart: 'no'
 
   db:
     image: postgres:15-alpine

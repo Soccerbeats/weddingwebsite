@@ -97,3 +97,70 @@ ENV HOSTNAME="0.0.0.0"
 
 # Run init script then start server
 CMD ["sh", "-c", "/app/init-db.sh && node server.js"]
+
+# ---------------------------------------------------------------------------
+# Seeder image — the demo instance's one-shot seed service.
+#
+# The production image above deliberately ships the standalone server and
+# nothing else, so it cannot run the demo seed. The demo stack (see
+# docker-compose.demo.yml) runs this image as a short-lived `seed` service:
+# it waits for the database, and only when the guest list is empty it runs
+# the demo seed — writing the config and photos straight into the demo
+# volumes — then exits. A redeploy therefore never wipes a demo someone has
+# been clicking around in.
+#
+# It is published as a separate image,
+#     ghcr.io/soccerbeats/weddingwebsite-seeder:latest
+# by the "Demo Instance" workflow (see .github/workflows/demo-deploy.yml).
+# The production image name and its tags are untouched.
+# ---------------------------------------------------------------------------
+FROM base AS seeder
+WORKDIR /app
+
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json ./
+COPY scripts/ ./scripts/
+# The seed imports the schema owners from src/lib (financeDb, honeymoonDb,
+# and their friends), so the library source ships with it — never executed
+# by the server, only loaded by the seed.
+COPY src/lib/ ./src/lib/
+COPY database/init.sql ./database/init.sql
+
+# The seed is a TypeScript script run through tsx; --no-save keeps
+# package.json and the lockfile untouched.
+RUN npm install --no-save tsx
+
+# The demo volumes mount here. Creating them in the image (owned by the
+# app user) makes Docker initialise the named volumes with the right
+# ownership, so the seed can write to them as nextjs.
+RUN mkdir -p /data/config /data/photos
+RUN chown nextjs:nodejs /data/config /data/photos
+
+# Wait for the database, apply the idempotent schema (the web service does
+# the same on its own boot — harmless to run twice), then seed only when
+# guest_list is empty. The wipe flag is safe here: the seed runs against
+# the dedicated demo database only, and only when it is provably empty.
+RUN printf '%s\n' \
+    '#!/bin/sh' \
+    'set -e' \
+    'echo "Waiting for database..."' \
+    'until node -e "const {Client}=require(\"pg\");const c=new Client(process.env.DATABASE_URL);c.connect().then(()=>{c.end();process.exit(0)}).catch(()=>process.exit(1))" 2>/dev/null; do sleep 1; done' \
+    'node -e "const fs=require(\"fs\");const {Client}=require(\"pg\");const c=new Client(process.env.DATABASE_URL);const sql=fs.readFileSync(\"/app/database/init.sql\",\"utf8\");c.connect().then(()=>c.query(sql)).then(()=>c.end()).then(()=>process.exit(0)).catch(e=>{console.error(e);c.end();process.exit(1)})"' \
+    'COUNT=$(node -e "const {Client}=require(\"pg\");const c=new Client(process.env.DATABASE_URL);c.connect().then(()=>c.query(\"SELECT count(*)::int AS n FROM guest_list\")).then(r=>{console.log(r.rows[0].n);return c.end()}).catch(e=>{console.error(e);c.end();process.exit(1)})")' \
+    'if [ "$COUNT" = "0" ]; then' \
+    '  echo "guest_list is empty — seeding the demo instance..."' \
+    '  node_modules/.bin/tsx scripts/seed-demo.mts --yes-wipe' \
+    '  echo "Demo seeded."' \
+    'else' \
+    '  echo "guest_list already has $COUNT rows — the demo keeps its current data, seed skipped."' \
+    'fi' \
+    > /app/seed-demo.sh && \
+    chmod +x /app/seed-demo.sh && \
+    chown nextjs:nodejs /app/seed-demo.sh
+
+USER nextjs
+
+CMD ["/app/seed-demo.sh"]

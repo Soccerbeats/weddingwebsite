@@ -11,6 +11,15 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.9 — [Unreleased] The demo instance deploys itself (`demo-self-deploy`, 2026-08-23 01:04)
+
+### Added
+- **The demo instance now deploys itself from GitHub.** A new "Demo Instance" workflow runs on every push to main: it waits for this build's image to land in the container registry (tagged by the Wedding Planner CI), publishes the new seeder image, then SSHes to the server, checks out the exact commit, pulls both images, brings the demo stack up, and verifies port 3001 answers. The demo is always the newest merge, with nobody running a docker command; with the deploy secrets unset, the same run still builds and publishes both images and skips the deploy with a notice.
+- **The Dockerfile gains a seeder stage, published as a second image.** The production image ships the standalone server and nothing else, so it cannot run the seed. The seeder stage carries the scripts and a small entrypoint, and is published under its own name — the production image and its tags are untouched.
+
+### Changed
+- **The demo stack seeds itself on first boot.** A one-shot seed service joins the demo compose stack; it waits for the database, seeds only when the guest list is empty, writes the config and photos straight into the demo volumes, and exits. A fresh stack is complete after `up -d` — the manual SSH-tunnel-and-docker-cp flow in the wiki is gone — and a redeploy finds a non-empty guest list and skips, so a demo someone has been clicking around in is never wiped.
+
 ## v0.9.8 — [Unreleased] The README is a landing page, not a manual (`readme-redesign`, 2026-08-22 23:28)
 
 ### Changed

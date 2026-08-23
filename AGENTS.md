@@ -82,7 +82,10 @@ idempotent — matches on place name, never reverts an edit) and
    served statically.
 4. **The image name is sacred**: always
    `ghcr.io/soccerbeats/weddingwebsite:latest`, never any other name — the
-   production Portainer stack is configured against it.
+   production Portainer stack is configured against it. (The demo's one-shot
+   seeder is a separate image under its own name,
+   `ghcr.io/soccerbeats/weddingwebsite-seeder:latest` — a different image,
+   never a tag of the sacred name.)
 5. **After every code change: deploy automatically.** Austin's standing
    instruction — it overrides the older "only deploy when asked" gate in
    `deploy.md`. Push to `main`, then build and push the image. Do not wait to
@@ -209,6 +212,14 @@ order, before the commit:
   waits for Postgres, then applies `database/init.sql`. Volumes hold
   `public/photos`, `public/config` and the postgres data — runtime uploads
   live in volumes, never in the image.
+- **Demo deployment** — the "Demo Instance" workflow (push to main) waits
+  for this build's sha tag in the registry, publishes the seeder image (the
+  Dockerfile's `seeder` stage, its own image name), and — when the deploy
+  secrets (`DEMO_DEPLOY_HOST`, `DEMO_DEPLOY_USER`, `DEMO_DEPLOY_SSH_KEY`,
+  `DEMO_SERVER_DIR`) are set — SSHes to the server, checks out the exact
+  commit, and brings up `docker/docker-compose.demo.yml`. The stack's
+  one-shot `seed` service fills a fresh demo on first boot and never wipes
+  an existing one; a hand run is still `npm run seed:demo -- --yes-wipe`.
 - **Seating chart** (`/admin/seating`) — a React Flow (`@xyflow/react`)
   canvas: draw the room, drop tables, drag guests from `guest_list` into
   seats. A "party" is a guest with `plus_one_name` set — dragging one

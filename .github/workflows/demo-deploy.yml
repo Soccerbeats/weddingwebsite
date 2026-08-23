@@ -1,0 +1,161 @@
+# The demo instance, deployed.
+#
+# The "Wedding Planner" CI builds and publishes the production image on every
+# push to main; this workflow finishes the loop for the demo:
+#
+#   1. Waits for this build's image (tagged sha-<sha> by that CI) to land in
+#      GitHub Container Registry.
+#   2. Builds and publishes the small one-shot seeder image,
+#      ghcr.io/soccerbeats/weddingwebsite-seeder:latest — the production
+#      image deliberately does not carry the seed scripts.
+#   3. SSHes to the server (secrets DEMO_DEPLOY_HOST, DEMO_DEPLOY_USER,
+#      DEMO_DEPLOY_SSH_KEY, DEMO_SERVER_DIR), checks out this exact commit,
+#      pulls both images and brings the demo stack up. The stack's one-shot
+#      seed service fills a fresh demo on first boot (see
+#      docker/docker-compose.demo.yml) and never wipes existing demo data.
+#   4. Verifies the demo answers on port 3001.
+#
+# With the deploy secrets unset, the deploy step is skipped with a notice —
+# the run still proves both images build and publish.
+#
+# A Portainer webhook can replace the SSH step (curl the webhook instead of
+# ssh); the image it pulls and the compose file it applies are the same.
+
+name: "Demo Instance"
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Deploys are serialized, never cancelled mid-run — a half-finished deploy
+# on the server is worse than a queued one.
+concurrency:
+  group: demo-instance-deploy
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/soccerbeats/weddingwebsite
+  SEEDER_IMAGE: ghcr.io/soccerbeats/weddingwebsite-seeder
+
+jobs:
+  wait-for-image:
+    name: "Demo Instance · wait for the image"
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      # The "Wedding Planner" CI publishes sha-<sha>, v<version> and
+      # :latest in one push; the sha tag is the signal that this exact
+      # commit is in the registry (and that :latest now points at it).
+      - name: Wait for sha-<sha> in GHCR
+        run: |
+          SHORT_SHA="${GITHUB_SHA:0:7}"
+          echo "Waiting for $IMAGE:sha-$SHORT_SHA ..."
+          for i in $(seq 1 60); do
+            if docker manifest inspect "$IMAGE:sha-$SHORT_SHA" >/dev/null 2>&1; then
+              echo "Image is in the registry."
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "::error::$IMAGE:sha-$SHORT_SHA never appeared in the registry. The 'Wedding Planner' CI must be merged and green first."
+          exit 1
+
+  build-seeder:
+    name: "Demo Instance · build & publish the seeder image"
+    runs-on: ubuntu-latest
+    needs: wait-for-image
+    timeout-minutes: 20
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push the seeder image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          # Same Dockerfile as the production image; the seeder is its
+          # last stage. It is a separate image with its own name — the
+          # production image and its tags are untouched.
+          file: docker/Dockerfile
+          target: seeder
+          push: true
+          tags: ${{ env.SEEDER_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          # Matches the platform the production image is published as.
+          platforms: linux/amd64
+
+  deploy:
+    name: "Demo Instance · pull & redeploy on the server"
+    runs-on: ubuntu-latest
+    needs: build-seeder
+    # Skip (with a notice) until the deploy secrets are set — this is what
+    # makes the workflow safe to merge before the server is wired up.
+    if: ${{ secrets.DEMO_DEPLOY_SSH_KEY != '' }}
+    timeout-minutes: 20
+    steps:
+      - name: Install the deploy key
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.DEMO_DEPLOY_SSH_KEY }}" > ~/.ssh/demo_deploy
+          chmod 600 ~/.ssh/demo_deploy
+
+      # The remote script checks out this exact commit (so the compose file
+      # on the server is the one from this build), pulls both images,
+      # brings the stack up, and waits for port 3001 to answer. The seed
+      # service does the rest: it fills a fresh demo on first boot and
+      # leaves an existing one alone.
+      - name: SSH to the server and redeploy the demo
+        env:
+          HOST: ${{ secrets.DEMO_DEPLOY_HOST }}
+          USER: ${{ secrets.DEMO_DEPLOY_USER }}
+          SERVER_DIR: ${{ secrets.DEMO_SERVER_DIR }}
+        run: |
+          ssh -i ~/.ssh/demo_deploy \
+              -o StrictHostKeyChecking=accept-new \
+              -o IdentitiesOnly=yes \
+              -o BatchMode=yes \
+              "${USER}@${HOST}" \
+              "DEMO_SERVER_DIR='${SERVER_DIR:-/opt/weddingwebsite}' GITHUB_SHA='${GITHUB_SHA}' REPO_URL='https://github.com/Soccerbeats/weddingwebsite.git' COMPOSE_FILE='docker/docker-compose.demo.yml' DEMO_PORT='3001' bash -s" <<'REMOTE'
+          set -euo pipefail
+          if [ -d "$DEMO_SERVER_DIR/.git" ]; then
+            : # an existing checkout — fetch into it below
+          elif [ -e "$DEMO_SERVER_DIR" ]; then
+            echo "::error::$DEMO_SERVER_DIR exists but is not a git checkout — refusing to touch it."
+            exit 1
+          else
+            echo "No repository at $DEMO_SERVER_DIR — cloning."
+            git clone "$REPO_URL" "$DEMO_SERVER_DIR"
+          fi
+          cd "$DEMO_SERVER_DIR"
+          git fetch --depth 1 origin "$GITHUB_SHA"
+          git checkout --detach --quiet "$GITHUB_SHA"
+          echo "Checked out ${GITHUB_SHA:0:7} — pulling images and bringing the stack up."
+          docker compose -f "$COMPOSE_FILE" pull
+          docker compose -f "$COMPOSE_FILE" up -d
+          for i in $(seq 1 60); do
+            if curl -fsS -o /dev/null "http://localhost:${DEMO_PORT}/"; then
+              echo "The demo answers on port ${DEMO_PORT}."
+              docker compose -f "$COMPOSE_FILE" ps
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::The demo did not come up on port ${DEMO_PORT}."
+          docker compose -f "$COMPOSE_FILE" logs --tail 50
+          exit 1
+          REMOTE
