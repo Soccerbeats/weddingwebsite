@@ -1,16 +1,31 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
-    RATINGS, cleanListingTitle, formatPerNight, isStayUrl, nameFromStayUrl, stayUrlsFromText,
-    type Place,
+    RATINGS, cleanListingTitle, formatPerNight, isStayUrl, nameFromStayUrl, priceValue,
+    stayUrlsFromText,
+    type Place, type PlaceStatus,
 } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
 import PlaceEditor from './PlaceEditor';
 import LinkPreview from './LinkPreview';
 import {
-    Button, Card, EmptyState, InlineText, OverflowMenu, TextArea,
+    Button, Card, EmptyState, InlineText, MiniSelect, OverflowMenu, StatusChip, TextArea,
 } from './ui';
+
+type SortKey = 'added' | 'price' | 'name' | 'status';
+
+const SORTS: { key: SortKey; label: string }[] = [
+    { key: 'added', label: 'Recently added' },
+    { key: 'price', label: 'Price: low first' },
+    { key: 'name', label: 'Name: A → Z' },
+    { key: 'status', label: 'Status: booked first' },
+];
+
+const SORT_KEY = 'honeymoon.stays.sort';
+
+/** Booked outranks shortlisted outranks idea, for the status sort. */
+const STATUS_RANK: Record<PlaceStatus, number> = { booked: 3, shortlisted: 2, idea: 1 };
 
 /**
  * Candidate places to stay.
@@ -30,6 +45,21 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
     const [adding, setAdding] = useState(false);
     const [fetching, setFetching] = useState(0);
     const [filter, setFilter] = useState<'all' | 'yes' | 'no' | 'unrated'>('all');
+    /**
+     * Newest first by default: a shortlist is worked from the top, and the thing
+     * you just pasted in is the thing you want to look at. Remembered per
+     * browser like the itinerary's view — read after mount, since the server has
+     * no localStorage and seeding state from it would break hydration.
+     */
+    const [sort, setSort] = useState<SortKey>('added');
+    useEffect(() => {
+        const saved = localStorage.getItem(SORT_KEY);
+        if (SORTS.some((s) => s.key === saved)) setSort(saved as SortKey);
+    }, []);
+    const chooseSort = (next: SortKey) => {
+        setSort(next);
+        localStorage.setItem(SORT_KEY, next);
+    };
     const [preview, setPreview] = useState<Place | null>(null);
     const [editing, setEditing] = useState<Place | null>(null);
     const [editorOpen, setEditorOpen] = useState(false);
@@ -40,11 +70,50 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
         [places],
     );
 
-    const shown = useMemo(() => stays.filter((s) => {
-        if (filter === 'all') return true;
-        if (filter === 'unrated') return s.rating == null;
-        return s.rating === filter;
-    }), [stays, filter]);
+    const shown = useMemo(() => {
+        const rows = stays.filter((s) => {
+            if (filter === 'all') return true;
+            if (filter === 'unrated') return s.rating == null;
+            return s.rating === filter;
+        });
+
+        /** Every sort falls back to this, so equal rows keep a stable order. */
+        const byName = (a: Place, b: Place) =>
+            a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+
+        const sorted = [...rows];
+        switch (sort) {
+            case 'price':
+                sorted.sort((a, b) => {
+                    const pa = priceValue(a.price_note);
+                    const pb = priceValue(b.price_note);
+                    // Unpriced last in either case: a stay with no number on it
+                    // is not "free", and floating it to the top of a cost sort
+                    // would bury the cheapest real option.
+                    if (pa == null && pb == null) return byName(a, b);
+                    if (pa == null) return 1;
+                    if (pb == null) return -1;
+                    return pa - pb || byName(a, b);
+                });
+                break;
+            case 'name':
+                sorted.sort(byName);
+                break;
+            case 'status':
+                sorted.sort((a, b) =>
+                    (STATUS_RANK[b.status] ?? 0) - (STATUS_RANK[a.status] ?? 0) || byName(a, b));
+                break;
+            case 'added':
+            default:
+                // There is no created_at column, and adding one now would stamp
+                // every existing row with the same backfilled time. The id is a
+                // serial, so descending id *is* insertion order, newest first —
+                // the same answer, with no migration and no lie about old rows.
+                sorted.sort((a, b) => b.id - a.id);
+                break;
+        }
+        return sorted;
+    }, [stays, filter, sort]);
 
     const counts = useMemo(() => ({
         all: stays.length,
@@ -184,6 +253,14 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                     </button>
                 ))}
                 <div className="flex-1" />
+                <MiniSelect
+                    value={sort}
+                    onChange={(e) => chooseSort(e.target.value as SortKey)}
+                    aria-label="Sort the shortlist"
+                    title="How the shortlist is ordered"
+                >
+                    {SORTS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+                </MiniSelect>
                 {missingImages.length > 0 && (
                     <Button onClick={fetchMissingImages} disabled={fetching > 0}>
                         {fetching > 0
@@ -233,6 +310,15 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                                             className="font-semibold text-gray-900 -ml-2"
                                             onCommit={(name) => api.update('places', { id: stay.id, name })}
                                         />
+                                        {/* Only once it is more than an idea: a chip
+                                            on every card would be noise, but a
+                                            shortlist you cannot see the state of
+                                            makes the status sort look arbitrary. */}
+                                        {stay.status !== 'idea' && (
+                                            <div className="mt-0.5">
+                                                <StatusChip status={stay.status} />
+                                            </div>
+                                        )}
                                         <InlineText
                                             value={stay.price_note ?? ''}
                                             placeholder="Price per night — type 250"

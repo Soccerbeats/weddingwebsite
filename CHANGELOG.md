@@ -11,6 +11,14 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.10 — [Released] The stays shortlist sorts (`main`, 2026-08-23 18:26)
+
+### Added
+- **A sort control on the Stays tab**, remembered per browser: **Recently added** (the default), **Price: low first**, **Name: A → Z**, and **Status: booked first**. It composes with the 👍/👎/unrated filters rather than replacing them.
+- **Recently added, newest first, is the default** — a shortlist is worked from the top, and the listing you just pasted in is the one you want to look at. There is no `created_at` column and adding one now would stamp every existing stay with the same backfilled time; `id` is a serial, so descending id *is* insertion order, newest first — the same answer with no migration and no lie about old rows.
+- **A stay with no price sorts last, not first.** A blank price is not "free", and floating the unpriced to the top of a cost sort buries the cheapest real option. Every sort falls back to the name, so equally-priced or equally-ranked stays keep a stable, readable order.
+- Stays that are past **Idea** now show their status chip on the card. A shortlist whose state you cannot see makes the status sort look arbitrary; a chip on every card would have been noise, so it appears only once a stay is shortlisted or booked.
+
 ## v0.9.9 — [Released] Every day in the split view can fly the map to itself (`main`, 2026-08-23 18:12)
 
 ### Added
