@@ -974,21 +974,25 @@ function RankRow({ stay, position, picked, onPick, cardRefs }: {
                 else cardRefs.current?.delete(stay.id);
             }}
             style={{ transform: CSS.Transform.toString(transform), transition }}
-            className={`flex items-center gap-2.5 px-2.5 py-2 bg-white
+            // No vertical padding: the photo is the tallest thing in the row, so
+            // with none it defines the row's height and sits flush against both
+            // edges. Everything shorter is centred against it.
+            className={`flex items-stretch gap-2.5 pr-3 bg-white
                 ${isDragging ? 'opacity-60' : ''} ${picked ? 'ring-2 ring-inset ring-accent' : ''}`}
         >
             <button
                 {...attributes}
                 {...listeners}
                 className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500
-                    touch-none px-1 shrink-0"
+                    touch-none pl-2 pr-1 shrink-0"
                 aria-label={`Drag ${stay.name} to reorder the ranking`}
             >
                 ⠿
             </button>
             {/* The position on screen, not the stored rank: mid-drag they differ,
                 and the number under your hand has to be the one you are aiming at. */}
-            <span className="w-6 shrink-0 text-sm font-bold text-accent tabular-nums text-right">
+            <span className="w-6 shrink-0 self-center text-sm font-bold text-accent tabular-nums
+                text-right">
                 {position}
             </span>
             {stay.image_url ? (
@@ -1000,13 +1004,19 @@ function RankRow({ stay, position, picked, onPick, cardRefs }: {
                     loading="lazy"
                     onClick={onPick}
                     title={`Show ${stay.name} on the map`}
-                    className="w-14 h-10 object-cover rounded-lg bg-gray-100 shrink-0 cursor-pointer"
+                    // 3:2 at 96px tall — the aspect the listings' own images come
+                    // in, so nothing is cropped to fit the box. Unrounded because
+                    // it touches the row's top and bottom: a rounded corner there
+                    // shows a notch of row behind it.
+                    className="w-36 h-24 object-cover bg-gray-100 shrink-0 cursor-pointer"
                     onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
                 />
             ) : (
-                <div className="w-14 h-10 rounded-lg bg-gray-50 shrink-0" />
+                // Same footprint, so the names line up whether or not a listing
+                // gave us a photo.
+                <div className="w-36 h-24 bg-gray-50 shrink-0" />
             )}
-            <button onClick={onPick} className="min-w-0 flex-1 text-left">
+            <button onClick={onPick} className="min-w-0 flex-1 self-center text-left py-2">
                 <div className="text-sm font-medium text-gray-900 truncate">{stay.name}</div>
                 {/* The price is the right-hand column, where it lines up and can
                     be compared down the list; repeating it here would just be
@@ -1018,15 +1028,18 @@ function RankRow({ stay, position, picked, onPick, cardRefs }: {
             </button>
             {rating && (
                 <span
-                    className="shrink-0 text-[11px] font-medium"
+                    className="shrink-0 self-center text-[11px] font-medium"
                     style={{ color: rating.color }}
                     title={rating.label}
                 >
                     {rating.icon}
                 </span>
             )}
-            {stay.status !== 'idea' && <StatusChip status={stay.status} />}
-            <span className="shrink-0 text-xs text-gray-500 tabular-nums w-20 text-right">
+            {stay.status !== 'idea' && (
+                <span className="shrink-0 self-center"><StatusChip status={stay.status} /></span>
+            )}
+            <span className="shrink-0 self-center text-xs text-gray-500 tabular-nums w-20
+                text-right">
                 {price != null ? stay.price_note : '—'}
             </span>
         </li>

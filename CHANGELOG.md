@@ -11,6 +11,12 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.18 — [Released] Ranking rows show a real photo (`main`, 2026-08-23 19:55)
+
+### Changed
+- **The photos in the ranking list are 144×96 instead of 56×40**, and they run flush from the top of their row to the bottom. The row has no vertical padding any more, so the photo is what sets its height and nothing frames it; it is 3:2 because that is the shape the listings' own images arrive in, so nothing is cropped out of proportion. Ranking hotels by a thumbnail you cannot see anything in was the wrong trade.
+- A stay whose listing gave us no photo keeps the same footprint, so the names still line up down the list rather than stepping in and out. The corners are square, not rounded: a rounded corner touching the row's edge shows a notch of background behind it.
+
 ## v0.9.17 — [Released] Three columns of stays, and a divider to drag (`main`, 2026-08-23 19:46)
 
 ### Fixed
