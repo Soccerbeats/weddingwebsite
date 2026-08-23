@@ -47,7 +47,7 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
     /** How many listings are still to look up, and what the last run found. */
     const [locating, setLocating] = useState(0);
     const [located, setLocated] = useState<number | null>(null);
-    const [filter, setFilter] = useState<'all' | 'yes' | 'no' | 'unrated'>('all');
+    const [filter, setFilter] = useState<'all' | 'yes' | 'mid' | 'no' | 'unrated'>('all');
     /**
      * Newest first by default: a shortlist is worked from the top, and the thing
      * you just pasted in is the thing you want to look at. Remembered per
@@ -121,6 +121,7 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
     const counts = useMemo(() => ({
         all: stays.length,
         yes: stays.filter((s) => s.rating === 'yes').length,
+        mid: stays.filter((s) => s.rating === 'mid').length,
         no: stays.filter((s) => s.rating === 'no').length,
         unrated: stays.filter((s) => s.rating == null).length,
     }), [stays]);
@@ -309,6 +310,7 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                 {([
                     ['all', `All ${counts.all}`],
                     ['yes', `👍 Interested ${counts.yes}`],
+                    ['mid', `😐 Mid tier ${counts.mid}`],
                     ['no', `👎 Not interested ${counts.no}`],
                     ['unrated', `Unrated ${counts.unrated}`],
                 ] as const).map(([key, label]) => (

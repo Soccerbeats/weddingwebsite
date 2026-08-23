@@ -401,6 +401,7 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
             label: 'Rating',
             options: [
                 { value: 'yes', label: '👍 Interested' },
+                { value: 'mid', label: '😐 Mid tier' },
                 { value: 'no', label: '👎 Not interested' },
                 { value: '', label: '— unrated —' },
             ],

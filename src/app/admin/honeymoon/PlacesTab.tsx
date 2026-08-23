@@ -142,6 +142,7 @@ export default function PlacesTab({ api, panel = false }: {
             label: 'Rating',
             options: [
                 { value: 'yes', label: '\u{1F44D} Interested' },
+                { value: 'mid', label: '\u{1F610} Mid tier' },
                 { value: 'no', label: '\u{1F44E} Not interested' },
                 { value: '', label: '— unrated —' },
             ],

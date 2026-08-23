@@ -11,6 +11,13 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.13 — [Released] Mid tier (`main`, 2026-08-23 18:58)
+
+### Added
+- **A third rating — 😐 Mid tier — between 👍 Interested and 👎 Not interested**, on every stay card, with its own filter pill and count. Most of a shortlist is neither a yes nor a no, and forcing those into one or the other threw away the distinction you were trying to record. Clicking the active rating still clears it.
+- Excursions get the same button and the same filter: the ratings are one shared vocabulary, and a rating you can set on one tab but not filter on another is a trap rather than a feature. The map's and Places' bulk **Rating** menus offer it too, so a lasso of also-rans can be marked in one go.
+- `PlaceRating` is now `'yes' | 'mid' | 'no' | null`, and the database read-back whitelists the new value — the column is plain `TEXT`, so anything not a known rating still reads as "not judged yet" rather than reaching the UI.
+
 ## v0.9.12 — [Released] Stays land on the map, and the map flies there (`main`, 2026-08-23 18:48)
 
 ### Added

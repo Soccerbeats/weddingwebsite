@@ -19,11 +19,21 @@ export type PlaceStatus = 'idea' | 'shortlisted' | 'booked';
  */
 export type PlaceSource = string;
 
-/** How you feel about a candidate stay. Null means not yet judged. */
-export type PlaceRating = 'yes' | 'no' | null;
+/**
+ * How you feel about a candidate stay. Null means not yet judged.
+ *
+ * `mid` sits between the two: the shortlist is mostly made of places that are
+ * neither a yes nor a no, and forcing those into one or the other loses the
+ * distinction you actually wanted to record.
+ */
+export type PlaceRating = 'yes' | 'mid' | 'no' | null;
 
-export const RATINGS: { key: 'yes' | 'no'; label: string; icon: string; color: string }[] = [
+/** In the order they are shown, which is why `mid` is in the middle. */
+export const RATINGS: {
+    key: Exclude<PlaceRating, null>; label: string; icon: string; color: string;
+}[] = [
     { key: 'yes', label: 'Interested', icon: '👍', color: '#059669' },
+    { key: 'mid', label: 'Mid tier', icon: '😐', color: '#d97706' },
     { key: 'no', label: 'Not interested', icon: '👎', color: '#be123c' },
 ];
 

@@ -30,7 +30,7 @@ export default function ExcursionsTab({ api }: { api: HoneymoonApi }) {
     const { data } = api;
     const [bulk, setBulk] = useState('');
     const [adding, setAdding] = useState(false);
-    const [rated, setRated] = useState<'all' | 'yes' | 'no' | 'unrated'>('all');
+    const [rated, setRated] = useState<'all' | 'yes' | 'mid' | 'no' | 'unrated'>('all');
     const [typeFilter, setTypeFilter] = useState('');
     const [preview, setPreview] = useState<Place | null>(null);
     const [editing, setEditing] = useState<Place | null>(null);
@@ -50,6 +50,7 @@ export default function ExcursionsTab({ api }: { api: HoneymoonApi }) {
     const counts = useMemo(() => ({
         all: excursions.length,
         yes: excursions.filter((e) => e.rating === 'yes').length,
+        mid: excursions.filter((e) => e.rating === 'mid').length,
         no: excursions.filter((e) => e.rating === 'no').length,
         unrated: excursions.filter((e) => e.rating == null).length,
     }), [excursions]);
@@ -167,6 +168,7 @@ export default function ExcursionsTab({ api }: { api: HoneymoonApi }) {
                 {([
                     ['all', `All ${counts.all}`],
                     ['yes', `👍 Interested ${counts.yes}`],
+                    ['mid', `😐 Mid tier ${counts.mid}`],
                     ['no', `👎 Not interested ${counts.no}`],
                     ['unrated', `Unrated ${counts.unrated}`],
                 ] as const).map(([key, label]) => (

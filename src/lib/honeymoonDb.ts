@@ -288,7 +288,10 @@ export async function getHoneymoonPayload(): Promise<HoneymoonPayload> {
         photos: jsonArray(r.photos),
         source: r.source ?? 'manual',
         needs_review: r.needs_review === true,
-        rating: r.rating === 'yes' || r.rating === 'no' ? r.rating : null,
+        // Whitelisted rather than passed through: the column is plain TEXT, and
+        // anything not a known rating is "not judged yet" rather than a value
+        // the UI has to defend itself against.
+        rating: r.rating === 'yes' || r.rating === 'mid' || r.rating === 'no' ? r.rating : null,
         image_url: r.image_url ?? null,
         is_excursion: r.is_excursion === true,
         country: r.country ?? '',
