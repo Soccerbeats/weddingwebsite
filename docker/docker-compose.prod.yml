@@ -1,4 +1,10 @@
-version: '3.8'
+# Production stack: the GHCR image plus Postgres.
+#
+#   docker compose -f docker/docker-compose.prod.yml up -d
+#
+# (In the Portainer stack the environment comes from the UI, not a .env file.)
+
+name: weddingwebsite
 
 services:
   web:

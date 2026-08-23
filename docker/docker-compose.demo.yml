@@ -8,11 +8,15 @@
 # Fill it with `npm run seed:demo` (see README → The demo instance). The seed is
 # destructive by design and refuses to run without --yes-wipe.
 #
-#   docker compose -p weddingdemo -f docker-compose.demo.yml up -d
+#   docker compose -f docker/docker-compose.demo.yml up -d
 #
 # The database port is published on 5433 so the seed can reach it over an SSH
 # tunnel from a machine that has the repository. Close it afterwards if you would
 # rather not have Postgres listening.
+
+# `name` pins the project, so the stack keeps the name the old `-p weddingdemo`
+# flag gave it.
+name: weddingdemo
 
 services:
   web:

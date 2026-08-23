@@ -11,6 +11,15 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.23 — [Released] The Docker files move into docker/ (`main`, 2026-08-23 22:40)
+
+### Changed
+- **The Docker files left the repository root.** The Dockerfile, the dev stack (docker-compose.yml), the production stack (docker-compose.prod.yml), the demo stack (docker-compose.demo.yml) and the env template (.env.example) now live in docker/, so the stack is one folder and the root is source code and docs.
+- **The build command gains `-f docker/Dockerfile`.** The build context is still the repository root, so nothing inside the image changed — same stages, same COPY paths, same init.sql. deploy.md, CLAUDE.md and the README quick start all show the new command.
+- **The stacks are run with `-f`.** From the root it is now `docker compose -f docker/docker-compose.yml up -d` (and likewise for the prod and demo files). Relative paths in a compose file resolve from the file's own directory, so the dev stack reaches the source tree with `..` — checked with `docker compose config` against the new layout.
+- **The .env file moves with the stacks, once.** Compose reads .env from the compose file's directory, so once the stacks sit in docker/ a root .env would silently stop being read — every variable defaults to blank with only a warning, and the database then refuses to start without its user. .env.example now sits beside the stacks; an existing .env moves once with `mv .env docker/`.
+- **The stacks pin their project names.** A compose file in docker/ would name its project after that directory — "docker" — which would look for docker_postgres_data and silently start a fresh, empty database instead of reusing the existing weddingwebsite_postgres_data. A top-level `name:` key keeps `weddingwebsite` for the dev and prod stacks, and `weddingdemo` for the demo stack (the flag `-p weddingdemo` used to supply).
+- **.dockerignore stays at the root — that is where the builder reads it from**, because the build context has to remain the repository root for the Dockerfile's COPY instructions. Its "Docker files" section now excludes docker/ wholesale, which also keeps the env template out of the image.
 ## v0.9.22 — [Released] A Travel tab (`main`, 2026-08-23 21:43)
 
 ### Added

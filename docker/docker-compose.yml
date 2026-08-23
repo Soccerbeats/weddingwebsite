@@ -1,9 +1,22 @@
-version: '3.8'
+# Development stack — source mounted, `npm run dev`, Postgres alongside.
+#
+# Run from the repository root:
+#
+#   cp docker/.env.example docker/.env   # once, then edit
+#   docker compose -f docker/docker-compose.yml up -d
+#
+# Compose reads .env from this directory (the compose file's directory), and
+# the relative paths below resolve from it too, so the source tree is `..`.
+# `name` pins the project, so existing volumes keep the names older
+# installs used (a file in docker/ would otherwise name the project "docker").
+
+name: weddingwebsite
 
 services:
   web:
     build:
-      context: .
+      context: ..
+      dockerfile: docker/Dockerfile
       target: dev
     container_name: wedding-web
     restart: always
@@ -14,7 +27,7 @@ services:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - NODE_ENV=${NODE_ENV}
     volumes:
-      - .:/app
+      - ../:/app
       - /app/node_modules
       - photos_data:/app/public/photos
       - config_data:/app/public/config
@@ -34,7 +47,7 @@ services:
       - '5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ../database/init.sql:/docker-entrypoint-initdb.d/init.sql
 
 volumes:
   postgres_data:
