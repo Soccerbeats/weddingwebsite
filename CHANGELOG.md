@@ -11,6 +11,17 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.26 — [Released] The README is a landing page, not a manual (`main`, 2026-08-23 23:33)
+
+### Changed
+- **The README now leads with the pitch and the install, not the gallery.** For a self-hoster scrolling GitHub for something to run, the first screen is now: a centred title and one-line hook, a badge row of the stack (Next.js 16, React 19, TypeScript, Tailwind CSS 4, PostgreSQL 15, Docker, PWA — the old "Built with" line, promoted and iconified), the wiki button, the live-site hero, and a demo call-to-action. **What it does** and **Quick start** move above the screenshots; the gallery is proof, shown after the ask.
+- **The demo is now something you can click, not a footnote.** The small "The live site / demo instance" note under the hero becomes a centred call-to-action — "Can't wait to self-host? Bring up the demo instance →" — with the one sentence that makes it safe: a completely fictional wedding, ninety guests, a budget, a seating chart and a sixteen-day honeymoon, all loaded, nothing real.
+- **The wiki link is a button now.** The old bold one-liner is a `for-the-badge` shield linking to the wiki, and the thirteen-row Documentation table is gone — the wiki's own Home page is that index, one click away, so the README stopped carrying a second copy of it.
+- **A dead anchor was fixed on the way.** The Changelog screenshot caption linked `#versions-and-the-changelog`, an in-page anchor that no heading on the page satisfies (the section moved to the wiki in v0.9.5); it now points at the wiki page it means.
+- The hero image and every screenshot are untouched — only their order and the framing around them changed.
+
+- **The quick start pointed at the wrong compose file.** It said "nothing to build" and then ran `docker/docker-compose.yml`, which is the development stack and builds from source. It now runs `docker-compose.prod.yml`, which pulls the published image, and copies `.env.example` first — the stack will not start without a database password. This was wrong on `main` too, not something this branch introduced.
+
 ## v0.9.25 — [Released] The agent docs consolidate into AGENTS.md (`main`, 2026-08-23 23:20)
 
 ### Changed
