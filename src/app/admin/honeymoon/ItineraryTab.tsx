@@ -12,9 +12,10 @@ import { CSS } from '@dnd-kit/utilities';
 import {
     SPREAD_WARNING_KM, TRAVEL_MODES, calendarMonths, dayHops, formatDayDate, formatDistance,
     formatTime,
-    type CalendarCell, type Day, type Stop, type TravelMode,
+    type CalendarCell, type Day, type Place, type Stop, type TravelMode,
 } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
+import PlaceEditor from './PlaceEditor';
 import PrintSheet from './PrintSheet';
 import {
     Button, Card, CategoryChip, EmptyState, InlineText, Modal, OverflowMenu, SelectField, TextField,
@@ -43,6 +44,15 @@ export default function ItineraryTab({ api, panel = false }: {
     // localStorage, so seeding from it directly would render one view on the
     // server and the other on the client and blow up hydration.
     const [view, setView] = useState<View>('list');
+
+    /**
+     * The place a stop points at, opened for editing.
+     *
+     * Held here rather than in the stop row so there is one editor for the whole
+     * tab — and so it works identically in the map's split view, where this same
+     * component is the left-hand column.
+     */
+    const [editingPlace, setEditingPlace] = useState<Place | null>(null);
     useEffect(() => {
         const saved = localStorage.getItem(VIEW_KEY);
         // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -126,14 +136,21 @@ export default function ItineraryTab({ api, panel = false }: {
             {!panel && <PrintSheet api={api} />}
 
             {shownView === 'calendar' ? (
-                <CalendarView api={api} days={days} />
+                <CalendarView api={api} days={days} onEditPlace={setEditingPlace} />
             ) : (
                 <DndContext sensors={daySensors} collisionDetection={closestCenter} onDragEnd={onDayDragEnd}>
                     <SortableContext items={days.map((d) => d.id)} strategy={rectSortingStrategy}>
                         <div className={`grid gap-3 items-start ${panel
                             ? 'grid-cols-1'
                             : 'grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3'}`}>
-                            {days.map((day) => <DayCard key={day.id} day={day} api={api} />)}
+                            {days.map((day) => (
+                                <DayCard
+                                    key={day.id}
+                                    day={day}
+                                    api={api}
+                                    onEditPlace={setEditingPlace}
+                                />
+                            ))}
                         </div>
                     </SortableContext>
                 </DndContext>
@@ -144,6 +161,15 @@ export default function ItineraryTab({ api, panel = false }: {
                     + Add day {days.length + 1}
                 </Button>
             </div>
+
+            {/* Never `place={null}`: a null place means "create new" to the
+                editor, and the itinerary has no reason to offer that. */}
+            <PlaceEditor
+                api={api}
+                place={editingPlace}
+                open={editingPlace != null}
+                onClose={() => setEditingPlace(null)}
+            />
         </div>
     );
 }
@@ -187,7 +213,11 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
  * the list view uses, so there is one place a day is edited and no second
  * implementation to keep in step.
  */
-function CalendarView({ api, days }: { api: HoneymoonApi; days: Day[] }) {
+function CalendarView({ api, days, onEditPlace }: {
+    api: HoneymoonApi;
+    days: Day[];
+    onEditPlace: (place: Place) => void;
+}) {
     const startDate = api.data?.trip.start_date ?? null;
     const [openDayId, setOpenDayId] = useState<number | null>(null);
 
@@ -262,7 +292,7 @@ function CalendarView({ api, days }: { api: HoneymoonApi; days: Day[] }) {
                 {openDay && (
                     <DndContext collisionDetection={closestCenter} onDragEnd={() => {}}>
                         <SortableContext items={[openDay.id]} strategy={rectSortingStrategy}>
-                            <DayCard day={openDay} api={api} />
+                            <DayCard day={openDay} api={api} onEditPlace={onEditPlace} />
                         </SortableContext>
                     </DndContext>
                 )}
@@ -335,7 +365,11 @@ function CalendarCellBox({ cell, day, api, onOpen }: {
     );
 }
 
-function DayCard({ day, api }: { day: Day; api: HoneymoonApi }) {
+function DayCard({ day, api, onEditPlace }: {
+    day: Day;
+    api: HoneymoonApi;
+    onEditPlace: (place: Place) => void;
+}) {
     const {
         attributes: dayAttributes, listeners: dayListeners, setNodeRef: setDayRef,
         transform: dayTransform, transition: dayTransition, isDragging: dayDragging,
@@ -347,6 +381,8 @@ function DayCard({ day, api }: { day: Day; api: HoneymoonApi }) {
 
     const startDate = api.data?.trip.start_date ?? null;
     const realDate = formatDayDate(startDate, day.day_number);
+    /** The stay this day is based at, if one is set — editable like any stop. */
+    const base = day.base_place_id == null ? null : api.placeById.get(day.base_place_id) ?? null;
     const hops = dayHops(day.stops, api.placeById);
     const longest = hops.reduce((max, hop) => Math.max(max, hop.km), 0);
 
@@ -498,6 +534,18 @@ function DayCard({ day, api }: { day: Day; api: HoneymoonApi }) {
                         .filter((p) => p.category === 'stay' || p.id === day.base_place_id)
                         .map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </SelectField>
+                {/* The base is a place too — the same one you booked and will want
+                    to add a confirmation number to. */}
+                {base && (
+                    <button
+                        onClick={() => onEditPlace(base)}
+                        title={`Edit ${base.name}`}
+                        aria-label={`Edit ${base.name}`}
+                        className="shrink-0 text-gray-300 hover:text-accent px-1 leading-none"
+                    >
+                        ✎
+                    </button>
+                )}
             </div>
 
             {/* ---- Travel legs ---- */}
@@ -574,6 +622,7 @@ function DayCard({ day, api }: { day: Day; api: HoneymoonApi }) {
                                         api={api}
                                         dayNumber={day.day_number}
                                         hopKm={hops.find((h) => h.fromIndex === index)?.km ?? null}
+                                        onEditPlace={onEditPlace}
                                     />
                                 ))}
                             </ul>
@@ -628,12 +677,13 @@ function DayCard({ day, api }: { day: Day; api: HoneymoonApi }) {
     );
 }
 
-function StopRow({ stop, index, api, dayNumber, hopKm }: {
+function StopRow({ stop, index, api, dayNumber, hopKm, onEditPlace }: {
     stop: Stop;
     index: number;
     api: HoneymoonApi;
     dayNumber: number;
     hopKm: number | null;
+    onEditPlace: (place: Place) => void;
 }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
         useSortable({ id: stop.id });
@@ -690,12 +740,22 @@ function StopRow({ stop, index, api, dayNumber, hopKm }: {
                 />
                 <div className="min-w-0 flex-1">
                     {place ? (
-                        <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm text-gray-900 truncate">
+                        // The name is the way in: a stop is the place, so clicking
+                        // it opens the same editor the Places tab opens. Before
+                        // this, a wrong address or a missing pin noticed while
+                        // reading the day meant leaving the day to go and fix it.
+                        <button
+                            onClick={() => onEditPlace(place)}
+                            title={`Edit ${place.name}`}
+                            className="flex items-center gap-2 flex-wrap text-left group/place w-full min-w-0"
+                        >
+                            <span className="text-sm text-gray-900 truncate
+                                group-hover/place:text-accent group-hover/place:underline
+                                decoration-dotted underline-offset-2">
                                 {stop.custom_label || place.name}
                             </span>
                             <CategoryChip category={place.category} />
-                        </div>
+                        </button>
                     ) : (
                         <InlineText
                             value={stop.custom_label ?? ''}
@@ -709,6 +769,10 @@ function StopRow({ stop, index, api, dayNumber, hopKm }: {
                     )}
                 </div>
                 <OverflowMenu items={[
+                    ...(place ? [{
+                        label: `Edit ${place.name}`,
+                        onClick: () => onEditPlace(place),
+                    }] : []),
                     {
                         label: showNotes || stop.notes ? 'Hide note' : 'Add a note',
                         onClick: () => setShowNotes((v) => !v),

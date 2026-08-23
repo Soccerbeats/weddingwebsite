@@ -11,6 +11,17 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.7 — [Released] A place is editable from the day it is on (`main`, 2026-08-23 17:55)
+
+### Added
+- **A stop in the itinerary is now a way into the place it points at.** Click a stop's name — on the Itinerary tab, in the calendar's day card, or in the map's split-view column — and the full place editor opens: name, type, region, country, status, the pin on its own map, notes, address, source, price and links. Noticing a wrong address or a missing pin while reading a day no longer means leaving the day, finding the place again in the Places tab, and finding your way back.
+- The same edit is on the stop's `⋯` menu as **Edit <place name>**, so it is discoverable rather than only hoverable, and the hovered name underlines to say it is clickable.
+- **The day's Base gets a ✎ beside it** when one is set. The base is a place too — the hotel you booked and will want to put a confirmation number on — and it was the one place on the card with no way in.
+- One editor per tab rather than one per row, so the same component works unchanged as the map's left-hand column: opening a place from the split view puts the dialog over the map, and saving refreshes the itinerary, the places column and the pins together.
+
+### Changed
+- Stops with no place behind them are untouched — a custom label is still edited inline where it sits, because there is no place to open.
+
 ## v0.9.6 — [Released] The map, the itinerary and the places at once (`main`, 2026-08-23 17:20)
 
 ### Added
