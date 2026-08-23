@@ -125,6 +125,7 @@ async function createTables() {
     await pool.query('ALTER TABLE honeymoon_notes ADD COLUMN IF NOT EXISTS source TEXT');
     // Interested / not interested on a candidate stay.
     await pool.query('ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS rating TEXT');
+    await pool.query('ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS rank INTEGER');
     // Coordinates for a travel leg's two ends — see database/init.sql.
     for (const column of ['from_lat', 'from_lng', 'to_lat', 'to_lng']) {
         await pool.query(
@@ -301,6 +302,7 @@ export async function getHoneymoonPayload(): Promise<HoneymoonPayload> {
         image_url: r.image_url ?? null,
         is_excursion: r.is_excursion === true,
         country: r.country ?? '',
+        rank: num(r.rank),
         sort_order: r.sort_order ?? 0,
     }));
 

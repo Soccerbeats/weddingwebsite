@@ -310,6 +310,11 @@ ALTER TABLE honeymoon_trip ADD COLUMN IF NOT EXISTS focus_country TEXT NOT NULL 
 -- Where a travel leg starts and ends, once it has been looked up. Nullable: a
 -- leg is useful as "DPS -> SIN, 14:05" long before anyone pins it, and the map
 -- simply doesn't draw the ones it cannot place.
+-- Where a stay sits in the shortlist's own ranking: 1 is your favourite, NULL
+-- is unranked. Separate from sort_order on purpose — that one decides the order
+-- of the whole place library, and ranking hotels must not reshuffle it.
+ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS rank INTEGER;
+
 ALTER TABLE honeymoon_travel ADD COLUMN IF NOT EXISTS from_lat DOUBLE PRECISION;
 ALTER TABLE honeymoon_travel ADD COLUMN IF NOT EXISTS from_lng DOUBLE PRECISION;
 ALTER TABLE honeymoon_travel ADD COLUMN IF NOT EXISTS to_lat DOUBLE PRECISION;

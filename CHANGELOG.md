@@ -11,6 +11,15 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.16 — [Released] Rank the stays by dragging them (`main`, 2026-08-23 19:40)
+
+### Added
+- **A ranking for the stays shortlist, and a view for building it.** The **① Ranking** toggle turns the card grid into one column of thin rows — position, photo, name, address, rating, status, price aligned down the right — and you drag a row by its ⠿ handle to move it. First is #1. Ordering things is a job for a list: dragging inside a wrapping grid means moving a card three positions to shift it one.
+- **The rank shows up in the card view too**, as a `#3` beside the name, and **My ranking** is a new option in the sort dropdown — so the order you built is visible and usable without switching views.
+- **A drag lands under your hand and saves behind it.** The rows reorder optimistically and the ranking is written in one transaction; the optimistic order stops being used the moment the server agrees, so it never becomes a second source of truth. A drag that waits for a round trip before it lands feels broken.
+- **Every drag ranks the whole shortlist**, not just the two rows that moved — otherwise the first drag leaves you with one ranked stay and a tail of nulls that sorts arbitrarily. For the same reason the ranking view ignores the rating filters and says so: ranking inside a filtered subset would renumber those rows 1..n and leave the hidden ones holding stale numbers. **Clear ranking** puts everything back to unranked.
+- A new nullable `rank` column on `honeymoon_places`, applied by `init.sql` and mirrored at runtime, plus a `PATCH /places { rank: [ids] }` shape that writes it in one transaction. Deliberately **not** `sort_order`: that decides the order of the whole place library, and ranking six hotels must not reshuffle two hundred places. The API grew a nullable-int field kind for it, because the existing one falls back to `0` — a real position, and not the same thing as "no position".
+
 ## v0.9.15 — [Released] The stays shortlist gets a map, and pins stop eating clicks (`main`, 2026-08-23 19:31)
 
 ### Added

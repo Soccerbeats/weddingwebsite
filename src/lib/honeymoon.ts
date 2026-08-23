@@ -53,6 +53,18 @@ export function sourceLabel(source: string | null | undefined): string {
 }
 
 /** Distinct sources present, for building a filter dropdown. */
+/**
+ * Rows in ranking order: ranked first, ascending, then everything unranked.
+ *
+ * The tail keeps the order it arrived in, so looking at a shortlist through this
+ * lens does not silently re-sort the part of it you have not ranked yet.
+ */
+export function byRank<T extends { rank: number | null }>(rows: T[]): T[] {
+    const ranked = rows.filter((r) => r.rank != null)
+        .sort((a, b) => (a.rank ?? 0) - (b.rank ?? 0));
+    return [...ranked, ...rows.filter((r) => r.rank == null)];
+}
+
 export function sourcesOf(places: { source: string }[]): string[] {
     const seen = new Set<string>();
     for (const place of places) seen.add(sourceLabel(place.source));
@@ -108,6 +120,14 @@ export interface Place {
      * says" — most places should inherit, and only the odd one out needs this.
      */
     country: string;
+    /**
+     * Where this stay sits in the shortlist's ranking — 1 is your favourite.
+     *
+     * Null means unranked, which is every stay until you drag one. Deliberately
+     * not `sort_order`: that decides the order of the whole place library, and
+     * ranking six hotels must not reshuffle two hundred places.
+     */
+    rank: number | null;
     sort_order: number;
 }
 

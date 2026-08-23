@@ -3,8 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import {
-    RATINGS, cleanListingTitle, formatPerNight, hasCoords, isStayUrl, nameFromStayUrl, priceValue,
-    stayUrlsFromText,
+    DndContext, PointerSensor, TouchSensor, closestCenter, useSensor, useSensors,
+    type DragEndEvent,
+} from '@dnd-kit/core';
+import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import {
+    RATINGS, byRank, cleanListingTitle, formatPerNight, hasCoords, isStayUrl, nameFromStayUrl,
+    priceValue, stayUrlsFromText,
     type Place, type PlaceStatus,
 } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
@@ -21,9 +27,15 @@ const TripMap = dynamic(() => import('./TripMap'), {
     loading: () => <div className="h-full w-full bg-gray-100 animate-pulse rounded-2xl" />,
 });
 
-type SortKey = 'added' | 'price' | 'name' | 'status';
+type SortKey = 'rank' | 'added' | 'price' | 'name' | 'status';
+
+/** Cards to compare them, ranking to put them in order. */
+type View = 'cards' | 'ranking';
+
+const VIEW_KEY = 'honeymoon.stays.view';
 
 const SORTS: { key: SortKey; label: string }[] = [
+    { key: 'rank', label: 'My ranking' },
     { key: 'added', label: 'Recently added' },
     { key: 'price', label: 'Price: low first' },
     { key: 'name', label: 'Name: A → Z' },
@@ -70,6 +82,24 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
     const chooseSort = (next: SortKey) => {
         setSort(next);
         localStorage.setItem(SORT_KEY, next);
+    };
+
+    /**
+     * Cards or ranking. Remembered like the sort, and for the same reason.
+     *
+     * The ranking view is one column of rows with a drag handle: comparing two
+     * hotels is a job for cards side by side, but *ordering* them is a job for a
+     * list you can drag, and trying to do the second with a wrapping grid means
+     * dragging a card three positions to move it one.
+     */
+    const [view, setView] = useState<View>('cards');
+    useEffect(() => {
+        const saved = localStorage.getItem(VIEW_KEY);
+        if (saved === 'ranking' || saved === 'cards') setView(saved);
+    }, []);
+    const chooseView = (next: View) => {
+        setView(next);
+        localStorage.setItem(VIEW_KEY, next);
     };
     const [preview, setPreview] = useState<Place | null>(null);
     /**
@@ -125,6 +155,11 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                 sorted.sort((a, b) =>
                     (STATUS_RANK[b.status] ?? 0) - (STATUS_RANK[a.status] ?? 0) || byName(a, b));
                 break;
+            case 'rank':
+                // byRank keeps the unranked tail in the order it arrived, which
+                // here is newest-first — the same default the list has always
+                // had, so an unranked shortlist looks unchanged.
+                return byRank([...rows].sort((a, b) => b.id - a.id));
             case 'added':
             default:
                 // There is no created_at column, and adding one now would stamp
@@ -136,6 +171,35 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
         }
         return sorted;
     }, [stays, filter, sort]);
+
+    /**
+     * The ranking view's rows: every stay, in rank order.
+     *
+     * Deliberately not the filtered list. Ranking is a whole-shortlist activity
+     * — dragging inside a filtered subset would renumber those rows 1..n and
+     * leave the hidden ones holding stale numbers, so the filter pills step
+     * aside in this view rather than quietly corrupting the order.
+     */
+    const ranking = useMemo(
+        () => byRank([...stays].sort((a, b) => b.id - a.id)),
+        [stays],
+    );
+
+    /**
+     * Save a new ranking.
+     *
+     * Every row is written, not just the two that moved: the first drag on an
+     * unranked shortlist has to give everything a number, or you end up with one
+     * ranked stay and a tail of nulls that sorts arbitrarily.
+     */
+    const applyRanking = (ids: number[]) => api.rankPlaces(ids);
+
+    const clearRanking = async () => {
+        const ranked = stays.filter((s) => s.rank != null);
+        if (!ranked.length) return;
+        if (!confirm(`Clear the ranking on ${ranked.length} stay(s)?`)) return;
+        await api.update('places', { ids: ranked.map((s) => s.id), rank: null });
+    };
 
     /**
      * What the map draws: the stays that have somewhere to be drawn.
@@ -380,7 +444,8 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
 
             {/* ---- Filters ---- */}
             <div className="flex flex-wrap items-center gap-1.5">
-                {([
+                {/* The pills step aside in the ranking view: see `ranking`. */}
+                {view === 'cards' && ([
                     ['all', `All ${counts.all}`],
                     ['yes', `👍 Interested ${counts.yes}`],
                     ['mid', `😐 Mid tier ${counts.mid}`],
@@ -399,14 +464,23 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                     </button>
                 ))}
                 <div className="flex-1" />
-                <MiniSelect
-                    value={sort}
-                    onChange={(e) => chooseSort(e.target.value as SortKey)}
-                    aria-label="Sort the shortlist"
-                    title="How the shortlist is ordered"
-                >
-                    {SORTS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
-                </MiniSelect>
+                <ViewToggle view={view} onChange={chooseView} />
+                {/* No sort control in the ranking view: the order *is* the
+                    ranking, and offering to sort it by price would either lie or
+                    make the next drag write nonsense. */}
+                {view === 'cards' && (
+                    <MiniSelect
+                        value={sort}
+                        onChange={(e) => chooseSort(e.target.value as SortKey)}
+                        aria-label="Sort the shortlist"
+                        title="How the shortlist is ordered"
+                    >
+                        {SORTS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+                    </MiniSelect>
+                )}
+                {view === 'ranking' && stays.some((st) => st.rank != null) && (
+                    <Button onClick={clearRanking}>Clear ranking</Button>
+                )}
                 {missingLocation.length > 0 && (
                     <Button
                         onClick={fetchMissingLocations}
@@ -437,8 +511,16 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                 </p>
             )}
 
-            {/* ---- Cards ---- */}
-            {shown.length === 0 ? (
+            {/* ---- Ranking ---- */}
+            {view === 'ranking' ? (
+                <RankingList
+                    stays={ranking}
+                    pickedId={picked?.id ?? null}
+                    onPick={pickFromList}
+                    onReorder={applyRanking}
+                    cardRefs={cardRefs}
+                />
+            ) : shown.length === 0 ? (
                 <Card>
                     <EmptyState
                         title={stays.length ? 'Nothing matches that filter' : 'No places to stay yet'}
@@ -493,11 +575,24 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                                 <div className="p-4">
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="min-w-0 flex-1">
-                                        <InlineText
-                                            value={stay.name}
-                                            className="font-semibold text-gray-900 -ml-2"
-                                            onCommit={(name) => api.update('places', { id: stay.id, name })}
-                                        />
+                                        <div className="flex items-baseline gap-1.5">
+                                            {stay.rank != null && (
+                                                <span
+                                                    className="shrink-0 text-[11px] font-bold text-accent
+                                                        tabular-nums"
+                                                    title={`Ranked #${stay.rank} in your shortlist`}
+                                                >
+                                                    #{stay.rank}
+                                                </span>
+                                            )}
+                                            <InlineText
+                                                value={stay.name}
+                                                className="font-semibold text-gray-900 -ml-2"
+                                                onCommit={(name) => api.update('places', {
+                                                    id: stay.id, name,
+                                                })}
+                                            />
+                                        </div>
                                         {/* Only once it is more than an idea: a chip
                                             on every card would be noise, but a
                                             shortlist you cannot see the state of
@@ -680,5 +775,200 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                 onClose={() => { setEditorOpen(false); setEditing(null); }}
             />
         </>
+    );
+}
+
+/** Cards to compare stays, ranking to put them in order. */
+function ViewToggle({ view, onChange }: { view: View; onChange: (view: View) => void }) {
+    const options: { key: View; label: string }[] = [
+        { key: 'cards', label: '▦ Cards' },
+        { key: 'ranking', label: '① Ranking' },
+    ];
+    return (
+        <div className="shrink-0 inline-flex rounded-full border border-gray-200 bg-white p-0.5">
+            {options.map((opt) => (
+                <button
+                    key={opt.key}
+                    onClick={() => onChange(opt.key)}
+                    aria-pressed={view === opt.key}
+                    className={`rounded-full px-3 py-1 text-sm font-medium transition
+                        ${view === opt.key ? 'bg-accent text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+                >
+                    {opt.label}
+                </button>
+            ))}
+        </div>
+    );
+}
+
+/**
+ * The shortlist as an ordered list you can drag.
+ *
+ * One column of thin rows rather than the card grid: ordering things is a job
+ * for a list, and dragging inside a wrapping grid means moving a card three
+ * positions to shift it one. The order is optimistic — the rows move under your
+ * hand and the ranking is written behind them — because a drag that waits for a
+ * round trip before it lands feels broken.
+ */
+function RankingList({ stays, pickedId, onPick, onReorder, cardRefs }: {
+    stays: Place[];
+    pickedId: number | null;
+    onPick: (stay: Place) => void;
+    onReorder: (ids: number[]) => void;
+    cardRefs: React.RefObject<Map<number, HTMLElement>>;
+}) {
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+        // Touch needs a hold, or the page cannot be scrolled past the list.
+        useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 6 } }),
+    );
+
+    /**
+     * The order on screen while the save is in flight.
+     *
+     * Stops being used the moment the server's own order agrees with it, or the
+     * moment the set of stays changes underneath — worked out during render
+     * rather than in an effect, so it never becomes a second source of truth and
+     * costs no extra pass. It only covers the gap between the drop and the
+     * refetch; a drag that waited for a round trip before landing feels broken.
+     */
+    const [pending, setPending] = useState<number[] | null>(null);
+    const byId = new Map(stays.map((s) => [s.id, s]));
+    const serverOrder = stays.map((s) => s.id).join(',');
+    const usable = pending
+        && pending.length === stays.length
+        && pending.every((id) => byId.has(id))
+        && pending.join(',') !== serverOrder;
+    const rows = usable && pending
+        ? pending.map((id) => byId.get(id)).filter((row): row is Place => row != null)
+        : stays;
+
+    if (!stays.length) {
+        return (
+            <Card>
+                <EmptyState
+                    title="Nothing to rank yet"
+                    hint="Paste a booking link above, then drag the rows into the order you like them."
+                />
+            </Card>
+        );
+    }
+
+    const onDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+        if (!over || active.id === over.id) return;
+        const ids = rows.map((s) => s.id);
+        const from = ids.indexOf(Number(active.id));
+        const to = ids.indexOf(Number(over.id));
+        if (from < 0 || to < 0) return;
+        ids.splice(to, 0, ids.splice(from, 1)[0]);
+        setPending(ids);
+        onReorder(ids);
+    };
+
+    return (
+        <Card className="overflow-hidden">
+            <p className="text-[11px] text-gray-400 px-3 pt-2.5">
+                Drag a row by its ⠿ handle. Every stay is here, whatever the filters say —
+                a ranking is the whole shortlist or it is nothing.
+            </p>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+                <SortableContext items={rows.map((s) => s.id)} strategy={verticalListSortingStrategy}>
+                    <ul className="divide-y divide-gray-100 mt-1.5">
+                        {rows.map((stay, index) => (
+                            <RankRow
+                                key={stay.id}
+                                stay={stay}
+                                position={index + 1}
+                                picked={pickedId === stay.id}
+                                onPick={() => onPick(stay)}
+                                cardRefs={cardRefs}
+                            />
+                        ))}
+                    </ul>
+                </SortableContext>
+            </DndContext>
+        </Card>
+    );
+}
+
+function RankRow({ stay, position, picked, onPick, cardRefs }: {
+    stay: Place;
+    position: number;
+    picked: boolean;
+    onPick: () => void;
+    cardRefs: React.RefObject<Map<number, HTMLElement>>;
+}) {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+        useSortable({ id: stay.id });
+    const price = priceValue(stay.price_note);
+    const rating = RATINGS.find((r) => r.key === stay.rating);
+
+    return (
+        <li
+            ref={(node) => {
+                setNodeRef(node);
+                // Shared with the card view, so a click on the map scrolls to
+                // whichever row is showing this stay right now.
+                if (node) cardRefs.current?.set(stay.id, node);
+                else cardRefs.current?.delete(stay.id);
+            }}
+            style={{ transform: CSS.Transform.toString(transform), transition }}
+            className={`flex items-center gap-2.5 px-2.5 py-2 bg-white
+                ${isDragging ? 'opacity-60' : ''} ${picked ? 'ring-2 ring-inset ring-accent' : ''}`}
+        >
+            <button
+                {...attributes}
+                {...listeners}
+                className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500
+                    touch-none px-1 shrink-0"
+                aria-label={`Drag ${stay.name} to reorder the ranking`}
+            >
+                ⠿
+            </button>
+            {/* The position on screen, not the stored rank: mid-drag they differ,
+                and the number under your hand has to be the one you are aiming at. */}
+            <span className="w-6 shrink-0 text-sm font-bold text-accent tabular-nums text-right">
+                {position}
+            </span>
+            {stay.image_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                    src={stay.image_url}
+                    alt={stay.name}
+                    referrerPolicy="no-referrer"
+                    loading="lazy"
+                    onClick={onPick}
+                    title={`Show ${stay.name} on the map`}
+                    className="w-14 h-10 object-cover rounded-lg bg-gray-100 shrink-0 cursor-pointer"
+                    onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
+                />
+            ) : (
+                <div className="w-14 h-10 rounded-lg bg-gray-50 shrink-0" />
+            )}
+            <button onClick={onPick} className="min-w-0 flex-1 text-left">
+                <div className="text-sm font-medium text-gray-900 truncate">{stay.name}</div>
+                {/* The price is the right-hand column, where it lines up and can
+                    be compared down the list; repeating it here would just be
+                    the same number twice. */}
+                <div className="text-[11px] text-gray-400 truncate">
+                    {stay.address || 'no address yet'}
+                    {!hasCoords(stay) ? ' · no pin' : ''}
+                </div>
+            </button>
+            {rating && (
+                <span
+                    className="shrink-0 text-[11px] font-medium"
+                    style={{ color: rating.color }}
+                    title={rating.label}
+                >
+                    {rating.icon}
+                </span>
+            )}
+            {stay.status !== 'idea' && <StatusChip status={stay.status} />}
+            <span className="shrink-0 text-xs text-gray-500 tabular-nums w-20 text-right">
+                {price != null ? stay.price_note : '—'}
+            </span>
+        </li>
     );
 }

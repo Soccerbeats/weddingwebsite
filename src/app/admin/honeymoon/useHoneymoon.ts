@@ -85,6 +85,22 @@ export function useHoneymoon() {
         }),
     ), [run]);
 
+    /**
+     * Write the stays shortlist's ranking — first id is rank 1.
+     *
+     * Its own call rather than `reorder`, because ranking writes `rank` and
+     * reordering writes `sort_order`: one is "this is my favourite hotel", the
+     * other is the order of the whole place library, and conflating them would
+     * reshuffle two hundred places to move one stay up a list.
+     */
+    const rankPlaces = useCallback((ids: number[]) => run(
+        () => fetch(`${BASE}/places`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rank: ids }),
+        }),
+    ), [run]);
+
     const reorder = useCallback((resource: Resource, ids: number[]) => run(
         () => fetch(`${BASE}/${resource}`, {
             method: 'PATCH',
@@ -395,7 +411,7 @@ export function useHoneymoon() {
 
     return {
         data, loading, error, saving: busy > 0,
-        refresh, create, update, reorder, remove, removeMany, createRegion, createCategory,
+        refresh, create, update, reorder, rankPlaces, remove, removeMany, createRegion, createCategory,
         removePlaces, removeDay, removeRow, undo, clearUndo, createRow, createMany,
         placeById, regionById, scheduledPlaceIds, dayOfPlace,
         clearError: () => setError(''),

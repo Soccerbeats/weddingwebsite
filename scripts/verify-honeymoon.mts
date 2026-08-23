@@ -778,6 +778,7 @@ function makePlace(id: number, name: string, lat: number | null, lng: number | n
         region_id: null, category: 'misc', address: null, description: null,
         status: 'idea', price_note: null, links: [], photos: [],
         source: 'manual', needs_review: false, sort_order: 0,
+        rating: null, is_excursion: false, image_url: null, country: '', rank: null,
     };
 }
 
