@@ -8,7 +8,7 @@
  * where a pin lands and what date a day shows.
  */
 import {
-    arcPoints, legEnds, travelModeMeta,
+    arcPoints, arrivalsOn, legArrivalDay, legEnds, legIsOvernight, travelModeMeta,
     boundsOf, dateForDay, distanceKm, formatDayDate, formatDistance, formatTime,
     dayHops, hasCoords, categoryMeta, CATEGORIES,
     sourceLabel, sourcesOf, SOURCE_AMY, SOURCE_MANUAL, SOURCE_YOUTUBE,
@@ -604,6 +604,7 @@ console.log('\nTravel legs');
     const leg = {
         id: 1, day_id: 1, mode: 'flight' as const, from_text: 'DPS', to_text: 'SIN',
         depart_time: '14:05', arrive_time: '16:50', confirmation_ref: null, notes: null,
+        arrive_day_offset: 0,
         from_lat: -8.7465, from_lng: 115.1674, to_lat: 1.3576, to_lng: 103.9885,
     };
     const ends = legEnds(leg);
@@ -645,6 +646,28 @@ console.log('\nTravel legs');
     check('an unknown mode falls back to flight', travelModeMeta('teleport').key === 'flight');
     check('a flight bows more than a walk',
         travelModeMeta('flight').curve > travelModeMeta('walk').curve);
+
+    // ---- legs that land on another day ----
+    const redEye = { ...leg, id: 2, depart_time: '23:40', arrive_time: '06:20', arrive_day_offset: 1 };
+    check('a same-day leg lands on its own day', legArrivalDay(leg, 3) === 3);
+    check('a red-eye lands on the next one', legArrivalDay(redEye, 3) === 4);
+    check('a long haul with a layover lands further out',
+        legArrivalDay({ ...redEye, arrive_day_offset: 2 }, 3) === 5);
+    check('a negative offset is not a thing', legArrivalDay({ arrive_day_offset: -2 }, 3) === 3);
+    check('only a later arrival counts as overnight',
+        legIsOvernight(redEye) && !legIsOvernight(leg));
+
+    const dayWith = (n: number, legs: typeof leg[]) => ({
+        id: n, day_number: n, title: null, base_place_id: null, notes: null,
+        stops: [], travel: legs,
+    });
+    const trip = [dayWith(3, [redEye, leg]), dayWith(4, []), dayWith(5, [])];
+    check('the arrival day knows what lands on it',
+        arrivalsOn(trip, 4).length === 1 && arrivalsOn(trip, 4)[0].fromDay.day_number === 3);
+    check('the same-day leg is not counted as an arrival elsewhere',
+        arrivalsOn(trip, 5).length === 0);
+    check('and the departure day does not list its own leg as an arrival',
+        arrivalsOn(trip, 3).length === 0);
 }
 
 console.log('\nCalendar export');
@@ -676,6 +699,24 @@ console.log('\nCalendar export');
     const open = buildIcs([{ uid: 'e@f', summary: 'Dinner', date: '2026-09-28', start: '19:00' }], stamp);
     check('no end time means an hour', open.includes('DTEND:20260928T200000'));
 
+    // An overnight flight: the end time is earlier on the clock than the start,
+    // which is only legal because it is on the next date.
+    const redEyeIcs = buildIcs([{
+        uid: 'i@j', summary: 'Flight', date: '2026-09-28', endDate: '2026-09-29',
+        start: '23:40', end: '06:20',
+    }], stamp);
+    check('an overnight event ends on the next date',
+        redEyeIcs.includes('DTSTART:20260928T234000')
+        && redEyeIcs.includes('DTEND:20260929T062000'),
+        redEyeIcs.split('\r\n').filter((l) => l.startsWith('DT')).join(' '));
+
+    // An endDate equal to the date is the same as not giving one at all.
+    const sameDay = buildIcs([{
+        uid: 'k@l', summary: 'Flight', date: '2026-09-28', endDate: '2026-09-28',
+        start: '09:30', end: '12:45',
+    }], stamp);
+    check('a same-date endDate changes nothing', sameDay.includes('DTEND:20260928T124500'));
+
     const long = buildIcs([{ uid: 'g@h', summary: 'x'.repeat(200), date: '2026-09-28' }], stamp);
     check('long lines are folded',
         long.split('\r\n').every((line) => line.length <= 75), 'a line ran past 75 octets');
@@ -693,9 +734,26 @@ console.log('\nCalendar export');
         travel: [{
             id: 7, day_id: 4, mode: 'car', from_text: 'Canggu', to_text: 'Ubud',
             depart_time: '08:00', arrive_time: '09:15', confirmation_ref: 'XY12', notes: null,
+            arrive_day_offset: 0,
             from_lat: null, from_lng: null, to_lat: null, to_lng: null,
         }],
     };
+    const overnight: Day = {
+        id: 9, day_number: 3, title: 'Fly home', base_place_id: null, notes: null, stops: [],
+        travel: [{
+            id: 11, day_id: 9, mode: 'flight', from_text: 'DPS', to_text: 'LAX',
+            depart_time: '23:40', arrive_time: '06:20', confirmation_ref: null, notes: null,
+            arrive_day_offset: 1,
+            from_lat: null, from_lng: null, to_lat: null, to_lng: null,
+        }],
+    };
+    const overnightEvents = tripEvents({ start_date: '2026-09-28', title: 'T' }, [overnight],
+        () => undefined);
+    const flight = overnightEvents.find((e) => e.uid.startsWith('honeymoon-travel'));
+    check('an overnight leg starts on its departure day', flight?.date === '2026-09-30');
+    check('and ends on the day it lands', flight?.endDate === '2026-10-01');
+    check('and says so in the summary', /\(\+1 day\)/.test(flight?.summary ?? ''), flight?.summary);
+
     const events = tripEvents({ start_date: '2026-09-28', title: 'T' }, [day],
         (id) => (id === 9 ? 'Monkey Forest' : undefined));
     check('a day becomes one all-day event',

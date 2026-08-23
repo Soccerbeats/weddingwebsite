@@ -10,8 +10,9 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
-    SPREAD_WARNING_KM, TRAVEL_MODES, calendarMonths, dayHops, daysBeyondRange, formatDate,
-    formatDayDate, formatDistance, formatTime, hasCoords, legEnds, travelModeMeta,
+    SPREAD_WARNING_KM, TRAVEL_MODES, arrivalsOn, calendarMonths, dayHops, daysBeyondRange,
+    formatDate, formatDayDate, formatDistance, formatTime, hasCoords, legArrivalDay, legEnds,
+    legIsOvernight, travelModeMeta,
     type CalendarCell, type Day, type Place, type Stop, type TravelLeg, type TravelMode,
 } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
@@ -195,6 +196,7 @@ export default function ItineraryTab({ api, panel = false, onFocusDay }: {
                                     onEditPlace={setEditingPlace}
                                     onFocusDay={onFocusDay}
                                     beyondRange={beyond.has(day.day_number)}
+                                    arrivals={arrivalsOn(days, day.day_number)}
                                 />
                             ))}
                         </div>
@@ -320,6 +322,7 @@ function CalendarView({ api, days, onEditPlace, onFocusDay, beyond }: {
                                         day={day}
                                         api={api}
                                         beyondRange={day != null && beyond.has(day.day_number)}
+                                        arrivals={day ? arrivalsOn(days, day.day_number) : []}
                                         onOpen={() => day && setOpenDayId(day.id)}
                                     />
                                 );
@@ -348,6 +351,7 @@ function CalendarView({ api, days, onEditPlace, onFocusDay, beyond }: {
                                 onEditPlace={onEditPlace}
                                 onFocusDay={onFocusDay}
                                 beyondRange={beyond.has(openDay.day_number)}
+                                arrivals={arrivalsOn(days, openDay.day_number)}
                             />
                         </SortableContext>
                     </DndContext>
@@ -357,11 +361,13 @@ function CalendarView({ api, days, onEditPlace, onFocusDay, beyond }: {
     );
 }
 
-function CalendarCellBox({ cell, day, api, beyondRange, onOpen }: {
+function CalendarCellBox({ cell, day, api, beyondRange, arrivals, onOpen }: {
     cell: CalendarCell;
     day: Day | null;
     api: HoneymoonApi;
     beyondRange: boolean;
+    /** Legs landing on this day, having left on an earlier one. */
+    arrivals: { leg: TravelLeg; fromDay: Day }[];
     onOpen: () => void;
 }) {
     // Outside the trip: a real date, greyed, so the shape of the trip against
@@ -399,10 +405,21 @@ function CalendarCellBox({ cell, day, api, beyondRange, onOpen }: {
             {day.title && (
                 <p className="text-[11px] font-medium text-gray-800 truncate">{day.title}</p>
             )}
+            {/* Landing here from an earlier day, before this day's own departures:
+                you arrive before you leave again. */}
+            {arrivals.map(({ leg }) => (
+                <p key={`in-${leg.id}`} className="text-[10px] text-slate-500 truncate">
+                    ↓ {travelModeMeta(leg.mode).icon}{' '}
+                    {leg.arrive_time ? formatTime(leg.arrive_time) : ''} {leg.to_text ?? ''}
+                </p>
+            ))}
             {day.travel.map((leg) => (
                 <p key={leg.id} className="text-[10px] text-slate-500 truncate">
-                    {TRAVEL_MODES.find((m) => m.key === leg.mode)?.icon ?? '→'}{' '}
+                    {travelModeMeta(leg.mode).icon}{' '}
                     {leg.depart_time ? formatTime(leg.depart_time) : ''} {leg.to_text ?? ''}
+                    {legIsOvernight(leg) && (
+                        <span className="font-semibold"> +{leg.arrive_day_offset}d</span>
+                    )}
                 </p>
             ))}
             {/* Three, then a count: any more and the cell sets the row height for
@@ -425,13 +442,15 @@ function CalendarCellBox({ cell, day, api, beyondRange, onOpen }: {
     );
 }
 
-function DayCard({ day, api, onEditPlace, onFocusDay, beyondRange = false }: {
+function DayCard({ day, api, onEditPlace, onFocusDay, beyondRange = false, arrivals = [] }: {
     day: Day;
     api: HoneymoonApi;
     onEditPlace: (place: Place) => void;
     onFocusDay?: (day: Day) => void;
     /** This day is numbered past the end of the trip's dates. */
     beyondRange?: boolean;
+    /** Legs that left on an earlier day and land on this one. */
+    arrivals?: { leg: TravelLeg; fromDay: Day }[];
 }) {
     const {
         attributes: dayAttributes, listeners: dayListeners, setNodeRef: setDayRef,
@@ -646,6 +665,25 @@ function DayCard({ day, api, onEditPlace, onFocusDay, beyondRange = false }: {
                 </div>
             )}
 
+            {/* ---- What lands here ---- */}
+            {/* A red-eye belongs to the day it departs, but the day it lands is
+                not a free morning — without this, day 4 looks empty when you
+                actually touch down on it at six. */}
+            {arrivals.map(({ leg, fromDay }) => (
+                <p
+                    key={`in-${leg.id}`}
+                    className="mt-2 rounded-2xl bg-slate-100 border border-slate-200 px-2.5 py-1.5
+                        text-[11px] text-slate-700"
+                >
+                    {travelModeMeta(leg.mode).icon} Arrives
+                    {leg.arrive_time ? ` ${formatTime(leg.arrive_time)}` : ''}
+                    {leg.to_text ? ` at ${leg.to_text}` : ''} — the{' '}
+                    {travelModeMeta(leg.mode).label.toLowerCase()} that left on day{' '}
+                    {fromDay.day_number}
+                    {leg.depart_time ? ` at ${formatTime(leg.depart_time)}` : ''}.
+                </p>
+            ))}
+
             {/* ---- Base ---- */}
             <div className="mt-2 flex items-center gap-2">
                 <span className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold shrink-0">
@@ -693,6 +731,12 @@ function DayCard({ day, api, onEditPlace, onFocusDay, beyondRange = false }: {
                                 <option key={m.key} value={m.key}>{m.icon} {m.label}</option>
                             ))}
                         </SelectField>
+                        {legIsOvernight(leg) && (
+                            <span className="shrink-0 rounded-full bg-slate-900 text-white
+                                text-[10px] font-semibold px-2 py-0.5">
+                                +{leg.arrive_day_offset} day{leg.arrive_day_offset === 1 ? '' : 's'}
+                            </span>
+                        )}
                         <div className="flex-1" />
                         <OverflowMenu items={[{
                             label: 'Remove leg',
@@ -719,6 +763,45 @@ function DayCard({ day, api, onEditPlace, onFocusDay, beyondRange = false }: {
                                 })}
                             />
                         </div>
+
+                        {/* How long the leg takes in days. A red-eye lands on the
+                            next one and a long haul with a layover later still,
+                            and without this the arrival time reads as being
+                            hours *before* the departure on the same day. */}
+                        <div className="flex items-center gap-2">
+                            <span className="text-[11px] uppercase tracking-wide text-gray-400
+                                font-semibold shrink-0">
+                                Lands
+                            </span>
+                            <SelectField
+                                className="max-w-[11rem]"
+                                value={String(leg.arrive_day_offset ?? 0)}
+                                onChange={(e) => api.update('travel', {
+                                    id: leg.id, arrive_day_offset: Number(e.target.value),
+                                })}
+                            >
+                                <option value="0">same day</option>
+                                <option value="1">next day (+1)</option>
+                                <option value="2">two days later (+2)</option>
+                                <option value="3">three days later (+3)</option>
+                            </SelectField>
+                        </div>
+
+                        {legIsOvernight(leg) && (
+                            <p className="text-[11px] text-slate-700 bg-slate-100 rounded-xl
+                                px-2.5 py-1.5">
+                                {travelModeMeta(leg.mode).icon} Leaves day {day.day_number}
+                                {leg.depart_time ? ` at ${formatTime(leg.depart_time)}` : ''}
+                                {realDate ? ` (${realDate})` : ''}, lands day{' '}
+                                {legArrivalDay(leg, day.day_number)}
+                                {leg.arrive_time ? ` at ${formatTime(leg.arrive_time)}` : ''}
+                                {formatDayDate(startDate, legArrivalDay(leg, day.day_number))
+                                    ? ` (${formatDayDate(
+                                        startDate, legArrivalDay(leg, day.day_number),
+                                    )})`
+                                    : ''}.
+                            </p>
+                        )}
                         <TextField
                             defaultValue={leg.confirmation_ref ?? ''}
                             placeholder="Confirmation ref"

@@ -129,6 +129,7 @@ const RESOURCES: Record<string, ResourceDef> = {
             to_text: { kind: 'text' },
             depart_time: { kind: 'time' },
             arrive_time: { kind: 'time' },
+            arrive_day_offset: { kind: 'int' },
             confirmation_ref: { kind: 'text' },
             notes: { kind: 'text' },
             from_lat: { kind: 'coord' },

@@ -333,6 +333,9 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                     route,
                     `Day ${day.day_number}`,
                     leg.depart_time ?? '',
+                    leg.arrive_day_offset > 0
+                        ? `lands +${leg.arrive_day_offset} day${leg.arrive_day_offset === 1 ? '' : 's'}`
+                        : '',
                 ].filter(Boolean).join(' · '),
             }];
         });

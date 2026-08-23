@@ -152,6 +152,14 @@ export interface TravelLeg {
     confirmation_ref: string | null;
     notes: string | null;
     /**
+     * Days between departure and arrival: 0 for the same day, 1 for a red-eye.
+     *
+     * An offset rather than a date, because a leg hangs off a day and the days
+     * renumber whenever one is inserted or dragged. "One day after this one"
+     * survives that; "the 14th" does not.
+     */
+    arrive_day_offset: number;
+    /**
      * Where the leg starts and ends, once looked up.
      *
      * Nullable, and independent of the text: a leg is useful as "DPS → SIN,
@@ -400,6 +408,36 @@ export const TRAVEL_MODES: {
 /** The mode's drawing style, falling back to flight for anything unknown. */
 export function travelModeMeta(mode: string) {
     return TRAVEL_MODES.find((m) => m.key === mode) ?? TRAVEL_MODES[0];
+}
+
+/** The day number a leg lands on, given the day it leaves. */
+export function legArrivalDay(leg: { arrive_day_offset: number }, departureDay: number): number {
+    return departureDay + Math.max(0, leg.arrive_day_offset || 0);
+}
+
+/** True for a leg that lands on a later day than it left. */
+export function legIsOvernight(leg: { arrive_day_offset: number }): boolean {
+    return (leg.arrive_day_offset || 0) > 0;
+}
+
+/**
+ * Legs that *land* on a given day, having left on an earlier one.
+ *
+ * A red-eye belongs to the day it departs — that is the day you pack and leave
+ * — but the day it lands is not empty, and an itinerary that says so only on the
+ * departure day makes the arrival day look like a free morning. This is what the
+ * itinerary, the calendar and the print sheet all read to say "you land here".
+ */
+export function arrivalsOn(days: Day[], dayNumber: number): { leg: TravelLeg; fromDay: Day }[] {
+    const found: { leg: TravelLeg; fromDay: Day }[] = [];
+    for (const day of days) {
+        if (day.day_number >= dayNumber) continue;
+        for (const leg of day.travel) {
+            if (!legIsOvernight(leg)) continue;
+            if (legArrivalDay(leg, day.day_number) === dayNumber) found.push({ leg, fromDay: day });
+        }
+    }
+    return found;
 }
 
 /** Both ends of a leg, or null when either has not been looked up. */
@@ -1026,6 +1064,14 @@ export interface IcsEvent {
     location?: string;
     /** `YYYY-MM-DD` for an all-day event. */
     date: string;
+    /**
+     * `YYYY-MM-DD` the event ends on, when that is not the day it started.
+     *
+     * Only meaningful with `start`/`end` times: an overnight flight's 06:20
+     * arrival is on the next date, and without this it would be written as a
+     * same-day event ending before it began.
+     */
+    endDate?: string;
     /** `HH:MM`. Both present makes it a timed event; absent makes it all-day. */
     start?: string;
     end?: string;
@@ -1080,13 +1126,19 @@ export function buildIcs(events: IcsEvent[], stamp: string, calendarName = 'Hone
         lines.push(`UID:${event.uid}`);
         lines.push(`DTSTAMP:${stamp}`);
         if (event.start) {
-            const end = event.end && event.end > event.start
+            // A different end date makes any end time valid, including one
+            // earlier in the clock than the start — that is what an overnight
+            // flight is. Without one, an end that is not later than the start is
+            // meaningless and gets the one-hour guess.
+            const endsLater = !!event.endDate && event.endDate !== event.date;
+            const end = event.end && (endsLater || event.end > event.start)
                 ? event.end
                 // No end time given: an hour is a better guess than a zero-length
                 // event, which some calendars refuse to draw at all.
                 : addHour(event.start);
+            const endCompact = (endsLater ? event.endDate! : event.date).replace(/-/g, '');
             lines.push(`DTSTART:${compact}T${event.start.replace(':', '')}00`);
-            lines.push(`DTEND:${compact}T${end.replace(':', '')}00`);
+            lines.push(`DTEND:${endCompact}T${end.replace(':', '')}00`);
         } else {
             // All-day events are exclusive at the end, hence the +1 day.
             lines.push(`DTSTART;VALUE=DATE:${compact}`);
@@ -1148,11 +1200,17 @@ export function tripEvents(
         for (const leg of day.travel) {
             const mode = TRAVEL_MODES.find((m) => m.key === leg.mode)?.label ?? 'Travel';
             const route = [leg.from_text, leg.to_text].filter(Boolean).join(' → ');
+            const arrivalDate = legIsOvernight(leg)
+                ? dateForDay(trip.start_date, legArrivalDay(leg, day.day_number))
+                : null;
+            const nights = leg.arrive_day_offset || 0;
             events.push({
                 uid: `honeymoon-travel-${leg.id}@wedding`,
-                summary: `${mode}${route ? `: ${route}` : ''}`,
+                summary: `${mode}${route ? `: ${route}` : ''}`
+                    + (nights > 0 ? ` (+${nights} day${nights === 1 ? '' : 's'})` : ''),
                 description: leg.confirmation_ref ? `Ref ${leg.confirmation_ref}` : undefined,
                 date: iso,
+                ...(arrivalDate ? { endDate: isoOf(arrivalDate) } : {}),
                 start: leg.depart_time ?? undefined,
                 end: leg.arrive_time ?? undefined,
             });

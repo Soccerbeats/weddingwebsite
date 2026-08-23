@@ -11,6 +11,17 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.21 — [Released] A flight can land on another day (`main`, 2026-08-23 21:36)
+
+### Added
+- **Travel legs can span days.** Every leg gets a **Lands** control — *same day*, *next day (+1)*, *two days later*, *three days later* — so a 23:40 departure arriving at 06:20 is finally expressible. Until now an overnight flight had to be entered as landing hours *before* it took off.
+- **It is an offset, not a date.** A leg hangs off a day, and the days renumber whenever one is inserted or dragged; "one day after this one" survives that, "the 14th" does not.
+- **The day it lands says so.** The departure day carries a **+1 day** badge and a line spelling the whole thing out — *"Leaves day 1 at 11:40 PM (Sat, Sep 12), lands day 2 at 6:20 AM (Sun, Sep 13)"* — and the arrival day, which would otherwise look like a free morning, gets *"Arrives 6:20 AM at DPS — the flight that left on day 1 at 11:40 PM"*.
+- **Everywhere else too.** The calendar view marks the departure cell **+1d** and shows a ↓ arrival line on the day it lands; the print sheet prints both; the map's leg popup says how many days it takes; and the `.ics` export now writes `DTEND` on the arrival *date*, so an overnight flight imports as one event across midnight instead of one that ends before it began.
+
+### Fixed
+- `buildIcs` treated any end time not later than the start as a mistake and replaced it with a one-hour guess. That is right for a same-day event and wrong for a red-eye, so an event carrying an explicit end **date** now keeps its end time whatever the clock says. Eight new checks cover the arithmetic and five cover the export, including that a same-date `endDate` changes nothing.
+
 ## v0.9.20 — [Released] Wider photos in the ranking rows (`main`, 2026-08-23 20:03)
 
 ### Changed
