@@ -11,7 +11,7 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
-## v0.9.9 — [Unreleased] The demo instance deploys itself (`demo-self-deploy`, 2026-08-23 01:04)
+## v0.9.27 — [Released] The demo instance deploys itself (`main`, 2026-08-23 23:42)
 
 ### Added
 - **The demo instance now deploys itself from GitHub.** A new "Demo Instance" workflow runs on every push to main: it waits for this build's image to land in the container registry (tagged by the Wedding Planner CI), publishes the new seeder image, then SSHes to the server, checks out the exact commit, pulls both images, brings the demo stack up, and verifies port 3001 answers. The demo is always the newest merge, with nobody running a docker command; with the deploy secrets unset, the same run still builds and publishes both images and skips the deploy with a notice.
@@ -20,7 +20,12 @@ All notable changes to this project are documented here, newest at the top.
 ### Changed
 - **The demo stack seeds itself on first boot.** A one-shot seed service joins the demo compose stack; it waits for the database, seeds only when the guest list is empty, writes the config and photos straight into the demo volumes, and exits. A fresh stack is complete after `up -d` — the manual SSH-tunnel-and-docker-cp flow in the wiki is gone — and a redeploy finds a non-empty guest list and skips, so a demo someone has been clicking around in is never wiped.
 
-## v0.9.8 — [Unreleased] The README is a landing page, not a manual (`readme-redesign`, 2026-08-22 23:28)
+### Fixed
+- **The gate that was supposed to keep this dormant could never open.** The deploy job was gated on `if: secrets.DEMO_DEPLOY_SSH_KEY != ''`, but the `secrets` context is not available in a job-level `if` — only `github`, `needs`, `vars` and `inputs` are — so the condition evaluated against nothing and the job would have been skipped *forever*, including after the secrets were set. The gate is now a job-level `env` (which can read secrets) checked by each step's `if` (which can read `env`), and an unset key says so with a notice instead of vanishing.
+- **The wait-for-image job inspected a registry it never logged into.** It worked only because the package happens to be public right now; flipping it back to private would have failed with twenty minutes of "manifest unknown". It logs in first.
+
+
+## v0.9.26 — [Released] The README is a landing page, not a manual (`main`, 2026-08-23 23:33)
 
 ### Changed
 - **The README now leads with the pitch and the install, not the gallery.** For a self-hoster scrolling GitHub for something to run, the first screen is now: a centred title and one-line hook, a badge row of the stack (Next.js 16, React 19, TypeScript, Tailwind CSS 4, PostgreSQL 15, Docker, PWA — the old "Built with" line, promoted and iconified), the wiki button, the live-site hero, and a demo call-to-action. **What it does** and **Quick start** move above the screenshots; the gallery is proof, shown after the ask.
@@ -29,7 +34,9 @@ All notable changes to this project are documented here, newest at the top.
 - **A dead anchor was fixed on the way.** The Changelog screenshot caption linked `#versions-and-the-changelog`, an in-page anchor that no heading on the page satisfies (the section moved to the wiki in v0.9.5); it now points at the wiki page it means.
 - The hero image and every screenshot are untouched — only their order and the framing around them changed.
 
-## v0.9.7 — [Unreleased] The agent docs consolidate into AGENTS.md (`agents-md-consolidation`, 2026-08-22 22:52)
+- **The quick start pointed at the wrong compose file.** It said "nothing to build" and then ran `docker/docker-compose.yml`, which is the development stack and builds from source. It now runs `docker-compose.prod.yml`, which pulls the published image, and copies `.env.example` first — the stack will not start without a database password. This was wrong on `main` too, not something this branch introduced.
+
+## v0.9.25 — [Released] The agent docs consolidate into AGENTS.md (`main`, 2026-08-23 23:20)
 
 ### Changed
 - **CLAUDE.md, IMPLEMENTATION_PLAN.md and SEATING_CHART_PLAN.md become one file: AGENTS.md**, in the [agents.md](https://agents.md) open format — a single predictable place any coding agent (Claude Code, Codex, Cursor, Copilot, …) reads for the working agreements. CLAUDE.md is now a **symlink** to it, so tooling that looks for CLAUDE.md still finds the full document; nothing is duplicated and there is one file to keep true.
@@ -37,7 +44,15 @@ All notable changes to this project are documented here, newest at the top.
 - **What was cut** was history, not knowledge: IMPLEMENTATION_PLAN.md described the project at inception (Next.js 14, `tailwind.config.js`, a `photos.json`-only photo workflow, an "admin dashboard" still listed as a future idea) and its "next steps" are all done; SEATING_CHART_PLAN.md is a finished plan (every phase shipped months ago) whose SQL had already drifted — the real schema gained `floor_plan_room` and `floor_plan_walls` and lives in `database/init.sql`, which the consolidated doc points at instead of re-quoting. What survives of the seating plan is one paragraph of still-true behaviour: React Flow canvas, a party being a guest with `plus_one_name` set, split parties flagged.
 - `deploy.md`'s pointer from "CLAUDE.md → After Every Code Change" now points at AGENTS.md.
 
-## v0.9.6 — [Unreleased] The Docker files move into docker/ (`docker-folder-cleanup`, 2026-08-22 21:57)
+
+## v0.9.24 — [Released] Pushing to main is the deploy (`main`, 2026-08-23 23:09)
+
+### Changed
+- **The working agreement no longer says to build and push the image by hand.** With the *Wedding Planner* pipeline merged, a push to `main` publishes `latest`, `v<version>` and `sha-<short>` on its own in about three and a half minutes — so doing it locally as well meant two different builds of the same commit racing for the tag production pulls, and "which build is deployed" stopped having an answer. `CLAUDE.md` and `deploy.md` now say: push, then pull and redeploy in Portainer.
+- **The manual build is kept, demoted to a fallback** — for Actions being down, or an image needed from a working tree that isn't pushed — with the warning that it overwrites what CI published. The knowledge is worth keeping; the habit is not.
+- `gh run list --limit 1` / `gh run watch` are documented as the way to see what the pipeline is doing, since that is now the thing to check after a push instead of a local build log.
+
+## v0.9.23 — [Released] The Docker files move into docker/ (`main`, 2026-08-23 22:40)
 
 ### Changed
 - **The Docker files left the repository root.** The Dockerfile, the dev stack (docker-compose.yml), the production stack (docker-compose.prod.yml), the demo stack (docker-compose.demo.yml) and the env template (.env.example) now live in docker/, so the stack is one folder and the root is source code and docs.
@@ -46,6 +61,171 @@ All notable changes to this project are documented here, newest at the top.
 - **The .env file moves with the stacks, once.** Compose reads .env from the compose file's directory, so once the stacks sit in docker/ a root .env would silently stop being read — every variable defaults to blank with only a warning, and the database then refuses to start without its user. .env.example now sits beside the stacks; an existing .env moves once with `mv .env docker/`.
 - **The stacks pin their project names.** A compose file in docker/ would name its project after that directory — "docker" — which would look for docker_postgres_data and silently start a fresh, empty database instead of reusing the existing weddingwebsite_postgres_data. A top-level `name:` key keeps `weddingwebsite` for the dev and prod stacks, and `weddingdemo` for the demo stack (the flag `-p weddingdemo` used to supply).
 - **.dockerignore stays at the root — that is where the builder reads it from**, because the build context has to remain the repository root for the Dockerfile's COPY instructions. Its "Docker files" section now excludes docker/ wholesale, which also keeps the env template out of the image.
+## v0.9.22 — [Released] A Travel tab (`main`, 2026-08-23 21:43)
+
+### Added
+- **A Travel tab: every flight, boat, car, train and walk of the trip in one list**, in trip order, each with the day it leaves on, its real date, its times, the day it lands, and whether the map can draw it yet. Booking travel is its own afternoon — you sit down with six confirmation emails — and doing that through the itinerary meant opening six day cards.
+- **Add a leg from there**: pick the day it leaves on, pick how you are travelling, press **+ Add leg**. It lands on that day's card in the itinerary at the same moment.
+- Counts by mode at the top, so *"two flights and a boat"* is visible without reading the list.
+
+### Changed
+- **The legs are still on the itinerary, and still editable there.** This is a second *view* of the same rows, not a second store: the leg editor was lifted into its own module and both tabs render it over the same record, so an edit in either place is the same edit. Verified both directions — rename a leg's From on the Travel tab and the itinerary shows it; do it on the itinerary and the Travel tab shows it; delete it from either and it is gone from both.
+
+## v0.9.21 — [Released] A flight can land on another day (`main`, 2026-08-23 21:36)
+
+### Added
+- **Travel legs can span days.** Every leg gets a **Lands** control — *same day*, *next day (+1)*, *two days later*, *three days later* — so a 23:40 departure arriving at 06:20 is finally expressible. Until now an overnight flight had to be entered as landing hours *before* it took off.
+- **It is an offset, not a date.** A leg hangs off a day, and the days renumber whenever one is inserted or dragged; "one day after this one" survives that, "the 14th" does not.
+- **The day it lands says so.** The departure day carries a **+1 day** badge and a line spelling the whole thing out — *"Leaves day 1 at 11:40 PM (Sat, Sep 12), lands day 2 at 6:20 AM (Sun, Sep 13)"* — and the arrival day, which would otherwise look like a free morning, gets *"Arrives 6:20 AM at DPS — the flight that left on day 1 at 11:40 PM"*.
+- **Everywhere else too.** The calendar view marks the departure cell **+1d** and shows a ↓ arrival line on the day it lands; the print sheet prints both; the map's leg popup says how many days it takes; and the `.ics` export now writes `DTEND` on the arrival *date*, so an overnight flight imports as one event across midnight instead of one that ends before it began.
+
+### Fixed
+- `buildIcs` treated any end time not later than the start as a mistake and replaced it with a one-hour guess. That is right for a same-day event and wrong for a red-eye, so an event carrying an explicit end **date** now keeps its end time whatever the clock says. Eight new checks cover the arithmetic and five cover the export, including that a same-date `endDate` changes nothing.
+
+## v0.9.20 — [Released] Wider photos in the ranking rows (`main`, 2026-08-23 20:03)
+
+### Changed
+- **The ranking photos are twice as wide — 288px instead of 144 — at the same 96px row height.** The rows are exactly as tall as they were; the picture just gets twice the area. It is a 3:1 window onto a 3:2 photo, so `object-cover` keeps the middle band and crops the sky and the floor, which is the part of a hotel picture worth looking at anyway.
+- It steps back to 144px once the list column itself is under 42rem — drag the map wide enough and it gets there — because a 288px photo in a 360px column leaves nothing for the name.
+
+## v0.9.19 — [Released] The ranking is on the pins too (`main`, 2026-08-23 19:58)
+
+### Added
+- **In the ranking view, each map pin carries its position** — #1 in the circle for your favourite, and so on down the list. The map becomes the same ordered list as the rows beside it, which is the point of having both on screen: you can see whether your top three are on the same side of the island. Labelled pins get a couple more pixels so the digits do not touch the ring.
+- Only in that view. In the card view the rank is already on the card, and a number in every circle would be noise on a map whose job there is "where is *this* one".
+- **A drag renumbers the pins with the rows**, immediately. The optimistic order moved up from the list into the tab so the two read from one source — two copies of "what order are these in" would have shown the list renumbered while the map sat stale for the length of a round trip.
+
+## v0.9.18 — [Released] Ranking rows show a real photo (`main`, 2026-08-23 19:55)
+
+### Changed
+- **The photos in the ranking list are 144×96 instead of 56×40**, and they run flush from the top of their row to the bottom. The row has no vertical padding any more, so the photo is what sets its height and nothing frames it; it is 3:2 because that is the shape the listings' own images arrive in, so nothing is cropped out of proportion. Ranking hotels by a thumbnail you cannot see anything in was the wrong trade.
+- A stay whose listing gave us no photo keeps the same footprint, so the names still line up down the list rather than stepping in and out. The corners are square, not rounded: a rounded corner touching the row's edge shows a notch of background behind it.
+
+## v0.9.17 — [Released] Three columns of stays, and a divider to drag (`main`, 2026-08-23 19:46)
+
+### Fixed
+- **The stays cards were stuck at two columns however wide the window got.** Adding the map column had capped them at `lg:grid-cols-2`; they now go up to three.
+- The cards answer to the width of **their own column** rather than the window's, which is the only thing that can be right once the divider moves: the same 1600px screen holds one column of cards or three depending on where you put it. One column under 42rem, two to 64rem, three above — measured on the list, not the viewport.
+
+### Added
+- **The divider between the list and the map drags**, left and right, with the same handle the map tab's split view uses — now shared rather than copied. The map is clamped so the list keeps 360px, arrow keys move a focused divider in 24px steps, and the width is remembered per browser. Below 1280px there is no divider: the map stacks under the list, where a 260px-wide map would have been no use to anybody.
+
+## v0.9.16 — [Released] Rank the stays by dragging them (`main`, 2026-08-23 19:40)
+
+### Added
+- **A ranking for the stays shortlist, and a view for building it.** The **① Ranking** toggle turns the card grid into one column of thin rows — position, photo, name, address, rating, status, price aligned down the right — and you drag a row by its ⠿ handle to move it. First is #1. Ordering things is a job for a list: dragging inside a wrapping grid means moving a card three positions to shift it one.
+- **The rank shows up in the card view too**, as a `#3` beside the name, and **My ranking** is a new option in the sort dropdown — so the order you built is visible and usable without switching views.
+- **A drag lands under your hand and saves behind it.** The rows reorder optimistically and the ranking is written in one transaction; the optimistic order stops being used the moment the server agrees, so it never becomes a second source of truth. A drag that waits for a round trip before it lands feels broken.
+- **Every drag ranks the whole shortlist**, not just the two rows that moved — otherwise the first drag leaves you with one ranked stay and a tail of nulls that sorts arbitrarily. For the same reason the ranking view ignores the rating filters and says so: ranking inside a filtered subset would renumber those rows 1..n and leave the hidden ones holding stale numbers. **Clear ranking** puts everything back to unranked.
+- A new nullable `rank` column on `honeymoon_places`, applied by `init.sql` and mirrored at runtime, plus a `PATCH /places { rank: [ids] }` shape that writes it in one transaction. Deliberately **not** `sort_order`: that decides the order of the whole place library, and ranking six hotels must not reshuffle two hundred places. The API grew a nullable-int field kind for it, because the existing one falls back to `0` — a real position, and not the same thing as "no position".
+
+## v0.9.15 — [Released] The stays shortlist gets a map, and pins stop eating clicks (`main`, 2026-08-23 19:31)
+
+### Added
+- **A map down the right-hand side of the Stays tab**, holding every stay that has a location and framing all of them. It re-frames when the set of stays changes — locating one, deleting another — but never on an ordinary edit, because the viewport is yours once you have panned it.
+- **Click a stay's photo and its pin lights up**: bigger, ringed, raised above the others, and panned into view if it was off the edge — by the smallest amount that works, so a pin already on screen never moves. Click the photo again to let go. A stay with no photo gets a **◎ Show on the map** link instead, so the two are not different features.
+- **Click a pin and its card comes to you**: scrolled to the middle of the list and ringed. If the current filter was hiding that stay the filter gives way — you asked for that one specifically, and doing nothing silently is the worst of the three options.
+- The map is deliberately **not filtered** with the list: it answers "where are these, relative to each other", which a map that empties out when you tick 👍 Interested cannot. Filtering narrows the list; the map highlights. It also doesn't cluster — a "5" badge over Canggu would hide the very pin you clicked a photo to find.
+- The photo now selects rather than opening the listing preview. **Preview** is still its own button on the card, and pointing at the map is the thing you do far more often.
+
+### Fixed
+- **Pins in the lower part of a map that ran past the bottom of the window silently did nothing when clicked.** Leaflet gives every marker a `tabIndex`; clicking a focusable element focuses it, and focusing something partly out of view makes the browser scroll it into view — which moved the pin out from under the cursor between mousedown and mouseup. The click event then landed on the nearest common ancestor, the map container, and the marker's own handler never ran. Markers are no longer focusable, which costs tab-to-a-pin on a map that regularly holds two hundred of them and buys back clicks that work. Found while building the stays map, but it was latent on the map tab too, on any window short enough.
+- The stays map is sized to the window rather than to the space below the paste box, so the whole map is always on screen — and the browser test now asserts that, so a future layout change that reintroduces the overflow fails loudly instead of quietly breaking every pin below the fold.
+
+## v0.9.14 — [Released] Travel legs know where they are, and the map draws them (`main`, 2026-08-23 19:10)
+
+### Added
+- **A travel leg's From and To can be looked up.** Each end gets a **Find** next to it, and the search goes out *with the leg's mode*: a flight's ends are looked up as airports, a boat's as ferry terminals, a train's as stations. That is what makes **DPS** resolve to Ngurah Rai International rather than — as Nominatim answers a bare three-letter code — a boundary in China. Several hits are offered as a list with their type and coordinates, since the second result for an airport code is regularly a hotel by the runway.
+- **Finding a place does not overwrite what you typed.** `DPS → SIN` is the right label for a leg; *"Ngurah Rai International Airport, Jalan Cucak Rowo, Tuban, Denpasar, Badung, Bali, Indonesia"* is not. The lookup sets the pin and leaves the text alone — the exception being a pasted link, which is nobody's idea of a label. Each end shows its coordinates once found, with a **clear** to forget them.
+- **Legs are drawn on the map as curved dashed arcs**, in the mode's own colour and dash, with the mode's icon at the top of the arc: a flight is a fine dotted bow in blue, a boat a longer dash in cyan, a car amber, a train violet, a walk a near-straight green stipple. They follow the 🗓 Itinerary overlay rather than having a toggle of their own — "show me the days" and "show me how I get between them" are one question — and the counts line says how many are drawn.
+- **The curve is load-bearing, not decoration.** A straight line between two pins is exactly what a day route looks like, and two legs between the same pair of airports — out on the Monday, back on the Friday — would sit on top of each other and read as one. The bow is always to the same side of the direction of travel, so an outbound and a return separate themselves. A flight bows most, a walk barely at all: a hundred-metre stroll drawn as an arc would be a lie about the route.
+- New columns on `honeymoon_travel` — `from_lat`, `from_lng`, `to_lat`, `to_lng`, all nullable, applied by `init.sql` and mirrored at runtime. A leg stays useful as *"DPS → SIN, 14:05"* long before anyone pins it; the map simply doesn't draw the ones it can't place. Twelve new checks in `npm run check:honeymoon` cover the arc maths — endpoints, curvature, that a return leg bows the other way, and that two points in the same place produce a line rather than NaN.
+
+### Fixed
+- Widening a lookup can find nothing at all — *"Sanur ferry terminal"* matches no such object while *"Sanur"* finds the place. The geocoder now retries the original query when the widened one comes back empty, so adding a word can never make somewhere un-findable.
+
+## v0.9.13 — [Released] Mid tier (`main`, 2026-08-23 18:58)
+
+### Added
+- **A third rating — 😐 Mid tier — between 👍 Interested and 👎 Not interested**, on every stay card, with its own filter pill and count. Most of a shortlist is neither a yes nor a no, and forcing those into one or the other threw away the distinction you were trying to record. Clicking the active rating still clears it.
+- Excursions get the same button and the same filter: the ratings are one shared vocabulary, and a rating you can set on one tab but not filter on another is a trap rather than a feature. The map's and Places' bulk **Rating** menus offer it too, so a lasso of also-rans can be marked in one go.
+- `PlaceRating` is now `'yes' | 'mid' | 'no' | null`, and the database read-back whitelists the new value — the column is plain `TEXT`, so anything not a known rating still reads as "not judged yet" rather than reaching the UI.
+
+## v0.9.12 — [Released] Stays land on the map, and the map flies there (`main`, 2026-08-23 18:48)
+
+### Added
+- **A booking link now gives up its address and its map pin.** `fetch-meta` reads the listing's JSON-LD — Booking.com publishes a `Hotel` block with a full postal address — plus the map centre it drops its own pin on, which is where the coordinates come from since their JSON-LD carries no `geo`. A pasted link therefore arrives on the shortlist already knowing where it is, and appears on the map immediately.
+- **A `Get locations for N` button on the Stays tab** for the shortlist you already have: it walks every stay whose listing hasn't been asked yet, fills in the address and the pin, and reports how many it found. Stays with a location show it on the card (📍) and those without say **no pin**, so it is obvious which ones the map is still missing.
+- Coordinates that come from a listing are marked **reviewed**, not "needs review". They are the listing's own location rather than a geocoder's guess at a name, so they belong on the map straight away instead of behind the map's unconfirmed filter — which would have made a lookup look like it did nothing.
+- **The map flies rather than cuts.** Pressing a day's ◎ Map button, or ⤢ Fit, now animates from wherever the map is to where it is going, pulling back through wider zooms on the way and settling in — measured mid-flight zooming out to z4–8 before returning to z13. That arc is what tells you *where* you just went; a cut leaves you somewhere unrecognisable. Arriving at the page still frames instantly: nobody wants a second of animation every time they open the tab.
+
+### Fixed
+- The address builder no longer produces *"Strand, Westminster Borough, London, WC2R 0EU, United Kingdom, Greater London, UK"*. Booking's `streetAddress` is usually the whole address already; three or more comma-separated parts is the tell that it needs nothing appended.
+- Only a JSON-LD node whose `@type` is a place is read. Booking.com also embeds **its own corporate address** — 82 rue Henri Farman, Issy-les-Moulineaux — in a trader-info block, and a naive scan for `address` finds that instead and pins every hotel in the Paris suburbs.
+
+## v0.9.11 — [Released] Changing the trip dates no longer deletes days (`main`, 2026-08-23 18:35)
+
+### Fixed
+- **Shortening the trip's dates deleted the days that fell past the new end, and their stops and travel legs with them.** It asked first — but that is the wrong trade at any level of warning: dragging a date range is an ordinary, exploratory edit, and an hour of planning should not be one mis-drag and one reflexive OK away from gone. Setting the dates is now non-destructive in both directions. A 14-day trip re-dated to 6 days keeps all 14 days, their stops, legs and notes, and they take their new dates from the new start.
+- Days that now fall past the end of the trip are **flagged in red instead of removed**: a rose ring and a line on each day card saying why, red cells in the calendar view, a banner at the top of the Itinerary, a note on the Settings card naming the days and saying *nothing was deleted*, and a red **N days past the end** in the portal header — a link, from every tab, to the itinerary that needs fixing. Move their stops onto earlier days, delete the days you don't want, or drag the range back out; the flags clear themselves the moment the dates cover the days again.
+
+### Changed
+- A **longer** range still builds the days it is missing, exactly as before — that half was never destructive and is the thing that makes the calendar worth dragging.
+- `RangePlan.remove` is now `RangePlan.beyond`: the tail is named so the UI can flag it, not so a caller can delete it. New pure helpers `tripLength()` and `daysBeyondRange()` decide what is out of range, with seven checks over them in `npm run check:honeymoon` — including that a trip with no end date flags nothing.
+- Settings' old *"you have 14 days planned for a 6-day trip, drag the range again to line them up"* note is gone; dragging the range no longer lines them up by deletion, so it said the wrong thing. The two real cases now speak for themselves: days past the end (red, with what to do), or a range longer than the days planned (amber, drag again to fill it in).
+
+## v0.9.10 — [Released] The stays shortlist sorts (`main`, 2026-08-23 18:26)
+
+### Added
+- **A sort control on the Stays tab**, remembered per browser: **Recently added** (the default), **Price: low first**, **Name: A → Z**, and **Status: booked first**. It composes with the 👍/👎/unrated filters rather than replacing them.
+- **Recently added, newest first, is the default** — a shortlist is worked from the top, and the listing you just pasted in is the one you want to look at. There is no `created_at` column and adding one now would stamp every existing stay with the same backfilled time; `id` is a serial, so descending id *is* insertion order, newest first — the same answer with no migration and no lie about old rows.
+- **A stay with no price sorts last, not first.** A blank price is not "free", and floating the unpriced to the top of a cost sort buries the cheapest real option. Every sort falls back to the name, so equally-priced or equally-ranked stays keep a stable, readable order.
+- Stays that are past **Idea** now show their status chip on the card. A shortlist whose state you cannot see makes the status sort look arbitrary; a chip on every card would have been noise, so it appears only once a stay is shortlisted or booked.
+
+## v0.9.9 — [Released] Every day in the split view can fly the map to itself (`main`, 2026-08-23 18:12)
+
+### Added
+- **A ◎ Map button on every day in the map's split view.** It moves the map to that day's stops and, if the routes aren't already drawn, switches the itinerary overlay on — either half alone is only half an answer: a viewport that jumped somewhere without the line and the numbered order arrives as an anonymous cluster of pins.
+- The other pins stay where they are. This moves the map, it does not filter it: losing the surrounding places would take away the context that makes *"is this stop miles from the others?"* answerable at a glance. Narrowing to one day is still what the day dropdown is for — and if that dropdown already has a day selected, the button points it at the day you clicked rather than flying to stops the filter has taken off the map.
+- The button is **disabled on a day with nothing pinned**, and says so, rather than looking broken when the map doesn't move. It appears only where there is a map to move: the Itinerary tab proper never renders it.
+
+### Changed
+- `TripMap` takes a `fitPoints` prop — what the next fit should frame, or null for everything on screen. It is read through a ref, so setting a new target never re-frames on its own; only a bumped `fitSignal` does, which keeps the rule the map has always had: the viewport is yours once you have panned it. `⤢ Fit` and a change of country both clear the target, so they go back to framing the whole trip.
+
+## v0.9.8 — [Released] Insert a day where you need it; the map's itinerary starts out of the way (`main`, 2026-08-23 18:06)
+
+### Added
+- **A day can be added before or after any other day**, from that day's `⋯` menu — *Add a day before day 4* / *Add a day after day 4*. Until now the only way to make a day was to append one to the end and drag it up the trip. The insert reuses the reorder the drag handle uses, so the trip renumbers around it and every following day's date shifts along; the days either side keep their stops, travel legs and notes.
+
+### Changed
+- **The map's itinerary overlay now opens minimised.** Pressing 🗓 asks for the routes *on the map*, and a panel that immediately covered the top-left corner of them was in the way of the thing it was describing. The corner keeps a **🗓 Itinerary · N days** button instead; clicking it opens the list of days and stops, and the panel has a — to put it back. Switching the overlay off and on starts collapsed again.
+- Both the button and the panel sit at `left-14` rather than `left-3`, clear of Leaflet's zoom control — the panel used to cover the **+**, so you could not zoom in while reading the days.
+
+## v0.9.7 — [Released] A place is editable from the day it is on (`main`, 2026-08-23 17:55)
+
+### Added
+- **A stop in the itinerary is now a way into the place it points at.** Click a stop's name — on the Itinerary tab, in the calendar's day card, or in the map's split-view column — and the full place editor opens: name, type, region, country, status, the pin on its own map, notes, address, source, price and links. Noticing a wrong address or a missing pin while reading a day no longer means leaving the day, finding the place again in the Places tab, and finding your way back.
+- The same edit is on the stop's `⋯` menu as **Edit <place name>**, so it is discoverable rather than only hoverable, and the hovered name underlines to say it is clickable.
+- **The day's Base gets a ✎ beside it** when one is set. The base is a place too — the hotel you booked and will want to put a confirmation number on — and it was the one place on the card with no way in.
+- One editor per tab rather than one per row, so the same component works unchanged as the map's left-hand column: opening a place from the split view puts the dialog over the map, and saving refreshes the itinerary, the places column and the pins together.
+
+### Changed
+- Stops with no place behind them are untouched — a custom label is still edited inline where it sits, because there is no place to open.
+
+## v0.9.6 — [Released] The map, the itinerary and the places at once (`main`, 2026-08-23 17:20)
+
+### Added
+- **A ⊞ Split button on the honeymoon map** that turns the map tab into all three planning tabs at once: the itinerary down the left in a single column, the place library down the right in a single column, and the map still holding the middle. It is for the part of planning you cannot do one tab at a time — putting a place on a day while looking at where it actually is, and seeing the day you just changed redraw on the map beside it.
+- **Both dividers drag.** Grab the gutter either side of the map and any of the three columns can be given the room; each column is clamped against the other so the map can be squeezed down to 320px but never out of existence. Arrow keys move a focused divider in 24px steps, so it isn't mouse-only.
+- Split state and both column widths are **remembered per browser** — how you like to lay out a screen is about your screen, not about the trip, so it is `localStorage` rather than a trip setting. Below 1024px the columns are suppressed and the map keeps the screen, whatever was last saved.
+- The two side columns are **the real tabs, not summaries of them**: everything works in the panel exactly as it does on its own page — inline edits, drag-to-reorder days and stops, the overflow menus, bulk selection, the place editor. Each panel scrolls independently of the other and of the map, and carries a `Full tab ↗` link out to the whole page.
+
+### Changed
+- `ItineraryTab` and `PlacesTab` take a `panel` prop for the narrow rendering: days stack one-up whatever the window is doing (rather than the page's two- and three-column grid), the calendar view and print/export controls are dropped, and Places loses its five count cards — the portal header already carries those numbers — with the filters stacking two-up so the list keeps the height.
+- Defaults are 400px for the itinerary and 340px for places: the widths at which a stop row shows a full place name instead of truncating it.
+
+### Fixed
+- **The map now watches its own box, not just the window.** Leaflet only ever invalidated its size on a window resize, so any layout change that moved the map's edges without moving the window's — dragging a divider, most obviously — painted the new space as grey tiles until something else forced a redraw. A `ResizeObserver` on the container fixes it for every case, including the panel-open animation.
 
 ## v0.9.5 — [Released] The README is a front page again; the rest is a wiki (`main`, 2026-08-17 19:40)
 

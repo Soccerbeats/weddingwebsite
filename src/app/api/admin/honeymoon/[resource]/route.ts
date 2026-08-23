@@ -10,7 +10,8 @@ import { ensureHoneymoonTables } from '@/lib/honeymoonDb';
  * string ever reaches the SQL text.
  */
 
-type FieldKind = 'text' | 'number' | 'int' | 'bool' | 'date' | 'ref' | 'enum' | 'json' | 'coord' | 'time';
+type FieldKind = 'text' | 'number' | 'int' | 'nint' | 'bool' | 'date' | 'ref' | 'enum'
+    | 'json' | 'coord' | 'time';
 
 interface Field {
     kind: FieldKind;
@@ -87,6 +88,7 @@ const RESOURCES: Record<string, ResourceDef> = {
             // fallback, and clearing a rating back to "unrated" has to survive
             // as NULL rather than snapping to 'yes'.
             rating: { kind: 'text' },
+            rank: { kind: 'nint' },
             image_url: { kind: 'text' },
             is_excursion: { kind: 'bool' },
             // Empty means "inherit from the region", so it must not become NULL.
@@ -127,8 +129,13 @@ const RESOURCES: Record<string, ResourceDef> = {
             to_text: { kind: 'text' },
             depart_time: { kind: 'time' },
             arrive_time: { kind: 'time' },
+            arrive_day_offset: { kind: 'int' },
             confirmation_ref: { kind: 'text' },
             notes: { kind: 'text' },
+            from_lat: { kind: 'coord' },
+            from_lng: { kind: 'coord' },
+            to_lat: { kind: 'coord' },
+            to_lng: { kind: 'coord' },
         },
         required: ['day_id'],
     },
@@ -185,6 +192,12 @@ function coerce(field: Field, raw: unknown): unknown {
         case 'int': {
             const n = parseNumber(raw);
             return n == null ? 0 : Math.trunc(n);
+        }
+        // Nullable int: 'int' falls back to 0, which is a real position and not
+        // the same thing as "no position". A cleared rank has to be NULL.
+        case 'nint': {
+            const n = parseNumber(raw);
+            return n == null ? null : Math.trunc(n);
         }
         case 'bool':
             return raw === true || raw === 'true' || raw === 1 || raw === '1';
@@ -366,6 +379,38 @@ export async function PATCH(request: Request, { params }: Params) {
 
         const def = resolve(resource);
         if (!def) return NextResponse.json({ error: 'Unknown resource' }, { status: 404 });
+
+        /*
+         * `{ rank: [id, id, …] }` writes the shortlist's ranking in one
+         * transaction: first id becomes rank 1, and every place not in the list
+         * is left exactly as it was.
+         *
+         * A separate shape from the reorder below because it is a separate
+         * column with separate meaning — `sort_order` orders the whole place
+         * library, and ranking six hotels must not touch it. Ids are coerced to
+         * integers before they reach the query.
+         */
+        if (!Array.isArray(body) && Array.isArray((body as { rank?: unknown }).rank)) {
+            const ids = ((body as { rank: unknown[] }).rank)
+                .map((id) => Math.trunc(Number(id)))
+                .filter((id) => Number.isFinite(id) && id > 0);
+            const client = await pool.connect();
+            try {
+                await client.query('BEGIN');
+                for (const [index, id] of ids.entries()) {
+                    await client.query(
+                        `UPDATE ${def.table} SET rank = $1 WHERE id = $2`, [index + 1, id],
+                    );
+                }
+                await client.query('COMMIT');
+            } catch (error) {
+                await client.query('ROLLBACK');
+                throw error;
+            } finally {
+                client.release();
+            }
+            return NextResponse.json({ success: true, ranked: ids.length });
+        }
 
         // A bare array of {id} reorders in one transaction — index becomes sort_order.
         if (Array.isArray(body)) {

@@ -50,6 +50,16 @@ jobs:
       # The "Wedding Planner" CI publishes sha-<sha>, v<version> and
       # :latest in one push; the sha tag is the signal that this exact
       # commit is in the registry (and that :latest now points at it).
+      # A login, so this does not depend on the package being public: it works
+      # either way, and a package flipped back to private would otherwise fail
+      # here with a confusing "manifest unknown" for twenty minutes.
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Wait for sha-<sha> in GHCR
         run: |
           SHORT_SHA="${GITHUB_SHA:0:7}"
@@ -103,12 +113,26 @@ jobs:
     name: "Demo Instance · pull & redeploy on the server"
     runs-on: ubuntu-latest
     needs: build-seeder
-    # Skip (with a notice) until the deploy secrets are set — this is what
-    # makes the workflow safe to merge before the server is wired up.
-    if: ${{ secrets.DEMO_DEPLOY_SSH_KEY != '' }}
     timeout-minutes: 20
+    # Skip until the deploy secrets are set — this is what makes the workflow
+    # safe to merge before the server is wired up.
+    #
+    # The gate is a job-level `env` read by each step's `if`, NOT a job-level
+    # `if`. The `secrets` context is not available in `jobs.<job_id>.if` (only
+    # github, needs, vars and inputs are), so `if: secrets.X != ''` there
+    # evaluates against nothing and the job is skipped *forever* — including
+    # after the secrets are set, which is a silent way for this to look broken.
+    # A step `if` can read `env`, and job-level `env` can read secrets.
+    env:
+      DEPLOY_READY: ${{ secrets.DEMO_DEPLOY_SSH_KEY != '' && 'true' || 'false' }}
     steps:
+      - name: Say why nothing is being deployed
+        if: env.DEPLOY_READY != 'true'
+        run: |
+          echo "::notice::DEMO_DEPLOY_SSH_KEY is not set — both images were built and published, and the server was left alone."
+
       - name: Install the deploy key
+        if: env.DEPLOY_READY == 'true'
         run: |
           mkdir -p ~/.ssh
           printf '%s\n' "${{ secrets.DEMO_DEPLOY_SSH_KEY }}" > ~/.ssh/demo_deploy
@@ -120,6 +144,7 @@ jobs:
       # service does the rest: it fills a fresh demo on first boot and
       # leaves an existing one alone.
       - name: SSH to the server and redeploy the demo
+        if: env.DEPLOY_READY == 'true'
         env:
           HOST: ${{ secrets.DEMO_DEPLOY_HOST }}
           USER: ${{ secrets.DEMO_DEPLOY_USER }}
