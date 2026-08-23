@@ -44,6 +44,15 @@ export interface TripMapProps {
      * load and when the fit button is pressed.
      */
     fitSignal?: number;
+    /**
+     * Points to frame on the *next* fit, instead of everything drawn.
+     *
+     * Set it to one day's stops and bump `fitSignal` to fly to that day; null
+     * means "frame everything on screen", which is what the fit button does.
+     * Read through a ref, so changing it never re-frames on its own — only a
+     * bumped signal does.
+     */
+    fitPoints?: { lat: number; lng: number }[] | null;
     /** While true, dragging draws a lasso instead of panning the map. */
     selectMode?: boolean;
     /** Ids currently lasso-selected, drawn with a highlight ring. */
@@ -54,7 +63,7 @@ export interface TripMapProps {
 }
 
 export default function TripMap({
-    places, routes = [], selectedId = null, onSelect, fitSignal = 0,
+    places, routes = [], selectedId = null, onSelect, fitSignal = 0, fitPoints = null,
     selectMode = false, selectedIds, onLassoSelect, className = '',
 }: TripMapProps) {
     const containerRef = useRef<HTMLDivElement | null>(null);
@@ -85,6 +94,10 @@ export default function TripMap({
     onLassoRef.current = onLassoSelect;
     const selectModeRef = useRef(selectMode);
     selectModeRef.current = selectMode;
+
+    // See the prop: held in a ref so a new target never fits by itself.
+    const fitPointsRef = useRef(fitPoints);
+    fitPointsRef.current = fitPoints;
 
     // Whether the map has ever been framed, and the last fit request seen.
     const fittedRef = useRef(false);
@@ -390,7 +403,12 @@ export default function TripMap({
         const firstDraw = !fittedRef.current;
         if (!asked && !firstDraw) return;
 
-        const points = places.filter(hasCoords).map((p) => ({ lat: p.lat, lng: p.lng }));
+        // A target, when the parent asked for one — a single day, say — and
+        // otherwise everything currently drawn.
+        const target = fitPointsRef.current;
+        const points = target?.length
+            ? target
+            : places.filter(hasCoords).map((p) => ({ lat: p.lat, lng: p.lng }));
         const bounds = boundsOf(points);
         // Nothing to frame yet — stay unfitted so the first real data still fits.
         if (!bounds) return;

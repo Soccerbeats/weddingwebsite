@@ -79,6 +79,13 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
     const [routeListOpen, setRouteListOpen] = useState(false);
     // Bumped only on purpose — never by a filter. See TripMap's fit effect.
     const [fitSignal, setFitSignal] = useState(0);
+    /**
+     * What the next fit should frame: one day's stops, or null for everything.
+     *
+     * Kept beside the signal rather than inside it because the two say different
+     * things — the signal is "re-frame now", this is "on what".
+     */
+    const [fitPoints, setFitPoints] = useState<{ lat: number; lng: number }[] | null>(null);
 
     /**
      * Split view, and how wide each side column is.
@@ -221,6 +228,9 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
         if (lastCountryRef.current === null) { lastCountryRef.current = country; return; }
         if (lastCountryRef.current === country) return;
         lastCountryRef.current = country;
+        // A new destination frames the whole destination, not the day you were
+        // last looking at.
+        setFitPoints(null);
         setFitSignal((n) => n + 1);
     }, [country]);
 
@@ -266,6 +276,34 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
         return days.map(forDay).filter((r) => r.points.length > 0);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedDay, showItinerary, days, pointsForDay]);
+
+    /**
+     * Fly the map to one day, from the itinerary column beside it.
+     *
+     * Two things happen, because either alone is half an answer: the viewport
+     * moves to that day's stops, and — if the routes aren't drawn — the itinerary
+     * overlay is switched on, so what you jumped to arrives with its line and
+     * numbered order rather than as an anonymous cluster of pins.
+     *
+     * The other pins stay where they are: this moves the map, it does not filter
+     * it. Narrowing to a single day is what the day dropdown is for, and losing
+     * the surrounding pins would take away the context that makes "is this stop
+     * miles from the others?" answerable at a glance.
+     */
+    const focusDay = useCallback((day: Day) => {
+        const points = pointsForDay(day);
+        if (!points.length) return;
+        setFitPoints(points.map((p) => ({ lat: p.lat, lng: p.lng })));
+        if (dayFilter === '') {
+            setShowItinerary(true);
+        } else {
+            // Already in single-day mode: point that at this day instead. Flying
+            // to stops the day filter has taken off the map would land on an
+            // empty sea.
+            setDayFilter(String(day.id));
+        }
+        setFitSignal((n) => n + 1);
+    }, [pointsForDay, dayFilter]);
 
     const pinnedCount = visible.filter(hasCoords).length;
     const unpinnedCount = visible.length - pinnedCount;
@@ -496,7 +534,7 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                         {showItinerary ? '🗓 On' : '🗓 Itinerary'}
                     </button>
                     <button
-                        onClick={() => setFitSignal((n) => n + 1)}
+                        onClick={() => { setFitPoints(null); setFitSignal((n) => n + 1); }}
                         title="Frame everything currently shown"
                         className="shrink-0 rounded-2xl px-2.5 py-1.5 text-sm font-medium border
                             border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100 transition"
@@ -592,7 +630,7 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                             href="/admin/honeymoon/itinerary"
                             width={widths.left}
                         >
-                            <ItineraryTab api={api} panel />
+                            <ItineraryTab api={api} panel onFocusDay={focusDay} />
                         </SidePanel>
                         <ColumnDivider
                             label="Resize the itinerary column"
@@ -626,6 +664,7 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                         selectedId={selectedId}
                         onSelect={setSelectedId}
                         fitSignal={fitSignal}
+                        fitPoints={fitPoints}
                         selectMode={selectMode}
                         selectedIds={lassoed}
                         onLassoSelect={(ids, additive) => setLassoed((prev) => {

@@ -11,6 +11,16 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.9 — [Released] Every day in the split view can fly the map to itself (`main`, 2026-08-23 18:12)
+
+### Added
+- **A ◎ Map button on every day in the map's split view.** It moves the map to that day's stops and, if the routes aren't already drawn, switches the itinerary overlay on — either half alone is only half an answer: a viewport that jumped somewhere without the line and the numbered order arrives as an anonymous cluster of pins.
+- The other pins stay where they are. This moves the map, it does not filter it: losing the surrounding places would take away the context that makes *"is this stop miles from the others?"* answerable at a glance. Narrowing to one day is still what the day dropdown is for — and if that dropdown already has a day selected, the button points it at the day you clicked rather than flying to stops the filter has taken off the map.
+- The button is **disabled on a day with nothing pinned**, and says so, rather than looking broken when the map doesn't move. It appears only where there is a map to move: the Itinerary tab proper never renders it.
+
+### Changed
+- `TripMap` takes a `fitPoints` prop — what the next fit should frame, or null for everything on screen. It is read through a ref, so setting a new target never re-frames on its own; only a bumped `fitSignal` does, which keeps the rule the map has always had: the viewport is yours once you have panned it. `⤢ Fit` and a change of country both clear the target, so they go back to framing the whole trip.
+
 ## v0.9.8 — [Released] Insert a day where you need it; the map's itinerary starts out of the way (`main`, 2026-08-23 18:06)
 
 ### Added

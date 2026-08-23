@@ -11,7 +11,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import {
     SPREAD_WARNING_KM, TRAVEL_MODES, calendarMonths, dayHops, formatDayDate, formatDistance,
-    formatTime,
+    formatTime, hasCoords,
     type CalendarCell, type Day, type Place, type Stop, type TravelMode,
 } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
@@ -31,9 +31,15 @@ const VIEW_KEY = 'honeymoon.itinerary.view';
  *   calendar view, print, export, the hint line — is dropped, and the days
  *   stack in one column whatever the window is doing.
  */
-export default function ItineraryTab({ api, panel = false }: {
+export default function ItineraryTab({ api, panel = false, onFocusDay }: {
     api: HoneymoonApi;
     panel?: boolean;
+    /**
+     * Given by the map's split view: frame the map on this day. Absent on the
+     * Itinerary tab proper, where there is no map to move, and the button that
+     * calls it is simply not rendered.
+     */
+    onFocusDay?: (day: Day) => void;
 }) {
     const { data } = api;
     const days = data?.days ?? [];
@@ -136,7 +142,12 @@ export default function ItineraryTab({ api, panel = false }: {
             {!panel && <PrintSheet api={api} />}
 
             {shownView === 'calendar' ? (
-                <CalendarView api={api} days={days} onEditPlace={setEditingPlace} />
+                <CalendarView
+                    api={api}
+                    days={days}
+                    onEditPlace={setEditingPlace}
+                    onFocusDay={onFocusDay}
+                />
             ) : (
                 <DndContext sensors={daySensors} collisionDetection={closestCenter} onDragEnd={onDayDragEnd}>
                     <SortableContext items={days.map((d) => d.id)} strategy={rectSortingStrategy}>
@@ -149,6 +160,7 @@ export default function ItineraryTab({ api, panel = false }: {
                                     day={day}
                                     api={api}
                                     onEditPlace={setEditingPlace}
+                                    onFocusDay={onFocusDay}
                                 />
                             ))}
                         </div>
@@ -213,10 +225,11 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
  * the list view uses, so there is one place a day is edited and no second
  * implementation to keep in step.
  */
-function CalendarView({ api, days, onEditPlace }: {
+function CalendarView({ api, days, onEditPlace, onFocusDay }: {
     api: HoneymoonApi;
     days: Day[];
     onEditPlace: (place: Place) => void;
+    onFocusDay?: (day: Day) => void;
 }) {
     const startDate = api.data?.trip.start_date ?? null;
     const [openDayId, setOpenDayId] = useState<number | null>(null);
@@ -292,7 +305,12 @@ function CalendarView({ api, days, onEditPlace }: {
                 {openDay && (
                     <DndContext collisionDetection={closestCenter} onDragEnd={() => {}}>
                         <SortableContext items={[openDay.id]} strategy={rectSortingStrategy}>
-                            <DayCard day={openDay} api={api} onEditPlace={onEditPlace} />
+                            <DayCard
+                                day={openDay}
+                                api={api}
+                                onEditPlace={onEditPlace}
+                                onFocusDay={onFocusDay}
+                            />
                         </SortableContext>
                     </DndContext>
                 )}
@@ -365,10 +383,11 @@ function CalendarCellBox({ cell, day, api, onOpen }: {
     );
 }
 
-function DayCard({ day, api, onEditPlace }: {
+function DayCard({ day, api, onEditPlace, onFocusDay }: {
     day: Day;
     api: HoneymoonApi;
     onEditPlace: (place: Place) => void;
+    onFocusDay?: (day: Day) => void;
 }) {
     const {
         attributes: dayAttributes, listeners: dayListeners, setNodeRef: setDayRef,
@@ -383,6 +402,16 @@ function DayCard({ day, api, onEditPlace }: {
     const realDate = formatDayDate(startDate, day.day_number);
     /** The stay this day is based at, if one is set — editable like any stop. */
     const base = day.base_place_id == null ? null : api.placeById.get(day.base_place_id) ?? null;
+    /**
+     * Whether there is anything on this day the map could actually fly to.
+     *
+     * A day of unpinned stops has no bounds, so the button is disabled and says
+     * why rather than looking broken when nothing moves.
+     */
+    const pinnedStops = day.stops.some((stop) => {
+        const place = stop.place_id == null ? undefined : api.placeById.get(stop.place_id);
+        return place != null && hasCoords(place);
+    });
     const hops = dayHops(day.stops, api.placeById);
     const longest = hops.reduce((max, hop) => Math.max(max, hop.km), 0);
 
@@ -500,6 +529,20 @@ function DayCard({ day, api, onEditPlace }: {
                         onCommit={(title) => api.update('days', { id: day.id, title })}
                     />
                 </div>
+                {onFocusDay && (
+                    <button
+                        onClick={() => onFocusDay(day)}
+                        disabled={!pinnedStops}
+                        title={pinnedStops
+                            ? `Move the map to day ${day.day_number}'s stops, and show the route`
+                            : 'Nothing on this day is pinned yet'}
+                        className="shrink-0 rounded-full border border-gray-200 bg-gray-50 px-2 py-1
+                            text-[11px] font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900
+                            disabled:opacity-40 disabled:hover:bg-gray-50 transition"
+                    >
+                        ◎ Map
+                    </button>
+                )}
                 <OverflowMenu
                     items={[
                         {
