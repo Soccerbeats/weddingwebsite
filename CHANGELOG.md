@@ -11,6 +11,13 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.24 — [Released] Pushing to main is the deploy (`main`, 2026-08-23 23:09)
+
+### Changed
+- **The working agreement no longer says to build and push the image by hand.** With the *Wedding Planner* pipeline merged, a push to `main` publishes `latest`, `v<version>` and `sha-<short>` on its own in about three and a half minutes — so doing it locally as well meant two different builds of the same commit racing for the tag production pulls, and "which build is deployed" stopped having an answer. `CLAUDE.md` and `deploy.md` now say: push, then pull and redeploy in Portainer.
+- **The manual build is kept, demoted to a fallback** — for Actions being down, or an image needed from a working tree that isn't pushed — with the warning that it overwrites what CI published. The knowledge is worth keeping; the habit is not.
+- `gh run list --limit 1` / `gh run watch` are documented as the way to see what the pipeline is doing, since that is now the thing to check after a push instead of a local build log.
+
 ## v0.9.23 — [Released] The Docker files move into docker/ (`main`, 2026-08-23 22:40)
 
 ### Changed

@@ -11,11 +11,10 @@ When Austin says **"document everything"** after completing a feature, it means:
    - Add a dated bullet to the **Decisions & History** section summarising what was built
    - Add any new API endpoints, config keys, or data formats to the appropriate sub-sections
 4. **Commit and push to GitHub** (`git add -A && git commit && git push`)
-5. **Build and push the Docker image** so it can be pulled from Portainer (the Dockerfile lives in `docker/`):
-    ```bash
-    docker build -t ghcr.io/soccerbeats/weddingwebsite:latest --target production -f docker/Dockerfile .
-    docker push ghcr.io/soccerbeats/weddingwebsite:latest
-    ```
+5. **Nothing else — CI publishes the image.** The push in step 4 starts the
+   *Wedding Planner* workflow, which builds the image and publishes
+   `latest`, `v<version>` and `sha-<short>` to GHCR. Austin pulls and
+   redeploys in Portainer.
 
 Do all five steps — don't skip any. README, CHANGELOG, and vault updates should all happen before the git commit so they're included.
 
@@ -60,23 +59,29 @@ Jarvis's convention, and the in-app viewer is Jarvis's view carried over.
 
 ## After Every Code Change
 
-After any code change (feature, fix, refactor), **always deploy — automatically, without waiting to be asked**. This is Austin's standing instruction and it **overrides** the "do not push unless explicitly asked" rule in `deploy.md`. Do both steps, in order:
+After any code change (feature, fix, refactor), **always deploy — automatically, without waiting to be asked**. This is Austin's standing instruction and it **overrides** the "do not push unless explicitly asked" rule in `deploy.md`.
 
-1. **Push to GitHub** (commit any pending changes on `main`, then push):
+**Pushing to GitHub *is* deploying.** Do this and nothing else:
 
 ```bash
 git add -A && git commit -m "describe the change"   # if not already committed
 git push origin main
 ```
 
-2. **Build and push the Docker image** so Austin can pull and redeploy from Portainer (the Dockerfile lives in `docker/`):
+The `.github/workflows/ci-cd.yml` pipeline ("Wedding Planner") then builds the
+image on GitHub's machines and publishes `latest`, `v<version>` and
+`sha-<short>` to GHCR, in about three and a half minutes. Austin pulls and
+redeploys in Portainer, as before.
 
-```bash
-docker build -t ghcr.io/soccerbeats/weddingwebsite:latest --target production -f docker/Dockerfile .
-docker push ghcr.io/soccerbeats/weddingwebsite:latest
-```
+**Do not build and push the image by hand.** Both writing `:latest` means two
+different builds of the same commit race for the tag that production pulls, and
+"which build is deployed" stops having an answer. Report the push, and — if it
+matters to the user — that CI is publishing; check with
+`gh run list --limit 1` rather than reaching for `docker build`.
 
-Do this automatically after every change — don't wait to be asked.
+The manual build stays documented in `deploy.md` for the case where CI genuinely
+cannot do it (Actions down, or an image needed from an unpushed working tree).
+That is a fallback, not the routine.
 
 ---
 
@@ -315,16 +320,21 @@ npm run dev  # Starts on localhost:3000
 
 **CRITICAL**: Always use the image name `ghcr.io/soccerbeats/weddingwebsite:latest` - NEVER use any other name!
 
+The routine path is CI — push to `main` and the *Wedding Planner* workflow
+publishes the image (see *After Every Code Change*). Watch it with
+`gh run list --limit 1` / `gh run watch`.
+
+By hand, only as a fallback:
+
 ```bash
-# 1. Build production image (Dockerfile lives in docker/)
+# Build the production image (the Dockerfile lives in docker/; context is the root)
 docker build -t ghcr.io/soccerbeats/weddingwebsite:latest --target production -f docker/Dockerfile .
 
-# 2. Push to GitHub Container Registry
+# Push to GitHub Container Registry — this overwrites what CI published,
+# so only do it when CI cannot
 docker push ghcr.io/soccerbeats/weddingwebsite:latest
 
-# 3. Deploy to Portainer
-# User manually pulls and redeploys via Portainer UI
-# OR Portainer webhook auto-deploys on new image push
+# Deploy: the user pulls and redeploys via the Portainer UI
 ```
 
 **Important Notes**:
