@@ -52,7 +52,7 @@ docker push ghcr.io/soccerbeats/weddingwebsite:latest
 
 - **Image name**: ALWAYS use `ghcr.io/soccerbeats/weddingwebsite:latest` — NEVER change this
 - **Build target**: Always use `--target production`
-- **Auto-deploy after every code change**: per Austin's standing instruction (see `CLAUDE.md` → "After Every Code Change"), push to GitHub automatically after any change — no need to ask. This supersedes the older "only deploy when asked" gate.
+- **Auto-deploy after every code change**: per Austin's standing instruction (see `AGENTS.md` → "The conventions that will bite you"), push to GitHub automatically after any change — no need to ask. This supersedes the older "only deploy when asked" gate.
 - **Don't build the image by hand as part of that.** CI publishes it. Two builds of the same commit both writing `:latest` means the tag production pulls has no single answer.
 
 ## Where It Deploys
