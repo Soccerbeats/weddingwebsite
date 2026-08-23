@@ -8,13 +8,15 @@
  * where a pin lands and what date a day shows.
  */
 import {
+    arcPoints, arrivalsOn, legArrivalDay, legEnds, legIsOvernight, travelModeMeta,
     boundsOf, dateForDay, distanceKm, formatDayDate, formatDistance, formatTime,
     dayHops, hasCoords, categoryMeta, CATEGORIES,
     sourceLabel, sourcesOf, SOURCE_AMY, SOURCE_MANUAL, SOURCE_YOUTUBE,
     categoriesOf, normalizeCategoryKey,
     pointInPolygon, placesInPolygon, nameFromStayUrl, stayUrlsFromText, isStayUrl, cleanListingTitle, formatPerNight,
     formatPrice, nameFromAnyUrl, priceValue, effectiveCountry, countriesInUse, calendarMonths,
-    monthMatrix, planRange, daysBetween, addDays, isoOf, buildIcs, tripEvents, searchHoneymoon,
+    monthMatrix, planRange, daysBeyondRange, tripLength, daysBetween, addDays, isoOf, buildIcs,
+    tripEvents, searchHoneymoon,
     type Day, type GuideNote, type Region, type TodoItem,
     type Place, type Stop,
 } from '../src/lib/honeymoon';
@@ -549,7 +551,7 @@ console.log('\nTrip range');
     const fresh = planRange('2026-09-28', '2026-10-07', []);
     check('a ten-day range is ten days', fresh.length === 10, String(fresh.length));
     check('creates all of them', fresh.add.length === 10 && fresh.add[9] === 10);
-    check('removes nothing', fresh.remove.length === 0);
+    check('leaves nothing outside', fresh.beyond.length === 0);
     check('is not a shift', !fresh.shiftOnly);
 
     // Dragged right-to-left means the same trip.
@@ -566,13 +568,15 @@ console.log('\nTrip range');
     const longer = planRange('2026-09-28', '2026-10-11', [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     check('extending adds only the new days',
         longer.add.join(',') === '11,12,13,14', longer.add.join(','));
-    check('extending removes nothing', longer.remove.length === 0);
+    check('extending leaves nothing outside', longer.beyond.length === 0);
 
-    // Shorter: the tail is named so the UI can say what would be lost.
+    // Shorter: the tail is named so the UI can flag it. Nothing is deleted —
+    // shortening a planned trip must never throw a day away.
     const shorter = planRange('2026-09-28', '2026-10-04', [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-    check('shortening names the days to drop',
-        shorter.remove.join(',') === '8,9,10', shorter.remove.join(','));
+    check('shortening names the days now outside the range',
+        shorter.beyond.join(',') === '8,9,10', shorter.beyond.join(','));
     check('shortening adds nothing', shorter.add.length === 0);
+    check('and is not a plain shift', !shorter.shiftOnly);
 
     // A single day is a real trip, not a zero-length one.
     const single = planRange('2026-09-28', '2026-09-28', []);
@@ -581,7 +585,89 @@ console.log('\nTrip range');
     // Gaps left by deleting a day in the middle are filled, not ignored.
     const gappy = planRange('2026-09-28', '2026-10-02', [1, 2, 5]);
     check('fills a gap in the middle', gappy.add.join(',') === '3,4', gappy.add.join(','));
-    check('and keeps day 5', !gappy.remove.includes(5));
+    check('and keeps day 5', !gappy.beyond.includes(5));
+
+    // The saved range, against the days that actually exist.
+    check('a full range has a one-based length', tripLength('2026-09-28', '2026-10-07') === 10);
+    check('one date is not a range', tripLength('2026-09-28', null) === null);
+    check('a single date is a one-day trip', tripLength('2026-09-28', '2026-09-28') === 1);
+    check('days past the end are flagged',
+        daysBeyondRange([1, 2, 3, 4, 5, 6, 7, 8], '2026-09-28', '2026-10-01').join(',') === '5,6,7,8');
+    check('a trip inside its dates flags nothing',
+        daysBeyondRange([1, 2, 3], '2026-09-28', '2026-10-01').length === 0);
+    check('no end date flags nothing',
+        daysBeyondRange([1, 2, 3, 99], '2026-09-28', null).length === 0);
+}
+
+console.log('\nTravel legs');
+{
+    const leg = {
+        id: 1, day_id: 1, mode: 'flight' as const, from_text: 'DPS', to_text: 'SIN',
+        depart_time: '14:05', arrive_time: '16:50', confirmation_ref: null, notes: null,
+        arrive_day_offset: 0,
+        from_lat: -8.7465, from_lng: 115.1674, to_lat: 1.3576, to_lng: 103.9885,
+    };
+    const ends = legEnds(leg);
+    check('a pinned leg has two ends', ends?.from.lat === -8.7465 && ends?.to.lng === 103.9885);
+    check('half a leg has none', legEnds({ ...leg, to_lat: null }) === null);
+    check('an unlooked-up leg has none', legEnds({ ...leg, from_lat: null, from_lng: null }) === null);
+
+    const arc = arcPoints(ends!.from, ends!.to, 0.22, 24);
+    check('the arc starts and ends on the leg',
+        arc[0].lat === ends!.from.lat && arc[0].lng === ends!.from.lng
+        && arc[arc.length - 1].lat === ends!.to.lat && arc[arc.length - 1].lng === ends!.to.lng);
+    check('and is sampled into the steps asked for', arc.length === 25, String(arc.length));
+
+    // The middle must be off the straight line — that is the whole point.
+    const midpoint = { lat: (ends!.from.lat + ends!.to.lat) / 2, lng: (ends!.from.lng + ends!.to.lng) / 2 };
+    const apex = arc[12];
+    const bowed = distanceKm(apex, midpoint);
+    check('the middle bows away from the straight line', bowed > 100, `${Math.round(bowed)} km`);
+
+    // A flatter curve bows less; a straight one barely at all.
+    const flat = arcPoints(ends!.from, ends!.to, 0.05, 24);
+    const flatBow = distanceKm(flat[12], midpoint);
+    check('a smaller curve bows less', flatBow < bowed, `${Math.round(flatBow)} km vs ${Math.round(bowed)} km`);
+
+    // Reversing the leg bows to the other side, so an outbound and a return
+    // separate instead of drawing over each other.
+    const back = arcPoints(ends!.to, ends!.from, 0.22, 24);
+    const apart = distanceKm(apex, back[12]);
+    check('the return leg arcs the other way', apart > 100, `${Math.round(apart)} km apart`);
+
+    // Degenerate input must not produce NaN points.
+    const same = arcPoints({ lat: 1, lng: 2 }, { lat: 1, lng: 2 });
+    check('two points in the same place are a line, not a NaN',
+        same.length === 2 && same.every((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng)));
+
+    check('every mode has a style',
+        ['flight', 'boat', 'car', 'train', 'walk']
+            .every((m) => travelModeMeta(m).dash.length > 0 && travelModeMeta(m).curve > 0));
+    check('an unknown mode falls back to flight', travelModeMeta('teleport').key === 'flight');
+    check('a flight bows more than a walk',
+        travelModeMeta('flight').curve > travelModeMeta('walk').curve);
+
+    // ---- legs that land on another day ----
+    const redEye = { ...leg, id: 2, depart_time: '23:40', arrive_time: '06:20', arrive_day_offset: 1 };
+    check('a same-day leg lands on its own day', legArrivalDay(leg, 3) === 3);
+    check('a red-eye lands on the next one', legArrivalDay(redEye, 3) === 4);
+    check('a long haul with a layover lands further out',
+        legArrivalDay({ ...redEye, arrive_day_offset: 2 }, 3) === 5);
+    check('a negative offset is not a thing', legArrivalDay({ arrive_day_offset: -2 }, 3) === 3);
+    check('only a later arrival counts as overnight',
+        legIsOvernight(redEye) && !legIsOvernight(leg));
+
+    const dayWith = (n: number, legs: typeof leg[]) => ({
+        id: n, day_number: n, title: null, base_place_id: null, notes: null,
+        stops: [], travel: legs,
+    });
+    const trip = [dayWith(3, [redEye, leg]), dayWith(4, []), dayWith(5, [])];
+    check('the arrival day knows what lands on it',
+        arrivalsOn(trip, 4).length === 1 && arrivalsOn(trip, 4)[0].fromDay.day_number === 3);
+    check('the same-day leg is not counted as an arrival elsewhere',
+        arrivalsOn(trip, 5).length === 0);
+    check('and the departure day does not list its own leg as an arrival',
+        arrivalsOn(trip, 3).length === 0);
 }
 
 console.log('\nCalendar export');
@@ -613,6 +699,24 @@ console.log('\nCalendar export');
     const open = buildIcs([{ uid: 'e@f', summary: 'Dinner', date: '2026-09-28', start: '19:00' }], stamp);
     check('no end time means an hour', open.includes('DTEND:20260928T200000'));
 
+    // An overnight flight: the end time is earlier on the clock than the start,
+    // which is only legal because it is on the next date.
+    const redEyeIcs = buildIcs([{
+        uid: 'i@j', summary: 'Flight', date: '2026-09-28', endDate: '2026-09-29',
+        start: '23:40', end: '06:20',
+    }], stamp);
+    check('an overnight event ends on the next date',
+        redEyeIcs.includes('DTSTART:20260928T234000')
+        && redEyeIcs.includes('DTEND:20260929T062000'),
+        redEyeIcs.split('\r\n').filter((l) => l.startsWith('DT')).join(' '));
+
+    // An endDate equal to the date is the same as not giving one at all.
+    const sameDay = buildIcs([{
+        uid: 'k@l', summary: 'Flight', date: '2026-09-28', endDate: '2026-09-28',
+        start: '09:30', end: '12:45',
+    }], stamp);
+    check('a same-date endDate changes nothing', sameDay.includes('DTEND:20260928T124500'));
+
     const long = buildIcs([{ uid: 'g@h', summary: 'x'.repeat(200), date: '2026-09-28' }], stamp);
     check('long lines are folded',
         long.split('\r\n').every((line) => line.length <= 75), 'a line ran past 75 octets');
@@ -630,8 +734,26 @@ console.log('\nCalendar export');
         travel: [{
             id: 7, day_id: 4, mode: 'car', from_text: 'Canggu', to_text: 'Ubud',
             depart_time: '08:00', arrive_time: '09:15', confirmation_ref: 'XY12', notes: null,
+            arrive_day_offset: 0,
+            from_lat: null, from_lng: null, to_lat: null, to_lng: null,
         }],
     };
+    const overnight: Day = {
+        id: 9, day_number: 3, title: 'Fly home', base_place_id: null, notes: null, stops: [],
+        travel: [{
+            id: 11, day_id: 9, mode: 'flight', from_text: 'DPS', to_text: 'LAX',
+            depart_time: '23:40', arrive_time: '06:20', confirmation_ref: null, notes: null,
+            arrive_day_offset: 1,
+            from_lat: null, from_lng: null, to_lat: null, to_lng: null,
+        }],
+    };
+    const overnightEvents = tripEvents({ start_date: '2026-09-28', title: 'T' }, [overnight],
+        () => undefined);
+    const flight = overnightEvents.find((e) => e.uid.startsWith('honeymoon-travel'));
+    check('an overnight leg starts on its departure day', flight?.date === '2026-09-30');
+    check('and ends on the day it lands', flight?.endDate === '2026-10-01');
+    check('and says so in the summary', /\(\+1 day\)/.test(flight?.summary ?? ''), flight?.summary);
+
     const events = tripEvents({ start_date: '2026-09-28', title: 'T' }, [day],
         (id) => (id === 9 ? 'Monkey Forest' : undefined));
     check('a day becomes one all-day event',
@@ -714,6 +836,7 @@ function makePlace(id: number, name: string, lat: number | null, lng: number | n
         region_id: null, category: 'misc', address: null, description: null,
         status: 'idea', price_note: null, links: [], photos: [],
         source: 'manual', needs_review: false, sort_order: 0,
+        rating: null, is_excursion: false, image_url: null, country: '', rank: null,
     };
 }
 

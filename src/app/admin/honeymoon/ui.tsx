@@ -659,3 +659,50 @@ export function OverflowMenu({ items }: { items: { label: string; onClick: () =>
         </div>
     );
 }
+
+/**
+ * A draggable gutter between two columns.
+ *
+ * Reports movement as a delta rather than a position: the parent clamps, and a
+ * clamped absolute position would leave the pointer somewhere the handle isn't.
+ * Pointer capture means the drag survives the cursor crossing the map — without
+ * it, Leaflet would swallow the move events the moment you left this 12px strip.
+ * Arrow keys move it too, in 24px steps, so it isn't mouse-only.
+ */
+export function ColumnDivider({ label, onDrag }: { label: string; onDrag: (dx: number) => void }) {
+    const lastX = useRef(0);
+
+    return (
+        <div
+            role="separator"
+            aria-label={label}
+            aria-orientation="vertical"
+            tabIndex={0}
+            title={`${label} — drag, or use the arrow keys`}
+            onPointerDown={(e) => {
+                e.preventDefault();
+                e.currentTarget.setPointerCapture(e.pointerId);
+                lastX.current = e.clientX;
+            }}
+            onPointerMove={(e) => {
+                if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+                const dx = e.clientX - lastX.current;
+                if (dx === 0) return;
+                lastX.current = e.clientX;
+                onDrag(dx);
+            }}
+            onPointerUp={(e) => e.currentTarget.releasePointerCapture(e.pointerId)}
+            onKeyDown={(e) => {
+                if (e.key === 'ArrowLeft') { e.preventDefault(); onDrag(-24); }
+                if (e.key === 'ArrowRight') { e.preventDefault(); onDrag(24); }
+            }}
+            className="group shrink-0 w-3 self-stretch flex items-center justify-center
+                cursor-col-resize touch-none focus:outline-none"
+        >
+            <span
+                className="h-12 w-1 rounded-full bg-gray-200 transition
+                    group-hover:bg-accent group-focus:bg-accent group-active:bg-accent"
+            />
+        </div>
+    );
+}

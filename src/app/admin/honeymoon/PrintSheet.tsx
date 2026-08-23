@@ -1,7 +1,10 @@
 'use client';
 
 import { createPortal } from 'react-dom';
-import { TRAVEL_MODES, formatDayDate, formatTime, type Day } from '@/lib/honeymoon';
+import {
+    TRAVEL_MODES, arrivalsOn, formatDayDate, formatTime, legIsOvernight, travelModeMeta,
+    type Day, type TravelLeg,
+} from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
 
 /**
@@ -37,7 +40,13 @@ export default function PrintSheet({ api }: { api: HoneymoonApi }) {
             </header>
 
             {days.map((day) => (
-                <DaySheet key={day.id} day={day} startDate={trip.start_date} name={name} />
+                <DaySheet
+                    key={day.id}
+                    day={day}
+                    startDate={trip.start_date}
+                    name={name}
+                    arrivals={arrivalsOn(days, day.day_number)}
+                />
             ))}
 
             {data.notes.length > 0 && (
@@ -57,10 +66,12 @@ export default function PrintSheet({ api }: { api: HoneymoonApi }) {
     ), document.body);
 }
 
-function DaySheet({ day, startDate, name }: {
+function DaySheet({ day, startDate, name, arrivals }: {
     day: Day;
     startDate: string | null;
     name: (id: number | null) => string;
+    /** Legs that left on an earlier day and land on this one. */
+    arrivals: { leg: TravelLeg; fromDay: Day }[];
 }) {
     const date = formatDayDate(startDate, day.day_number);
     const base = name(day.base_place_id);
@@ -76,6 +87,19 @@ function DaySheet({ day, startDate, name }: {
             {base && <p className="text-xs mb-1">Staying at {base}</p>}
             {day.notes && <p className="text-xs mb-1 italic">{day.notes}</p>}
 
+            {/* What lands today, from an earlier day, printed before today's own
+                departures — you arrive before you leave again. */}
+            {arrivals.map(({ leg, fromDay }) => (
+                <p key={`in-${leg.id}`} className="text-sm">
+                    <span className="font-semibold">
+                        Arrives{leg.arrive_time && ` ${formatTime(leg.arrive_time)}`}
+                    </span>
+                    {leg.to_text && ` · ${leg.to_text}`}
+                    {` · ${travelModeMeta(leg.mode).label.toLowerCase()} from day ${fromDay.day_number}`}
+                    {leg.confirmation_ref && ` · ref ${leg.confirmation_ref}`}
+                </p>
+            ))}
+
             {day.travel.map((leg) => {
                 const mode = TRAVEL_MODES.find((m) => m.key === leg.mode)?.label ?? 'Travel';
                 return (
@@ -83,6 +107,11 @@ function DaySheet({ day, startDate, name }: {
                         <span className="font-semibold">{mode}</span>
                         {leg.depart_time && ` ${formatTime(leg.depart_time)}`}
                         {leg.arrive_time && `–${formatTime(leg.arrive_time)}`}
+                        {/* On paper this is the difference between a 23:40 flight
+                            that lands at 06:20 tomorrow and one that reads as
+                            impossible. */}
+                        {legIsOvernight(leg)
+                            && ` (+${leg.arrive_day_offset} day${leg.arrive_day_offset === 1 ? '' : 's'})`}
                         {(leg.from_text || leg.to_text)
                             && ` · ${[leg.from_text, leg.to_text].filter(Boolean).join(' → ')}`}
                         {leg.confirmation_ref && ` · ref ${leg.confirmation_ref}`}

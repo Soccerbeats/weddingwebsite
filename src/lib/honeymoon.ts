@@ -19,11 +19,21 @@ export type PlaceStatus = 'idea' | 'shortlisted' | 'booked';
  */
 export type PlaceSource = string;
 
-/** How you feel about a candidate stay. Null means not yet judged. */
-export type PlaceRating = 'yes' | 'no' | null;
+/**
+ * How you feel about a candidate stay. Null means not yet judged.
+ *
+ * `mid` sits between the two: the shortlist is mostly made of places that are
+ * neither a yes nor a no, and forcing those into one or the other loses the
+ * distinction you actually wanted to record.
+ */
+export type PlaceRating = 'yes' | 'mid' | 'no' | null;
 
-export const RATINGS: { key: 'yes' | 'no'; label: string; icon: string; color: string }[] = [
+/** In the order they are shown, which is why `mid` is in the middle. */
+export const RATINGS: {
+    key: Exclude<PlaceRating, null>; label: string; icon: string; color: string;
+}[] = [
     { key: 'yes', label: 'Interested', icon: '👍', color: '#059669' },
+    { key: 'mid', label: 'Mid tier', icon: '😐', color: '#d97706' },
     { key: 'no', label: 'Not interested', icon: '👎', color: '#be123c' },
 ];
 
@@ -43,6 +53,18 @@ export function sourceLabel(source: string | null | undefined): string {
 }
 
 /** Distinct sources present, for building a filter dropdown. */
+/**
+ * Rows in ranking order: ranked first, ascending, then everything unranked.
+ *
+ * The tail keeps the order it arrived in, so looking at a shortlist through this
+ * lens does not silently re-sort the part of it you have not ranked yet.
+ */
+export function byRank<T extends { rank: number | null }>(rows: T[]): T[] {
+    const ranked = rows.filter((r) => r.rank != null)
+        .sort((a, b) => (a.rank ?? 0) - (b.rank ?? 0));
+    return [...ranked, ...rows.filter((r) => r.rank == null)];
+}
+
 export function sourcesOf(places: { source: string }[]): string[] {
     const seen = new Set<string>();
     for (const place of places) seen.add(sourceLabel(place.source));
@@ -98,6 +120,14 @@ export interface Place {
      * says" — most places should inherit, and only the odd one out needs this.
      */
     country: string;
+    /**
+     * Where this stay sits in the shortlist's ranking — 1 is your favourite.
+     *
+     * Null means unranked, which is every stay until you drag one. Deliberately
+     * not `sort_order`: that decides the order of the whole place library, and
+     * ranking six hotels must not reshuffle two hundred places.
+     */
+    rank: number | null;
     sort_order: number;
 }
 
@@ -121,6 +151,25 @@ export interface TravelLeg {
     arrive_time: string | null;
     confirmation_ref: string | null;
     notes: string | null;
+    /**
+     * Days between departure and arrival: 0 for the same day, 1 for a red-eye.
+     *
+     * An offset rather than a date, because a leg hangs off a day and the days
+     * renumber whenever one is inserted or dragged. "One day after this one"
+     * survives that; "the 14th" does not.
+     */
+    arrive_day_offset: number;
+    /**
+     * Where the leg starts and ends, once looked up.
+     *
+     * Nullable, and independent of the text: a leg is useful as "DPS → SIN,
+     * 14:05" long before anyone pins it, so the text stays the thing you type
+     * and these are what the map draws when they are there.
+     */
+    from_lat: number | null;
+    from_lng: number | null;
+    to_lat: number | null;
+    to_lng: number | null;
 }
 
 export interface Day {
@@ -336,13 +385,125 @@ export const STATUSES: { key: PlaceStatus; label: string; color: string }[] = [
     { key: 'booked', label: 'Booked', color: '#059669' },
 ];
 
-export const TRAVEL_MODES: { key: TravelMode; label: string; icon: string }[] = [
-    { key: 'flight', label: 'Flight', icon: '✈️' },
-    { key: 'boat', label: 'Boat', icon: '⛴️' },
-    { key: 'car', label: 'Car', icon: '🚗' },
-    { key: 'train', label: 'Train', icon: '🚆' },
-    { key: 'walk', label: 'Walk', icon: '🚶' },
+/**
+ * How each mode is drawn on the map, as well as named.
+ *
+ * `curve` is how far the arc bows out from the straight line, as a fraction of
+ * its length: a flight bows the most because that is what reads as "flew over
+ * this", and a walk is nearly straight because it is a hundred metres and
+ * pretending otherwise would be a lie about the route. `dash` keeps every leg
+ * visibly *not* a road — a leg is a hop between two points, not a path anyone
+ * drove — while still telling the modes apart.
+ */
+export const TRAVEL_MODES: {
+    key: TravelMode; label: string; icon: string; color: string; dash: string; curve: number;
+}[] = [
+    { key: 'flight', label: 'Flight', icon: '✈️', color: '#0369a1', dash: '2 8', curve: 0.28 },
+    { key: 'boat', label: 'Boat', icon: '⛴️', color: '#0891b2', dash: '6 6', curve: 0.2 },
+    { key: 'car', label: 'Car', icon: '🚗', color: '#b45309', dash: '10 6', curve: 0.10 },
+    { key: 'train', label: 'Train', icon: '🚆', color: '#6d28d9', dash: '12 4 2 4', curve: 0.10 },
+    { key: 'walk', label: 'Walk', icon: '🚶', color: '#4d7c0f', dash: '1 6', curve: 0.05 },
 ];
+
+/** The mode's drawing style, falling back to flight for anything unknown. */
+export function travelModeMeta(mode: string) {
+    return TRAVEL_MODES.find((m) => m.key === mode) ?? TRAVEL_MODES[0];
+}
+
+/** The day number a leg lands on, given the day it leaves. */
+export function legArrivalDay(leg: { arrive_day_offset: number }, departureDay: number): number {
+    return departureDay + Math.max(0, leg.arrive_day_offset || 0);
+}
+
+/** True for a leg that lands on a later day than it left. */
+export function legIsOvernight(leg: { arrive_day_offset: number }): boolean {
+    return (leg.arrive_day_offset || 0) > 0;
+}
+
+/**
+ * Legs that *land* on a given day, having left on an earlier one.
+ *
+ * A red-eye belongs to the day it departs — that is the day you pack and leave
+ * — but the day it lands is not empty, and an itinerary that says so only on the
+ * departure day makes the arrival day look like a free morning. This is what the
+ * itinerary, the calendar and the print sheet all read to say "you land here".
+ */
+export function arrivalsOn(days: Day[], dayNumber: number): { leg: TravelLeg; fromDay: Day }[] {
+    const found: { leg: TravelLeg; fromDay: Day }[] = [];
+    for (const day of days) {
+        if (day.day_number >= dayNumber) continue;
+        for (const leg of day.travel) {
+            if (!legIsOvernight(leg)) continue;
+            if (legArrivalDay(leg, day.day_number) === dayNumber) found.push({ leg, fromDay: day });
+        }
+    }
+    return found;
+}
+
+/** Both ends of a leg, or null when either has not been looked up. */
+export function legEnds(leg: TravelLeg): {
+    from: { lat: number; lng: number }; to: { lat: number; lng: number };
+} | null {
+    if (leg.from_lat == null || leg.from_lng == null) return null;
+    if (leg.to_lat == null || leg.to_lng == null) return null;
+    return {
+        from: { lat: leg.from_lat, lng: leg.from_lng },
+        to: { lat: leg.to_lat, lng: leg.to_lng },
+    };
+}
+
+/**
+ * A leg as a curve, not a straight line.
+ *
+ * A quadratic Bézier whose control point is pushed out perpendicular to the
+ * midpoint, sampled into `steps` segments — Leaflet draws polylines, so the
+ * curve has to arrive as points. Two reasons it bows rather than going straight:
+ * a straight line between two pins is indistinguishable from the day routes
+ * already on the map, and two legs between the same pair of places (out on the
+ * Monday, back on the Friday) would otherwise sit exactly on top of each other.
+ *
+ * The bow is always to the same side of the direction of travel, so an outbound
+ * and a return leg arc away from each other and read as two journeys.
+ *
+ * Longitude is scaled by cos(latitude) while offsetting, so the arc looks like
+ * an arc on a Mercator map instead of flattening out near the equator and
+ * ballooning near the poles.
+ */
+export function arcPoints(
+    from: { lat: number; lng: number },
+    to: { lat: number; lng: number },
+    curve = 0.2,
+    steps = 48,
+): { lat: number; lng: number }[] {
+    const midLat = (from.lat + to.lat) / 2;
+    const midLng = (from.lng + to.lng) / 2;
+
+    // The straight line, in degrees, with longitude squeezed to match latitude.
+    const scale = Math.max(0.2, Math.cos((midLat * Math.PI) / 180));
+    const dLat = to.lat - from.lat;
+    const dLng = (to.lng - from.lng) * scale;
+    const length = Math.hypot(dLat, dLng);
+
+    // Two points in the same place have no direction to bow away from.
+    if (length === 0) return [{ ...from }, { ...to }];
+
+    // Perpendicular to the direction of travel, right-hand side.
+    const offset = length * curve;
+    const controlLat = midLat + (dLng / length) * offset;
+    const controlLng = midLng - ((dLat / length) * offset) / scale;
+
+    const points: { lat: number; lng: number }[] = [];
+    const count = Math.max(2, Math.round(steps));
+    for (let i = 0; i <= count; i += 1) {
+        const t = i / count;
+        const inverse = 1 - t;
+        points.push({
+            lat: inverse * inverse * from.lat + 2 * inverse * t * controlLat + t * t * to.lat,
+            lng: inverse * inverse * from.lng + 2 * inverse * t * controlLng + t * t * to.lng,
+        });
+    }
+    return points;
+}
 
 /* ------------------------------------------------------------------ */
 /* Geo                                                                 */
@@ -672,6 +833,16 @@ export function dateForDay(startDate: string | null, dayNumber: number): Date | 
     return parsed;
 }
 
+/** One `YYYY-MM-DD` as "Sat, Sep 12". UTC, so it never drifts by a timezone. */
+export function formatDate(date: string | null | undefined): string | null {
+    if (!date) return null;
+    const parsed = new Date(`${date}T00:00:00Z`);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed.toLocaleDateString('en-US', {
+        weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC',
+    });
+}
+
 export function formatDayDate(startDate: string | null, dayNumber: number): string | null {
     const date = dateForDay(startDate, dayNumber);
     if (!date) return null;
@@ -816,19 +987,25 @@ export interface RangePlan {
     length: number;
     /** Day numbers to create, in order. */
     add: number[];
-    /** Day numbers that would no longer exist. */
-    remove: number[];
-    /** True when only the dates move and every day row survives. */
+    /**
+     * Day numbers that would fall past the end of the new range.
+     *
+     * They are *not* deleted — shortening a trip must never throw away a day
+     * you have planned. They are named so the UI can flag them and let you move
+     * their stops or put the dates back.
+     */
+    beyond: number[];
+    /** True when only the dates move: nothing to add and nothing left outside. */
     shiftOnly: boolean;
 }
 
 /**
  * What setting a date range would do to the day rows.
  *
- * Pure on purpose: dropping days deletes their stops and travel legs, so the
- * caller has to be able to say exactly what is about to be lost *before*
- * anything is written. Returning a plan rather than performing one makes that
- * possible and makes the arithmetic testable without a database.
+ * Pure on purpose, and non-destructive by design: a shorter range adds nothing
+ * and removes nothing, it just leaves a tail of days outside the trip for the
+ * UI to flag. Returning a plan rather than performing one keeps the arithmetic
+ * testable without a database.
  */
 export function planRange(
     from: string,
@@ -841,9 +1018,39 @@ export function planRange(
     const have = new Set(existingDayNumbers);
     const add: number[] = [];
     for (let n = 1; n <= length; n += 1) if (!have.has(n)) add.push(n);
-    const remove = existingDayNumbers.filter((n) => n > length).sort((a, b) => a - b);
+    const beyond = existingDayNumbers.filter((n) => n > length).sort((a, b) => a - b);
 
-    return { start, end, length, add, remove, shiftOnly: !add.length && !remove.length };
+    return { start, end, length, add, beyond, shiftOnly: !add.length && !beyond.length };
+}
+
+/**
+ * How many days the trip's saved dates cover, or null without a full range.
+ *
+ * One-based, like the day numbers it is compared against: a start and end on the
+ * same date is a one-day trip, not a zero-day one.
+ */
+export function tripLength(start: string | null, end: string | null): number | null {
+    const between = daysBetween(start, end);
+    if (between == null) return null;
+    return Math.max(1, between + 1);
+}
+
+/**
+ * Which of these days sit past the end of the trip's dates.
+ *
+ * The itinerary is allowed to be longer than the dates — that is what happens
+ * the moment you shorten a trip you have already planned, and losing the plan
+ * would be far worse than being out of range for a while. This is what the red
+ * flags on those days are driven from.
+ *
+ * A trip with no end date has nothing to be outside of, so nothing is flagged.
+ */
+export function daysBeyondRange(
+    dayNumbers: number[], start: string | null, end: string | null,
+): number[] {
+    const length = tripLength(start, end);
+    if (length == null) return [];
+    return dayNumbers.filter((n) => n > length).sort((a, b) => a - b);
 }
 
 /* ------------------------------------------------------------------ */
@@ -857,6 +1064,14 @@ export interface IcsEvent {
     location?: string;
     /** `YYYY-MM-DD` for an all-day event. */
     date: string;
+    /**
+     * `YYYY-MM-DD` the event ends on, when that is not the day it started.
+     *
+     * Only meaningful with `start`/`end` times: an overnight flight's 06:20
+     * arrival is on the next date, and without this it would be written as a
+     * same-day event ending before it began.
+     */
+    endDate?: string;
     /** `HH:MM`. Both present makes it a timed event; absent makes it all-day. */
     start?: string;
     end?: string;
@@ -911,13 +1126,19 @@ export function buildIcs(events: IcsEvent[], stamp: string, calendarName = 'Hone
         lines.push(`UID:${event.uid}`);
         lines.push(`DTSTAMP:${stamp}`);
         if (event.start) {
-            const end = event.end && event.end > event.start
+            // A different end date makes any end time valid, including one
+            // earlier in the clock than the start — that is what an overnight
+            // flight is. Without one, an end that is not later than the start is
+            // meaningless and gets the one-hour guess.
+            const endsLater = !!event.endDate && event.endDate !== event.date;
+            const end = event.end && (endsLater || event.end > event.start)
                 ? event.end
                 // No end time given: an hour is a better guess than a zero-length
                 // event, which some calendars refuse to draw at all.
                 : addHour(event.start);
+            const endCompact = (endsLater ? event.endDate! : event.date).replace(/-/g, '');
             lines.push(`DTSTART:${compact}T${event.start.replace(':', '')}00`);
-            lines.push(`DTEND:${compact}T${end.replace(':', '')}00`);
+            lines.push(`DTEND:${endCompact}T${end.replace(':', '')}00`);
         } else {
             // All-day events are exclusive at the end, hence the +1 day.
             lines.push(`DTSTART;VALUE=DATE:${compact}`);
@@ -979,11 +1200,17 @@ export function tripEvents(
         for (const leg of day.travel) {
             const mode = TRAVEL_MODES.find((m) => m.key === leg.mode)?.label ?? 'Travel';
             const route = [leg.from_text, leg.to_text].filter(Boolean).join(' → ');
+            const arrivalDate = legIsOvernight(leg)
+                ? dateForDay(trip.start_date, legArrivalDay(leg, day.day_number))
+                : null;
+            const nights = leg.arrive_day_offset || 0;
             events.push({
                 uid: `honeymoon-travel-${leg.id}@wedding`,
-                summary: `${mode}${route ? `: ${route}` : ''}`,
+                summary: `${mode}${route ? `: ${route}` : ''}`
+                    + (nights > 0 ? ` (+${nights} day${nights === 1 ? '' : 's'})` : ''),
                 description: leg.confirmation_ref ? `Ref ${leg.confirmation_ref}` : undefined,
                 date: iso,
+                ...(arrivalDate ? { endDate: isoOf(arrivalDate) } : {}),
                 start: leg.depart_time ?? undefined,
                 end: leg.arrive_time ?? undefined,
             });

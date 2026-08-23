@@ -4,7 +4,10 @@ import { useEffect, useRef, useState } from 'react';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
 import type * as LeafletNS from 'leaflet';
-import { boundsOf, categoryMeta, hasCoords, placesInPolygon, type LatLng, type Place } from '@/lib/honeymoon';
+import {
+    arcPoints, boundsOf, categoryMeta, hasCoords, placesInPolygon,
+    type LatLng, type Place,
+} from '@/lib/honeymoon';
 
 /**
  * The trip map.
@@ -31,10 +34,28 @@ export interface DayRoute {
     label: string;
 }
 
+/** One travel leg, ready to draw: two ends and how it should look. */
+export interface TravelArc {
+    id: number;
+    from: LatLng;
+    to: LatLng;
+    color: string;
+    /** SVG dash pattern — every leg is dashed, differently per mode. */
+    dash: string;
+    /** How far the arc bows out, as a fraction of its length. */
+    curve: number;
+    /** Emoji for the mode, drawn at the top of the arc. */
+    icon: string;
+    /** Popup text: "Flight · DPS → SIN · Day 3". */
+    label: string;
+}
+
 export interface TripMapProps {
     places: Place[];
     /** Ordered routes to draw — one per day being shown. */
     routes?: DayRoute[];
+    /** Travel legs to draw as curved dashed arcs. */
+    legs?: TravelArc[];
     selectedId?: number | null;
     onSelect?: (id: number) => void;
     /**
@@ -44,6 +65,38 @@ export interface TripMapProps {
      * load and when the fit button is pressed.
      */
     fitSignal?: number;
+    /**
+     * Points to frame on the *next* fit, instead of everything drawn.
+     *
+     * Set it to one day's stops and bump `fitSignal` to fly to that day; null
+     * means "frame everything on screen", which is what the fit button does.
+     * Read through a ref, so changing it never re-frames on its own — only a
+     * bumped signal does.
+     */
+    fitPoints?: { lat: number; lng: number }[] | null;
+    /**
+     * Short text to draw inside a pin, by place id.
+     *
+     * The stays ranking uses it to put the position in the circle, so the map
+     * reads as the same ordered list as the rows beside it. Anything longer than
+     * two characters will not fit and should not be attempted.
+     */
+    pinLabels?: Map<number, string>;
+    /**
+     * Group nearby pins into counts. On by default.
+     *
+     * A shortlist map turns it off: five hotels in Canggu collapsing into a "5"
+     * badge would hide the very pin you clicked a photo to highlight.
+     */
+    cluster?: boolean;
+    /**
+     * Bring the selected pin into view when it changes, without changing zoom.
+     *
+     * `panInside` moves the minimum amount needed and does nothing at all if the
+     * pin is already on screen — so a selection made *on* the map never shifts
+     * the ground under the click that made it.
+     */
+    panToSelected?: boolean;
     /** While true, dragging draws a lasso instead of panning the map. */
     selectMode?: boolean;
     /** Ids currently lasso-selected, drawn with a highlight ring. */
@@ -54,7 +107,8 @@ export interface TripMapProps {
 }
 
 export default function TripMap({
-    places, routes = [], selectedId = null, onSelect, fitSignal = 0,
+    places, routes = [], legs = [], selectedId = null, onSelect, fitSignal = 0, fitPoints = null,
+    cluster = true, panToSelected = false, pinLabels,
     selectMode = false, selectedIds, onLassoSelect, className = '',
 }: TripMapProps) {
     const containerRef = useRef<HTMLDivElement | null>(null);
@@ -86,6 +140,10 @@ export default function TripMap({
     const selectModeRef = useRef(selectMode);
     selectModeRef.current = selectMode;
 
+    // See the prop: held in a ref so a new target never fits by itself.
+    const fitPointsRef = useRef(fitPoints);
+    fitPointsRef.current = fitPoints;
+
     // Whether the map has ever been framed, and the last fit request seen.
     const fittedRef = useRef(false);
     const lastSignalRef = useRef(fitSignal);
@@ -93,6 +151,7 @@ export default function TripMap({
     /* Create the map once. */
     useEffect(() => {
         let cancelled = false;
+        let observer: ResizeObserver | null = null;
 
         (async () => {
             const L = (await import('leaflet')).default;
@@ -125,10 +184,20 @@ export default function TripMap({
             // The container is often still sizing when the map initialises
             // (tab switch, modal open), which leaves grey tiles until a resize.
             setTimeout(() => map.invalidateSize(), 50);
+
+            // Leaflet only watches the *window*. The map's box also changes
+            // without one — dragging a panel divider on the split view resizes
+            // it every frame — and a map that isn't told renders the new space
+            // as grey tiles.
+            if (typeof ResizeObserver !== 'undefined' && containerRef.current) {
+                observer = new ResizeObserver(() => map.invalidateSize());
+                observer.observe(containerRef.current);
+            }
         })();
 
         return () => {
             cancelled = true;
+            observer?.disconnect();
             mapRef.current?.remove();
             mapRef.current = null;
             layerRef.current = null;
@@ -153,7 +222,7 @@ export default function TripMap({
 
         // Clustering is suspended while lassoing: you cannot meaningfully draw
         // around points that are hidden inside a count badge.
-        const clustered = routes.length === 0 && !selectMode;
+        const clustered = cluster && routes.length === 0 && !selectMode;
         const layer = clustered
             ? L.markerClusterGroup({
                 showCoverageOnHover: false,
@@ -192,24 +261,47 @@ export default function TripMap({
                     ? 'border-style:dashed;border-color:#f59e0b;border-width:2px;'
                     : `border-style:solid;border-color:#fff;border-width:${selected ? 3 : 2}px;`;
 
+            // A pin carrying a number needs a couple more pixels to hold it
+            // without the digits touching the ring.
+            const label = pinLabels?.get(place.id) ?? '';
+            const size = selected ? 28 : (label ? 24 : 20);
             const icon = L.divIcon({
                 className: 'honeymoon-pin',
                 html: `<span style="
                     display:flex;align-items:center;justify-content:center;
-                    width:${selected ? 26 : 20}px;height:${selected ? 26 : 20}px;
+                    width:${size}px;height:${size}px;
                     background:${meta.color};${ring}
                     border-radius:9999px;
                     box-shadow:0 1px 4px rgba(0,0,0,.4);
-                    font-size:${selected ? 13 : 10}px;line-height:1;
-                "></span>`,
-                iconSize: [selected ? 26 : 20, selected ? 26 : 20],
-                iconAnchor: [selected ? 13 : 10, selected ? 13 : 10],
+                    color:#fff;font-weight:700;
+                    font-size:${selected ? 13 : 11}px;line-height:1;
+                ">${escapeHtml(label)}</span>`,
+                iconSize: [size, size],
+                iconAnchor: [size / 2, size / 2],
             });
 
             const marker = L.marker([place.lat, place.lng], {
                 icon,
                 title: place.name,
                 zIndexOffset: selected ? 1000 : 0,
+                /*
+                 * Not focusable, and this is load-bearing.
+                 *
+                 * Leaflet's default gives every marker a tabIndex. Clicking a
+                 * focusable element focuses it, and focusing an element that is
+                 * partly outside its scroll container makes the browser scroll it
+                 * into view — which moves the pin out from under the cursor
+                 * between mousedown and mouseup. The click event then lands on
+                 * the nearest common ancestor, the map container, and the
+                 * marker's own click handler never runs. On any layout where the
+                 * map runs past the bottom of the window, pins in the lower part
+                 * of it silently stop responding.
+                 *
+                 * The trade is tab-to-a-pin, on a map that regularly holds two
+                 * hundred of them; the keyboard route to a place is the list on
+                 * the Places tab, which is a better one anyway.
+                 */
+                keyboard: false,
             });
 
             const reviewNote = place.needs_review
@@ -226,7 +318,17 @@ export default function TripMap({
             });
             marker.addTo(layer);
         }
-    }, [places, selectedId, selectedIds, routes.length, selectMode, ready]);
+    }, [places, selectedId, selectedIds, routes.length, selectMode, cluster, pinLabels, ready]);
+
+    /* Keep the selected pin on screen, when the parent asks for that. */
+    useEffect(() => {
+        if (!panToSelected || selectedId == null) return;
+        const map = mapRef.current;
+        if (!map) return;
+        const place = places.find((p) => p.id === selectedId);
+        if (!place || !hasCoords(place)) return;
+        map.panInside([place.lat, place.lng], { padding: [48, 48] });
+    }, [selectedId, panToSelected, places, ready]);
 
     /* Draw the selected day's route. */
     useEffect(() => {
@@ -271,7 +373,55 @@ export default function TripMap({
                     .addTo(layer);
             });
         }
-    }, [routes, ready]);
+
+        /*
+         * Travel legs, as curved dashed arcs.
+         *
+         * Curved on purpose. A straight line between two pins is exactly what a
+         * day route looks like, and two legs between the same pair of airports
+         * — out on the Monday, back on the Friday — would sit on top of each
+         * other and read as one. The bow is always to the same side of the
+         * direction of travel, so an outbound and a return separate themselves.
+         */
+        for (const leg of legs) {
+            const points = arcPoints(leg.from, leg.to, leg.curve)
+                .map((p) => [p.lat, p.lng] as [number, number]);
+            const line = L.polyline(points, {
+                color: leg.color,
+                weight: 2.5,
+                opacity: 0.9,
+                dashArray: leg.dash,
+                // Round caps make a sparse dash read as dots rather than ticks.
+                lineCap: 'round',
+            }).addTo(layer);
+            line.bindPopup(`<div style="font-weight:600">${escapeHtml(leg.label)}</div>`);
+
+            // The mode, at the top of the arc: the curve says "a journey", this
+            // says which kind, without a legend to look up.
+            const apex = points[Math.floor(points.length / 2)];
+            if (apex) {
+                L.marker(apex, {
+                    icon: L.divIcon({
+                        className: 'honeymoon-leg-mode',
+                        html: `<span style="
+                            display:flex;align-items:center;justify-content:center;
+                            width:24px;height:24px;background:#fff;
+                            border:2px solid ${leg.color};border-radius:9999px;
+                            font-size:12px;line-height:1;
+                            box-shadow:0 1px 4px rgba(0,0,0,.3);
+                        ">${leg.icon}</span>`,
+                        iconSize: [24, 24],
+                        iconAnchor: [12, 12],
+                    }),
+                    // Under the numbered day badges: which stop is third matters
+                    // more than which mode got you there.
+                    zIndexOffset: 1500,
+                })
+                    .bindPopup(`<div style="font-weight:600">${escapeHtml(leg.label)}</div>`)
+                    .addTo(layer);
+            }
+        }
+    }, [routes, legs, ready]);
 
     /**
      * Freehand lasso.
@@ -379,7 +529,12 @@ export default function TripMap({
         const firstDraw = !fittedRef.current;
         if (!asked && !firstDraw) return;
 
-        const points = places.filter(hasCoords).map((p) => ({ lat: p.lat, lng: p.lng }));
+        // A target, when the parent asked for one — a single day, say — and
+        // otherwise everything currently drawn.
+        const target = fitPointsRef.current;
+        const points = target?.length
+            ? target
+            : places.filter(hasCoords).map((p) => ({ lat: p.lat, lng: p.lng }));
         const bounds = boundsOf(points);
         // Nothing to frame yet — stay unfitted so the first real data still fits.
         if (!bounds) return;
@@ -391,7 +546,25 @@ export default function TripMap({
         // fitting against a zero-height container produces a nonsense zoom.
         const timer = setTimeout(() => {
             map.invalidateSize();
-            map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
+            const options = { padding: [40, 40] as [number, number], maxZoom: 15 };
+            if (firstDraw) {
+                // Arriving at the page: be where you asked to be. Flying in from
+                // a default view of the Java Sea is a second of animation nobody
+                // asked for, every single time the tab is opened.
+                map.fitBounds(bounds, options);
+            } else {
+                /*
+                 * Asked for while the map is already somewhere: fly.
+                 *
+                 * flyToBounds interpolates zoom and centre together, which pulls
+                 * back far enough to show both the old and new positions before
+                 * settling — so jumping from one day to another reads as a move
+                 * across the island rather than a cut to somewhere unrecognisable.
+                 * That arc is the point, not decoration: it is what tells you
+                 * *where* you just went.
+                 */
+                map.flyToBounds(bounds, { ...options, duration: 1.4, easeLinearity: 0.25 });
+            }
         }, 60);
         return () => clearTimeout(timer);
     }, [places, fitSignal, ready]);

@@ -83,10 +83,12 @@ idempotent — matches on place name, never reverts an edit) and
 4. **The image name is sacred**: always
    `ghcr.io/soccerbeats/weddingwebsite:latest`, never any other name — the
    production Portainer stack is configured against it.
-5. **After every code change: deploy automatically.** Austin's standing
-   instruction — it overrides the older "only deploy when asked" gate in
-   `deploy.md`. Push to `main`, then build and push the image. Do not wait to
-   be asked.
+5. **After every code change: deploy automatically — and deploying is just
+   pushing.** Austin's standing instruction, overriding the older "only deploy
+   when asked" gate in `deploy.md`. Push to `main`; CI builds and publishes the
+   image. **Do not build and push it by hand** — two builds of the same commit
+   both writing `:latest` leaves no answer to "which build is deployed". Do not
+   wait to be asked.
 
 ### Changelog entry format
 
@@ -112,12 +114,24 @@ idempotent — matches on place name, never reverts an edit) and
 git add -A && git commit -m "describe the change"
 git push origin main
 
+gh run list --limit 1   # the "Wedding Planner" pipeline; ~3.5 minutes
+# then Portainer: "Pull and redeploy" (manual, or via webhook)
+```
+
+That push is the deploy. `.github/workflows/ci-cd.yml` builds the app, checks
+the changelog, builds the production image and publishes `latest`,
+`v<version>` (the topmost `CHANGELOG.md` heading) and `sha-<short>` to GHCR. A
+pull request gets the same build as a check and publishes nothing, so a broken
+commit cannot reach the registry.
+
+Building by hand is a **fallback only** — Actions down, or an image needed from
+a working tree that is not pushed. It overwrites whatever CI published:
+
+```bash
 docker build --cache-from ghcr.io/soccerbeats/weddingwebsite:latest \
   --target production -t ghcr.io/soccerbeats/weddingwebsite:latest \
   -f docker/Dockerfile .
 docker push ghcr.io/soccerbeats/weddingwebsite:latest
-
-# then Portainer: "Pull and redeploy" (manual, or via webhook)
 ```
 
 The Dockerfile runs `npm run build` internally — no local build step needed.
@@ -161,7 +175,7 @@ order, before the commit:
    the feature's section, a dated bullet under **Decisions & History**, and
    any new API endpoints, config keys or data formats
 4. Commit and push to GitHub
-5. Build and push the Docker image so Portainer can pull it
+5. Nothing else — the push publishes the image (see *Deployment*)
 
 ## Architecture
 
