@@ -307,5 +307,24 @@ ALTER TABLE honeymoon_todos ADD COLUMN IF NOT EXISTS result TEXT;
 ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS country TEXT NOT NULL DEFAULT '';
 ALTER TABLE honeymoon_trip ADD COLUMN IF NOT EXISTS focus_country TEXT NOT NULL DEFAULT '';
 
+-- Where a travel leg starts and ends, once it has been looked up. Nullable: a
+-- leg is useful as "DPS -> SIN, 14:05" long before anyone pins it, and the map
+-- simply doesn't draw the ones it cannot place.
+-- Where a stay sits in the shortlist's own ranking: 1 is your favourite, NULL
+-- is unranked. Separate from sort_order on purpose — that one decides the order
+-- of the whole place library, and ranking hotels must not reshuffle it.
+ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS rank INTEGER;
+
+-- How many days after departure a leg lands: 0 for the same day, 1 for a
+-- red-eye, more for a journey with a long layover. Relative to the leg's own
+-- day rather than an absolute date, so inserting or reordering days — which
+-- renumbers the whole trip — cannot leave an arrival stranded on the wrong one.
+ALTER TABLE honeymoon_travel ADD COLUMN IF NOT EXISTS arrive_day_offset INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE honeymoon_travel ADD COLUMN IF NOT EXISTS from_lat DOUBLE PRECISION;
+ALTER TABLE honeymoon_travel ADD COLUMN IF NOT EXISTS from_lng DOUBLE PRECISION;
+ALTER TABLE honeymoon_travel ADD COLUMN IF NOT EXISTS to_lat DOUBLE PRECISION;
+ALTER TABLE honeymoon_travel ADD COLUMN IF NOT EXISTS to_lng DOUBLE PRECISION;
+
 CREATE INDEX IF NOT EXISTS honeymoon_places_region_idx ON honeymoon_places (region_id);
 CREATE INDEX IF NOT EXISTS honeymoon_stops_day_idx ON honeymoon_stops (day_id);

@@ -31,7 +31,32 @@ export interface GeocodeHit {
     address?: string;
     /** The link that was pasted, so the editor can keep it on the place. */
     url?: string;
+    /** Nominatim's own classification, e.g. "aeroway/aerodrome". */
+    kind?: string;
 }
+
+/**
+ * What a travel mode wants a search to find.
+ *
+ * A leg is looked up by mode, because the answer depends on it: "DPS" typed for
+ * a flight means the airport, and Nominatim on its own answers a bare three
+ * letter code with a boundary in China. Appending the word, and then floating
+ * the transport hits to the top, turns both halves of that into the right
+ * result. `rank` is matched against `category/type`.
+ */
+const MODE_HINTS: Record<string, { suffix: string; rank: string[] }> = {
+    flight: { suffix: 'airport', rank: ['aeroway/aerodrome', 'aeroway/terminal', 'aeroway'] },
+    boat: {
+        suffix: 'ferry terminal',
+        rank: ['amenity/ferry_terminal', 'harbour', 'man_made/pier', 'landuse/port'],
+    },
+    train: { suffix: 'station', rank: ['railway/station', 'railway/halt', 'public_transport'] },
+    car: { suffix: '', rank: [] },
+    walk: { suffix: '', rank: [] },
+};
+
+/** IATA-shaped: three letters and nothing else. */
+const CODE_ONLY = /^[A-Za-z]{3}$/;
 
 function finite(value: number): boolean {
     return Number.isFinite(value) && Math.abs(value) <= 180;
@@ -148,7 +173,9 @@ async function expandShortLink(url: string): Promise<string | null> {
 }
 
 export async function GET(request: Request) {
-    const raw = new URL(request.url).searchParams.get('q')?.trim() ?? '';
+    const params = new URL(request.url).searchParams;
+    const raw = params.get('q')?.trim() ?? '';
+    const hint = MODE_HINTS[params.get('mode') ?? ''] ?? null;
     if (!raw) return NextResponse.json({ results: [] });
 
     try {
@@ -190,29 +217,67 @@ export async function GET(request: Request) {
         }
 
         // 3. A name — forward geocode.
-        const url = new URL(NOMINATIM);
-        url.searchParams.set('q', raw);
-        url.searchParams.set('format', 'jsonv2');
-        url.searchParams.set('limit', '6');
-        url.searchParams.set('addressdetails', '1');
+        //
+        // A bare code gets the mode's word appended: "DPS" finds a Chinese
+        // boundary, "DPS airport" finds Ngurah Rai. Anything longer is left
+        // alone — someone typing "Gilimanuk harbour" has already said it.
+        const query = hint?.suffix && CODE_ONLY.test(raw) ? `${raw} ${hint.suffix}` : raw;
 
-        const res = await fetch(url, {
-            headers: { 'User-Agent': USER_AGENT, 'Accept-Language': 'en' },
-            signal: AbortSignal.timeout(10000),
-        });
+        const search = async (term: string) => {
+            const url = new URL(NOMINATIM);
+            url.searchParams.set('q', term);
+            url.searchParams.set('format', 'jsonv2');
+            url.searchParams.set('limit', '6');
+            url.searchParams.set('addressdetails', '1');
+            return fetch(url, {
+                headers: { 'User-Agent': USER_AGENT, 'Accept-Language': 'en' },
+                signal: AbortSignal.timeout(10000),
+            });
+        };
+
+        let res = await search(query);
         if (!res.ok) {
             return NextResponse.json({ results: [], error: 'Geocoder unavailable' }, { status: 502 });
         }
+        let body = await res.json();
+        // Adding a word can turn a hit into nothing — "Sanur ferry terminal"
+        // finds no such thing while "Sanur" finds the place. If the widened
+        // query came back empty, the original still gets its turn.
+        if (query !== raw && Array.isArray(body) && body.length === 0) {
+            res = await search(raw);
+            if (res.ok) body = await res.json();
+        }
 
-        const body = await res.json();
         const results: GeocodeHit[] = (Array.isArray(body) ? body : [])
-            .map((row: { display_name?: string; lat?: string; lon?: string }) => ({
+            .map((row: {
+                display_name?: string; lat?: string; lon?: string;
+                category?: string; type?: string;
+            }) => ({
                 label: row.display_name ?? '',
                 lat: Number(row.lat),
                 lng: Number(row.lon),
                 precision: 'geocoded' as const,
+                kind: [row.category, row.type].filter(Boolean).join('/'),
             }))
             .filter((hit: GeocodeHit) => valid(hit.lat, hit.lng));
+
+        /*
+         * Float the hits that match the mode.
+         *
+         * Nominatim's own order is by its relevance score, which for "Changi
+         * Airport" puts a railway station above the airport and for "SIN Changi
+         * T3" offers a taxiway. Ranking by what the leg *is* fixes both without
+         * discarding anything: the rest of the list keeps its original order
+         * underneath, so a search for a hotel by the airport still finds it.
+         */
+        if (hint?.rank.length) {
+            const score = (hit: GeocodeHit) => {
+                const kind = hit.kind ?? '';
+                const at = hint.rank.findIndex((want) => kind.startsWith(want));
+                return at === -1 ? hint.rank.length : at;
+            };
+            results.sort((a, b) => score(a) - score(b));
+        }
 
         return NextResponse.json({ results });
     } catch (error) {
