@@ -1,0 +1,14 @@
+[Unit]
+Description=Check every few minutes for a newly published wedding demo image
+
+[Timer]
+# Five minutes is well under the time a CI run takes, so the demo is current
+# within a few minutes of a merge without polling the registry pointlessly
+# often. Persistent, so a reboot during a release still catches up.
+OnBootSec=3min
+OnUnitActiveSec=5min
+Persistent=true
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

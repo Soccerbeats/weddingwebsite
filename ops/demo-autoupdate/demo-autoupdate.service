@@ -1,0 +1,10 @@
+[Unit]
+Description=Redeploy the public wedding demo when a new image is published
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/demo-autoupdate.sh
+# The pull and the container swap can both be slow on a cold layer.
+TimeoutStartSec=900

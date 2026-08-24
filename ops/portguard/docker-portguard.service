@@ -1,0 +1,16 @@
+[Unit]
+# Re-applies the DOCKER-USER rules after every boot. Nothing persists iptables
+# on this host (no iptables-persistent), and ufw's own rules cannot cover
+# published Docker ports, so without this the ports are open again after a
+# reboot. Ordered after docker so the DOCKER-USER chain exists to insert into.
+Description=Keep published Docker ports off the public internet
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/docker-portguard.sh
+
+[Install]
+WantedBy=multi-user.target

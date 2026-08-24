@@ -11,6 +11,18 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.33 — [Unreleased] A merge redeploys the running instances (`main`, 2026-08-24 04:22)
+
+### Added
+- **CI tells Portainer to redeploy production once the image is published.** A new `redeploy` job POSTs the stack's webhook after the image job, so a merge to `main` reaches the live site without anyone pressing *Pull and redeploy*. Three attempts, because a cold pull can outrun Portainer's own timeout, and the URL is never printed — it is the credential. Only a push to `main` runs it: a `v*` tag deliberately does not redeploy, for the same reason it does not move `:latest`.
+- **A webhook, deliberately, and not SSH.** A redeploy webhook's entire power is "re-pull this one stack"; an SSH key in CI is the power to run anything on a box that also hosts production, handed to anyone who can land a commit on a public repository. An earlier draft of the demo workflow did the latter and was dropped for exactly this reason.
+- **The OVH instance pulls instead, because it cannot be pushed to.** That host is a Portainer *edge* environment and edge stacks have no per-stack webhook — the option is absent from the UI, so there is nothing for CI to call. It now polls: `ops/demo-autoupdate/` installs a timer that compares the digest of `:latest` against the image its container is running and redeploys only when they differ. Verified end to end: it took the demo from v0.9.30 to v0.9.32, the seed ran, and the *second* run correctly did nothing.
+- **Only-when-changed is the whole design.** The demo stack has a one-shot seed service, so a blind `compose up -d` every five minutes would wipe and reseed the demo continuously — three dozen photographs re-fetched each time, and a window where a visitor sees an empty site. Comparing the running container against the freshly pulled image also self-heals: an instance left behind by a half-failed update is noticed on the next tick rather than at the next release.
+- **`ops/` now holds the host-side pieces** — the auto-updater and the `DOCKER-USER` port rules — with the reasoning that made each necessary. Both existed as a file on exactly one box with nothing recording why.
+
+### Fixed
+- **Published Docker ports were not behind ufw.** ufw was active on the OVH host and every published container port still answered the internet: Docker writes its own DNAT and forwarding rules ahead of ufw's chains, so ufw cannot police a published port. The demo's `3001` — which skips Cloudflare and the reverse proxy entirely — and the proxy's own admin panel on `81` were both reachable from anywhere. Closed with rules in `DOCKER-USER`, matched on `-m conntrack --ctorigdstport` rather than the container's address, because DNAT has already rewritten the packet by the time it reaches `FORWARD` and a container's IP changes on every redeploy. Confirmed still blocking after the stack was recreated with a new container IP, and done for IPv6 too — that host has a public v6 address, so one family alone would have left the port open.
+
 ## v0.9.32 — [Released] The demo has an address (`main`, 2026-08-24 03:31)
 
 ### Added

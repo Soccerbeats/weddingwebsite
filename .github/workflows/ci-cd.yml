@@ -142,3 +142,74 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
+
+  # Tell Portainer to pull the image it was just handed and swap the container,
+  # so a merge to main reaches the running site without anyone pressing a
+  # button.
+  #
+  # A webhook, deliberately, and not SSH. A redeploy webhook is a single URL
+  # whose only power is "re-pull this one stack"; an SSH key in CI is the power
+  # to run anything on a box that also hosts production, handed to anyone who
+  # can land a commit on a public repository. The earlier draft of the demo
+  # workflow did the latter and was dropped for exactly this reason.
+  redeploy:
+    name: "Wedding Planner · tell Portainer to redeploy"
+    runs-on: ubuntu-latest
+    needs: docker
+    timeout-minutes: 10
+    # Only a push to main publishes :latest, so only a push to main has
+    # anything new for Portainer to pull. A tag deliberately does not redeploy:
+    # tagging an old commit must never move production.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # The URLs live in job-level env because `secrets` cannot be read from a
+    # job-level `if:` — only `github`, `needs`, `vars` and `inputs` are in scope
+    # there. Step-level `if:` can read `env`, which is how the steps below skip
+    # cleanly when a webhook has not been configured.
+    env:
+      PORTAINER_PROD_WEBHOOK: ${{ secrets.PORTAINER_PROD_WEBHOOK }}
+      PORTAINER_OVH_WEBHOOK: ${{ secrets.PORTAINER_OVH_WEBHOOK }}
+    steps:
+      - name: Redeploy production
+        if: env.PORTAINER_PROD_WEBHOOK != ''
+        run: |
+          # Three attempts: a redeploy webhook does real work (pull, recreate)
+          # and Portainer occasionally takes longer than the default timeout on
+          # a cold pull. Never print the URL — it is the credential.
+          for attempt in 1 2 3; do
+            CODE=$(curl -s -o /tmp/body -w '%{http_code}' --max-time 300 \
+              -X POST "$PORTAINER_PROD_WEBHOOK" || echo 000)
+            case "$CODE" in
+              2*) echo "Production redeploy accepted (HTTP $CODE)."; exit 0 ;;
+            esac
+            echo "::warning::Attempt $attempt failed (HTTP $CODE): $(cat /tmp/body)"
+            sleep 15
+          done
+          echo "::error::Production redeploy never succeeded. The image IS published — redeploy by hand in Portainer. A 404 with \"Unable to find the stack by webhook ID\" means the token no longer exists: re-enable the webhook on the stack, press Update the stack, and reset the PORTAINER_PROD_WEBHOOK secret."
+          exit 1
+
+      - name: Redeploy the OVH instance
+        if: env.PORTAINER_OVH_WEBHOOK != ''
+        run: |
+          for attempt in 1 2 3; do
+            CODE=$(curl -s -o /tmp/body -w '%{http_code}' --max-time 300 \
+              -X POST "$PORTAINER_OVH_WEBHOOK" || echo 000)
+            case "$CODE" in
+              2*) echo "OVH redeploy accepted (HTTP $CODE)."; exit 0 ;;
+            esac
+            echo "::warning::Attempt $attempt failed (HTTP $CODE): $(cat /tmp/body)"
+            sleep 15
+          done
+          echo "::error::OVH redeploy never succeeded."
+          exit 1
+
+      - name: Say what was not configured
+        if: env.PORTAINER_PROD_WEBHOOK == '' || env.PORTAINER_OVH_WEBHOOK == ''
+        run: |
+          # A skipped redeploy must not look like a successful one. Without this
+          # the job goes green having done nothing at all.
+          if [ -z "$PORTAINER_PROD_WEBHOOK" ]; then
+            echo "::warning::No PORTAINER_PROD_WEBHOOK secret — production was NOT redeployed. Set it with: gh secret set PORTAINER_PROD_WEBHOOK"
+          fi
+          if [ -z "$PORTAINER_OVH_WEBHOOK" ]; then
+            echo "::notice::No PORTAINER_OVH_WEBHOOK secret. The OVH box is a Portainer *edge* environment, which has no per-stack webhook, so it updates itself instead — see demo-autoupdate.timer on that host."
+          fi
