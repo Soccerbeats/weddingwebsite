@@ -11,7 +11,7 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
-## v0.9.31 — [Unreleased] The documentation catches up (`main`, 2026-08-24 02:52)
+## v0.9.31 — [Released] The documentation catches up (`main`, 2026-08-24 02:52)
 
 ### Changed
 - **The wiki was written at v0.9.5 and the app is at v0.9.30.** Everything it had gone wrong about is now right: Deployment described building the image on a laptop, Installation pointed at paths that moved into `docker/`, Development named a `CLAUDE.md` that is now a symlink to `AGENTS.md`, and the demo page described a stack you filled by hand rather than one that is read-only and seeds itself. Ten of the fifteen pages changed.
