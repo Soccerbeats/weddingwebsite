@@ -11,6 +11,15 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.30 — [Released] The demo banner stops sitting on the nav (`main`, 2026-08-24 02:01)
+
+### Fixed
+- **The banner was drawn over the top of the nav bar**, clipping it. The nav is `position: fixed`, so it knew nothing about a banner sitting above it in the flow. The banner's height is now published once as a CSS variable — `--demo-banner-h`, `0px` on a normal instance — and everything that measures from the top of the window adds it: the nav bar, the island it becomes when you scroll, the mobile drawer that hangs off the bar, and the admin shell's fixed container. One number in one place, so they cannot disagree and clip each other again.
+- Measured in a browser rather than eyeballed: the banner occupies 0–28px, the nav bar starts at exactly 28, the scrolled island at 40, and in the admin panel the shell starts at 108 with nothing hidden behind the banner.
+
+### Added
+- **The ADMIN button is always on the nav in demo mode.** The whole point is that anyone can walk into the admin panel, and a button they cannot see is a door they will not find. It is a separate `isDemo` prop rather than pretending the visitor is an admin — that flag also decides which pages the nav lists, and a visitor should see the site the way a guest sees it.
+
 ## v0.9.29 — [Released] The demo stack stops publishing its database (`main`, 2026-08-24 01:54)
 
 ### Fixed

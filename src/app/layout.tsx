@@ -3,6 +3,7 @@ import { Playfair_Display, Geist, Geist_Mono, Great_Vibes } from 'next/font/goog
 import './globals.css';
 import AppShell from '@/components/AppShell';
 import DemoBanner from '@/components/DemoBanner';
+import { demoStatus } from '@/lib/demo';
 import WipCheck from '@/components/WipCheck';
 import { getSiteConfig } from '@/lib/config';
 import { cookies } from 'next/headers';
@@ -91,6 +92,7 @@ export default async function RootLayout({
 }>) {
   const config = getSiteConfig();
   const isAdmin = await getIsAdmin();
+  const { demo: isDemo } = demoStatus();
 
   // suppressHydrationWarning below is for the inline script in <head>, which
   // adds `no-scrollbar-gutter` to <html> before paint on admin routes. The
@@ -124,6 +126,13 @@ export default async function RootLayout({
               --accent: ${config.accentColor || '#D4AF37'};
               --accent-light: ${config.accentLightColor || '#F4E5C3'};
               --accent-dark: ${config.accentDarkColor || '#B8941F'};
+              /*
+                How much room the demo banner takes, and 0 when there is no
+                banner. Everything that positions itself against the top of the
+                window adds this: the nav bar and the admin shell. One number in
+                one place, so they cannot disagree and clip each other.
+              */
+              --demo-banner-h: ${isDemo ? '1.75rem' : '0px'};
             }
           `
         }} />
@@ -131,6 +140,7 @@ export default async function RootLayout({
         <DemoBanner />
         <WipCheck />
         <AppShell
+          isDemo={isDemo}
           brideName={config.brideName}
           groomName={config.groomName}
           logoMode={config.logoMode}

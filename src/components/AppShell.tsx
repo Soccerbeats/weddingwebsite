@@ -13,6 +13,8 @@ interface AppShellProps {
   logoMode?: boolean;
   weddingLogo?: string;
   isAdmin: boolean;
+  /** The demo instance: the admin button is always offered, and there is a banner. */
+  isDemo?: boolean;
   weddingDate?: string;
   weddingLocation?: string;
   footerHeroImage?: string;
@@ -25,6 +27,7 @@ export default function AppShell({
   logoMode,
   weddingLogo,
   isAdmin,
+  isDemo = false,
   weddingDate,
   weddingLocation,
   footerHeroImage,
@@ -50,13 +53,22 @@ export default function AppShell({
           logoMode={logoMode}
           weddingLogo={weddingLogo}
           isAdmin={isAdmin}
+          isDemo={isDemo}
         />
         {/*
-          Fixed container that starts exactly where the nav ends (top-20 = 80px)
-          and fills to all other edges. This gives the admin layout a container
-          with truly explicit pixel dimensions — no reliance on flex-grow for height.
+          Fixed container that starts exactly where the nav ends (80px) and fills
+          to all other edges. This gives the admin layout a container with truly
+          explicit pixel dimensions — no reliance on flex-grow for height.
+
+          Plus the demo banner's height, which is 0 unless this is the demo: the
+          banner sits above the nav, so everything measured from the top of the
+          window moves down by it. Without this the admin panel started under the
+          banner and lost its first 28 pixels.
         */}
-        <div className="fixed top-20 left-0 right-0 bottom-0 overflow-hidden flex flex-col">
+        <div
+          className="fixed left-0 right-0 bottom-0 overflow-hidden flex flex-col
+            top-[calc(5rem+var(--demo-banner-h,0px))]"
+        >
           {children}
         </div>
       </>
@@ -72,6 +84,7 @@ export default function AppShell({
         logoMode={logoMode}
         weddingLogo={weddingLogo}
         isAdmin={isAdmin}
+        isDemo={isDemo}
       />
       <HeartBurst />
       {/* Home page: hero fills under the floating nav island (pt-0).

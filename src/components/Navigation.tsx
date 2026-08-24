@@ -16,6 +16,14 @@ interface NavigationProps {
     logoMode?: boolean;
     weddingLogo?: string;
     isAdmin?: boolean;
+    /**
+     * The demo instance. The admin button is always offered — the whole point of
+     * the demo is that anyone can walk into the admin panel, and a button they
+     * cannot see is a door they will not find. Kept separate from `isAdmin`
+     * rather than folded into it, because that flag also decides which pages the
+     * nav lists, and a visitor should see the site as a guest sees it.
+     */
+    isDemo?: boolean;
 }
 
 export default function Navigation({
@@ -24,6 +32,7 @@ export default function Navigation({
     logoMode = false,
     weddingLogo = '',
     isAdmin = false,
+    isDemo = false,
 }: NavigationProps) {
     const [isOpen, setIsOpen]       = useState(false);
     const [basicMode, setBasicMode] = useState(false);
@@ -179,7 +188,11 @@ export default function Navigation({
 
     const barStyle: CSSProperties = {
         position: 'fixed',
-        top:   island ? '12px' : '0',
+        // Plus the demo banner, which is 0px unless this is the demo instance.
+        // The banner sits above the nav in the normal flow; a fixed bar knows
+        // nothing about flow, so it has to be told — otherwise the banner is
+        // drawn straight over the top of the nav island.
+        top:   island ? 'calc(12px + var(--demo-banner-h, 0px))' : 'var(--demo-banner-h, 0px)',
         left:  island ? islandL : '0',
         right: island ? islandR : '0',
         zIndex: 50,
@@ -206,7 +219,10 @@ export default function Navigation({
     const hoverBg     = 'rgba(212,175,55,0.3)';
 
     // Mobile drawer: sits just below the bar
-    const barBottom = island ? 12 + 68 : 80; // top + height
+    // top + height. The mobile drawer hangs off this, so it inherits the banner
+    // offset through the same variable rather than being adjusted separately.
+    const barBottom = island ? 12 + 68 : 80;
+    const drawerTop = `calc(${barBottom + 4}px + var(--demo-banner-h, 0px))`;
 
     return (
         <>
@@ -271,7 +287,7 @@ export default function Navigation({
                             </Link>
                         );
                     })}
-                    {isAdmin && (
+                    {(isAdmin || isDemo) && (
                         <Link
                             href="/admin"
                             className="ml-2 px-4 py-1.5 rounded-full bg-accent text-white text-xs font-bold uppercase tracking-widest hover:bg-accent-dark transition-colors shadow"
@@ -283,7 +299,7 @@ export default function Navigation({
 
                 {/* Mobile hamburger */}
                 <div className="flex items-center gap-3 md:hidden">
-                    {isAdmin && (
+                    {(isAdmin || isDemo) && (
                         <Link
                             href="/admin"
                             className="px-3 py-1 rounded-full bg-accent text-white text-xs font-bold uppercase tracking-widest hover:bg-accent-dark transition-colors shadow"
@@ -315,7 +331,7 @@ export default function Navigation({
                 id="mobile-menu"
                 className="fixed md:hidden overflow-hidden"
                 style={{
-                    top:       `${barBottom + 4}px`,
+                    top:       drawerTop,
                     left:      island ? islandL : '0',
                     right:     island ? islandR : '0',
                     zIndex:    49,
