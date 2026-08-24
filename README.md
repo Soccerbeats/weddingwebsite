@@ -145,3 +145,21 @@ Private planning for the trip — admin-only, with no public page.
 Every release is written up in [CHANGELOG.md](CHANGELOG.md), which is also the
 source of truth for the app's version — the topmost `vX.Y.Z` is what the admin
 panel displays.
+
+## License
+
+**Free for your wedding. Ask me about anything commercial.**
+
+Source-available under the [PolyForm Noncommercial License 1.0.0](LICENSE.md) —
+not an open-source license, deliberately. Run it for your own wedding or a
+friend's, read it, change it, self-host it, share your changes: all free, no
+permission needed. Charities, schools, public research bodies and government
+institutions count as noncommercial too.
+
+Selling it, hosting it as a paid service, or building client sites with it needs
+a separate license. That conversation is welcome and the answer is not
+automatically no — [open an issue](https://github.com/Soccerbeats/weddingwebsite/issues)
+and let's talk.
+
+Dependencies keep their own licenses, and whatever a deployment holds — the
+photographs, the guest list, the names — belongs to whoever put it there.

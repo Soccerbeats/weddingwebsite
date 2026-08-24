@@ -11,7 +11,18 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
-## v0.9.36 — [Unreleased] Production stops waiting to be told (`main`, 2026-08-24 13:23)
+## v0.9.37 — [Unreleased] A license: free for your wedding, ask about anything else (`main`, 2026-08-24 15:58)
+
+### Added
+- **`LICENSE.md` — the PolyForm Noncommercial License 1.0.0**, verbatim from the SPDX license list rather than retyped, because a licence reproduced from memory is a licence with subtle holes in it. Anyone may run this for their own wedding, or a friend's: read it, change it, self-host it, share the changes, no permission needed. Charities, schools, public research bodies and government institutions count as noncommercial too, whatever their funding. Selling it, hosting it as a paid service or building client sites with it needs a separate license, which is an invitation rather than a refusal.
+- **A plain-English summary above the licence, marked as non-binding** and explicitly deferring to the text below it, so the intent is readable in fifteen seconds without the summary being able to create an ambiguity of its own.
+- **Two exclusions stated outright**: dependencies keep their own licences — this covers the code in this repository, not Next.js or Postgres — and anyone's wedding content belongs to whoever put it there. None of the latter is in this repository; the README's screenshots are all of the fictional demo.
+- `license` in `package.json` (`PolyForm-Noncommercial-1.0.0`, a real SPDX identifier) and a License section in the README.
+
+### Changed
+- The repository had **no licence at all** until now, which under copyright means "all rights reserved" — so this only *grants* permissions that nobody previously had, rather than withdrawing any. Note that GitHub's sidebar will likely not name the licence: its detector recognises common open-source licences, and this deliberately is not one.
+
+## v0.9.36 — [Released] Production stops waiting to be told (`main`, 2026-08-24 13:23)
 
 ### Added
 - **The production host now polls for its own image**, the way the demo box already does — `ops/prod-autoupdate/` installs a five-minute timer that compares the digest of `:latest` against the image its container is running and recreates it only on a difference. A merge reaches the live site on its own, with nothing on that machine reachable from CI.
