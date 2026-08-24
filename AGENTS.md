@@ -38,7 +38,7 @@ The Docker dev stack (source mounted, hot reload) lives in `docker/`:
 
 ```bash
 cp docker/.env.example docker/.env   # once, then edit
-docker compose -f docker/docker-compose.yml up -d
+docker compose -f docker/docker-compose.dev.yml up -d
 ```
 
 ## Checks — run before calling a change done
@@ -174,11 +174,18 @@ order, before the commit:
 
 1. Update `README.md` — the relevant section, with step-by-step usage
 2. Add a **version-stamped** `CHANGELOG.md` entry (rules above)
-3. Update the vault at `/home/austin/vault/wiki/entities/wedding-website.md` —
+3. Update the **GitHub wiki** — it is where the documentation actually lives
+   (the README is a front page). Clone it, edit, push:
+   `git clone git@github.com:Soccerbeats/weddingwebsite.wiki.git` — branch
+   `master`. Touch every page the change makes wrong, not just the obvious
+   one: a feature usually lands in `Features`, its own area page, and
+   `Architecture` or `Troubleshooting` if it added a mechanism or a failure
+   mode. It went 25 versions stale once because nothing on this list said to.
+4. Update the vault at `/home/austin/vault/wiki/entities/wedding-website.md` —
    the feature's section, a dated bullet under **Decisions & History**, and
    any new API endpoints, config keys or data formats
-4. Commit and push to GitHub
-5. Nothing else — the push publishes the image (see *Deployment*)
+5. Commit and push to GitHub
+6. Nothing else — the push publishes the image (see *Deployment*)
 
 ## Architecture
 
@@ -227,12 +234,21 @@ order, before the commit:
   waits for Postgres, then applies `database/init.sql`. Volumes hold
   `public/photos`, `public/config` and the postgres data — runtime uploads
   live in volumes, never in the image.
-- **The demo instance** — runs the same image as production, so nothing is
-  built for it. The "Demo Instance" workflow (push to main) only publishes
-  the **seeder** image: the Dockerfile's `seeder` stage, under its own name.
-  The demo stack's one-shot `seed` service pulls it and fills a *fresh* demo
-  on first boot, skipping one that already has data (a hand run is still
-  `npm run seed:demo -- --yes-wipe`). Updating the demo is the same act as
+- **The demo instance** — runs the same image as production with
+  `DEMO_MODE=true`, so nothing is built for it. That flag makes the instance
+  **read-only and login-free**: `src/middleware.ts` answers every write under
+  `/api/` without running it, and opens `/admin` to everyone. `src/lib/demo.ts`
+  refuses the flag unless the database in `DATABASE_URL` is named `demo`, so a
+  production instance cannot fall into it — keep that fail-safe if you touch
+  either file. The browser asks `/api/demo-status` rather than reading a
+  `NEXT_PUBLIC_` mirror, because two sources of truth for "is it safe to drop
+  writes" is not a trade worth making.
+  The "Demo Instance" workflow (push to main) publishes the **seeder** image:
+  the Dockerfile's `seeder` stage, under its own name. The stack's one-shot
+  `seed` service runs on every `up` (`SEED_ALWAYS=true`) — safe *because* the
+  instance is immutable, and it is how the demo gains data for features that
+  shipped since it was last deployed. A hand run is still
+  `npm run seed:demo -- --yes-wipe`. Updating the demo is the same act as
   production — pull the image, redeploy the stack. Nothing in CI touches the
   server: a draft of that workflow SSHed in to save the redeploy click, which
   would have let anyone able to push to this public repository run commands on

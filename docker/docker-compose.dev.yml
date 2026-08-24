@@ -3,7 +3,7 @@
 # Run from the repository root:
 #
 #   cp docker/.env.example docker/.env   # once, then edit
-#   docker compose -f docker/docker-compose.yml up -d
+#   docker compose -f docker/docker-compose.dev.yml up -d
 #
 # Compose reads .env from this directory (the compose file's directory), and
 # the relative paths below resolve from it too, so the source tree is `..`.

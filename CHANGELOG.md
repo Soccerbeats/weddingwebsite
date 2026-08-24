@@ -11,6 +11,22 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.31 — [Unreleased] The documentation catches up (`main`, 2026-08-24 02:52)
+
+### Changed
+- **The wiki was written at v0.9.5 and the app is at v0.9.30.** Everything it had gone wrong about is now right: Deployment described building the image on a laptop, Installation pointed at paths that moved into `docker/`, Development named a `CLAUDE.md` that is now a symlink to `AGENTS.md`, and the demo page described a stack you filled by hand rather than one that is read-only and seeds itself. Ten of the fifteen pages changed.
+- **The demo instance page is rewritten around `DEMO_MODE`** — what the flag changes, why the write block lives in the middleware rather than in the routes that write, why the flag is refused unless the database really is the demo's, and why reseeding on every start is safe *because* nothing persists.
+- **Deployment now says what a merge publishes**, which event moves which tag, why a `v*` tag must never move `:latest`, and how to redeploy the demo.
+- **Architecture gained how demo mode is put together** — the five files involved, why the browser asks an endpoint instead of reading a `NEXT_PUBLIC_` mirror, and why the banner's height is one variable. Plus the three honeymoon columns that each encode a decision: `rank`, `arrive_day_offset`, and a leg's nullable coordinates.
+- **The honeymoon page covers the seventeen versions it had never seen** — the split view, the minimised overlay, flying to a day, travel arcs, the Travel tab, overnight legs, the stays map, ranking, sorting, mid tier — and its Settings section no longer claims that shortening the dates deletes the trailing days, which is exactly the behaviour v0.9.11 removed.
+- **Troubleshooting gained six rows**, mostly demo- and pipeline-shaped, including the Leaflet markers that ate clicks and the two ways a demo can look wrong.
+- README: the demo is described as what it now is — no login, everything open, every change discarded on refresh.
+- Followed the `docker/docker-compose.yml` → `docker/docker-compose.dev.yml` rename through the README, `AGENTS.md`, the wiki, and the file's own header, which still told you to run it under its old name.
+
+### Added
+- **`AGENTS.md`'s "document everything" list now includes the wiki.** It went twenty-five versions stale because nothing on that list said to touch it, so the step now names the clone URL, the branch, and the expectation that a feature usually lands on three pages rather than one.
+- Its demo-mode notes now describe the immutability rail as something to keep, not just as machinery: the flag's database check and the vestigial `ADMIN_PASSWORD` are both there so a refused flag fails towards production.
+
 ## v0.9.30 — [Released] The demo banner stops sitting on the nav (`main`, 2026-08-24 02:01)
 
 ### Fixed

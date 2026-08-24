@@ -29,8 +29,10 @@
 
 <p align="center">
   <a href="https://github.com/Soccerbeats/weddingwebsite/wiki/The-Demo-Instance"><strong>Can't wait to self-host? Bring up the demo instance →</strong></a><br>
-  A completely fictional wedding — ninety guests, a budget, a seating chart and a
-  sixteen-day honeymoon, all loaded. Safe to poke at; nothing there is real.
+  One compose file, one environment variable: a completely fictional wedding —
+  ninety guests, a budget, a seating chart and a sixteen-day honeymoon — with no
+  login, the whole admin panel open, and every change discarded on refresh.
+  Hand out the URL; nothing there is real and nothing anyone does to it sticks.
 </p>
 
 ## What it does
@@ -64,11 +66,12 @@ docker compose -f docker/docker-compose.prod.yml up -d
 ```
 
 Then open `http://localhost:3000`, and `/admin` with the password you set.
-(`docker/docker-compose.yml` is the development stack — it builds from source
+(`docker/docker-compose.dev.yml` is the development stack — it builds from source
 instead of pulling the image.)
 
 - **[Installation](https://github.com/Soccerbeats/weddingwebsite/wiki/Installation)** — Portainer, plain Compose, or local
-- **[Deployment](https://github.com/Soccerbeats/weddingwebsite/wiki/Deployment)** — building, pushing and redeploying
+- **[Deployment](https://github.com/Soccerbeats/weddingwebsite/wiki/Deployment)** — what a merge publishes, and how to redeploy
+- **[The demo instance](https://github.com/Soccerbeats/weddingwebsite/wiki/The-Demo-Instance)** — a read-only copy with fictional data, for showing people
 
 ## Screenshots
 
