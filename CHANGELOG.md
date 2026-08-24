@@ -11,7 +11,7 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
-## v0.9.32 — [Unreleased] The demo has an address (`main`, 2026-08-24 03:31)
+## v0.9.32 — [Released] The demo has an address (`main`, 2026-08-24 03:31)
 
 ### Added
 - **The demo is live at [weddingwebsitedemo.com](https://weddingwebsitedemo.com), and the README says so** — a badge beside the documentation one, and the callout under the hero now leads with a link you can click instead of instructions for building your own. The screenshot note points there too: every screen in the README is one you can go and poke at, which is a stronger claim than "these are real screenshots".
