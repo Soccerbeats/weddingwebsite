@@ -9,6 +9,22 @@ const JWT_SECRET = new TextEncoder().encode(SECRET_KEY);
 /** The methods that change something. GET/HEAD/OPTIONS are always let through. */
 const WRITE_METHODS = new Set(['POST', 'PATCH', 'PUT', 'DELETE']);
 
+/**
+ * The only endpoints under `/api/admin/` that answer without the admin cookie,
+ * and only to GET.
+ *
+ * Each one backs a page a guest is meant to see: the site config (the nav, the
+ * RSVP form, the registry page), the registry items, and the timeline on
+ * our-story. Nothing here is private — it is the same content the public pages
+ * render. Adding to this list makes something world-readable, so add only what
+ * a public page cannot render without.
+ */
+const PUBLIC_ADMIN_READS = new Set([
+    '/api/admin/site-config',
+    '/api/admin/registry-items',
+    '/api/admin/timeline',
+]);
+
 export async function middleware(request: NextRequest) {
     /*
      * On the demo instance, nothing is allowed to persist — so writes never
@@ -52,6 +68,51 @@ export async function middleware(request: NextRequest) {
             success: true,
             demo: true,
         });
+    }
+
+    /*
+     * The admin API requires the admin cookie.
+     *
+     * It did not, until now: the matcher covered `/admin/*` but the API routes
+     * under `/api/admin/*` checked nothing themselves, so anyone who could reach
+     * the site could rewrite the guest list, delete photographs or edit any page
+     * with a bare `curl` — no login involved. Verified against a running
+     * instance before fixing: a cookie-less PATCH returned 200 and the row
+     * changed.
+     *
+     * Done here rather than in each of the thirty-odd handlers for the same
+     * reason as the demo write-block above: one place covers every route,
+     * including the ones added next month.
+     *
+     * The three exceptions below are why this was awkward to begin with. Those
+     * endpoints live under `/api/admin/` by an accident of naming but serve the
+     * *public* site — the nav and the RSVP form read the site config, the
+     * registry page reads the registry, the our-story page reads the timeline —
+     * so requiring a cookie for them would take the public pages down. They are
+     * reads of content that is already on public pages. Everything else under
+     * `/api/admin/` — the guest list, the RSVPs, the finances, the honeymoon,
+     * the seating — needs the cookie for *every* method, GET included: those are
+     * names, addresses and dietary requirements, and reading them was as open as
+     * writing them.
+     */
+    if (request.nextUrl.pathname.startsWith('/api/admin')) {
+        const publicRead = request.method === 'GET'
+            && PUBLIC_ADMIN_READS.has(request.nextUrl.pathname);
+        // The demo instance opens the whole admin panel deliberately, and its
+        // writes were already answered above without ever reaching a handler.
+        if (!publicRead && !isDemoMode()) {
+            const token = request.cookies.get('admin_token')?.value;
+            let authorised = false;
+            if (token) {
+                try { await jwtVerify(token, JWT_SECRET); authorised = true; } catch { /* expired or forged */ }
+            }
+            if (!authorised) {
+                // JSON, not a redirect: the caller is fetch(), not a browser
+                // following links, and a 307 to a login page would arrive as an
+                // unparseable HTML body.
+                return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+            }
+        }
     }
 
     // Only protect /admin routes

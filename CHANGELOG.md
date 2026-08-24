@@ -11,6 +11,28 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.35 — [Unreleased] The admin API asks who you are (`main`, 2026-08-24 04:54)
+
+### Fixed
+- **The admin API accepted unauthenticated requests.** `src/middleware.ts` guarded `/admin/*`, but the routes under `/api/admin/*` checked nothing themselves — so anyone who could reach the site could rewrite the guest list, delete photographs, edit any page or read every RSVP with a bare `curl`, without ever seeing the login page. Verified against a running instance before the fix (a cookie-less `PATCH` returned 200 and the row changed) and after it (401, and the row is untouched).
+  - The cookie is now required for **every method, GET included**. Reading was as open as writing, and what it exposed was names, addresses, phone numbers and dietary requirements.
+  - Three endpoints stay public, to GET only: `site-config`, `registry-items` and `timeline`. They live under `/api/admin/` by an accident of naming but serve the public site — the nav and the RSVP form read the site config, the registry page reads the registry, our-story reads the timeline — so this is why the hole was awkward to close rather than an oversight. Each one returns content that is already rendered on a public page. The allowlist is a named set with a comment saying what adding to it means.
+  - Enforced in the middleware rather than in the thirty-odd handlers, so a route added next month is covered before it is written.
+  - **The demo instance is unaffected by design**: its writes are still answered without reaching a handler, and its admin GETs still work with no login, because that flag opens the panel deliberately. Verified both, plus that a refused `DEMO_MODE` now lands on the *stricter* path rather than an open one.
+- **`npm audit` went from 31 vulnerabilities (1 critical, 10 high) to zero.** Next 16.0.8 → 16.3.2 (Server Actions source-code exposure, a DoS in Server Components), nodemailer 7 → 9 (SMTP command injection via a CRLF in the transport name, and via `envelope.size`), and the rest of the tree with `npm audit fix`.
+- **`sharp` is now a declared dependency, pinned to a fixed version.** It was inherited from Next — which meant the photo route imported a library the project never declared, at a version it could not choose, and it was sitting on four libvips CVEs. It processes uploaded images, so it is about as reachable as a dependency gets.
+- **The RSVP confirmation email interpolated the guest's typed name into HTML.** The form emails whatever address was entered, so it could be used to deliver a wedding-branded email carrying someone else's markup to a third party. Escaped at the boundary.
+
+### Changed
+- **`allowedDevOrigins` is set for the dev server.** Next 16.3 enforces what 16.0 merely warned about, and the dev stack in `docker/` is browsed by the server's LAN address rather than localhost. Without it the pages render while every chunk 403s — so the site loads and then does nothing: forms submit as plain GETs and no button works. It fails in the one way that does not look like a configuration problem, and it cost me twenty minutes of believing I had broken hydration. Development only; `next start` ignores it.
+
+### Verified
+- The security fix, in a production build as well as dev: seven public pages 200, anonymous read and write both 401, the three allowlisted reads 200, `/admin` still redirects, and a logged-in session reads and writes normally.
+- Every public page renders for a visitor with no cookie, with no console errors beyond a missing `photos.json` that only exists in a deployed volume.
+- Six admin pages load and an inline edit still saves, after the framework upgrade.
+- The photo route's own suite (`npm run check:photos`) against the new `sharp`, plus the finance, honeymoon and changelog suites.
+- No SQL is built by interpolation: 207 of 210 queries are parameterised, and the three that name a table pull it from a whitelist guarded by `hasOwnProperty`.
+
 ## v0.9.34 — [Unreleased] The finance tab uses the screen (`main`, 2026-08-24 05:02)
 
 ### Fixed

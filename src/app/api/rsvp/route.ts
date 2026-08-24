@@ -2,6 +2,26 @@ import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import nodemailer from 'nodemailer';
 
+/**
+ * Escape a value before it goes into an HTML email body.
+ *
+ * The confirmation email interpolated the guest's own typed name straight into
+ * markup. The form sends that email to whatever address was entered, so anyone
+ * could have used the RSVP form to deliver a wedding-branded email carrying
+ * markup of their choosing to a third party. The name is the only free-text
+ * field that reaches the HTML version — the notification to the couple is plain
+ * text — but the fix belongs at the boundary, not in a note about which fields
+ * happen to be safe today.
+ */
+function escapeHtml(value: string): string {
+    return value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 export async function POST(request: Request) {
     try {
         const body = await request.json();
@@ -80,7 +100,7 @@ export async function POST(request: Request) {
                     to: email,
                     subject: "We received your RSVP!",
                     text: `Hi ${guestName},\n\nThank you so much for RSVPing to our wedding. We have confirmed your response: ${attending ? 'Attending' : 'Not Attending'}.\n\nWe can't wait to celebrate with you!\n\nBest,\nSarah & James`,
-                    html: `<h1>RSVP Confirmation</h1><p>Hi ${guestName},</p><p>Thank you so much for RSVPing to our wedding. We have confirmed your response: <strong>${attending ? 'Attending' : 'Not Attending'}</strong>.</p><p>Best,<br>Sarah & James</p>`,
+                    html: `<h1>RSVP Confirmation</h1><p>Hi ${escapeHtml(guestName)},</p><p>Thank you so much for RSVPing to our wedding. We have confirmed your response: <strong>${attending ? 'Attending' : 'Not Attending'}</strong>.</p><p>Best,<br>Sarah & James</p>`,
                 });
 
                 if (process.env.NOTIFICATION_EMAIL) {
