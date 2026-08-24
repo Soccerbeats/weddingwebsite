@@ -221,9 +221,17 @@ order, before the commit:
 
 ### Key mechanisms
 
-- **Auth** — one admin password (`ADMIN_PASSWORD`); bcrypt-hashed session in
-  an HTTP-only cookie; `src/middleware.ts` protects `/admin/*` and redirects
-  non-admins away from WIP pages.
+- **Auth** — one admin password (`ADMIN_PASSWORD`); a JWT session in an
+  HTTP-only cookie; `src/middleware.ts` protects `/admin/*` (redirecting
+  non-admins away from WIP pages) **and `/api/admin/*`, for every method
+  including GET**. Three GETs are allowlisted as public in that file —
+  `site-config`, `registry-items`, `timeline` — because the nav, the RSVP form,
+  the registry page and our-story read them; they return content that is
+  already on public pages. **Adding to that list makes something
+  world-readable.** Enforce new rules there rather than in handlers: one place
+  covers every route, including the ones added later. (Until v0.9.35 the API
+  half was missing entirely and the whole admin API accepted anonymous reads
+  and writes.)
 - **Photo serving** — admin uploads land in the `public/photos` volume;
   `GET /api/photos/[filename]` serves them (with thumbs and resizing). Every
   `<Image>` uses `src=/api/photos/…` plus `unoptimized` (required for volume
