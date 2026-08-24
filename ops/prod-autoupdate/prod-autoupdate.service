@@ -1,0 +1,10 @@
+[Unit]
+Description=Redeploy the wedding site's web container when a new image is published
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/prod-autoupdate.sh
+# A cold pull plus a container swap can both be slow.
+TimeoutStartSec=900

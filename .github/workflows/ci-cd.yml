@@ -208,7 +208,17 @@ jobs:
           # A skipped redeploy must not look like a successful one. Without this
           # the job goes green having done nothing at all.
           if [ -z "$PORTAINER_PROD_WEBHOOK" ]; then
-            echo "::warning::No PORTAINER_PROD_WEBHOOK secret — production was NOT redeployed. Set it with: gh secret set PORTAINER_PROD_WEBHOOK"
+            # Not an emergency: the production host polls the registry every five
+            # minutes (prod-autoupdate.timer, see ops/) and redeploys its web
+            # container when the digest moves, so the image still reaches the
+            # site — just minutes later instead of immediately. Setting the
+            # secret makes the deploy synchronous with the merge.
+            #
+            # Portainer has been reluctant to keep a webhook on this stack: two
+            # generated tokens were both absent from its database afterwards
+            # ("Webhook":"" and "AutoUpdate":null on stack 146), which is what
+            # the fallback exists for.
+            echo "::notice::No PORTAINER_PROD_WEBHOOK secret. Production was not pushed to; its own timer will pull this image within ~5 minutes. Set the secret (gh secret set PORTAINER_PROD_WEBHOOK) to deploy on merge instead."
           fi
           if [ -z "$PORTAINER_OVH_WEBHOOK" ]; then
             echo "::notice::No PORTAINER_OVH_WEBHOOK secret. The OVH box is a Portainer *edge* environment, which has no per-stack webhook, so it updates itself instead — see demo-autoupdate.timer on that host."

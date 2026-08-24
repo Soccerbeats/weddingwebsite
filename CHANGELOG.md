@@ -11,6 +11,20 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.36 — [Unreleased] Production stops waiting to be told (`main`, 2026-08-24 13:23)
+
+### Added
+- **The production host now polls for its own image**, the way the demo box already does — `ops/prod-autoupdate/` installs a five-minute timer that compares the digest of `:latest` against the image its container is running and recreates it only on a difference. A merge reaches the live site on its own, with nothing on that machine reachable from CI.
+- **Scoped to the web service** (`--no-deps web`), so `wedding-db-prod` is never recreated because an application image moved — a failed recreate on this stack has previously left the database created-but-stopped while pages that don't touch it still answered 200. Compose does the swap, never `docker run`: compose only manages containers carrying `com.docker.compose.config-hash`, which only compose writes and cannot be added afterwards, so a hand-made container silently breaks Portainer's own redeploy button.
+- **A post-deploy check**: it curls the site after the swap and logs the status code, because a silent failure here is a wedding site that is down underneath a green log line.
+- It uses **Portainer's own** compose file and env, mirrored on the host and verified byte-identical (md5) to the copy inside the Portainer container — so a poll deploys exactly what pressing the button would.
+
+### Changed
+- **CI's message when no webhook is configured is now a notice, not a warning**, and says what actually happens: the host will pull this image within about five minutes, and setting the secret makes the deploy synchronous with the merge instead. The old wording said production "was NOT redeployed", which stopped being true the moment the fallback existed.
+
+### Fixed
+- **Why the webhook still does not work, established rather than guessed.** Two tokens generated in Portainer's UI were both absent from its database: stack 146 reads `"Webhook":""` and `"AutoUpdate":null`, and the endpoint answers a real token and a made-up one identically — *"Unable to find the stack by webhook ID"*. So the token was never persisted, however the UI produced it. Ruled out along the way: the endpoint is right (Portainer 2.39.4 answers `/api/status`), the stack was genuinely saved (its `UpdateDate` is today), and both containers carry their `config-hash` label, so a failing stack update is not the cause either.
+
 ## v0.9.35 — [Released] The admin API asks who you are (`main`, 2026-08-24 04:54)
 
 ### Fixed

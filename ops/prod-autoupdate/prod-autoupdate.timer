@@ -1,0 +1,14 @@
+[Unit]
+Description=Check every few minutes for a newly published wedding-site image
+
+[Timer]
+# Five minutes: well inside the time a CI run takes, so production is current
+# within minutes of a merge without hammering the registry. Persistent, so a
+# reboot during a release still catches up.
+OnBootSec=3min
+OnUnitActiveSec=5min
+Persistent=true
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

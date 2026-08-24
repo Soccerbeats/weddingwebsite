@@ -28,8 +28,42 @@ cp ../docker/docker-compose.demo.yml /etc/wedding-demo/docker-compose.yml   # se
 systemctl daemon-reload && systemctl enable --now demo-autoupdate.timer
 ```
 
-Production is the other way round: it is a normal Portainer environment, so CI
-POSTs its redeploy webhook (`PORTAINER_PROD_WEBHOOK`) and nothing needs to poll.
+## `prod-autoupdate/` — production polls too, for now
+
+Production is a normal (non-edge) Portainer environment, so CI *should* just POST
+its redeploy webhook (`PORTAINER_PROD_WEBHOOK`). In practice Portainer has not
+kept a webhook on that stack: two tokens generated in its UI were both missing
+from its database afterwards — stack 146 reads `"Webhook":""` and
+`"AutoUpdate":null` — so the webhook 404s with "Unable to find the stack by
+webhook ID".
+
+Until that is sorted, the host polls, exactly like the demo box. Two differences
+from `demo-autoupdate`, both deliberate:
+
+- **`--no-deps web`**: only the application container is recreated. A database
+  has no business restarting because an application image moved, and a failed
+  recreate on this stack has previously left the database created-but-stopped
+  while pages that don't touch it still returned 200.
+- **A post-deploy check**: it curls the site afterwards and logs the status code.
+  A silent failure here is a wedding site that is down under a green log line.
+
+It uses **Portainer's own** compose file and env, mirrored to the host at
+`/data/compose/146/v1` and verified byte-identical to the copy inside the
+Portainer container. Compose does the recreate, never `docker run`: compose only
+manages containers carrying `com.docker.compose.config-hash`, which only compose
+writes and which cannot be added to an existing container — a hand-made one is
+invisible to it, and Portainer's own "Pull and redeploy" then fails on a name
+conflict until someone recreates it properly.
+
+```bash
+install -m 755 prod-autoupdate/prod-autoupdate.sh /usr/local/sbin/
+install -m 644 prod-autoupdate/prod-autoupdate.{service,timer} /etc/systemd/system/
+systemctl daemon-reload && systemctl enable --now prod-autoupdate.timer
+```
+
+Fixing the webhook makes this redundant rather than wrong: it no-ops whenever the
+running image already matches the registry. To stop it entirely:
+`systemctl disable --now prod-autoupdate.timer`.
 
 ## `portguard/` — published Docker ports are not behind ufw
 
