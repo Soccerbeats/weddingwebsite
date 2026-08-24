@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { isDemoClient } from '@/lib/demoClient';
 import { normalizeCategoryKey, setCategoryRegistry, titleCase } from '@/lib/honeymoon';
 import type { Day, HoneymoonPayload, Place } from '@/lib/honeymoon';
 
@@ -58,7 +59,20 @@ export function useHoneymoon() {
                 const body = await res.json().catch(() => ({}));
                 throw new Error(body.error || 'Save failed');
             }
-            await refresh();
+            /*
+             * On the demo instance, don't refetch.
+             *
+             * The write was dropped by the middleware, so a refetch would return
+             * the seeded data and snap every controlled field — a status
+             * dropdown, a rating, a toggle — straight back to where it was, half
+             * a second after someone changed it. Skipping it leaves what they
+             * did on screen until they navigate or refresh, which is the point
+             * of the demo.
+             *
+             * Nothing else changes: the write still went nowhere, and the next
+             * page load is pristine.
+             */
+            if (!(await isDemoClient())) await refresh();
             return true;
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Save failed');

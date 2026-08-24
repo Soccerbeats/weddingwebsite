@@ -11,6 +11,18 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.28 — [Released] Demo mode: look at everything, change nothing (`main`, 2026-08-24 01:43)
+
+### Added
+- **`DEMO_MODE` turns an instance into a public demo — same image, one variable.** There is no separate demo build, which is the point: the demo always has the newest features because it *is* the production image. On the demo instance the whole admin panel is open with **no login** (the login page sends you inside), and **no write ever persists**: a visitor can rename the couple, delete photos, drag the seating chart about, submit an RSVP — and the next page load has it all back.
+- **One interception point, in `src/middleware.ts`.** Every non-GET request to `/api/*` is answered with a plausible success — the fields sent, plus a synthetic id — and never reaches its route. That covers all 26 write routes *and every route added later*, so a new feature cannot forget to be immutable and the guarantee rests on nothing being careful. Verified against a live database: renaming a place, creating a day, deleting a place, patching the site config and posting a public RSVP all returned 200 and changed nothing, in Postgres or on disk.
+- **A banner on every page** — *"🎭 Demo instance — everything here is fictional, and nothing you change is saved."* Server-rendered, so no flash, and it renders nothing at all on a normal instance.
+- **Changes stay on screen until you leave.** The honeymoon portal skips its post-write refetch in demo mode, so a status dropdown or a rating does not snap back half a second after someone changes it. Creates and deletes still will not appear — lists only ever come from the server — which is the known limit of this approach.
+- **The demo reseeds itself on every start** (`SEED_ALWAYS=true` on the seed service). Nothing a visitor did was kept, so there is nothing to preserve — and a fresh seed is how the fictional wedding picks up the data for features that shipped since the last deploy. Left unset, the seeder still skips a database that already has rows.
+
+### Fixed
+- **The flag is built to be hard to enable by accident**, because writes that quietly go nowhere are the worst failure this system has. It is off unless explicitly set, so every default fails towards "this is production" — and it *also* requires the database to be the demo's, so `DEMO_MODE` pasted onto the real stack is refused with a log line naming the mismatch. Verified: pointed at a database called `wedding_db` it refused, kept the login, and showed no banner. With the flag off, an authenticated write still persists exactly as before.
+
 ## v0.9.27 — [Released] The demo instance seeds itself (`main`, 2026-08-24 00:57)
 
 ### Added

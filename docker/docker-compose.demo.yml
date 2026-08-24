@@ -37,8 +37,13 @@ services:
       - '3001:3000'
     environment:
       - DATABASE_URL=postgresql://demo:demo@db:5432/demo
-      # Deliberately guessable: this instance holds nothing worth protecting and
-      # the password is meant to be shared with whoever is being shown around.
+      # Read-only for everyone: no login, and no write is ever persisted. See
+      # src/lib/demo.ts — the flag is also refused unless the database is the
+      # demo's, which the DATABASE_URL above satisfies.
+      - DEMO_MODE=true
+      # Vestigial while DEMO_MODE holds — there is no login page to type it
+      # into. Kept so that if the flag is ever refused, this instance falls back
+      # to *asking for a password* rather than standing wide open.
       - ADMIN_PASSWORD=demo
       - NODE_ENV=production
     volumes:
@@ -58,6 +63,11 @@ services:
       - DATABASE_URL=postgresql://demo:demo@db:5432/demo
       - CONFIG_DIR=/data/config
       - PHOTO_DIR=/data/photos
+      # Reseed on every start, rather than only when the database is empty:
+      # this instance is immutable, so there is no visitor's work to protect —
+      # and a fresh seed is how the demo picks up the data for features that
+      # shipped since it was last deployed.
+      - SEED_ALWAYS=true
     volumes:
       - demo_config:/data/config
       - demo_photos:/data/photos

@@ -143,6 +143,12 @@ RUN chown nextjs:nodejs /data/config /data/photos
 # the same on its own boot — harmless to run twice), then seed only when
 # guest_list is empty. The wipe flag is safe here: the seed runs against
 # the dedicated demo database only, and only when it is provably empty.
+#
+# SEED_ALWAYS=true reseeds on every start instead, wiping first. That is what
+# the public demo sets: it runs with DEMO_MODE, so nothing a visitor does was
+# ever kept and there is nothing to preserve — while a *new* seed brings the
+# fictional wedding up to date with whatever features shipped since. Left
+# unset, the guard above stands, so a hand-run demo someone is using is safe.
 RUN printf '%s\n' \
     '#!/bin/sh' \
     'set -e' \
@@ -150,7 +156,7 @@ RUN printf '%s\n' \
     'until node -e "const {Client}=require(\"pg\");const c=new Client(process.env.DATABASE_URL);c.connect().then(()=>{c.end();process.exit(0)}).catch(()=>process.exit(1))" 2>/dev/null; do sleep 1; done' \
     'node -e "const fs=require(\"fs\");const {Client}=require(\"pg\");const c=new Client(process.env.DATABASE_URL);const sql=fs.readFileSync(\"/app/database/init.sql\",\"utf8\");c.connect().then(()=>c.query(sql)).then(()=>c.end()).then(()=>process.exit(0)).catch(e=>{console.error(e);c.end();process.exit(1)})"' \
     'COUNT=$(node -e "const {Client}=require(\"pg\");const c=new Client(process.env.DATABASE_URL);c.connect().then(()=>c.query(\"SELECT count(*)::int AS n FROM guest_list\")).then(r=>{console.log(r.rows[0].n);return c.end()}).catch(e=>{console.error(e);c.end();process.exit(1)})")' \
-    'if [ "$COUNT" = "0" ]; then' \
+    'if [ "$COUNT" = "0" ] || [ "$SEED_ALWAYS" = "true" ]; then' \
     '  echo "guest_list is empty — seeding the demo instance..."' \
     '  node_modules/.bin/tsx scripts/seed-demo.mts --yes-wipe' \
     '  echo "Demo seeded."' \

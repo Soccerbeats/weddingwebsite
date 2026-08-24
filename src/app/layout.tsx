@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Playfair_Display, Geist, Geist_Mono, Great_Vibes } from 'next/font/google';
 import './globals.css';
 import AppShell from '@/components/AppShell';
+import DemoBanner from '@/components/DemoBanner';
 import WipCheck from '@/components/WipCheck';
 import { getSiteConfig } from '@/lib/config';
 import { cookies } from 'next/headers';
@@ -126,6 +127,8 @@ export default async function RootLayout({
             }
           `
         }} />
+        {/* Above everything, on every page: which instance this is. */}
+        <DemoBanner />
         <WipCheck />
         <AppShell
           brideName={config.brideName}
