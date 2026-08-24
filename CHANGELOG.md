@@ -33,7 +33,7 @@ All notable changes to this project are documented here, newest at the top.
 - The photo route's own suite (`npm run check:photos`) against the new `sharp`, plus the finance, honeymoon and changelog suites.
 - No SQL is built by interpolation: 207 of 210 queries are parameterised, and the three that name a table pull it from a whitelist guarded by `hasOwnProperty`.
 
-## v0.9.34 — [Unreleased] The finance tab uses the screen (`main`, 2026-08-24 05:02)
+## v0.9.34 — [Released] The finance tab uses the screen (`main`, 2026-08-24 05:02)
 
 ### Fixed
 - **The line totals were being cut off.** On the Budget tab the total column was 80px holding `$10,120.00`, and the column beside it held a *badge and a toggle* in 72px — so both overflowed and the badge landed on top of the number. Every unpaid line over four figures read as `$10,120.0` with `NOT PAID` printed across it. The columns are now sized for what they contain.
@@ -50,7 +50,7 @@ All notable changes to this project are documented here, newest at the top.
 - Row separators went from `gray-50` to `gray-100`. At 1300px wide the eye needs the line to get from a name to its total.
 - A truncated name now carries a tooltip, so a long line item is readable without widening the column for every other row.
 
-## v0.9.33 — [Unreleased] A merge redeploys the running instances (`main`, 2026-08-24 04:22)
+## v0.9.33 — [Released] A merge redeploys the running instances (`main`, 2026-08-24 04:22)
 
 ### Added
 - **CI tells Portainer to redeploy production once the image is published.** A new `redeploy` job POSTs the stack's webhook after the image job, so a merge to `main` reaches the live site without anyone pressing *Pull and redeploy*. Three attempts, because a cold pull can outrun Portainer's own timeout, and the URL is never printed — it is the credential. Only a push to `main` runs it: a `v*` tag deliberately does not redeploy, for the same reason it does not move `:latest`.
