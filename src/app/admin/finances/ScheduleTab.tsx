@@ -102,7 +102,7 @@ export default function ScheduleTab({ data, api }: { data: FinancePayload; api: 
             <Card className="overflow-hidden">
                 <div className="hidden gap-2 border-b border-gray-100 px-4 py-2 text-[10px] font-semibold
                     uppercase tracking-wide text-gray-400 md:grid
-                    md:grid-cols-[1.5fr_7rem_1.4fr_7rem_6rem_4rem_1.5rem]">
+                    md:grid-cols-[minmax(0,1.5fr)_7.5rem_minmax(0,1.4fr)_7rem_7rem_4.5rem_1.75rem]">
                     <div>Payment</div>
                     <div>Due</div>
                     <div>For</div>
@@ -117,8 +117,8 @@ export default function ScheduleTab({ data, api }: { data: FinancePayload; api: 
                         api.update('schedule', { id: sp.id, ...fields });
                     return (
                         <div key={sp.id}
-                            className={`grid grid-cols-1 gap-2 border-b border-gray-50 px-4 py-2 last:border-0
-                                md:grid-cols-[1.5fr_7rem_1.4fr_7rem_6rem_4rem_1.5rem] md:items-center
+                            className={`grid grid-cols-1 gap-2 border-b border-gray-100 px-4 py-2 last:border-0
+                                md:grid-cols-[minmax(0,1.5fr)_7.5rem_minmax(0,1.4fr)_7rem_7rem_4.5rem_1.75rem] md:items-center
                                 ${sp.settled ? 'bg-emerald-50/30' : sp.isOverdue ? 'bg-rose-50/40' : ''}`}>
                             <div className="flex min-w-0 items-center gap-2">
                                 <InlineText

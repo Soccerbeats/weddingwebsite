@@ -29,7 +29,7 @@ export default function AdminFinancesPage() {
 
     if (loading) {
         return (
-            <div className="max-w-5xl mx-auto">
+            <div className="w-full">
                 <div className="animate-pulse space-y-4">
                     <div className="h-8 bg-gray-100 rounded-2xl w-56" />
                     <div className="h-24 bg-gray-100 rounded-2xl" />
@@ -41,7 +41,7 @@ export default function AdminFinancesPage() {
 
     if (!data) {
         return (
-            <div className="max-w-5xl mx-auto">
+            <div className="w-full">
                 <div className="bg-rose-50 border border-rose-200 rounded-2xl p-5">
                     <h2 className="font-semibold text-rose-900 mb-1">Couldn&apos;t load your finances</h2>
                     <p className="text-sm text-rose-700">{error || 'Something went wrong.'}</p>
@@ -61,19 +61,18 @@ export default function AdminFinancesPage() {
     const leftToPay = Math.max(0, summary.stillToSpendCash);
 
     return (
-        <div className="max-w-5xl mx-auto" data-finance-suite>
-            <div className="flex flex-wrap items-start justify-between gap-3 mb-1">
-                <div>
-                    <h1 className="text-2xl font-semibold text-gray-900">Finances</h1>
-                    <p className="text-xs md:text-sm text-gray-400 mt-0.5">
-                        {formatMoney(summary.budgetTotal)} budgeted ·{' '}
-                        {formatMoney(summary.paidTotal)} paid ·{' '}
-                        {formatMoney(leftToPay)} left for you two to cover
-                    </p>
-                </div>
-                <div className="h-5 flex items-center">
-                    {saving && <span className="text-xs text-gray-400">Saving…</span>}
-                </div>
+        <div className="w-full" data-finance-suite>
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <h1 className="text-xl font-semibold text-gray-900 md:text-2xl">Finances</h1>
+                <p className="text-xs text-gray-400 md:text-sm">
+                    {formatMoney(summary.budgetTotal)} budgeted ·{' '}
+                    {formatMoney(summary.paidTotal)} paid ·{' '}
+                    <span className="text-gray-500">{formatMoney(leftToPay)} left for you two to cover</span>
+                </p>
+                {/* Fixed width, so the row does not reflow every time it appears. */}
+                <span className="ml-auto w-16 text-right text-xs text-gray-400">
+                    {saving ? 'Saving…' : ''}
+                </span>
             </div>
 
             {error && (
@@ -85,15 +84,17 @@ export default function AdminFinancesPage() {
                 </div>
             )}
 
-            <div className="flex gap-1.5 overflow-x-auto py-3 md:py-4 -mx-1 px-1 print:hidden">
+            <div className="my-3 flex gap-1 overflow-x-auto rounded-full border border-gray-200
+                bg-white p-1 print:hidden md:w-fit">
                 {TABS.map((t) => (
                     <button
                         key={t.key}
                         onClick={() => setTab(t.key)}
-                        className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition-colors border
-                            ${tab === t.key
-                                ? 'bg-accent text-white border-transparent'
-                                : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                        aria-current={tab === t.key ? 'page' : undefined}
+                        className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors
+                            md:px-4 ${tab === t.key
+                                ? 'bg-accent text-white shadow-sm'
+                                : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}
                     >
                         {t.label}
                         {t.key === 'schedule' && summary.overdueTotal > 0 && (

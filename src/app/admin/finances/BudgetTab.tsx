@@ -39,15 +39,15 @@ export default function BudgetTab({ data, api }: { data: FinancePayload; api: Fi
 
     return (
         <div className="space-y-6">
-            <Card className="p-5">
-                <div className="flex flex-wrap items-end justify-between gap-4">
-                    <div>
-                        <div className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold">
+            <Card className="px-4 py-3">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                    <div className="flex items-baseline gap-2">
+                        <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                             Total budget
-                        </div>
-                        <div className="text-3xl font-semibold tabular-nums text-gray-900">
+                        </span>
+                        <span className="text-2xl font-semibold tabular-nums text-gray-900">
                             {formatMoney(summary.budgetTotal)}
-                        </div>
+                        </span>
                     </div>
                     <div className="text-right text-xs text-gray-400">
                         {summary.itemCount} line{summary.itemCount === 1 ? '' : 's'} ·{' '}
@@ -187,7 +187,7 @@ function CategoryBlock({ category, data, api, expanded, onToggleExpanded }: {
                 </div>
             </div>
 
-            <div className="hidden md:grid grid-cols-[1.6fr_5.5rem_5rem_6rem_5rem_4.5rem_1.5rem] gap-2 px-4 py-2
+            <div className="hidden md:grid grid-cols-[minmax(0,1.7fr)_6rem_4.5rem_7rem_7rem_5rem_1.75rem] gap-2 px-4 py-2
                 text-[10px] uppercase tracking-wide text-gray-400 font-semibold border-b border-gray-50">
                 <div>Item</div>
                 <div className="text-right">Unit cost</div>
@@ -435,9 +435,9 @@ function ItemRow({ item, data, api, expanded, onToggleExpanded }: {
     const patch = (fields: Record<string, unknown>) => api.update('items', { id: item.id, ...fields });
 
     return (
-        <div className={`border-b border-gray-50 last:border-0 ${item.is_paid ? 'bg-emerald-50/30' : ''}`}>
+        <div className={`border-b border-gray-100 last:border-0 ${item.is_paid ? 'bg-emerald-50/30' : ''}`}>
             <div className="grid grid-cols-1 gap-2 px-4 py-2
-                md:grid-cols-[1.6fr_5.5rem_5rem_6rem_5rem_4.5rem_1.5rem] md:items-center">
+                md:grid-cols-[minmax(0,1.7fr)_6rem_4.5rem_7rem_7rem_5rem_1.75rem] md:items-center">
                 <div className="flex items-center gap-1 min-w-0">
                     <GlyphButton
                         onClick={onToggleExpanded}
@@ -512,7 +512,13 @@ function ItemRow({ item, data, api, expanded, onToggleExpanded }: {
 
                 <RowField label="Paid">
                     <div className="flex items-center justify-end gap-2 md:justify-center">
-                        {stats && (
+                        {/*
+                          Only the states the toggle cannot express. "PAID" next
+                          to a switch that is visibly on said the same thing
+                          twice, and the pair together overflowed the column and
+                          landed on top of the line total.
+                        */}
+                        {stats && (stats.state === 'partial' || stats.state === 'overpaid') && (
                             <StateBadge state={stats.state} className="hidden md:inline-block" />
                         )}
                         <Toggle
@@ -605,7 +611,7 @@ function ItemDetail({ item, data, api }: { item: BudgetItem; data: FinancePayloa
 
             {item.use_subitems && (
                 <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-                    <div className="hidden md:grid grid-cols-[1fr_5.5rem_5rem_5rem_1.5rem] gap-2 px-3 py-2
+                    <div className="hidden md:grid grid-cols-[minmax(0,1fr)_6rem_4.5rem_7rem_1.75rem] gap-2 px-3 py-2
                         text-[10px] uppercase tracking-wide text-gray-400 font-semibold border-b border-gray-50">
                         <div>Part</div>
                         <div className="text-right">Unit cost</div>
@@ -615,8 +621,8 @@ function ItemDetail({ item, data, api }: { item: BudgetItem; data: FinancePayloa
                     </div>
                     {item.subitems.map((sub) => (
                         <div key={sub.id}
-                            className="grid grid-cols-1 gap-2 px-3 py-2 border-b border-gray-50 last:border-0
-                                md:grid-cols-[1fr_5.5rem_5rem_5rem_1.5rem] md:items-center md:py-1.5">
+                            className="grid grid-cols-1 gap-2 px-3 py-2 border-b border-gray-100 last:border-0
+                                md:grid-cols-[minmax(0,1fr)_6rem_4.5rem_7rem_1.75rem] md:items-center md:py-1.5">
                             <InlineText
                                 value={sub.name}
                                 placeholder="Part name"

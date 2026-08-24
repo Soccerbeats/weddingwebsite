@@ -25,7 +25,11 @@ export default function SettingsTab({ data, api }: { data: FinancePayload; api: 
     };
 
     return (
-        <div className="space-y-6">
+        /* Same two-column treatment as the Overview, and for the same reason:
+         * these are forms, and a text input a thousand pixels wide is harder to
+         * use than a short one, not easier. */
+        <div className="space-y-5 xl:space-y-0 xl:columns-2 xl:gap-5
+            [&>*]:xl:mb-5 [&>*]:xl:break-inside-avoid">
             <Card className="p-5">
                 <h3 className="font-semibold text-gray-900 mb-1">Headcount</h3>
                 <p className="text-xs text-gray-400 mb-4">

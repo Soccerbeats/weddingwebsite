@@ -39,7 +39,7 @@ export default function ContributionsTab({ data, api }: { data: FinancePayload; 
 
     return (
         <div className="space-y-6">
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
                 <StatTile label="Pledged" value={formatMoney(summary.pledgedTotal)}
                     hint={`${contributors.length} contributor${contributors.length === 1 ? '' : 's'}`} />
                 <StatTile label="Received" value={formatMoney(summary.receivedTotal)} tone="good" />
@@ -208,7 +208,7 @@ function ContributorCard({ contributor, targetGroups, api }: {
                         {contributor.receipts.map((receipt) => (
                             <div key={receipt.id}
                                 className="grid grid-cols-1 gap-2 rounded-xl bg-gray-50 px-3 py-3
-                                    md:grid-cols-[1fr_7rem_1.4fr_5.5rem_1.5rem] md:items-center
+                                    md:grid-cols-[minmax(0,1.4fr)_7.5rem_minmax(0,1fr)_7rem_1.75rem] md:items-center
                                     md:px-2 md:py-1.5">
                                 <InlineText
                                     value={receipt.note ?? ''}

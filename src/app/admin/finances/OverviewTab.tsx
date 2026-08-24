@@ -31,8 +31,17 @@ export default function OverviewTab({ data }: { data: FinancePayload }) {
     const overpaidSections = summary.categories.filter((c) => c.remaining < 0);
 
     return (
-        <div className="space-y-6">
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        /*
+         * One column up to xl, two above it. A page of full-width cards on a
+         * 1600px screen puts "Vendor bills" and its one line of text across
+         * fourteen hundred pixels; in two columns the same cards read at a
+         * sensible measure and half the scrolling disappears. Multicol rather
+         * than a grid because the cards are wildly different heights and a grid
+         * would leave a ragged hole beside every short one.
+         */
+        <div className="space-y-5 xl:space-y-0 xl:columns-2 xl:gap-5
+            [&>*]:xl:mb-5 [&>*]:xl:break-inside-avoid">
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:[column-span:all]">
                 <StatTile label="Total budget" value={formatMoney(summary.budgetTotal)}
                     hint={`${summary.itemCount} line items`} />
                 <StatTile label="Paid toward budget" value={formatMoney(summary.paidTotal)}

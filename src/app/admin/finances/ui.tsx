@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { formatMoney } from '@/lib/finance';
 
 export { formatMoney };
@@ -38,14 +38,14 @@ export function StatTile({ label, value, hint, tone = 'default' }: {
     // Compact on mobile: a stack of five full-size tiles pushed the actual data
     // most of a screen down on every tab.
     return (
-        <Card className="p-3 md:p-4">
-            <div className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold md:text-[11px]">
+        <Card className="px-3 py-2.5 md:px-4 md:py-3">
+            <div className="truncate text-[10px] font-semibold uppercase tracking-wide text-gray-400">
                 {label}
             </div>
-            <div className={`mt-0.5 text-base font-semibold tabular-nums md:mt-1 md:text-xl ${toneClass}`}>
+            <div className={`mt-0.5 text-base font-semibold tabular-nums md:text-xl ${toneClass}`}>
                 {value}
             </div>
-            {hint && <div className="mt-0.5 text-[11px] text-gray-400 md:mt-1 md:text-xs">{hint}</div>}
+            {hint && <div className="mt-0.5 truncate text-[11px] text-gray-400" title={hint}>{hint}</div>}
         </Card>
     );
 }
@@ -86,15 +86,31 @@ export function InlineText({ value, onCommit, placeholder, className = '', align
 
     const commit = () => { if (draft !== value) onCommit(draft); };
 
+    /*
+     * Escape has to tell the blur handler to stand down.
+     *
+     * It cannot just reset the draft and blur: `setDraft` is asynchronous, so
+     * the `commit()` that the blur fires still sees the abandoned text and saves
+     * it — pressing Escape wrote the value it was meant to discard. A ref is
+     * read synchronously, so the blur that follows knows to skip.
+     */
+    const abandon = useRef(false);
+
     return (
         <input
             value={draft}
             placeholder={placeholder}
+            // A long name truncates in a table cell; the tooltip is how you read
+            // the rest of it without widening the column for every other row.
+            title={draft || undefined}
             onChange={(e) => setDraft(e.target.value)}
-            onBlur={commit}
+            onBlur={() => {
+                if (abandon.current) { abandon.current = false; setDraft(value); return; }
+                commit();
+            }}
             onKeyDown={(e) => {
                 if (e.key === 'Enter') { e.currentTarget.blur(); }
-                if (e.key === 'Escape') { setDraft(value); e.currentTarget.blur(); }
+                if (e.key === 'Escape') { abandon.current = true; e.currentTarget.blur(); }
             }}
             className={`bg-transparent rounded-lg px-2 py-2 md:py-1 text-base md:text-sm w-full
                 hover:bg-gray-50 focus:bg-white focus:outline-none focus:ring-2
@@ -113,8 +129,11 @@ export function InlineNumber({ value, onCommit, placeholder, prefix, className =
     className?: string;
 }) {
     const [draft, setDraft] = useState(String(value ?? 0));
+    const [editing, setEditing] = useState(false);
     const [seen, setSeen] = useState(value);
     if (value !== seen) { setSeen(value); setDraft(String(value ?? 0)); }
+    // See InlineText: Escape must be able to stop the blur from committing.
+    const abandon = useRef(false);
 
     const commit = () => {
         const cleaned = draft.replace(/[$,\s]/g, '');
@@ -124,29 +143,40 @@ export function InlineNumber({ value, onCommit, placeholder, prefix, className =
         setDraft(String(next));
     };
 
+    // Idle cells show the formatted value; the raw number appears on focus.
+    // `prefix` now only says "this is money" — where the symbol goes is the
+    // formatter's business, so it can sit against the digits.
+    const pretty = prefix
+        ? formatMoney(value)
+        : (value === 0 ? (placeholder ? '' : '0') : String(value));
+
     return (
-        <div className="relative">
-            {prefix && (
-                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">
-                    {prefix}
-                </span>
-            )}
-            <input
-                value={draft}
-                placeholder={placeholder}
-                inputMode="decimal"
-                onChange={(e) => setDraft(e.target.value)}
-                onBlur={commit}
-                onKeyDown={(e) => {
-                    if (e.key === 'Enter') { e.currentTarget.blur(); }
-                    if (e.key === 'Escape') { setDraft(String(value)); e.currentTarget.blur(); }
-                }}
-                className={`bg-transparent rounded-lg py-2 md:py-1 text-base md:text-sm w-full
-                    text-right tabular-nums hover:bg-gray-50 focus:bg-white focus:outline-none
-                    focus:ring-2 focus:ring-accent/30 transition
-                    ${prefix ? 'pl-6 pr-2' : 'px-2'} ${className}`}
-            />
-        </div>
+        <input
+            value={editing ? draft : pretty}
+            placeholder={placeholder}
+            inputMode="decimal"
+            onFocus={(e) => {
+                setEditing(true);
+                setDraft(value ? String(value) : '');
+                // Select on entry: the common edit is replacing the number, not
+                // appending a digit to it.
+                requestAnimationFrame(() => e.target.select?.());
+            }}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={() => {
+                if (abandon.current) { abandon.current = false; setDraft(String(value)); setEditing(false); return; }
+                commit();
+                setEditing(false);
+            }}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.currentTarget.blur(); }
+                if (e.key === 'Escape') { abandon.current = true; e.currentTarget.blur(); }
+            }}
+            className={`w-full rounded-lg bg-transparent px-2 py-2 text-right text-base tabular-nums
+                transition hover:bg-gray-50 focus:bg-white focus:outline-none focus:ring-2
+                focus:ring-accent/30 md:py-1 md:text-sm
+                ${value === 0 && !editing ? 'text-gray-400' : ''} ${className}`}
+        />
     );
 }
 

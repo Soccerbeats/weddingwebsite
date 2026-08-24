@@ -253,7 +253,7 @@ export default function PurchasesTab({ data, api }: { data: FinancePayload; api:
             <Card className="overflow-hidden">
                 <div className="hidden gap-2 border-b border-gray-100 px-4 py-2 text-[10px] font-semibold
                     uppercase tracking-wide text-gray-400
-                    md:grid md:grid-cols-[1.25rem_1.6fr_6.5rem_1.1fr_1.2fr_4.5rem_1fr_5.5rem_1.5rem]">
+                    md:grid md:grid-cols-[1.25rem_minmax(0,1.6fr)_6.75rem_6.5rem_minmax(0,1.5fr)_4.5rem_minmax(0,1.1fr)_6.5rem_1.5rem]">
                     <div />
                     <div>What</div>
                     <div>Date</div>
@@ -274,8 +274,8 @@ export default function PurchasesTab({ data, api }: { data: FinancePayload; api:
                     const isOpen = expanded.has(row.key);
                     return (
                         <div key={row.key}
-                            className={`grid grid-cols-1 gap-2 px-4 py-2 border-b border-gray-50 last:border-0
-                                md:grid-cols-[1.25rem_1.6fr_6.5rem_1.1fr_1.2fr_4.5rem_1fr_5.5rem_1.5rem]
+                            className={`grid grid-cols-1 gap-2 px-4 py-2 border-b border-gray-100 last:border-0
+                                md:grid-cols-[1.25rem_minmax(0,1.6fr)_6.75rem_6.5rem_minmax(0,1.5fr)_4.5rem_minmax(0,1.1fr)_6.5rem_1.5rem]
                                 md:items-center
                                 ${row.kind === 'gift' ? 'bg-emerald-50/40' : ''}`}>
                             <div className="flex min-w-0 items-center gap-1 md:contents">
@@ -384,7 +384,7 @@ export default function PurchasesTab({ data, api }: { data: FinancePayload; api:
                             <RowField label="Note">
                                 <InlineText
                                     value={row.notes ?? ''}
-                                    placeholder="Vendor, confirmation no…"
+                                    placeholder="Note…"
                                     onCommit={(notes) => patch({ notes })}
                                     className="md:text-xs"
                                 />

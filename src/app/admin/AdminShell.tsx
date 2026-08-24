@@ -43,6 +43,10 @@ export default function AdminShell({
         // its scrollspy needs a scroll container it can name as the root.
         || pathname?.startsWith('/admin/changelog');
 
+    // Pages whose content is tabular and wants the width: 32px of gutter either
+    // side is breathing room on a form and lost column on a budget.
+    const isWideGutter = pathname?.startsWith('/admin/finances');
+
     const navGroups: { title?: string; items: { href: string; label: string }[] }[] = [
         { items: [{ href: '/admin/dashboard', label: '⌂ Dashboard' }] },
         {
@@ -192,7 +196,7 @@ export default function AdminShell({
                     <main className={`flex-1 min-w-0 flex flex-col ${isFullBleed ? 'overflow-hidden' : 'overflow-auto'}`}>
                         {isFullBleed
                             ? <div className="flex-1 min-h-0 flex flex-col overflow-hidden">{children}</div>
-                            : <div className="p-4 md:p-8">{children}</div>
+                            : <div className={isWideGutter ? 'p-3 md:p-5' : 'p-4 md:p-8'}>{children}</div>
                         }
                     </main>
                 </div>

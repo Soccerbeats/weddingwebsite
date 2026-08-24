@@ -11,6 +11,23 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.34 — [Unreleased] The finance tab uses the screen (`main`, 2026-08-24 05:02)
+
+### Fixed
+- **The line totals were being cut off.** On the Budget tab the total column was 80px holding `$10,120.00`, and the column beside it held a *badge and a toggle* in 72px — so both overflowed and the badge landed on top of the number. Every unpaid line over four figures read as `$10,120.0` with `NOT PAID` printed across it. The columns are now sized for what they contain.
+- **`$` sat at the far left of a cell while its digits sat at the far right**, so a money field read as two unrelated things — `$        6800`. Money cells now show the formatted value when you are not editing them (`$6,800.00`, symbol against the digits, thousands separated) and swap to the raw number on focus, which is what you want to type over. The text is selected on entry, because the common edit is replacing a number rather than appending to one.
+- **Escape saved the edit it was supposed to throw away.** It reset the draft and blurred, but `setDraft` is asynchronous, so the commit that the blur fired still saw the abandoned text and wrote it. Pressing Escape after typing 999 into a $7,250 line left the line at $999. Both inline fields now flag the abandon on a ref, which the blur reads synchronously. Found by testing my own change in a browser; it had been there all along.
+- Placeholders that never fit their column — `Vendor, confirmation no…` rendering as `Vendor, confirmati` — read as truncated *data*. Shortened.
+- **The fifth stat tile on Gift Money** wrapped onto a row of its own with three empty slots beside it: four tiles in a four-column grid, five tiles in the markup.
+
+### Changed
+- **The tab was capped at 1024px and centred, throwing away 320px of a 1600px window** — on the very tabs whose columns were clipping for want of it. It now uses the width, with tighter gutters than the rest of the admin panel: 32px of margin either side is breathing room on a form and a lost column on a budget.
+- **Overview and Settings go to two columns above 1280px** rather than stretching. Full width is right for a table and wrong for prose and for forms: it had put "Vendor bills" and its one line of text across fourteen hundred pixels, and made every settings input a runway. Multicol rather than a grid, because the cards are wildly different heights and a grid leaves a ragged hole beside every short one. Overview now opens with the biggest line items already on screen, and Settings fits on one screen.
+- **The header and the tab bar share a row**, and the tabs are one bordered segmented control instead of six loose pills — two stacked rows of chrome cost a third of the first screen on every tab.
+- **The `PAID` badge is gone from lines the toggle already describes.** A badge saying "PAID" beside a switch that is visibly on says it twice; it is kept for *part-paid* and *overpaid*, which a two-state switch cannot express — and which are the two you need to notice.
+- Row separators went from `gray-50` to `gray-100`. At 1300px wide the eye needs the line to get from a name to its total.
+- A truncated name now carries a tooltip, so a long line item is readable without widening the column for every other row.
+
 ## v0.9.33 — [Unreleased] A merge redeploys the running instances (`main`, 2026-08-24 04:22)
 
 ### Added
