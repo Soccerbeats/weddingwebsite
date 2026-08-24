@@ -11,7 +11,7 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
-## v0.9.35 — [Unreleased] The admin API asks who you are (`main`, 2026-08-24 04:54)
+## v0.9.35 — [Released] The admin API asks who you are (`main`, 2026-08-24 04:54)
 
 ### Fixed
 - **The admin API accepted unauthenticated requests.** `src/middleware.ts` guarded `/admin/*`, but the routes under `/api/admin/*` checked nothing themselves — so anyone who could reach the site could rewrite the guest list, delete photographs, edit any page or read every RSVP with a bare `curl`, without ever seeing the login page. Verified against a running instance before the fix (a cookie-less `PATCH` returned 200 and the row changed) and after it (401, and the row is untouched).
