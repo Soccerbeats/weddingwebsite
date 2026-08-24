@@ -18,6 +18,10 @@
 </p>
 
 <p align="center">
+  <a href="https://weddingwebsitedemo.com">
+    <img src="https://img.shields.io/badge/%F0%9F%8E%AD_Live_demo-weddingwebsitedemo.com-D4AF37?style=for-the-badge" alt="Live demo at weddingwebsitedemo.com" height="28">
+  </a>
+  &nbsp;
   <a href="https://github.com/Soccerbeats/weddingwebsite/wiki">
     <img src="https://img.shields.io/badge/%F0%9F%93%96_Full_documentation-in_the_wiki-0969da?style=for-the-badge" alt="Full documentation in the wiki" height="28">
   </a>
@@ -28,11 +32,12 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Soccerbeats/weddingwebsite/wiki/The-Demo-Instance"><strong>Can't wait to self-host? Bring up the demo instance →</strong></a><br>
-  One compose file, one environment variable: a completely fictional wedding —
-  ninety guests, a budget, a seating chart and a sixteen-day honeymoon — with no
-  login, the whole admin panel open, and every change discarded on refresh.
-  Hand out the URL; nothing there is real and nothing anyone does to it sticks.
+  <a href="https://weddingwebsitedemo.com"><strong>Try it →&nbsp; weddingwebsitedemo.com</strong></a><br>
+  A completely fictional wedding — ninety guests, a budget, a seating chart and a
+  sixteen-day honeymoon. No login: the whole admin panel is open, so change
+  anything you like. Nothing there is real and nothing you do to it is saved.<br>
+  <sub>Run your own with one compose file and one environment variable —
+  <a href="https://github.com/Soccerbeats/weddingwebsite/wiki/The-Demo-Instance">how the demo works</a>.</sub>
 </p>
 
 ## What it does
@@ -71,12 +76,13 @@ instead of pulling the image.)
 
 - **[Installation](https://github.com/Soccerbeats/weddingwebsite/wiki/Installation)** — Portainer, plain Compose, or local
 - **[Deployment](https://github.com/Soccerbeats/weddingwebsite/wiki/Deployment)** — what a merge publishes, and how to redeploy
-- **[The demo instance](https://github.com/Soccerbeats/weddingwebsite/wiki/The-Demo-Instance)** — a read-only copy with fictional data, for showing people
+- **[The demo instance](https://github.com/Soccerbeats/weddingwebsite/wiki/The-Demo-Instance)** — how the read-only copy at [weddingwebsitedemo.com](https://weddingwebsitedemo.com) is put together, and how to host your own
 
 ## Screenshots
 
-> Every screenshot below comes from the [demo instance](https://github.com/Soccerbeats/weddingwebsite/wiki/The-Demo-Instance),
-> so the couple, guests, budget and honeymoon in them are fictional.
+> Every screenshot below comes from the [live demo](https://weddingwebsitedemo.com),
+> so the couple, guests, budget and honeymoon in them are fictional — and every
+> screen here is one you can go and click through yourself.
 
 ### The public site
 
