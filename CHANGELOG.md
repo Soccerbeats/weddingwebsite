@@ -11,6 +11,12 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.29 — [Released] The demo stack stops publishing its database (`main`, 2026-08-24 01:54)
+
+### Fixed
+- **The demo's Postgres was published on the host as `5433:5432`, with the password `demo`.** On an instance whose entire promise is that a visitor cannot change anything, that was a door straight past it: `DEMO_MODE` guards the application, not the database, so anyone who could reach the host could have connected with psql and written whatever they liked. The port is gone — the seed service reaches the database over the compose network, which is all anything needs. It was published in the first place so a hand-run seed could reach it from another machine; the seeder runs inside the stack now, so that reason has expired.
+- The file's own header still described the old "seed only an empty database" behaviour, one screen above the `SEED_ALWAYS=true` that overrides it. It now says what it does: reseeds on every start, and why that is safe here.
+
 ## v0.9.28 — [Released] Demo mode: look at everything, change nothing (`main`, 2026-08-24 01:43)
 
 ### Added

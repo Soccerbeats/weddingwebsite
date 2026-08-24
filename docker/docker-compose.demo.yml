@@ -5,12 +5,14 @@
 # demo can reach the real guest list — which is the whole reason it exists as a
 # stack rather than as a "demo mode" inside the running site.
 #
-# It seeds itself. The one-shot `seed` service waits for the database and, only
-# when the guest list is empty, fills the demo — the fictional wedding, the
-# photos, the budget, the seating, the honeymoon — writing the config and
-# photos straight into the demo volumes. A fresh stack is complete after
-# `up -d`; a redeploy finds a non-empty guest list and skips, so a demo
-# someone has been clicking around in is never wiped.
+# It seeds itself, on every start. The one-shot `seed` service waits for the
+# database, wipes it and fills the demo — the fictional wedding, the photos, the
+# budget, the seating, the honeymoon — writing the config and photos straight
+# into the demo volumes. Reseeding every time is safe *because* this instance is
+# immutable (DEMO_MODE below): no visitor's work is ever kept, so there is
+# nothing to preserve, and a fresh seed is how the demo gains the data for
+# features that shipped since the last deploy. Drop `SEED_ALWAYS` and the seeder
+# reverts to filling only an empty database.
 #
 #   docker compose -f docker/docker-compose.demo.yml up -d
 #
@@ -20,9 +22,11 @@
 # throwaway container: `npm run seed:demo -- --yes-wipe` (destructive by
 # design, refuses to run without the flag).
 #
-# The database port is published on 5433 in case a hand run of the seed needs
-# to reach it from another machine. Close it afterwards if you would rather
-# not have Postgres listening.
+# Postgres is deliberately NOT published to the host. The demo is meant to be
+# reachable by anyone, its password is `demo`, and a published database port
+# would let a visitor write to it directly with psql — straight past DEMO_MODE,
+# which only guards the application. The seed runs inside the stack and reaches
+# the database over the compose network, so nothing needs the port.
 
 # `name` pins the project, so the stack keeps the name the old `-p weddingdemo`
 # flag gave it.
@@ -79,8 +83,8 @@ services:
     image: postgres:15-alpine
     container_name: wedding-db-demo
     restart: always
-    ports:
-      - '5433:5432'
+    # No `ports:` — see the note at the top. Reachable only from inside the
+    # stack, which is all the web and seed services need.
     environment:
       - POSTGRES_USER=demo
       - POSTGRES_PASSWORD=demo
