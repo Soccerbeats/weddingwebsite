@@ -1,0 +1,117 @@
+# The demo instance's seeder image.
+#
+# The "Wedding Planner" CI builds and publishes the production image on every
+# push to main. The demo runs that same image, so it needs nothing built for
+# it — but it does need the *seed*, and the production image deliberately does
+# not carry the seed scripts. So on every push to main this:
+#
+#   1. Waits for this build's image (tagged sha-<sha> by that CI) to land in
+#      GitHub Container Registry.
+#   2. Builds and publishes the small one-shot seeder image,
+#      ghcr.io/soccerbeats/weddingwebsite-seeder:latest.
+#
+# That is all. It does not touch the server, and deliberately so.
+#
+# The demo stack's one-shot `seed` service (docker/docker-compose.demo.yml)
+# pulls that image and fills a *fresh* demo on first boot; it skips a demo that
+# already has data. Bringing the demo up to date is the same act as production:
+# pull the image and redeploy the stack.
+#
+# An earlier draft of this workflow SSHed to the server to do that redeploy
+# itself, which would have meant anyone able to push to this public repository
+# could run commands on the box that also hosts production. The demo runs the
+# same image as production and is redeployed the same way, so the job bought
+# one click and cost a shell. It was dropped.
+#
+# The follow-up worth doing on the server side is making the demo a Portainer
+# stack like production (it is currently a compose file placed by hand at
+# /data/compose/demo). Then "redeploy" is the same button, and Portainer's own
+# webhook can make it hands-off without anything holding an SSH key.
+
+name: "Demo Instance"
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Deploys are serialized, never cancelled mid-run — a half-finished deploy
+# on the server is worse than a queued one.
+concurrency:
+  group: demo-instance-deploy
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/soccerbeats/weddingwebsite
+  SEEDER_IMAGE: ghcr.io/soccerbeats/weddingwebsite-seeder
+
+jobs:
+  wait-for-image:
+    name: "Demo Instance · wait for the image"
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      # The "Wedding Planner" CI publishes sha-<sha>, v<version> and
+      # :latest in one push; the sha tag is the signal that this exact
+      # commit is in the registry (and that :latest now points at it).
+      # A login, so this does not depend on the package being public: it works
+      # either way, and a package flipped back to private would otherwise fail
+      # here with a confusing "manifest unknown" for twenty minutes.
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Wait for sha-<sha> in GHCR
+        run: |
+          SHORT_SHA="${GITHUB_SHA:0:7}"
+          echo "Waiting for $IMAGE:sha-$SHORT_SHA ..."
+          for i in $(seq 1 60); do
+            if docker manifest inspect "$IMAGE:sha-$SHORT_SHA" >/dev/null 2>&1; then
+              echo "Image is in the registry."
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "::error::$IMAGE:sha-$SHORT_SHA never appeared in the registry. The 'Wedding Planner' CI must be merged and green first."
+          exit 1
+
+  build-seeder:
+    name: "Demo Instance · build & publish the seeder image"
+    runs-on: ubuntu-latest
+    needs: wait-for-image
+    timeout-minutes: 20
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push the seeder image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          # Same Dockerfile as the production image; the seeder is its
+          # last stage. It is a separate image with its own name — the
+          # production image and its tags are untouched.
+          file: docker/Dockerfile
+          target: seeder
+          push: true
+          tags: ${{ env.SEEDER_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          # Matches the platform the production image is published as.
+          platforms: linux/amd64

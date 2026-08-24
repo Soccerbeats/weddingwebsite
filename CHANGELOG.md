@@ -11,6 +11,20 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.27 — [Released] The demo instance seeds itself (`main`, 2026-08-24 00:57)
+
+### Added
+- **The demo instance seeds itself.** A new "Demo Instance" workflow runs on every push to `main`: it waits for this build's image to land in the registry, then builds and publishes the one-shot **seeder** image, `ghcr.io/soccerbeats/weddingwebsite-seeder:latest`. That is all it does — it does not touch the server. Bringing the demo up to date stays what it is for production: pull the image, redeploy the stack.
+- **The Dockerfile gains a seeder stage, published as a second image.** The production image ships the standalone server and nothing else, so it cannot run the seed. The seeder stage carries the scripts and a small entrypoint, and is published under its own name — the production image and its tags are untouched.
+
+### Changed
+- **The demo stack seeds itself on first boot.** A one-shot seed service joins the demo compose stack; it waits for the database, seeds only when the guest list is empty, writes the config and photos straight into the demo volumes, and exits. A fresh stack is complete after `up -d` — the manual SSH-tunnel-and-docker-cp flow in the wiki is gone — and a redeploy finds a non-empty guest list and skips, so a demo someone has been clicking around in is never wiped.
+
+### Fixed
+- **The workflow's third job — an SSH deploy to the server — was dropped before this merged.** It would have checked out the commit on the box and brought the demo stack up, gated on four `DEMO_DEPLOY_*` secrets. Two reasons it is gone rather than fixed. The demo runs the *same image* as production, so the job bought one redeploy click; and it cost a shell on the host that also runs production and a client's WordPress site, to anyone able to push to this public repository. And the gate that was meant to keep it dormant could not have worked either way: it read `if: secrets.DEMO_DEPLOY_SSH_KEY != ''` on the job, but the `secrets` context is not available in `jobs.<job_id>.if` — only `github`, `needs`, `vars` and `inputs` are — so the job would have been skipped forever, including after the secrets were set. The awkwardness it was working around is real, though: the demo is a compose file placed by hand at `/data/compose/demo` rather than a Portainer stack. That is worth fixing on the server, where Portainer's own webhook can make the demo hands-off with no key involved.
+- **The wait-for-image job inspected a registry it never logged into.** It worked only because the package happens to be public right now; flipping it back to private would have failed with twenty minutes of "manifest unknown". It logs in first.
+
+
 ## v0.9.26 — [Released] The README is a landing page, not a manual (`main`, 2026-08-23 23:33)
 
 ### Changed
