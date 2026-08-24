@@ -1,25 +1,32 @@
-# The demo instance, deployed.
+# The demo instance's seeder image.
 #
 # The "Wedding Planner" CI builds and publishes the production image on every
-# push to main; this workflow finishes the loop for the demo:
+# push to main. The demo runs that same image, so it needs nothing built for
+# it — but it does need the *seed*, and the production image deliberately does
+# not carry the seed scripts. So on every push to main this:
 #
 #   1. Waits for this build's image (tagged sha-<sha> by that CI) to land in
 #      GitHub Container Registry.
 #   2. Builds and publishes the small one-shot seeder image,
-#      ghcr.io/soccerbeats/weddingwebsite-seeder:latest — the production
-#      image deliberately does not carry the seed scripts.
-#   3. SSHes to the server (secrets DEMO_DEPLOY_HOST, DEMO_DEPLOY_USER,
-#      DEMO_DEPLOY_SSH_KEY, DEMO_SERVER_DIR), checks out this exact commit,
-#      pulls both images and brings the demo stack up. The stack's one-shot
-#      seed service fills a fresh demo on first boot (see
-#      docker/docker-compose.demo.yml) and never wipes existing demo data.
-#   4. Verifies the demo answers on port 3001.
+#      ghcr.io/soccerbeats/weddingwebsite-seeder:latest.
 #
-# With the deploy secrets unset, the deploy step is skipped with a notice —
-# the run still proves both images build and publish.
+# That is all. It does not touch the server, and deliberately so.
 #
-# A Portainer webhook can replace the SSH step (curl the webhook instead of
-# ssh); the image it pulls and the compose file it applies are the same.
+# The demo stack's one-shot `seed` service (docker/docker-compose.demo.yml)
+# pulls that image and fills a *fresh* demo on first boot; it skips a demo that
+# already has data. Bringing the demo up to date is the same act as production:
+# pull the image and redeploy the stack.
+#
+# An earlier draft of this workflow SSHed to the server to do that redeploy
+# itself, which would have meant anyone able to push to this public repository
+# could run commands on the box that also hosts production. The demo runs the
+# same image as production and is redeployed the same way, so the job bought
+# one click and cost a shell. It was dropped.
+#
+# The follow-up worth doing on the server side is making the demo a Portainer
+# stack like production (it is currently a compose file placed by hand at
+# /data/compose/demo). Then "redeploy" is the same button, and Portainer's own
+# webhook can make it hands-off without anything holding an SSH key.
 
 name: "Demo Instance"
 
@@ -108,79 +115,3 @@ jobs:
           cache-to: type=gha,mode=max
           # Matches the platform the production image is published as.
           platforms: linux/amd64
-
-  deploy:
-    name: "Demo Instance · pull & redeploy on the server"
-    runs-on: ubuntu-latest
-    needs: build-seeder
-    timeout-minutes: 20
-    # Skip until the deploy secrets are set — this is what makes the workflow
-    # safe to merge before the server is wired up.
-    #
-    # The gate is a job-level `env` read by each step's `if`, NOT a job-level
-    # `if`. The `secrets` context is not available in `jobs.<job_id>.if` (only
-    # github, needs, vars and inputs are), so `if: secrets.X != ''` there
-    # evaluates against nothing and the job is skipped *forever* — including
-    # after the secrets are set, which is a silent way for this to look broken.
-    # A step `if` can read `env`, and job-level `env` can read secrets.
-    env:
-      DEPLOY_READY: ${{ secrets.DEMO_DEPLOY_SSH_KEY != '' && 'true' || 'false' }}
-    steps:
-      - name: Say why nothing is being deployed
-        if: env.DEPLOY_READY != 'true'
-        run: |
-          echo "::notice::DEMO_DEPLOY_SSH_KEY is not set — both images were built and published, and the server was left alone."
-
-      - name: Install the deploy key
-        if: env.DEPLOY_READY == 'true'
-        run: |
-          mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.DEMO_DEPLOY_SSH_KEY }}" > ~/.ssh/demo_deploy
-          chmod 600 ~/.ssh/demo_deploy
-
-      # The remote script checks out this exact commit (so the compose file
-      # on the server is the one from this build), pulls both images,
-      # brings the stack up, and waits for port 3001 to answer. The seed
-      # service does the rest: it fills a fresh demo on first boot and
-      # leaves an existing one alone.
-      - name: SSH to the server and redeploy the demo
-        if: env.DEPLOY_READY == 'true'
-        env:
-          HOST: ${{ secrets.DEMO_DEPLOY_HOST }}
-          USER: ${{ secrets.DEMO_DEPLOY_USER }}
-          SERVER_DIR: ${{ secrets.DEMO_SERVER_DIR }}
-        run: |
-          ssh -i ~/.ssh/demo_deploy \
-              -o StrictHostKeyChecking=accept-new \
-              -o IdentitiesOnly=yes \
-              -o BatchMode=yes \
-              "${USER}@${HOST}" \
-              "DEMO_SERVER_DIR='${SERVER_DIR:-/opt/weddingwebsite}' GITHUB_SHA='${GITHUB_SHA}' REPO_URL='https://github.com/Soccerbeats/weddingwebsite.git' COMPOSE_FILE='docker/docker-compose.demo.yml' DEMO_PORT='3001' bash -s" <<'REMOTE'
-          set -euo pipefail
-          if [ -d "$DEMO_SERVER_DIR/.git" ]; then
-            : # an existing checkout — fetch into it below
-          elif [ -e "$DEMO_SERVER_DIR" ]; then
-            echo "::error::$DEMO_SERVER_DIR exists but is not a git checkout — refusing to touch it."
-            exit 1
-          else
-            echo "No repository at $DEMO_SERVER_DIR — cloning."
-            git clone "$REPO_URL" "$DEMO_SERVER_DIR"
-          fi
-          cd "$DEMO_SERVER_DIR"
-          git fetch --depth 1 origin "$GITHUB_SHA"
-          git checkout --detach --quiet "$GITHUB_SHA"
-          echo "Checked out ${GITHUB_SHA:0:7} — pulling images and bringing the stack up."
-          docker compose -f "$COMPOSE_FILE" pull
-          docker compose -f "$COMPOSE_FILE" up -d
-          for i in $(seq 1 60); do
-            if curl -fsS -o /dev/null "http://localhost:${DEMO_PORT}/"; then
-              echo "The demo answers on port ${DEMO_PORT}."
-              docker compose -f "$COMPOSE_FILE" ps
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "::error::The demo did not come up on port ${DEMO_PORT}."
-          docker compose -f "$COMPOSE_FILE" logs --tail 50
-          exit 1
-          REMOTE

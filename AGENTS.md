@@ -227,14 +227,16 @@ order, before the commit:
   waits for Postgres, then applies `database/init.sql`. Volumes hold
   `public/photos`, `public/config` and the postgres data — runtime uploads
   live in volumes, never in the image.
-- **Demo deployment** — the "Demo Instance" workflow (push to main) waits
-  for this build's sha tag in the registry, publishes the seeder image (the
-  Dockerfile's `seeder` stage, its own image name), and — when the deploy
-  secrets (`DEMO_DEPLOY_HOST`, `DEMO_DEPLOY_USER`, `DEMO_DEPLOY_SSH_KEY`,
-  `DEMO_SERVER_DIR`) are set — SSHes to the server, checks out the exact
-  commit, and brings up `docker/docker-compose.demo.yml`. The stack's
-  one-shot `seed` service fills a fresh demo on first boot and never wipes
-  an existing one; a hand run is still `npm run seed:demo -- --yes-wipe`.
+- **The demo instance** — runs the same image as production, so nothing is
+  built for it. The "Demo Instance" workflow (push to main) only publishes
+  the **seeder** image: the Dockerfile's `seeder` stage, under its own name.
+  The demo stack's one-shot `seed` service pulls it and fills a *fresh* demo
+  on first boot, skipping one that already has data (a hand run is still
+  `npm run seed:demo -- --yes-wipe`). Updating the demo is the same act as
+  production — pull the image, redeploy the stack. Nothing in CI touches the
+  server: a draft of that workflow SSHed in to save the redeploy click, which
+  would have let anyone able to push to this public repository run commands on
+  the box that also hosts production.
 - **Seating chart** (`/admin/seating`) — a React Flow (`@xyflow/react`)
   canvas: draw the room, drop tables, drag guests from `guest_list` into
   seats. A "party" is a guest with `plus_one_name` set — dragging one
