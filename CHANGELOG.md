@@ -11,7 +11,16 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
-## v0.9.40 — [Unreleased] Filter the shortlist by area (`main`, 2026-08-25 05:28)
+## v0.9.41 — [Unreleased] Nine releases get written up (`main`, 2026-08-25 06:01)
+
+### Changed
+- **The wiki catches up on v0.9.32 → v0.9.40.** Nine pages changed, and the honeymoon and finance pages had drifted furthest — the Stays section had never heard of areas, the area filter or the Removed bucket, and the finance page still described a tab that has since been rebuilt.
+- **Deployment now explains how an image actually reaches a server**, which is the thing that changed most and was documented least: both hosts run a timer that compares the digest of `:latest` against the image their container is running and redeploy only on a difference. The deploy loop's third step is now "nothing".
+- **The Portainer webhook finding is written down with its correction.** I first concluded webhooks were unavailable for this stack; a full scan of Portainer's database found **two other stacks that do have persisted ones**, both the same type and neither Git-backed — so the feature works there and it is worth retrying at stack-creation time. The wiki, `ops/README.md` and the vault all now say that, along with the one-line check that tells you whether a token really saved before you wire it into CI.
+- README: the honeymoon summary mentions the shortlist you can rank, tag by area and rule out without deleting; the Deployment link says what it now covers.
+- Architecture gained the `archived` column beside the three others that encode a decision, Troubleshooting gained the dead-webhook and the 500-on-blank rows, Development mentions `ops/`, Home carries the licence, and Features stops describing the stays tab as it was four versions ago.
+
+## v0.9.40 — [Released] Filter the shortlist by area (`main`, 2026-08-25 05:28)
 
 ### Added
 - **An area filter on the Stays tab**, beside the sort. Pick Ubud and the shortlist is the Ubud stays; the options are only the areas that actually hold one, each with its count — offering every region you have ever created when six of them have a hotel in makes the control useless, and an option that can only return nothing is a trap.

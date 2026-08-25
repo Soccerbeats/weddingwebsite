@@ -37,6 +37,22 @@ from its database afterwards — stack 146 reads `"Webhook":""` and
 `"AutoUpdate":null` — so the webhook 404s with "Unable to find the stack by
 webhook ID".
 
+**This is not a Portainer limitation, and it is worth retrying.** Two *other*
+stacks on the same instance do have persisted webhooks, and both are the same kind
+of stack (`Type=2`, no Git config) — so the feature works here. The likeliest
+explanation is that the toggle persists when set while **creating** a stack and is
+dropped when set on an existing one: both working examples are long-standing
+stacks, both failed attempts were on an existing one. Before trusting a URL the UI
+gives you, confirm it saved:
+
+```bash
+ssh root@10.0.0.100 'pct exec 210 -- grep -a -o "THE-UUID" \
+  /var/lib/docker/volumes/portainer_data/_data/portainer.db'
+```
+
+Silence means it did not persist. Do not set the secret to a dead URL — the job
+fails the pipeline on every merge.
+
 Until that is sorted, the host polls, exactly like the demo box. Two differences
 from `demo-autoupdate`, both deliberate:
 

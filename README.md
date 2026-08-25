@@ -56,7 +56,8 @@ a honeymoon fund, and an RSVP form that recognises them by name.
 - **Photos** — upload, drag to reorder, heart the ones that go public
 - **Content** — every page's text, colours, and a work-in-progress toggle per page
 - **Honeymoon** — a private planner: a map of everywhere you are considering, a
-  day-by-day itinerary, accommodation and excursion shortlists, and the guide
+  day-by-day itinerary, travel legs that can land the next day, an accommodation
+  shortlist you can rank, tag by area and rule out without deleting, and the guide
   notes that have no coordinates
 
 Full list: **[Features](https://github.com/Soccerbeats/weddingwebsite/wiki/Features)**.
@@ -75,7 +76,7 @@ Then open `http://localhost:3000`, and `/admin` with the password you set.
 instead of pulling the image.)
 
 - **[Installation](https://github.com/Soccerbeats/weddingwebsite/wiki/Installation)** — Portainer, plain Compose, or local
-- **[Deployment](https://github.com/Soccerbeats/weddingwebsite/wiki/Deployment)** — what a merge publishes, and how to redeploy
+- **[Deployment](https://github.com/Soccerbeats/weddingwebsite/wiki/Deployment)** — what a merge publishes, and how it reaches a running server on its own
 - **[The demo instance](https://github.com/Soccerbeats/weddingwebsite/wiki/The-Demo-Instance)** — how the read-only copy at [weddingwebsitedemo.com](https://weddingwebsitedemo.com) is put together, and how to host your own
 
 ## Screenshots
