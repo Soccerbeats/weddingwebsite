@@ -11,6 +11,11 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.43 — [Released] The photo check learns about fresh checkouts (`main`, 2026-08-25 15:49)
+
+### Fixed
+- `npm run check:photos` failed on CI's very first run of it: `public/photos` is a Docker volume and is not in git, so on a clean checkout the fixture's destination directory did not exist and the copy threw `ENOENT`. The script now creates the directory first. v0.9.42 never published an image because of this — v0.9.43 carries all of its fixes.
+
 ## v0.9.42 — [Released] The audit's bugs, fixed (`main`, 2026-08-25 15:44)
 
 Every fixable finding from `docs/bug-audit-2026-08-25.md`, in one release. The three critical items are server-side and guest-facing; the rest range from wrong headline numbers to lint. The audit document carries a status line per finding.

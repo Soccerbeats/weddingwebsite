@@ -19,6 +19,9 @@ const fixturePath = path.join(photosDir, FIXTURE);
 const subFixturePath = path.join(photosDir, ...SUBDIR_FIXTURE);
 // Uploaded photos live in a Docker volume, so copy in a bundled jpeg instead.
 const source = path.join(process.cwd(), 'public/images/nav-defaults/photos.jpg');
+// public/photos is a volume, not a tracked directory — on a fresh checkout (CI)
+// it does not exist yet.
+fs.mkdirSync(photosDir, { recursive: true });
 fs.copyFileSync(source, fixturePath);
 fs.mkdirSync(path.dirname(subFixturePath), { recursive: true });
 fs.copyFileSync(source, subFixturePath);
