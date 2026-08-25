@@ -6,6 +6,7 @@ import {
     SOURCE_MANUAL, countriesInUse, sourceLabel, sourcesOf,
     type Place, type PlaceLink, type PlaceStatus,
 } from '@/lib/honeymoon';
+import BookingPanel from './BookingPanel';
 import type { HoneymoonApi } from './useHoneymoon';
 import {
     Button, CategorySelect, CustomisableSelect, ManageListModal, Modal, SelectField, StatusSelect,
@@ -591,6 +592,23 @@ export default function PlaceEditor({ api, place, open, onClose }: {
                                 />
                             </div>
                         </div>
+
+                        {/* ---- Booking ----
+                            Only for a place that exists: a booking hangs off a
+                            place_id, and there isn't one until the first save. */}
+                        {editing && (status === 'booked' || place?.is_excursion) && (
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-500 mb-1">
+                                    Booking
+                                </label>
+                                <BookingPanel
+                                    api={api}
+                                    kind={place?.is_excursion ? 'excursion' : 'stay'}
+                                    placeId={place.id}
+                                    compact
+                                />
+                            </div>
+                        )}
 
                         {/* ---- Links ---- */}
                         <div>

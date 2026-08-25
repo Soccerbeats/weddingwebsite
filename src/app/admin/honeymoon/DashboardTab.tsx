@@ -6,6 +6,10 @@ import { useMemo } from 'react';
 import {
     currencySymbol, dateForDay, dayColor, daysBetween, effectiveCountry, formatDayDate, hasCoords, priceValue,
 } from '@/lib/honeymoon';
+import { todayIso } from '@/lib/honeymoon';
+import {
+    buildBudget, completenessOf, deadlinesOf, formatMoney, perPerson, phaseHint, unbookedDays,
+} from '@/lib/honeymoonBudget';
 import type { HoneymoonApi } from './useHoneymoon';
 import { Card, CategoryChip } from './ui';
 
@@ -33,6 +37,22 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
     const days = useMemo(() => data?.days ?? [], [data]);
     const trip = data?.trip;
     const symbol = currencySymbol(trip?.home_currency);
+
+    /*
+     * The four questions the old dashboard could not answer.
+     *
+     * All arithmetic over the payload — no fetch, no effect — so they cost a
+     * render and are always in step with what the tabs show.
+     */
+    const today = todayIso();
+    const budget = useMemo(() => (data ? buildBudget(data) : null), [data]);
+    const deadlines = useMemo(() => (data
+        ? deadlinesOf(data.bookings, today, (id) => (id != null
+            ? data.places.find((place) => place.id === id)?.name ?? '' : ''))
+        : []), [data, today]);
+    const unbooked = useMemo(() => (data ? unbookedDays(data, today) : []), [data, today]);
+    const completeness = useMemo(() => (data ? completenessOf(data) : null), [data]);
+    const nudge = useMemo(() => (trip ? phaseHint(trip, today) : null), [trip, today]);
 
     // Removed stays are not in the running, so they are not in the count either —
     // a headline number that includes the ones you rejected is a wrong number.
@@ -361,41 +381,125 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
 
                 {/* ---- Money ---- */}
                 <Card className="p-4 flex flex-col min-h-0 overflow-auto">
-                    <h2 className="text-sm font-semibold text-gray-900 mb-2 shrink-0">Rough cost</h2>
-                    <dl className="space-y-2">
-                        <div>
-                            <dt className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold">
-                                Stays you like
-                            </dt>
-                            <dd className="text-sm text-gray-800">
-                                {stayCost
-                                    ? (stayCost.min === stayCost.max
-                                        ? `${symbol}${stayCost.min.toLocaleString('en-US')} per night`
-                                        : `${symbol}${stayCost.min.toLocaleString('en-US')}–${symbol}${stayCost.max.toLocaleString('en-US')} per night`)
-                                    : <span className="text-gray-400">no prices entered yet</span>}
-                            </dd>
-                        </div>
-                        <div>
-                            <dt className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold">
-                                Excursions you like
-                            </dt>
-                            <dd className="text-sm text-gray-800">
-                                {excursionCost.priced
-                                    ? `${symbol}${excursionCost.total.toLocaleString('en-US')}`
-                                    : <span className="text-gray-400">no prices entered yet</span>}
-                                {excursionCost.wanted > excursionCost.priced && (
-                                    <span className="text-[11px] text-gray-400">
-                                        {' '}({excursionCost.wanted - excursionCost.priced} without a price)
-                                    </span>
+                    <div className="flex items-baseline justify-between gap-2 mb-2 shrink-0">
+                        <h2 className="text-sm font-semibold text-gray-900">Cost of the trip</h2>
+                        {budget && budget.total > 0 && (
+                            <span className="text-[11px] text-gray-400">
+                                {formatMoney(perPerson(budget.total), trip?.home_currency || 'USD')}
+                                {' '}each
+                            </span>
+                        )}
+                    </div>
+
+                    {!budget || budget.total === 0 ? (
+                        <>
+                            <p className="text-sm text-gray-500">
+                                Nothing priced with a number yet.
+                            </p>
+                            <p className="text-[11px] text-gray-400 mt-2">
+                                A place&apos;s <strong>Cost</strong> field (per night, per person or
+                                total) is what this adds up — the free-text price note stays for the
+                                detail. Travel legs and bookings count too.
+                            </p>
+                        </>
+                    ) : (
+                        <>
+                            <p className="text-2xl font-semibold text-gray-900 tabular-nums">
+                                {formatMoney(budget.total, trip?.home_currency || 'USD')}
+                            </p>
+                            {budget.budget != null && (
+                                <div className="mt-1.5">
+                                    <div className="h-1.5 w-full rounded-full bg-gray-100
+                                        overflow-hidden">
+                                        <div
+                                            className={`h-full rounded-full ${
+                                                budget.total > budget.budget
+                                                    ? 'bg-rose-500' : 'bg-emerald-500'}`}
+                                            style={{
+                                                width: `${Math.min(100, Math.round(
+                                                    (budget.total / Math.max(budget.budget, 1)) * 100,
+                                                ))}%`,
+                                            }}
+                                        />
+                                    </div>
+                                    <p className={`text-[11px] mt-1 ${budget.remaining != null
+                                        && budget.remaining < 0 ? 'text-rose-700' : 'text-gray-500'}`}>
+                                        {budget.remaining != null && budget.remaining >= 0
+                                            ? `${formatMoney(budget.remaining, trip?.home_currency || 'USD')} left of ${formatMoney(budget.budget, trip?.home_currency || 'USD')}`
+                                            : `${formatMoney(Math.abs(budget.remaining ?? 0), trip?.home_currency || 'USD')} over the ${formatMoney(budget.budget, trip?.home_currency || 'USD')} budget`}
+                                    </p>
+                                </div>
+                            )}
+
+                            <dl className="mt-3 space-y-1 text-sm">
+                                {([
+                                    ['Stays', budget.stays],
+                                    ['Travel', budget.travel],
+                                    ['Excursions', budget.excursions],
+                                    ['Everything else', budget.other],
+                                ] as [string, number][]).filter(([, amount]) => amount > 0)
+                                    .map(([label, amount]) => (
+                                        <div key={label} className="flex justify-between gap-2">
+                                            <dt className="text-gray-500">{label}</dt>
+                                            <dd className="text-gray-800 tabular-nums">
+                                                {formatMoney(amount, trip?.home_currency || 'USD')}
+                                            </dd>
+                                        </div>
+                                    ))}
+                                {budget.paid > 0 && (
+                                    <div className="flex justify-between gap-2 border-t
+                                        border-gray-100 pt-1">
+                                        <dt className="text-gray-500">Paid so far</dt>
+                                        <dd className="text-emerald-700 tabular-nums">
+                                            {formatMoney(budget.paid, trip?.home_currency || 'USD')}
+                                        </dd>
+                                    </div>
                                 )}
-                            </dd>
-                        </div>
-                    </dl>
-                    {/* Said plainly: an entry with no number is not counted as zero. */}
-                    <p className="text-[11px] text-gray-400 mt-3">
-                        Only counts entries with a number in them, and ignores how many
-                        nights or people — it&apos;s a sense of scale, not a budget.
-                    </p>
+                                {budget.outstanding > 0 && budget.paid > 0 && (
+                                    <div className="flex justify-between gap-2">
+                                        <dt className="text-gray-500">Still to pay</dt>
+                                        <dd className="text-gray-800 tabular-nums">
+                                            {formatMoney(budget.outstanding, trip?.home_currency || 'USD')}
+                                        </dd>
+                                    </div>
+                                )}
+                            </dl>
+
+                            {(budget.unpriced > 0 || budget.unconverted > 0) && (
+                                <p className="text-[11px] text-gray-400 mt-2">
+                                    {budget.unpriced > 0 && (
+                                        <>{budget.unpriced} place{budget.unpriced === 1 ? '' : 's'} priced
+                                        only in words, so not counted. </>
+                                    )}
+                                    {budget.unconverted > 0 && (
+                                        <>{budget.unconverted} amount{budget.unconverted === 1 ? '' : 's'} in
+                                        a currency with no rate, counted at face value.</>
+                                    )}
+                                </p>
+                            )}
+
+                            {/* The old sense-of-scale reading, kept for exactly the
+                                places the total cannot include: a note that says
+                                "about 1.2m a night" is real information, it just
+                                is not arithmetic. */}
+                            {budget.unpriced > 0 && (stayCost || excursionCost.priced > 0) && (
+                                <p className="text-[11px] text-gray-500 mt-1">
+                                    From the notes:{' '}
+                                    {stayCost && (
+                                        <>stays {stayCost.min === stayCost.max
+                                            ? `${symbol}${stayCost.min.toLocaleString('en-US')}`
+                                            : `${symbol}${stayCost.min.toLocaleString('en-US')}–${symbol}${stayCost.max.toLocaleString('en-US')}`}
+                                        {' '}a night</>
+                                    )}
+                                    {stayCost && excursionCost.priced > 0 && ', '}
+                                    {excursionCost.priced > 0 && (
+                                        <>excursions about {symbol}
+                                        {excursionCost.total.toLocaleString('en-US')}</>
+                                    )}.
+                                </p>
+                            )}
+                        </>
+                    )}
                 </Card>
 
                 {/* ---- Shortlist ---- */}
@@ -446,6 +550,124 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
                     )}
                 </Card>
             </div>
+
+            {/* ---- Deadlines, unbooked nights, completeness ----
+                Three answers that were unanswerable before bookings existed. Each
+                one only appears when it has something to say: an empty card on a
+                dashboard is a card you learn to ignore. */}
+            {(deadlines.length > 0 || unbooked.length > 0 || nudge
+                || (completeness && completeness.score < 100 && completeness.days > 0)) && (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 shrink-0">
+                    {deadlines.length > 0 && (
+                        <Card className="p-3">
+                            <h2 className="text-sm font-semibold text-gray-900 mb-2">
+                                Before these dates
+                            </h2>
+                            <ul className="space-y-1.5">
+                                {deadlines.slice(0, 4).map((deadline) => (
+                                    <li
+                                        key={`${deadline.kind}-${deadline.booking.id}`}
+                                        className={`flex items-baseline justify-between gap-2
+                                            rounded-xl px-2.5 py-1.5 text-sm ${deadline.daysAway <= 7
+                                            ? 'bg-rose-50 text-rose-800'
+                                            : 'bg-gray-50 text-gray-700'}`}
+                                    >
+                                        <span className="min-w-0 truncate">{deadline.label}</span>
+                                        <span className="shrink-0 tabular-nums text-[11px]">
+                                            {deadline.daysAway === 0
+                                                ? 'today'
+                                                : `${deadline.daysAway}d`}
+                                        </span>
+                                    </li>
+                                ))}
+                            </ul>
+                            <p className="text-[11px] text-gray-400 mt-2">
+                                From the cancellation and deposit dates on your bookings.
+                            </p>
+                        </Card>
+                    )}
+
+                    {unbooked.length > 0 && (
+                        <Card className="p-3">
+                            <h2 className="text-sm font-semibold text-gray-900 mb-2">
+                                Nights not booked
+                            </h2>
+                            <ul className="space-y-1.5">
+                                {unbooked.slice(0, 5).map((entry) => (
+                                    <li key={entry.dayNumber}>
+                                        <Link
+                                            href={`${BASE}/itinerary`}
+                                            className="flex items-baseline justify-between gap-2
+                                                rounded-xl bg-amber-50 px-2.5 py-1.5 text-sm
+                                                text-amber-900 hover:bg-amber-100"
+                                        >
+                                            <span className="min-w-0 truncate">
+                                                Day {entry.dayNumber}
+                                                {entry.base
+                                                    ? ` — ${entry.base.name} is only ${entry.base.status}`
+                                                    : ' — nowhere to sleep'}
+                                            </span>
+                                            <span className="shrink-0 tabular-nums text-[11px]">
+                                                {entry.daysUntil != null ? `${entry.daysUntil}d` : ''}
+                                            </span>
+                                        </Link>
+                                    </li>
+                                ))}
+                            </ul>
+                            <p className="text-[11px] text-gray-400 mt-2">
+                                Only shown inside two months of departure — the most expensive
+                                mistake to notice late.
+                            </p>
+                        </Card>
+                    )}
+
+                    {completeness && completeness.days > 0 && (
+                        <Card className="p-3">
+                            <div className="flex items-baseline justify-between gap-2 mb-2">
+                                <h2 className="text-sm font-semibold text-gray-900">
+                                    Itinerary completeness
+                                </h2>
+                                <span className="text-sm font-semibold tabular-nums text-gray-900">
+                                    {completeness.score}%
+                                </span>
+                            </div>
+                            <div className="h-1.5 w-full rounded-full bg-gray-100 overflow-hidden">
+                                <div
+                                    className="h-full rounded-full bg-accent"
+                                    style={{ width: `${completeness.score}%` }}
+                                />
+                            </div>
+                            <ul className="mt-2 space-y-0.5 text-[11px] text-gray-600">
+                                <li>
+                                    {completeness.withBase}/{completeness.days} days have somewhere
+                                    to sleep
+                                </li>
+                                <li>
+                                    {completeness.booked}/{Math.max(completeness.withBase, 1)} of
+                                    those are booked
+                                </li>
+                                <li>
+                                    {completeness.withStops}/{completeness.days} have at least two
+                                    things planned
+                                </li>
+                                {completeness.missingTravel.length > 0 && (
+                                    <li className="text-amber-700">
+                                        Day{completeness.missingTravel.length === 1 ? '' : 's'}{' '}
+                                        {completeness.missingTravel.join(', ')}: the base changes with
+                                        no travel leg
+                                    </li>
+                                )}
+                            </ul>
+                            {nudge && (
+                                <p className="mt-2 rounded-xl bg-sky-50 px-2.5 py-1.5 text-[11px]
+                                    text-sky-900">
+                                    {nudge}
+                                </p>
+                            )}
+                        </Card>
+                    )}
+                </div>
+            )}
 
             {/* ---- Progress ---- */}
             <Card className="p-3 shrink-0">

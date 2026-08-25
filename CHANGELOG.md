@@ -11,6 +11,20 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.47 — [Released] The planner's second half, part four: money (`main`, 2026-08-25 18:50)
+
+Wave 4 of seven. The dashboard's cost card used to apologise for itself — "a sense of scale, not a budget" — because the only price on a place was free text. Now the total is arithmetic, and the three questions that depended on it can be answered.
+
+### Added
+- **A booking vault.** One panel, wherever a booking can hang — a stay, an excursion, a flight, a dinner table: confirmation number, who it was booked with, check-in and check-out, cost and how much of it is paid, the deposit date, the date free cancellation ends, contact, booking page and notes. It creates itself lazily, so a shortlist of forty hotels does not carry forty empty bookings. `status: booked` recorded *that* something was booked and nothing else.
+- **A real trip total.** A stay priced per night is multiplied by the nights it is actually the base for; a per-person price is doubled (stated, not hidden); travel legs and bookings count; a booking's cost *replaces* the place's estimate rather than doubling it. Shown against a **budget** you set, broken down by stays / travel / excursions / everything else, with what has been paid and what is still to find, and the per-person figure people actually compare. Places priced only in words are counted as unpriced and said so — with the old sense-of-scale reading kept underneath for exactly those.
+- **Currencies that add up.** A stored rate per pair, fetched keyless (open.er-api.com) or typed by hand — and **a rate you typed is never overwritten by a fetch**, because if you agreed 15,800 with the hotel that is the number the budget should use. An amount in a currency with no rate is counted at face value and flagged rather than silently dropped or silently guessed. Plus a quick converter on the Settings tab.
+- **Three dashboard cards that were previously impossible.** *Before these dates* — cancellation and deposit deadlines, soonest first, red inside a week. *Nights not booked* — days whose base is only shortlisted, or missing entirely, shown only within two months of departure because a trip six months out has nothing booked and saying so twenty times is noise. *Itinerary completeness* — one number over four things (somewhere to sleep, two things to do, a travel leg wherever the base changes, and the base actually booked), which also names the days where the base changes with no travel leg.
+- **Cost and "booked by" on travel legs**, feeding the same total.
+
+### Deliberately not done
+- Linking the honeymoon total into the wedding **Finance** budget as a category. It is one line of arithmetic and a genuine design question — what happens to the wedding total when the honeymoon changes, and which of the two owns the number — and getting it wrong means double-counting in the budget that pays for the wedding. Worth deciding together rather than assuming.
+
 ## v0.9.46 — [Released] The planner's second half, part three: the trip knows things (`main`, 2026-08-25 18:05)
 
 Wave 3 of seven. The portal could say how far apart two places are; it could not say how long the drive takes, whether the place is open when you get there, or whether it will be raining. Now it can — from four services, three of which need no key, all cached in Postgres and none of which is ever allowed to matter: every value starts null and every view renders exactly as it did before while it is missing.

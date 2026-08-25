@@ -8,6 +8,7 @@ import {
 import { INFO_SECTIONS } from '@/lib/honeymoonToday';
 import type { HoneymoonApi } from './useHoneymoon';
 import DateRangePicker from './DateRangePicker';
+import MoneySettings from './MoneySettings';
 import ShareLinks from './ShareLinks';
 import { Button, Card, SelectField, TextArea, TextField } from './ui';
 
@@ -244,6 +245,18 @@ export default function SettingsTab({ api }: { api: HoneymoonApi }) {
                         }}
                     />
                 </div>
+            </Card>
+
+            {/* ---- Money ---- */}
+            <Card className="p-4 space-y-3">
+                <div>
+                    <h3 className="text-sm font-semibold text-gray-900">Money</h3>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                        A budget to measure against, and a rate per currency pair so prices in
+                        rupiah and dollars can be added together.
+                    </p>
+                </div>
+                <MoneySettings api={api} />
             </Card>
 
             {/* ---- Take it with you ---- */}

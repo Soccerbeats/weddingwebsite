@@ -9,6 +9,7 @@ import {
 import { formatDuration, legRealMinutes } from '@/lib/honeymoonTimeline';
 import { nominalZone } from '@/lib/honeymoonSun';
 import { dateIso } from '@/lib/honeymoonToday';
+import BookingPanel from './BookingPanel';
 import type { HoneymoonApi } from './useHoneymoon';
 import { Button, OverflowMenu, SelectField, TextField } from './ui';
 
@@ -541,6 +542,11 @@ function LegDetails({ leg, day, api }: { leg: TravelLeg; day: Day; api: Honeymoo
                             }}
                         />
                     </div>
+
+                    {/* The ticket itself: reference, what it cost, when it stops
+                        being refundable. The fields above are the leg; this is
+                        the booking. */}
+                    <BookingPanel api={api} kind="travel" travelId={leg.id} compact />
                 </div>
             )}
         </div>

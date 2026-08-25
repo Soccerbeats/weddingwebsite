@@ -35,6 +35,10 @@ import {
     legRealMinutes, zoneOffsetMinutes,
 } from '../src/lib/honeymoonTimeline';
 import {
+    buildBudget, completenessOf, convert, deadlinesOf, describeRate, formatMoney,
+    nightsAtBase, unbookedDays,
+} from '../src/lib/honeymoonBudget';
+import {
     coordsFromMapsUrl, coordsFromPair, nameFromMapsUrl,
 } from '../src/app/api/admin/honeymoon/geocode/route';
 import { SEED_PLACES, SEED_REGIONS, SEED_NOTES } from '../src/lib/honeymoonSeed';
@@ -1224,6 +1228,165 @@ console.log('\nTime zones on a leg');
 
     check('a date walks forward in UTC', addDaysIso('2026-09-30', 1) === '2026-10-01');
     check('and across a year', addDaysIso('2026-12-31', 1) === '2027-01-01');
+}
+
+console.log('\nBudget');
+{
+    const rates = [
+        { id: 1, pair: 'USDIDR', rate: 15800, manual: false, fetched_at: null },
+        { id: 2, pair: 'USDSGD', rate: 1.35, manual: true, fetched_at: null },
+    ];
+    check('the same currency converts to itself', convert(100, 'USD', 'USD', rates) === 100);
+    check('a stored pair converts', convert(2, 'USD', 'IDR', rates) === 31_600);
+    check('and the reverse of a stored pair', convert(31_600, 'IDR', 'USD', rates) === 2);
+    check('an unknown pair does not guess', convert(10, 'JPY', 'IDR', rates) === null);
+    check('a missing currency is treated as the target',
+        convert(10, null, 'USD', rates) === 10);
+    check('a rate describes itself', describeRate(rates[0]) === '1 USD = 15,800 IDR');
+    check('and a small one keeps its decimals', describeRate(rates[1]) === '1 USD = 1.35 SGD');
+
+    const hotel = { ...makePlace(1, 'Amankila', -8.4, 115.5), cost: 420, cost_currency: 'USD',
+        cost_per: 'night' as const };
+    const dive = { ...makePlace(2, 'Dive day', -8.4, 115.5), cost: 180, cost_currency: 'USD',
+        cost_per: 'person' as const, is_excursion: true };
+    const temple = { ...makePlace(3, 'Temple', -8.4, 115.5), cost: 50_000,
+        cost_currency: 'IDR', cost_per: 'total' as const };
+    const vague = { ...makePlace(4, 'Somewhere', null, null), price_note: 'about a million rupiah' };
+
+    const days: Day[] = [1, 2, 3].map((n) => ({
+        id: n, day_number: n, title: null, notes: null, base_place_id: 1, stops: [], travel: [],
+    }));
+    days[2].travel = [{ ...LEG_DEFAULTS, id: 1, day_id: 3, from_text: 'DPS', to_text: 'SIN',
+        cost: 260, cost_currency: 'USD' }];
+
+    check('a base is counted for the nights it is the base',
+        nightsAtBase(days, 1) === 3 && nightsAtBase(days, 2) === 0);
+
+    const payload = {
+        trip: { id: 1, title: 'T', start_date: '2026-09-12', end_date: '2026-09-14',
+            home_currency: 'USD', notes: null, focus_country: '', budget: 5000,
+            partner_names: '', info: {}, time_format: '24h' as const,
+            distance_unit: 'km' as const, phase: 'planning' as const },
+        places: [hotel, dive, temple, vague],
+        days,
+        bookings: [],
+        rates,
+    };
+
+    const budget = buildBudget(payload);
+    check('a per-night stay is nights times rate', budget.stays === 1260, String(budget.stays));
+    check('a per-person excursion is doubled', budget.excursions === 360, String(budget.excursions));
+    check('a travel leg is counted', budget.travel === 260, String(budget.travel));
+    check('a rupiah price is converted to the home currency',
+        Math.abs(budget.other - 50_000 / 15_800) < 0.01, String(budget.other));
+    check('the total is the sum of the lines',
+        Math.abs(budget.total - (1260 + 360 + 260 + 50_000 / 15_800)) < 0.01,
+        String(budget.total));
+    check('a place with only a price note is counted as unpriced', budget.unpriced === 1);
+    check('the biggest line is first', budget.lines[0].label === 'Amankila');
+    check('the detail says how it was worked out', budget.lines[0].detail === '3 nights × 420');
+    check('a budget gives a remainder',
+        budget.remaining != null && Math.abs(budget.remaining - (5000 - budget.total)) < 0.01);
+
+    const unconvertible = buildBudget({
+        ...payload,
+        places: [{ ...makePlace(9, 'Yen thing', null, null), cost: 9000, cost_currency: 'JPY',
+            cost_per: 'total' as const }],
+        days: [],
+    });
+    check('an unconvertible price is counted at face value and flagged',
+        unconvertible.total === 9000 && unconvertible.unconverted === 1
+        && unconvertible.lines[0].assumed);
+
+    const booked = buildBudget({
+        ...payload,
+        bookings: [{
+            id: 1, place_id: 1, travel_id: null, stop_id: null, kind: 'stay' as const,
+            provider: null, confirmation: 'AMK-1', url: null, contact: null,
+            check_in: null, check_out: null, check_in_time: null, check_out_time: null,
+            cost: 1180, cost_currency: 'USD', cost_paid: 400, deposit_due_on: null,
+            cancel_by: null, party_size: null, dress_code: null, paid: false,
+            documents: [], notes: null, created_at: null,
+        }],
+    });
+    check("a booking's cost replaces the place's estimate, rather than doubling it",
+        booked.lines.filter((line) => line.label === 'Amankila').length === 1
+        && booked.lines.find((line) => line.label === 'Amankila')?.amount === 1180);
+    check('what has been paid is counted', booked.paid === 400);
+    check('and what is left to pay', Math.abs(booked.outstanding - (booked.total - 400)) < 0.01);
+
+    check('money reads as money', formatMoney(1260, 'USD') === '$1,260');
+    check('and an unknown code still prints', formatMoney(1260, 'XXZ').includes('1,260'));
+}
+
+console.log('\nWhat still needs doing');
+{
+    const stay = { ...makePlace(1, 'Amankila', -8.4, 115.5), status: 'booked' as const };
+    const maybe = { ...makePlace(2, 'Maybe villa', -8.4, 115.5), status: 'shortlisted' as const };
+    const bookings = [{
+        id: 1, place_id: 1, travel_id: null, stop_id: null, kind: 'stay' as const,
+        provider: 'Direct', confirmation: 'A1', url: null, contact: null,
+        check_in: null, check_out: null, check_in_time: null, check_out_time: null,
+        cost: 1200, cost_currency: 'USD', cost_paid: null,
+        deposit_due_on: '2026-09-01', cancel_by: '2026-09-05',
+        party_size: null, dress_code: null, paid: false, documents: [], notes: null,
+        created_at: null,
+    }];
+
+    const deadlines = deadlinesOf(bookings, '2026-08-25', () => 'Amankila');
+    check('both dates on a booking become deadlines', deadlines.length === 2);
+    check('the soonest is first',
+        deadlines[0].kind === 'deposit' && deadlines[0].daysAway === 7, String(deadlines[0].daysAway));
+    check('and the cancellation date follows', deadlines[1].daysAway === 11);
+    check('a date already passed is not a task',
+        deadlinesOf(bookings, '2026-09-10', () => 'X').length === 0);
+    check('a paid deposit stops being a deadline',
+        deadlinesOf([{ ...bookings[0], paid: true }], '2026-08-25', () => 'X')
+            .every((entry) => entry.kind !== 'deposit'));
+
+    const days: Day[] = [1, 2, 3].map((n) => ({
+        id: n, day_number: n, title: null, notes: null,
+        base_place_id: n === 1 ? 1 : n === 2 ? 2 : null,
+        stops: [], travel: [],
+    }));
+    const payload = {
+        trip: { id: 1, title: 'T', start_date: '2026-09-12', end_date: null,
+            home_currency: 'USD', notes: null, focus_country: '', budget: null,
+            partner_names: '', info: {}, time_format: '24h' as const,
+            distance_unit: 'km' as const, phase: 'planning' as const },
+        places: [stay, maybe],
+        days,
+        bookings,
+    };
+
+    const unbooked = unbookedDays(payload, '2026-08-25');
+    check('a booked base is not flagged', !unbooked.some((entry) => entry.dayNumber === 1));
+    check('a shortlisted base is', unbooked.some((entry) => entry.dayNumber === 2
+        && entry.reason === 'not-booked'));
+    check('and a day with no base at all is', unbooked.some((entry) => entry.dayNumber === 3
+        && entry.reason === 'no-base'));
+    check('a trip far in the future is not nagged about',
+        unbookedDays({ ...payload, trip: { ...payload.trip, start_date: '2027-09-12' } },
+            '2026-08-25').length === 0);
+
+    const withStops: Day[] = [
+        { ...days[0], stops: [makeStop(1, null), makeStop(2, null)] },
+        { ...days[1], base_place_id: 1, stops: [makeStop(3, null), makeStop(4, null)] },
+    ];
+    const complete = completenessOf({ places: [stay], days: withStops, bookings });
+    check('a fully planned pair of days scores 100', complete.score === 100, String(complete.score));
+    check('and counts what it looked at',
+        complete.days === 2 && complete.withBase === 2 && complete.withStops === 2);
+
+    const moved: Day[] = [
+        { ...withStops[0], base_place_id: 1 },
+        { ...withStops[1], base_place_id: 2 },
+    ];
+    const gap = completenessOf({ places: [stay, maybe], days: moved, bookings });
+    check('a change of base with no travel leg is flagged',
+        gap.missingTravel.join(',') === '2', gap.missingTravel.join(','));
+    check('and it costs the score', gap.score < 100);
+    check('an empty trip scores zero', completenessOf({ places: [], days: [], bookings: [] }).score === 0);
 }
 
 console.log(`\n${failures === 0 ? 'PASS' : 'FAIL'} — ${checks - failures}/${checks} checks passed.\n`);
