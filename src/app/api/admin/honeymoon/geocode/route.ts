@@ -14,11 +14,28 @@ import { safeFetch } from '@/lib/safeFetch';
  * set, and going through the server also avoids CORS entirely.
  */
 
-const NOMINATIM = 'https://nominatim.openstreetmap.org/search';
+/**
+ * The primary geocoder.
+ *
+ * Overridable so a self-hosted Nominatim can be used instead — and so the
+ * fallback path can actually be exercised, which is otherwise only reachable by
+ * waiting for the public instance to refuse you.
+ */
+const NOMINATIM = process.env.NOMINATIM_URL || 'https://nominatim.openstreetmap.org/search';
 
 // Nominatim's usage policy requires a real identifying UA with contact info.
+/**
+ * How this instance identifies itself to Nominatim.
+ *
+ * Their usage policy requires a User-Agent that identifies the application *and
+ * offers a way to reach whoever runs it* — a generic one is a documented reason
+ * for a `403 Access denied`, which is exactly what a self-hosted instance
+ * started getting. The default carries the project URL rather than an email,
+ * because publishing a personal address in a public repository is not this
+ * file's call; set `GEOCODER_USER_AGENT` to add one.
+ */
 const USER_AGENT = process.env.GEOCODER_USER_AGENT
-    ?? 'WeddingWebsite-HoneymoonPortal/1.0 (self-hosted; admin planning tool)';
+    ?? 'WeddingWebsite-HoneymoonPortal/1.0 (+https://github.com/Soccerbeats/weddingwebsite)';
 
 export interface GeocodeHit {
     label: string;
@@ -48,6 +65,14 @@ export interface GeocodeHit {
     phone?: string;
     /** The listing's own website, offered as a link on the place. */
     website?: string;
+    /**
+     * Which service answered.
+     *
+     * Shown in the picker when it is not the primary one, because the fallback
+     * is fuzzier: asked for "YBR airport" it will happily return *YBL* airport,
+     * 1,800 km away, with no indication that it guessed.
+     */
+    source?: 'nominatim' | 'photon';
 }
 
 /**
@@ -188,6 +213,149 @@ async function expandShortLink(url: string): Promise<string | null> {
     }
 }
 
+/** Photon: the same OSM data, keyless, and it answers when Nominatim will not. */
+const PHOTON = 'https://photon.komoot.io/api/';
+
+interface NominatimRow {
+    display_name?: string; lat?: string; lon?: string;
+    category?: string; type?: string;
+    extratags?: Record<string, string> | null;
+}
+
+/** Nominatim rows as hits, or a reason it could not be asked. */
+async function searchNominatim(term: string): Promise<
+    { hits: GeocodeHit[]; refused?: string }
+> {
+    const url = new URL(NOMINATIM);
+    url.searchParams.set('q', term);
+    url.searchParams.set('format', 'jsonv2');
+    url.searchParams.set('limit', '6');
+    url.searchParams.set('addressdetails', '1');
+    // Opening hours, phone and website ride along on a request that was already
+    // being made.
+    url.searchParams.set('extratags', '1');
+
+    try {
+        const res = await fetch(url, {
+            headers: { 'User-Agent': USER_AGENT, 'Accept-Language': 'en' },
+            signal: AbortSignal.timeout(10000),
+        });
+        if (!res.ok) {
+            // 403 is their policy talking, not a fault: an unidentifiable
+            // User-Agent or an IP they have decided is using too much.
+            return { hits: [], refused: res.status === 403 || res.status === 429
+                ? `OpenStreetMap's geocoder turned us away (${res.status})`
+                : `OpenStreetMap's geocoder said ${res.status}` };
+        }
+        const body = await res.json();
+        const rows: NominatimRow[] = Array.isArray(body) ? body : [];
+        return {
+            hits: rows.map((row) => ({
+                label: row.display_name ?? '',
+                lat: Number(row.lat),
+                lng: Number(row.lon),
+                precision: 'geocoded' as const,
+                kind: [row.category, row.type].filter(Boolean).join('/'),
+                opening_hours: row.extratags?.opening_hours || undefined,
+                phone: row.extratags?.phone || row.extratags?.['contact:phone'] || undefined,
+                website: row.extratags?.website || row.extratags?.['contact:website'] || undefined,
+                source: 'nominatim' as const,
+            })).filter((hit) => valid(hit.lat, hit.lng)),
+        };
+    } catch {
+        return { hits: [], refused: "OpenStreetMap's geocoder did not answer in time" };
+    }
+}
+
+interface PhotonFeature {
+    geometry?: { coordinates?: [number, number] };
+    properties?: {
+        name?: string; street?: string; housenumber?: string; postcode?: string;
+        city?: string; district?: string; state?: string; country?: string;
+        osm_key?: string; osm_value?: string; website?: string;
+    };
+}
+
+/**
+ * Photon features as hits.
+ *
+ * Its properties are already split into name/city/country, so the label is
+ * assembled rather than read — which happens to produce the same
+ * "name, area, country" shape Nominatim's `display_name` has, so nothing
+ * downstream has to know which service answered.
+ */
+async function searchPhoton(term: string): Promise<{ hits: GeocodeHit[]; refused?: string }> {
+    const url = new URL(PHOTON);
+    url.searchParams.set('q', term);
+    url.searchParams.set('limit', '6');
+    url.searchParams.set('lang', 'en');
+    try {
+        const res = await fetch(url, {
+            headers: { 'User-Agent': USER_AGENT },
+            signal: AbortSignal.timeout(10000),
+        });
+        if (!res.ok) return { hits: [], refused: `The fallback geocoder said ${res.status}` };
+        const body = await res.json();
+        const features: PhotonFeature[] = Array.isArray(body?.features) ? body.features : [];
+        return {
+            hits: features.map((feature) => {
+                const p = feature.properties ?? {};
+                const coordinates = feature.geometry?.coordinates ?? [NaN, NaN];
+                const label = [
+                    [p.housenumber, p.street].filter(Boolean).join(' ') || p.name,
+                    p.name && p.street ? p.name : null,
+                    p.district, p.city, p.state, p.postcode, p.country,
+                ].filter(Boolean).join(', ');
+                return {
+                    // GeoJSON is lng,lat — the opposite order to everything else
+                    // in this codebase, which is worth writing down.
+                    lat: Number(coordinates[1]),
+                    lng: Number(coordinates[0]),
+                    label: label || (p.name ?? ''),
+                    precision: 'geocoded' as const,
+                    kind: [p.osm_key, p.osm_value].filter(Boolean).join('/'),
+                    website: p.website || undefined,
+                    source: 'photon' as const,
+                };
+            }).filter((hit) => valid(hit.lat, hit.lng)),
+        };
+    } catch {
+        return { hits: [], refused: 'The fallback geocoder did not answer in time' };
+    }
+}
+
+/**
+ * Look a name up, widening and then falling back.
+ *
+ * Four attempts at most, in the order that gets the best answer soonest:
+ * Nominatim with the mode's word appended, Nominatim with what was typed,
+ * then the same two against Photon. The first that returns anything wins.
+ */
+async function geocodeName(query: string, raw: string): Promise<{
+    results: GeocodeHit[]; error?: string;
+}> {
+    const terms = query === raw ? [raw] : [query, raw];
+    let refused: string | undefined;
+
+    for (const search of [searchNominatim, searchPhoton]) {
+        for (const term of terms) {
+            const { hits, refused: why } = await search(term);
+            if (hits.length) return { results: hits };
+            // Remember the first refusal, but keep trying: "Sanur ferry
+            // terminal" finds no such thing while "Sanur" finds the place.
+            if (why && !refused) refused = why;
+        }
+    }
+
+    return {
+        results: [],
+        error: refused
+            ? `${refused}. Nothing was found for "${raw}" — paste a Google Maps link or `
+                + 'right-click the pin there and copy the "lat, lng" numbers instead.'
+            : undefined,
+    };
+}
+
 export async function GET(request: Request) {
     const params = new URL(request.url).searchParams;
     const raw = params.get('q')?.trim() ?? '';
@@ -237,50 +405,21 @@ export async function GET(request: Request) {
         // alone — someone typing "Gilimanuk harbour" has already said it.
         const query = hint?.suffix && CODE_ONLY.test(raw) ? `${raw} ${hint.suffix}` : raw;
 
-        const search = async (term: string) => {
-            const url = new URL(NOMINATIM);
-            url.searchParams.set('q', term);
-            url.searchParams.set('format', 'jsonv2');
-            url.searchParams.set('limit', '6');
-            url.searchParams.set('addressdetails', '1');
-            // Opening hours, phone and website ride along on a request that was
-            // already being made.
-            url.searchParams.set('extratags', '1');
-            return fetch(url, {
-                headers: { 'User-Agent': USER_AGENT, 'Accept-Language': 'en' },
-                signal: AbortSignal.timeout(10000),
-            });
-        };
-
-        let res = await search(query);
-        if (!res.ok) {
-            return NextResponse.json({ results: [], error: 'Geocoder unavailable' }, { status: 502 });
+        /*
+         * Nominatim first, Photon if Nominatim will not answer.
+         *
+         * Nominatim's results are better for this job — `extratags` brings back
+         * opening hours, a phone and a website, and its ranking understands
+         * "airport" — but it is a free service with a strict policy, and a
+         * self-hosted instance can find itself getting `403 Access denied` with
+         * no warning and no way to appeal. Photon is the same OSM data from
+         * komoot, keyless, and it answers when Nominatim will not; it is fuzzier,
+         * which the results are labelled with rather than hidden.
+         */
+        const { results, error } = await geocodeName(query, raw);
+        if (!results.length) {
+            return NextResponse.json({ results: [], error }, error ? { status: 502 } : undefined);
         }
-        let body = await res.json();
-        // Adding a word can turn a hit into nothing — "Sanur ferry terminal"
-        // finds no such thing while "Sanur" finds the place. If the widened
-        // query came back empty, the original still gets its turn.
-        if (query !== raw && Array.isArray(body) && body.length === 0) {
-            res = await search(raw);
-            if (res.ok) body = await res.json();
-        }
-
-        const results: GeocodeHit[] = (Array.isArray(body) ? body : [])
-            .map((row: {
-                display_name?: string; lat?: string; lon?: string;
-                category?: string; type?: string;
-                extratags?: Record<string, string> | null;
-            }) => ({
-                label: row.display_name ?? '',
-                lat: Number(row.lat),
-                lng: Number(row.lon),
-                precision: 'geocoded' as const,
-                kind: [row.category, row.type].filter(Boolean).join('/'),
-                opening_hours: row.extratags?.opening_hours || undefined,
-                phone: row.extratags?.phone || row.extratags?.['contact:phone'] || undefined,
-                website: row.extratags?.website || row.extratags?.['contact:website'] || undefined,
-            }))
-            .filter((hit: GeocodeHit) => valid(hit.lat, hit.lng));
 
         /*
          * Float the hits that match the mode.
@@ -291,13 +430,33 @@ export async function GET(request: Request) {
          * discarding anything: the rest of the list keeps its original order
          * underneath, so a search for a hotel by the airport still finds it.
          */
-        if (hint?.rank.length) {
-            const score = (hit: GeocodeHit) => {
+        /*
+         * Rank by what the leg *is*, then by whether the name says what was
+         * typed — in that order, and in one comparator.
+         *
+         * Kind has to win: both geocoders match fuzzily on short strings, and
+         * "DPS" pulls back a Delhi Public School as well as Ngurah Rai. Sorting
+         * on the typed code first floats the school, because its name really
+         * does contain "DPS". Sorting on kind first and using the code only to
+         * break ties keeps the airport at the top and still prefers *the* YBR
+         * over a similar-looking YBL when both are aerodromes.
+         *
+         * Nothing is discarded either way: a search for a hotel by the airport
+         * still finds it, further down.
+         */
+        const bareCode = CODE_ONLY.test(raw);
+        if (hint?.rank.length || bareCode) {
+            const code = raw.toLowerCase();
+            const kindScore = (hit: GeocodeHit) => {
+                if (!hint?.rank.length) return 0;
                 const kind = hit.kind ?? '';
                 const at = hint.rank.findIndex((want) => kind.startsWith(want));
                 return at === -1 ? hint.rank.length : at;
             };
-            results.sort((a, b) => score(a) - score(b));
+            const codeScore = (hit: GeocodeHit) => (
+                bareCode && hit.label.toLowerCase().includes(code) ? 0 : 1
+            );
+            results.sort((a, b) => kindScore(a) - kindScore(b) || codeScore(a) - codeScore(b));
         }
 
         return NextResponse.json({ results });

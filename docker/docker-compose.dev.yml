@@ -37,6 +37,7 @@ services:
       - SMTP_PASS=${SMTP_PASS:-}
       - NOTIFICATION_EMAIL=${NOTIFICATION_EMAIL:-}
       - GEOCODER_USER_AGENT=${GEOCODER_USER_AGENT:-}
+      - NOMINATIM_URL=${NOMINATIM_URL:-}
     volumes:
       - ../:/app
       - /app/node_modules

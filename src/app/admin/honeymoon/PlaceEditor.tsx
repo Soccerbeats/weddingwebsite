@@ -50,6 +50,8 @@ interface GeocodeHit {
     opening_hours?: string;
     phone?: string;
     website?: string;
+    /** Which geocoder answered; the fallback matches fuzzily. */
+    source?: 'nominatim' | 'photon';
 }
 
 /**
@@ -442,6 +444,11 @@ export default function PlaceEditor({ api, place, open, onClose }: {
                                             <div className="text-sm text-gray-800 line-clamp-2">{hit.label}</div>
                                             <div className="text-[11px] text-gray-400 tabular-nums">
                                                 {hit.lat.toFixed(5)}, {hit.lng.toFixed(5)}
+                                                {hit.source === 'photon' && (
+                                                    <span className="text-amber-700">
+                                                        {' '}· fuzzy match, check it
+                                                    </span>
+                                                )}
                                             </div>
                                         </button>
                                     </li>

@@ -213,7 +213,11 @@ export default function TravelLegCard({ leg, day, api }: {
 }
 
 /** One end of a travel leg: what you type, and where that turned out to be. */
-interface Hit { label: string; lat: number; lng: number; kind?: string }
+interface Hit {
+    label: string; lat: number; lng: number; kind?: string;
+    /** Which geocoder answered — see the route for why it matters. */
+    source?: 'nominatim' | 'photon';
+}
 
 /**
  * The From or To of a travel leg, with a lookup.
@@ -268,9 +272,20 @@ function LegEnd({ leg, end, api }: {
                 setError(body.error ?? `Nothing found for "${term}".`);
                 return;
             }
-            // One answer is an answer; several need a choice, because the second
-            // hit for an airport code is regularly a hotel next to the runway.
-            if (found.length === 1) applyHit(found[0]);
+            /*
+             * One answer is an answer — unless it is a guess.
+             *
+             * A single hit is normally applied straight away, because the second
+             * hit for an airport code is regularly a hotel next to the runway.
+             * But the fallback geocoder answers fuzzily: asked for "YBR airport"
+             * it returns *YBL* airport, 1,800 km away, and applying that silently
+             * would put a confident wrong pin on the map. So a single hit is
+             * auto-applied only when its name actually contains what was typed.
+             */
+            const confident = found.length === 1
+                && (found[0].source !== 'photon'
+                    || found[0].label.toLowerCase().includes(term.toLowerCase()));
+            if (confident) applyHit(found[0]);
             else setHits(found.slice(0, 5));
         } catch {
             setError('Lookup failed.');
@@ -353,6 +368,12 @@ function LegEnd({ leg, end, api }: {
                                 <div className="text-[10px] text-gray-400 tabular-nums">
                                     {hit.kind ? `${hit.kind} · ` : ''}
                                     {hit.lat.toFixed(4)}, {hit.lng.toFixed(4)}
+                                    {/* Said, not hidden: the fallback matches
+                                        fuzzily and can return a different
+                                        airport with a similar code. */}
+                                    {hit.source === 'photon' && (
+                                        <span className="text-amber-700"> · fuzzy match, check it</span>
+                                    )}
                                 </div>
                             </button>
                         </li>

@@ -11,6 +11,20 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.53 — [Released] The map search works when OpenStreetMap says no (`main`, 2026-08-25 23:30)
+
+Typing an airport code into a travel leg and pressing Find failed on the deployed instance with *"lookup failed"*. It was not the code: **Nominatim was answering that host with `403 Access denied`** — their usage policy blocks requests whose User-Agent does not identify the application *and offer a way to reach whoever runs it*, and the portal's default said neither. It worked from a laptop and not from the server, which is exactly how this hides.
+
+### Fixed
+- **A second geocoder, for when the first will not answer.** Nominatim stays primary — its results are better for this job and `extratags` brings back opening hours, a phone and a website — with **Photon** (komoot, same OSM data, keyless) behind it. Four attempts at most: the mode-widened term and the raw term against each service, first answer wins.
+- **The default User-Agent now identifies the project and links to it**, which is what the policy asks for. `GEOCODER_USER_AGENT` overrides it — worth setting to one with your own email on a self-hosted instance, since that is the difference between being rate-limited and being blocked.
+- **A refusal now says what happened.** *"OpenStreetMap's geocoder turned us away (403). Nothing was found for "YBR" — paste a Google Maps link or right-click the pin there and copy the lat, lng numbers instead."* It used to say "Lookup failed", which reads as a bug in the portal.
+- **A fuzzy hit is never applied silently.** The fallback matches loosely: asked for `YBR airport` it offers *YBL* in British Columbia and a *Don José* in Argentina, both genuinely aerodromes and both wrong. A single result is auto-filled only when its name actually contains what you typed; otherwise you get the list, and every fallback row is labelled **"fuzzy match, check it"**.
+- **Ranking puts the airport above the school.** A bare code is used to break ties *within* the mode's kind ranking rather than above it — sorting on the code first floated a "Delhi Public School (DPS)" over Ngurah Rai, because its name really does contain DPS.
+
+### Added
+- `NOMINATIM_URL` points the primary geocoder at a self-hosted instance — and makes the fallback path testable, which is otherwise only reachable by waiting to be refused.
+
 ## v0.9.52 — [Released] Flight lookup, against the real API (`main`, 2026-08-25 22:45)
 
 Tested against a live AeroDataBox key for the first time. The URL shape and the parser were right; three things around them were not.
