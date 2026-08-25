@@ -55,10 +55,12 @@ a honeymoon fund, and an RSVP form that recognises them by name.
   contributed, what is still owed and when it is due
 - **Photos** — upload, drag to reorder, heart the ones that go public
 - **Content** — every page's text, colours, and a work-in-progress toggle per page
-- **Honeymoon** — a private planner: a map of everywhere you are considering, a
-  day-by-day itinerary, travel legs that can land the next day, an accommodation
-  shortlist you can rank, tag by area and rule out without deleting, and the guide
-  notes that have no coordinates
+- **Honeymoon** — a private planner *and* a trip companion: a map of everywhere
+  you are considering, a day-by-day itinerary with real driving times and honest
+  arrival times, an accommodation shortlist you can rank, compare and rule out
+  without deleting, booking details with cancellation deadlines, a trip budget
+  that adds up, weather and daylight per day, a phone-first **Today** view that
+  works offline, and a read-only link for the other half of the couple
 
 Full list: **[Features](https://github.com/Soccerbeats/weddingwebsite/wiki/Features)**.
 
@@ -121,7 +123,32 @@ instead of pulling the image.)
 
 ### The honeymoon portal
 
-Private planning for the trip — admin-only, with no public page.
+Private planning for the trip, and the thing you actually open on it. Admin-only,
+with no public page — except a read-only link you can hand to one person.
+
+**Planning it.** Every candidate on one clustered map over four base layers
+(streets, satellite, terrain, clean), with a measure tool and drawable region
+boundaries; a place library that imports from a spreadsheet, Google My Maps or a
+Google Takeout and exports as CSV, GeoJSON or KML; a shortlist you can rank,
+compare side by side and triage one card at a time; per-person ratings and
+comments, because two people rate one shortlist; photos, opening hours and
+"best time to go" on a place; and a booking vault holding the confirmation
+number, what it cost, what is paid and the date after which cancelling costs
+you.
+
+**Making it work.** Driving times from a router instead of straight lines, a
+day laid out as a timeline that says when you actually arrive and which stops you
+cannot make, weather (a forecast inside sixteen days, a decade of normals beyond
+it), sunrise and sunset, time zones on flights so a westbound leg stops reading
+as negative, and a conflicts panel that collects everything wrong with the plan —
+a night with nowhere to sleep, two stays booked over the same nights, a booking
+whose dates disagree with the days it covers.
+
+**Taking it with you.** A Today view built for one thumb, cached by a service
+worker so it opens with no signal; an emergency card with the local numbers as
+tap-to-call buttons; a calendar you can subscribe to rather than download; a
+print sheet you can fold into a passport; and a documents folder for the
+passports, visas and insurance you would be sorry to be without.
 
 <img src="docs/images/honeymoon-map.jpg" width="820" alt="The honeymoon map: clustered pins across Portugal, Madeira and the Azores, with filters above and a category legend">
 
@@ -136,6 +163,11 @@ Private planning for the trip — admin-only, with no public page.
 |---|---|
 | <img src="docs/images/honeymoon-dashboard.jpg" alt="The honeymoon dashboard: counts, the itinerary, a map of confirmed pins, what needs attention and rough costs"> | <img src="docs/images/honeymoon-guide.jpg" alt="Region write-ups and Know Before You Go notes grouped by category"> |
 | The whole trip on one screen | Region write-ups and everything with no coordinates |
+
+> The screenshots above predate v0.9.44–v0.9.50, which added the Today view, the
+> booking vault, the budget, road times, weather, the conflicts panel and the rest
+> of `docs/honeymoon-improvements-2026-08-25.md`. The layout is the same; there is
+> more on each screen.
 
 ### On a phone
 
