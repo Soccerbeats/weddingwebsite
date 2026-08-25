@@ -188,6 +188,18 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
             return places.filter((p) => ids.has(p.id));
         }
         return places.filter((p) => {
+            /*
+             * Removed stays are off the map entirely — that is most of the point
+             * of removing one. No toggle to bring them back either: the shortlist
+             * is where you decide what is still in the running, and a map option
+             * to show the rejects would put them back in the way of the decision
+             * the map exists to help with.
+             *
+             * The day-view branch above is deliberately not filtered this way: a
+             * place you actually scheduled still draws its route, exactly as an
+             * unconfirmed pin does once it is on a day.
+             */
+            if (p.archived) return false;
             // Additive: off hides the unconfirmed, on shows everything.
             if (!showUnconfirmed && p.needs_review) return false;
             // Exclude only places known to be somewhere *else*. A place whose

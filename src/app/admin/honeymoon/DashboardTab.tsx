@@ -32,7 +32,12 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
     const trip = data?.trip;
     const symbol = currencySymbol(trip?.home_currency);
 
-    const stays = useMemo(() => places.filter((p) => p.category === 'stay'), [places]);
+    // Removed stays are not in the running, so they are not in the count either —
+    // a headline number that includes the ones you rejected is a wrong number.
+    const stays = useMemo(
+        () => places.filter((p) => p.category === 'stay' && !p.archived),
+        [places],
+    );
     const excursions = useMemo(() => places.filter((p) => p.is_excursion), [places]);
 
     const stats = useMemo(() => {

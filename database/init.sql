@@ -315,6 +315,13 @@ ALTER TABLE honeymoon_trip ADD COLUMN IF NOT EXISTS focus_country TEXT NOT NULL 
 -- of the whole place library, and ranking hotels must not reshuffle it.
 ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS rank INTEGER;
 
+-- Removed from the shortlist without being destroyed. A stay you have ruled out
+-- is still worth keeping — you looked at it for a reason, and "why did we not
+-- book that one?" is a question that comes back. Archived places are hidden from
+-- the shortlist's ordinary buckets and from both maps, and reachable only
+-- through the Removed bucket, which can restore them or delete them for good.
+ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT FALSE;
+
 -- How many days after departure a leg lands: 0 for the same day, 1 for a
 -- red-eye, more for a journey with a long layover. Relative to the leg's own
 -- day rather than an absolute date, so inserting or reordering days — which

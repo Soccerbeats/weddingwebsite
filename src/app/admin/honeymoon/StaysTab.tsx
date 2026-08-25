@@ -75,7 +75,7 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
     /** How many listings are still to look up, and what the last run found. */
     const [locating, setLocating] = useState(0);
     const [located, setLocated] = useState<number | null>(null);
-    const [filter, setFilter] = useState<'all' | 'yes' | 'mid' | 'no' | 'unrated'>('all');
+    const [filter, setFilter] = useState<'all' | 'yes' | 'mid' | 'no' | 'unrated' | 'removed'>('all');
     /**
      * Newest first by default: a shortlist is worked from the top, and the thing
      * you just pasted in is the thing you want to look at. Remembered per
@@ -108,6 +108,10 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
     const chooseView = (next: View) => {
         setView(next);
         localStorage.setItem(VIEW_KEY, next);
+        // The ranking is of the shortlist, and the pills are hidden in that view
+        // — so leaving the Removed bucket selected would show the rejects as a
+        // rankable list with no visible way back.
+        if (next === 'ranking') setFilter((f) => (f === 'removed' ? 'all' : f));
     };
     const [preview, setPreview] = useState<Place | null>(null);
     /**
@@ -164,14 +168,25 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
     const [managingRegions, setManagingRegions] = useState(false);
 
     const places = useMemo(() => data?.places ?? [], [data]);
+    /**
+     * The live shortlist. Removed stays are not in it at all — they are kept,
+     * not shown: `All` means all the ones you are still considering, which is
+     * what you mean when you look at a shortlist.
+     */
     const stays = useMemo(
-        () => places.filter((p) => p.category === 'stay'),
+        () => places.filter((p) => p.category === 'stay' && !p.archived),
+        [places],
+    );
+    const removed = useMemo(
+        () => places.filter((p) => p.category === 'stay' && p.archived),
         [places],
     );
 
     const shown = useMemo(() => {
-        const rows = stays.filter((s) => {
-            if (filter === 'all') return true;
+        // The Removed bucket is a different list, not a filter over the live one.
+        const source = filter === 'removed' ? removed : stays;
+        const rows = source.filter((s) => {
+            if (filter === 'all' || filter === 'removed') return true;
             if (filter === 'unrated') return s.rating == null;
             return s.rating === filter;
         });
@@ -217,7 +232,7 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                 break;
         }
         return sorted;
-    }, [stays, filter, sort]);
+    }, [stays, removed, filter, sort]);
 
     /**
      * The ranking view's rows: every stay, in rank order.
@@ -339,7 +354,8 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
         mid: stays.filter((s) => s.rating === 'mid').length,
         no: stays.filter((s) => s.rating === 'no').length,
         unrated: stays.filter((s) => s.rating == null).length,
-    }), [stays]);
+        removed: removed.length,
+    }), [stays, removed]);
 
     interface Meta {
         title?: string;
@@ -539,6 +555,10 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                     ['mid', `😐 Mid tier ${counts.mid}`],
                     ['no', `👎 Not interested ${counts.no}`],
                     ['unrated', `Unrated ${counts.unrated}`],
+                    // Only once there is something in it: a bucket that is
+                    // always empty is a button that does nothing, and it would
+                    // sit there on every trip that never removes a stay.
+                    ...(counts.removed ? [['removed', `🗑 Removed ${counts.removed}`] as const] : []),
                 ] as const).map(([key, label]) => (
                     <button
                         key={key}
@@ -790,11 +810,33 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                                                     id: stay.id, rating: '',
                                                 }),
                                             }] : []),
-                                            {
-                                                label: 'Delete',
+                                            /*
+                                             * Removing is the ordinary action and deleting
+                                             * is not offered here at all. You ruled a hotel
+                                             * out for a reason, and "why did we say no to
+                                             * that one?" comes back a fortnight later — so
+                                             * the default keeps it. Permanent deletion lives
+                                             * in the Removed bucket, one deliberate step
+                                             * further on.
+                                             */
+                                            stay.archived
+                                                ? {
+                                                    label: 'Put back on the shortlist',
+                                                    onClick: () => api.update('places', {
+                                                        id: stay.id, archived: false,
+                                                    }),
+                                                }
+                                                : {
+                                                    label: 'Remove from the shortlist',
+                                                    onClick: () => api.update('places', {
+                                                        id: stay.id, archived: true,
+                                                    }),
+                                                },
+                                            ...(stay.archived ? [{
+                                                label: 'Delete for good',
                                                 danger: true,
                                                 onClick: () => api.removePlaces([stay]),
-                                            },
+                                            }] : []),
                                         ]}
                                     />
                                 </div>

@@ -700,7 +700,11 @@ function DayCard({ day, api, onEditPlace, onFocusDay, beyondRange = false, arriv
                 >
                     <option value="">— not set —</option>
                     {(api.data?.places ?? [])
-                        .filter((p) => p.category === 'stay' || p.id === day.base_place_id)
+                        // A removed stay is no longer a candidate to sleep in —
+                        // unless it is already this day's base, which must stay
+                        // listed or the day would silently lose it.
+                        .filter((p) => (p.category === 'stay' && !p.archived)
+                            || p.id === day.base_place_id)
                         .map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </SelectField>
                 {/* The base is a place too — the same one you booked and will want

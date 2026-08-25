@@ -96,6 +96,7 @@ const RESOURCES: Record<string, ResourceDef> = {
             rank: { kind: 'nint' },
             image_url: { kind: 'text' },
             is_excursion: { kind: 'bool' },
+            archived: { kind: 'bool' },
             // Empty means "inherit from the region", so it must not become NULL.
             country: { kind: 'text', blankAsEmpty: true },
             needs_review: { kind: 'bool' },

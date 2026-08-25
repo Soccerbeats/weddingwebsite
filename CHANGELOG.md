@@ -11,7 +11,21 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
-## v0.9.38 — [Unreleased] Stays say which area they are in (`main`, 2026-08-25 05:07)
+## v0.9.39 — [Unreleased] Removed stays go in a bucket, not the bin (`main`, 2026-08-25 05:22)
+
+### Added
+- **Stays can be removed without being deleted.** A stay's ⋯ menu offers **Remove from the shortlist**; it leaves the shortlist, disappears from both maps, and turns up in a **🗑 Removed** bucket beside the rating filters. **Put back on the shortlist** returns it. You ruled a hotel out for a reason, and *"why did we say no to that one?"* comes back a fortnight later.
+- **Deleting is no longer offered on a live stay at all.** It exists only inside the Removed bucket, as **Delete for good** — one deliberate step further on, rather than sitting next to Edit details waiting to be misclicked.
+- **The bucket is a separate list, not a filter over the shortlist.** `All` means all the ones still in the running, which is what you mean when you look at a shortlist — so the counts on every pill drop when you remove one.
+- **The pill only appears once something is in it.** A bucket that is always empty is a button that does nothing, and it would sit there on every trip that never removes a stay.
+- A removed stay is **off both maps**: the shortlist's own map and the Map tab's pins. No toggle to bring them back either — the map exists to help you decide, and an option to show the rejects would put them back in the way of that. Verified in a browser: 7 pins to 6 on removing one, still 6 while the Removed bucket is open, back to 7 on restoring it, and the Map tab's own count going 78 → 77 → 78.
+- The count on the dashboard and the Base picker in the itinerary skip removed stays too — a headline number that includes the ones you rejected is a wrong number, and a hotel you have ruled out is not a candidate to sleep in. A day whose base is already a removed stay keeps it listed, or the day would silently lose its base.
+- One exception, deliberate: **the day view still draws a removed place that is actually scheduled**, exactly as it already does for an unconfirmed pin. If you put it on a day, the route needs it.
+
+### Changed
+- New `archived` column on `honeymoon_places`, in `init.sql` and mirrored by the runtime schema owner. Tested on the path a deployed instance will take — an existing database missing the column, a fresh process, and the 83 rows already there all defaulting to `false` rather than null.
+
+## v0.9.38 — [Released] Stays say which area they are in (`main`, 2026-08-25 05:07)
 
 ### Added
 - **An area dropdown on every stay card** — Ubud, Seminyak, Canggu, whatever you have. It sits with the address and the map pin because it answers the same question, and a shortlist is something you sort by area in your head long before you care what it costs.

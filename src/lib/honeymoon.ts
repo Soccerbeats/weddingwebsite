@@ -113,6 +113,9 @@ export interface Place {
      * tying the tab to one category would drop anything you re-typed.
      */
     is_excursion: boolean;
+    /** Removed from the shortlist, but kept. Hidden from the maps and the
+     *  ordinary buckets; only the Removed bucket shows it. */
+    archived: boolean;
     /** Preview image scraped from the listing's Open Graph tags. */
     image_url: string | null;
     /**

@@ -59,6 +59,7 @@ async function createTables() {
             rating TEXT,
             image_url TEXT,
             is_excursion BOOLEAN NOT NULL DEFAULT FALSE,
+            archived BOOLEAN NOT NULL DEFAULT FALSE,
             country TEXT NOT NULL DEFAULT '',
             sort_order INTEGER NOT NULL DEFAULT 0,
             created_at TIMESTAMP DEFAULT NOW()
@@ -140,6 +141,10 @@ async function createTables() {
     await pool.query('ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS image_url TEXT');
     await pool.query(
         'ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS is_excursion BOOLEAN NOT NULL DEFAULT FALSE',
+    );
+    // Removed from the shortlist but kept — see init.sql for why.
+    await pool.query(
+        'ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT FALSE',
     );
     await pool.query('ALTER TABLE honeymoon_todos ADD COLUMN IF NOT EXISTS result TEXT');
     await pool.query(
@@ -305,6 +310,7 @@ export async function getHoneymoonPayload(): Promise<HoneymoonPayload> {
         rating: r.rating === 'yes' || r.rating === 'mid' || r.rating === 'no' ? r.rating : null,
         image_url: r.image_url ?? null,
         is_excursion: r.is_excursion === true,
+        archived: r.archived === true,
         country: r.country ?? '',
         rank: num(r.rank),
         sort_order: r.sort_order ?? 0,
