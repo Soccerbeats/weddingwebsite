@@ -4,10 +4,9 @@ import './globals.css';
 import AppShell from '@/components/AppShell';
 import DemoBanner from '@/components/DemoBanner';
 import { demoStatus } from '@/lib/demo';
-import WipCheck from '@/components/WipCheck';
 import { getSiteConfig } from '@/lib/config';
 import { cookies } from 'next/headers';
-import { jwtVerify } from 'jose';
+import { ADMIN_COOKIE, verifyAdminToken } from '@/lib/auth';
 
 // Force this layout to be dynamic so it re-reads config on every request
 export const dynamic = 'force-dynamic';
@@ -75,11 +74,7 @@ export async function generateViewport(): Promise<Viewport> {
 async function getIsAdmin(): Promise<boolean> {
   try {
     const cookieStore = await cookies();
-    const token = cookieStore.get('admin_token')?.value;
-    if (!token) return false;
-    const secret = new TextEncoder().encode(process.env.ADMIN_PASSWORD || 'default_secret_password');
-    await jwtVerify(token, secret);
-    return true;
+    return (await verifyAdminToken(cookieStore.get(ADMIN_COOKIE)?.value)) !== null;
   } catch {
     return false;
   }
@@ -138,7 +133,6 @@ export default async function RootLayout({
         }} />
         {/* Above everything, on every page: which instance this is. */}
         <DemoBanner />
-        <WipCheck />
         <AppShell
           isDemo={isDemo}
           brideName={config.brideName}

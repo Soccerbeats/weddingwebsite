@@ -1,21 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getSiteConfig } from '@/lib/config';
 import pool from '@/lib/db';
-import { jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
-
-const JWT_SECRET = new TextEncoder().encode(process.env.ADMIN_PASSWORD || 'default_secret_password');
+import { ADMIN_COOKIE, verifyAdminToken } from '@/lib/auth';
 
 async function isAdmin(): Promise<boolean> {
-  try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get('admin_token')?.value;
-    if (!token) return false;
-    await jwtVerify(token, JWT_SECRET);
-    return true;
-  } catch {
-    return false;
-  }
+  const cookieStore = await cookies();
+  return (await verifyAdminToken(cookieStore.get(ADMIN_COOKIE)?.value)) !== null;
 }
 
 interface NavCard {

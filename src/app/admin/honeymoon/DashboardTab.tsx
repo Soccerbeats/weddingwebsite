@@ -4,7 +4,7 @@ import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { useMemo } from 'react';
 import {
-    currencySymbol, dateForDay, daysBetween, effectiveCountry, formatDayDate, hasCoords, priceValue,
+    currencySymbol, dateForDay, dayColor, daysBetween, effectiveCountry, formatDayDate, hasCoords, priceValue,
 } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
 import { Card, CategoryChip } from './ui';
@@ -27,17 +27,16 @@ const BASE = '/admin/honeymoon';
 export default function DashboardTab({ api }: { api: HoneymoonApi }) {
     const { data } = api;
 
-    const places = useMemo(() => data?.places ?? [], [data]);
+    // Removed (archived) places are kept for the record but are not part of
+    // the trip; every headline number here leaves them out.
+    const places = useMemo(() => (data?.places ?? []).filter((p) => !p.archived), [data]);
     const days = useMemo(() => data?.days ?? [], [data]);
     const trip = data?.trip;
     const symbol = currencySymbol(trip?.home_currency);
 
     // Removed stays are not in the running, so they are not in the count either —
     // a headline number that includes the ones you rejected is a wrong number.
-    const stays = useMemo(
-        () => places.filter((p) => p.category === 'stay' && !p.archived),
-        [places],
-    );
+    const stays = useMemo(() => places.filter((p) => p.category === 'stay'), [places]);
     const excursions = useMemo(() => places.filter((p) => p.is_excursion), [places]);
 
     const stats = useMemo(() => {
@@ -98,10 +97,6 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
     }, [places, data?.regions, trip?.focus_country]);
 
     /** Each day's stops, drawn over the overview map in its own colour. */
-    const DAY_COLORS = [
-        '#0f172a', '#be123c', '#0891b2', '#a16207', '#7c3aed',
-        '#059669', '#ea580c', '#db2777', '#4d7c0f', '#0284c7',
-    ];
     const mapRoutes = useMemo(() => days.map((day) => ({
         points: day.stops
             .map((stop) => {
@@ -110,10 +105,9 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
                 return { lat: place.lat, lng: place.lng, label: stop.custom_label || place.name };
             })
             .filter((pt): pt is { lat: number; lng: number; label: string } => pt != null),
-        color: DAY_COLORS[(day.day_number - 1) % DAY_COLORS.length],
+        color: dayColor(day.day_number),
         label: `Day ${day.day_number}${day.title ? ` — ${day.title}` : ''}`,
     })).filter((r) => r.points.length > 0),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [days, api.placeById]);
 
     const stopCount = days.reduce((n, d) => n + d.stops.length, 0);

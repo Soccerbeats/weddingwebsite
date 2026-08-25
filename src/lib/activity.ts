@@ -77,9 +77,12 @@ function isoFromEpochId(id: unknown): string | null {
  */
 function dateLabel(value: unknown): string | null {
     if (!value) return null;
-    const d = value instanceof Date ? value : new Date(String(value));
-    if (isNaN(d.getTime())) return null;
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    // lib/db returns DATE columns as `YYYY-MM-DD`; build the Date from parts so
+    // it can never be read as UTC midnight and rendered a day early.
+    const text = value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10);
+    const [y, m, d] = text.split('-').map(Number);
+    if (!y || !m || !d) return null;
+    return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 function money(value: unknown): string {

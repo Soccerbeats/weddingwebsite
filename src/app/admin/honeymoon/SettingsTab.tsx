@@ -60,8 +60,10 @@ export default function SettingsTab({ api }: { api: HoneymoonApi }) {
         setWorking(true);
         try {
             await api.update('trip', { start_date: plan.start, end_date: plan.end });
-            for (const dayNumber of plan.add) {
-                await api.create('days', { day_number: dayNumber });
+            // One transaction for the new days, not one round trip each.
+            if (plan.add.length) {
+                await api.createMany('days', plan.add.map((day_number) => ({ day_number })));
+                await api.refresh();
             }
         } finally {
             setWorking(false);
@@ -159,8 +161,13 @@ export default function SettingsTab({ api }: { api: HoneymoonApi }) {
                 <div>
                     <label className="block text-xs font-semibold text-gray-500 mb-1">Trip name</label>
                     <TextField
+                        key={trip.title}
                         defaultValue={trip.title}
-                        onBlur={(e) => api.update('trip', { title: e.target.value })}
+                        onBlur={(e) => {
+                            if (e.target.value.trim() && e.target.value !== trip.title) {
+                                api.update('trip', { title: e.target.value });
+                            }
+                        }}
                     />
                 </div>
 
@@ -181,9 +188,12 @@ export default function SettingsTab({ api }: { api: HoneymoonApi }) {
                 <div>
                     <label className="block text-xs font-semibold text-gray-500 mb-1">Notes</label>
                     <TextField
+                        key={trip.notes ?? ''}
                         defaultValue={trip.notes ?? ''}
                         placeholder="Anything trip-wide"
-                        onBlur={(e) => api.update('trip', { notes: e.target.value })}
+                        onBlur={(e) => {
+                            if (e.target.value !== (trip.notes ?? '')) api.update('trip', { notes: e.target.value });
+                        }}
                     />
                 </div>
             </Card>

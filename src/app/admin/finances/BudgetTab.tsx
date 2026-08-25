@@ -6,7 +6,7 @@ import type { FinanceApi, FinancePayload } from './useFinances';
 import { StateBadge, TemplatePicker } from './extras';
 import {
     AddButton, Bar, Card, DeleteButton, EmptyState, GlyphButton, InlineNumber, InlineText,
-    Money, PillButton, RowDate, RowField, RowSelect, Toggle, formatMoney,
+    Money, PillButton, RowDate, RowField, RowSelect, Toggle, formatMoney, todayLocal,
 } from './ui';
 
 const QTY_LABELS: Record<string, string> = {
@@ -270,7 +270,7 @@ function SectionPayments({ category, data, api }: {
             description: `${category.name} payment`,
             amount: 0,
             payer_id: data.payers[0]?.id ?? null,
-            purchased_on: new Date().toISOString().slice(0, 10),
+            purchased_on: todayLocal(),
         });
 
     return (

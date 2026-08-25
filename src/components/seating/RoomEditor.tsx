@@ -115,6 +115,7 @@ export default function RoomEditor({
   // Sync local vertices when room changes (and not dragging)
   useEffect(() => {
     if (!dragging.current && room) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLocalVertices(room.vertices);
     }
   }, [room]);

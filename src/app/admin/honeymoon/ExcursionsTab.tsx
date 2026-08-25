@@ -38,7 +38,8 @@ export default function ExcursionsTab({ api }: { api: HoneymoonApi }) {
     const [fetching, setFetching] = useState(0);
 
     const places = useMemo(() => data?.places ?? [], [data]);
-    const excursions = useMemo(() => places.filter((p) => p.is_excursion), [places]);
+    // Removed places stay out of the shortlist, as on the Stays tab.
+    const excursions = useMemo(() => places.filter((p) => p.is_excursion && !p.archived), [places]);
 
     const shown = useMemo(() => excursions.filter((e) => {
         if (typeFilter && e.category !== typeFilter) return false;
@@ -278,6 +279,7 @@ export default function ExcursionsTab({ api }: { api: HoneymoonApi }) {
                                                 onChange={(category) => api.update('places', {
                                                     id: item.id, category,
                                                 })}
+                                                onCreateCategory={api.createCategory}
                                             />
                                         </div>
                                         <div>

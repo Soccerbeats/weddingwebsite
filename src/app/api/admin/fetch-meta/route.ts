@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { safeFetch } from '@/lib/safeFetch';
 
 function detectStore(url: string): 'target' | 'amazon' | 'other' {
     if (url.includes('target.com')) return 'target';
@@ -196,7 +197,7 @@ function extractMeta(html: string, url: string) {
 export async function POST(req: Request) {
     try {
         const { url } = await req.json();
-        if (!url) return NextResponse.json({ error: 'URL required' }, { status: 400 });
+        if (!url || typeof url !== 'string') return NextResponse.json({ error: 'URL required' }, { status: 400 });
 
         const store = detectStore(url);
 
@@ -211,14 +212,16 @@ export async function POST(req: Request) {
 
         let lastStatus = 0;
         for (const ua of attempts) {
-            const res = await fetch(url, {
+            // safeFetch refuses private/loopback addresses (on every redirect
+            // hop) and caps the body — this endpoint fetches whatever an admin
+            // pastes, from a box that also hosts the LAN's admin panels.
+            const res = await safeFetch(url, {
                 headers: {
                     'User-Agent': ua,
                     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                     'Accept-Language': 'en-US,en;q=0.5',
                 },
-                // 10 second timeout
-                signal: AbortSignal.timeout(10000),
+                timeoutMs: 10000,
             });
             lastStatus = res.status;
             if (!res.ok) continue;

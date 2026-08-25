@@ -438,8 +438,10 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
         if (!urls.length) return;
         setAdding(true);
         try {
+            // Removed stays count too: pasting one's link again should not
+            // create a second copy beside the one in the Removed bucket.
             const existing = new Set(
-                stays.flatMap((s) => s.links.map((l) => l.url)),
+                [...stays, ...removed].flatMap((s) => s.links.map((l) => l.url)),
             );
             for (const url of urls) {
                 if (existing.has(url)) continue;

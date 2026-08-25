@@ -57,6 +57,7 @@ export default function WipControlPage() {
       const allToggles: WipToggle[] = publicPages.map((page): WipToggle => {
         const existing = toggleMap.get(page.path);
         if (existing !== undefined) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           return { ...(existing as WipToggle), is_hidden: (existing as any).is_hidden ?? false };
         }
         return {
@@ -187,7 +188,7 @@ export default function WipControlPage() {
                 <li>• <strong>Photos</strong> - Photo gallery</li>
               </ul>
               <p className="text-sm text-gray-600 mt-3 italic">
-                Other pages (Wedding Party, Schedule, RSVP) won't appear in navigation at all.
+                Other pages (Wedding Party, Schedule, RSVP) won&apos;t appear in navigation at all.
               </p>
             </div>
 
@@ -244,7 +245,7 @@ export default function WipControlPage() {
         <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b border-gray-200">
           <h2 className="text-xl font-bold text-gray-900">Individual Page Controls</h2>
           <p className="text-sm text-gray-600 mt-1">
-            <strong>WIP:</strong> visitors see a "coming soon" message &nbsp;|&nbsp;
+            <strong>WIP:</strong> visitors see a &quot;coming soon&quot; message &nbsp;|&nbsp;
             <strong>Hidden:</strong> page is removed from navigation entirely
           </p>
         </div>
@@ -342,7 +343,7 @@ export default function WipControlPage() {
           </li>
           <li className="flex items-start gap-2">
             <span className="text-blue-600 mt-0.5">•</span>
-            <span><strong>🚧 WIP</strong> — Visitors who navigate to the page see a "coming soon" message instead</span>
+            <span><strong>🚧 WIP</strong> — Visitors who navigate to the page see a &quot;coming soon&quot; message instead</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-blue-600 mt-0.5">•</span>

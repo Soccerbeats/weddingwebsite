@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { weddingDateTime } from '@/lib/weddingDate';
 
 interface CountdownClockProps {
     weddingDate: string;
@@ -18,16 +19,22 @@ interface TimeLeft {
 export default function CountdownClock({ weddingDate, weddingTime, countdownMode = 'full' }: CountdownClockProps) {
     const [timeLeft, setTimeLeft] = useState<TimeLeft | null>(null);
     const [mounted, setMounted] = useState(false);
+    const [passed, setPassed] = useState(false);
     const isSimpleMode = countdownMode === 'simple';
     const isDaysOnlyMode = countdownMode === 'days-only';
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setMounted(true);
 
         const calculateTimeLeft = (): TimeLeft => {
-            const weddingDateTime = new Date(`${weddingDate} ${weddingTime}`);
+            // Parsed by hand: Safari rejects date strings V8 accepts, and the
+            // settings fields are free text.
+            const target = weddingDateTime(weddingDate, weddingTime);
+            if (!target) return { days: 0, hours: 0, minutes: 0, seconds: 0 };
             const now = new Date();
-            const difference = weddingDateTime.getTime() - now.getTime();
+            const difference = target.getTime() - now.getTime();
+            setPassed(difference <= 0);
 
             if (difference > 0) {
                 return {
@@ -81,6 +88,18 @@ export default function CountdownClock({ weddingDate, weddingTime, countdownMode
                         </span>
                     </div>
                 ))}
+            </div>
+        );
+    }
+
+    // The day has come: the counter would sit at zeros forever otherwise.
+    if (passed) {
+        return (
+            <div className="flex justify-center">
+                <div className="px-10 py-6 bg-white rounded-3xl shadow-2xl border-4 border-accent/30 text-center">
+                    <div className="text-4xl sm:text-5xl font-serif text-accent">We&apos;re married!</div>
+                    <div className="text-sm text-gray-500 mt-2 uppercase tracking-widest">Thank you for celebrating with us</div>
+                </div>
             </div>
         );
     }

@@ -59,17 +59,23 @@ export default function TravelLegCard({ leg, day, api }: {
                 <div className="grid grid-cols-2 gap-2">
                     <TextField
                         type="time"
+                        key={`d${leg.depart_time ?? ''}`}
                         defaultValue={leg.depart_time ?? ''}
-                        onBlur={(e) => api.update('travel', {
-                            id: leg.id, depart_time: e.target.value,
-                        })}
+                        onBlur={(e) => {
+                            if (e.target.value !== (leg.depart_time ?? '')) {
+                                api.update('travel', { id: leg.id, depart_time: e.target.value });
+                            }
+                        }}
                     />
                     <TextField
                         type="time"
+                        key={`a${leg.arrive_time ?? ''}`}
                         defaultValue={leg.arrive_time ?? ''}
-                        onBlur={(e) => api.update('travel', {
-                            id: leg.id, arrive_time: e.target.value,
-                        })}
+                        onBlur={(e) => {
+                            if (e.target.value !== (leg.arrive_time ?? '')) {
+                                api.update('travel', { id: leg.id, arrive_time: e.target.value });
+                            }
+                        }}
                     />
                 </div>
 
@@ -112,11 +118,14 @@ export default function TravelLegCard({ leg, day, api }: {
                     </p>
                 )}
                 <TextField
+                    key={`c${leg.confirmation_ref ?? ''}`}
                     defaultValue={leg.confirmation_ref ?? ''}
                     placeholder="Confirmation ref"
-                    onBlur={(e) => api.update('travel', {
-                        id: leg.id, confirmation_ref: e.target.value,
-                    })}
+                    onBlur={(e) => {
+                        if (e.target.value !== (leg.confirmation_ref ?? '')) {
+                            api.update('travel', { id: leg.id, confirmation_ref: e.target.value });
+                        }
+                    }}
                 />
                 {/* Both ends found: say so once, on the leg, rather than
                     twice on the fields. */}
@@ -158,6 +167,10 @@ function LegEnd({ leg, end, api }: {
     const lng = end === 'from' ? leg.from_lng : leg.to_lng;
 
     const [draft, setDraft] = useState(text ?? '');
+    // Follow the stored text when it changes underneath us (a refetch after a
+    // lookup on the other tab); adjusting state during render, per React.
+    const [seen, setSeen] = useState(text ?? '');
+    if ((text ?? '') !== seen) { setSeen(text ?? ''); setDraft(text ?? ''); }
     const [searching, setSearching] = useState(false);
     const [hits, setHits] = useState<Hit[]>([]);
     const [error, setError] = useState('');

@@ -5,7 +5,7 @@ import { contributorExpected, contributorReceived, type Contributor } from '@/li
 import type { FinanceApi, FinancePayload } from './useFinances';
 import {
     AddButton, Bar, Card, DeleteButton, EmptyState, GlyphButton, InlineNumber, InlineText,
-    Money, PillButton, RowDate, RowField, RowSelect, StatTile, formatMoney,
+    Money, PillButton, RowDate, RowField, RowSelect, StatTile, formatMoney, todayLocal,
 } from './ui';
 
 /**
@@ -125,7 +125,7 @@ function ContributorCard({ contributor, targetGroups, api }: {
         api.create('receipts', {
             contributor_id: contributor.id,
             amount: outstanding > 0 ? outstanding : 0,
-            received_on: new Date().toISOString().slice(0, 10),
+            received_on: todayLocal(),
         });
 
     return (

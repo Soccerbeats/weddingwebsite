@@ -12,7 +12,7 @@ export default function AdminShell({
 }) {
     const pathname = usePathname();
     const router = useRouter();
-    const [config, setConfig] = useState<any>(null);
+    const [config, setConfig] = useState<{ accentColor?: string; accentLightColor?: string; accentDarkColor?: string } | null>(null);
     const [sidebarOpen, setSidebarOpen] = useState(false);
 
     // Fetch config on mount and whenever pathname changes (including when navigating to /admin)
@@ -25,6 +25,7 @@ export default function AdminShell({
 
     // Close drawer on navigation
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setSidebarOpen(false);
     }, [pathname]);
 

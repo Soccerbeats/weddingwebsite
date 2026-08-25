@@ -42,9 +42,20 @@ export default function HeartBurst() {
 
   useEffect(() => {
     const onDblClick = (e: MouseEvent) => spawnHearts(e.clientX, e.clientY);
+    // Touch devices don't fire dblclick reliably, so detect the second tap by
+    // hand: two touchends within 300ms and ~30px of each other. A single tap —
+    // every button press on the site — must never spawn anything.
+    let lastTap: { at: number; x: number; y: number } | null = null;
     const onDblTouch = (e: TouchEvent) => {
-      const t = e.touches[0] || e.changedTouches[0];
-      if (t) spawnHearts(t.clientX, t.clientY);
+      const t = e.changedTouches[0] || e.touches[0];
+      if (!t) return;
+      const now = performance.now();
+      if (lastTap && now - lastTap.at < 300 && Math.hypot(t.clientX - lastTap.x, t.clientY - lastTap.y) < 30) {
+        lastTap = null;
+        spawnHearts(t.clientX, t.clientY);
+        return;
+      }
+      lastTap = { at: now, x: t.clientX, y: t.clientY };
     };
 
     window.addEventListener('dblclick', onDblClick);

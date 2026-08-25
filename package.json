@@ -11,7 +11,7 @@
     "check:photos": "npx --yes tsx scripts/check-photo-route.mts",
     "check:finance": "npx --yes tsx scripts/verify-finance-math.mts",
     "check:finance:db": "npx --yes tsx scripts/verify-finance-db.mts",
-    "check:finance:ui": "npx --yes tsx scripts/verify-finance-ui.mts",
+    "check:finance:ui": "npx --yes -p playwright -p tsx tsx scripts/verify-finance-ui.mts",
     "check:honeymoon": "npx --yes tsx scripts/verify-honeymoon.mts",
     "seed:honeymoon": "npx --yes tsx scripts/seed-honeymoon.mts",
     "check:types": "tsc --noEmit && tsc --noEmit -p tsconfig.scripts.json",

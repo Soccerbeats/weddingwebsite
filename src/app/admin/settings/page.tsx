@@ -12,6 +12,7 @@ export default function AdminSettings() {
         weddingLocation: '',
         weddingVenue: '',
         rsvpDeadline: '',
+        contactEmail: '',
         roomBlockHotel: '',
         roomBlockUrl: '',
         roomBlockMessage: '',
@@ -24,13 +25,20 @@ export default function AdminSettings() {
     useEffect(() => {
         fetch('/api/admin/site-config')
             .then(res => res.json())
-            // Pre-fill the room-block message with the default wording so it's
-            // visible and overwritable when nothing has been saved yet.
-            .then(data => setConfig(prev => ({
-                ...prev,
-                ...data,
-                roomBlockMessage: data.roomBlockMessage || DEFAULT_ROOM_BLOCK_MESSAGE,
-            })));
+            // Only this page's own fields. Spreading the whole config into
+            // state and posting it back overwrote every other editor's keys
+            // with whatever this tab had loaded — the Colour page's save could
+            // be undone by pressing Save here a minute later.
+            .then(data => setConfig(prev => {
+                const next = { ...prev };
+                for (const key of Object.keys(prev) as (keyof typeof prev)[]) {
+                    if (data[key] !== undefined) (next as Record<string, unknown>)[key] = data[key];
+                }
+                // Pre-fill the room-block message with the default wording so
+                // it's visible and overwritable when nothing has been saved yet.
+                next.roomBlockMessage = data.roomBlockMessage || DEFAULT_ROOM_BLOCK_MESSAGE;
+                return next;
+            }));
     }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -72,7 +80,7 @@ export default function AdminSettings() {
             <form onSubmit={handleSubmit} className="space-y-6 bg-white p-8 rounded-2xl border border-gray-200 shadow-lg">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Bride's Name</label>
+                        <label className="block text-sm font-medium text-gray-700">Bride&apos;s Name</label>
                         <input
                             type="text"
                             value={config.brideName}
@@ -81,7 +89,7 @@ export default function AdminSettings() {
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Groom's Name</label>
+                        <label className="block text-sm font-medium text-gray-700">Groom&apos;s Name</label>
                         <input
                             type="text"
                             value={config.groomName}
@@ -175,7 +183,7 @@ export default function AdminSettings() {
                                 <strong>Name Mode (Default):</strong> Displays bride and groom names in the navigation bar
                             </p>
                             <p className="text-sm text-gray-700 mt-2">
-                                <strong>Logo Mode:</strong> Displays your wedding logo image. Set the logo in Admin → Photos → "Set Wedding Logo"
+                                <strong>Logo Mode:</strong> Displays your wedding logo image. Set the logo in Admin → Photos → &quot;Set Wedding Logo&quot;
                             </p>
                         </div>
                     </div>
@@ -183,6 +191,17 @@ export default function AdminSettings() {
 
                 <div className="pt-6 border-t border-gray-100">
                     <h2 className="text-xl font-semibold text-gray-900 mb-4">RSVP Data</h2>
+                    <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700">Contact Email</label>
+                        <input
+                            type="email"
+                            value={config.contactEmail || ''}
+                            onChange={(e) => setConfig({ ...config, contactEmail: e.target.value })}
+                            className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
+                            placeholder="you@example.com"
+                        />
+                        <p className="mt-1 text-xs text-gray-500">Shown on the RSVP page for guests having trouble.</p>
+                    </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700">RSVP Deadline</label>
                         <input

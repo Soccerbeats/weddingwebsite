@@ -158,6 +158,20 @@ export default function HeroCollapse({
     }
   };
 
+  // ── Keep the particle canvas's bitmap the size of its box ────────────────
+  // One observer for the life of the mobile layout. A ref callback used to
+  // create a new ResizeObserver on every render and never disconnect it.
+  useEffect(() => {
+    const el = mobileCanvasRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => {
+      el.width  = el.offsetWidth;
+      el.height = el.offsetHeight;
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [isMobile]);
+
   // ── Detect mobile (also responds to resize / DevTools viewport changes) ──
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 768px)');
@@ -305,7 +319,6 @@ export default function HeroCollapse({
     // Also check immediately in case the page loaded with a hash already scrolled
     snapIfNeeded();
     return () => window.removeEventListener('scroll', snapIfNeeded);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMobile]);
 
   // ── Wheel / touch event hijacking (desktop only) ─────────────────────────
@@ -790,17 +803,7 @@ export default function HeroCollapse({
       <div className="relative" style={{ position: 'sticky', top: 0, height: '100svh', overflow: 'hidden', backgroundColor: bgColor }}>
         {/* Particle canvas — dimensions set via ResizeObserver so they're correct after layout */}
         <canvas
-          ref={el => {
-            (mobileCanvasRef as React.MutableRefObject<HTMLCanvasElement | null>).current = el;
-            if (!el) return;
-            const ro = new ResizeObserver(() => {
-              el.width  = el.offsetWidth;
-              el.height = el.offsetHeight;
-            });
-            ro.observe(el);
-            // Store cleanup on element for GC
-            (el as HTMLCanvasElement & { _ro?: ResizeObserver })._ro = ro;
-          }}
+          ref={mobileCanvasRef}
           style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', zIndex: 30, pointerEvents: 'none' }}
         />
 

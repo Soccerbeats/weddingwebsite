@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { SignJWT, jwtVerify } from 'jose';
 import { isDemoMode } from '@/lib/demo';
-
-const SECRET_KEY = process.env.ADMIN_PASSWORD || 'default_secret_password';
-const JWT_SECRET = new TextEncoder().encode(SECRET_KEY);
+import {
+    ADMIN_COOKIE, cookieOptions, isSecureRequest, shouldRefresh, signAdminToken, verifyAdminToken,
+} from '@/lib/auth';
+import { clientIp, rateLimit } from '@/lib/rateLimit';
 
 /** The methods that change something. GET/HEAD/OPTIONS are always let through. */
 const WRITE_METHODS = new Set(['POST', 'PATCH', 'PUT', 'DELETE']);
@@ -25,7 +25,58 @@ const PUBLIC_ADMIN_READS = new Set([
     '/api/admin/timeline',
 ]);
 
+/**
+ * Public routes that accept writes from anyone, and how hard they may be hit.
+ *
+ * Per IP, fixed window. Generous for a guest (nobody RSVPs twenty times in ten
+ * minutes) and tight enough that a script cannot enumerate names through the
+ * verification endpoint or flood the RSVP table.
+ */
+const PUBLIC_WRITE_LIMITS: Record<string, { limit: number; windowMs: number }> = {
+    '/api/auth/login': { limit: 10, windowMs: 15 * 60_000 },
+    '/api/rsvp': { limit: 20, windowMs: 10 * 60_000 },
+    '/api/guest-verification': { limit: 30, windowMs: 10 * 60_000 },
+};
+
+/**
+ * Public pages the Work-in-Progress controls can hide or veil.
+ *
+ * Checked here, server-side, so a WIP page never renders for a guest at all —
+ * not even for the moment before a client-side redirect fires, and not to
+ * anything that doesn't run JavaScript. The list mirrors `publicPages` on the
+ * WIP control page.
+ */
+const GATED_PAGES = new Set(['/our-story', '/wedding-party', '/schedule', '/photos', '/registry', '/rsvp']);
+
+/**
+ * The WIP table, fetched from our own API and held for a short while.
+ *
+ * The middleware runs on the edge runtime and cannot open a database
+ * connection, so it asks `/api/wip-status`; caching keeps that to one request
+ * every few seconds rather than one per page view. A failed fetch answers
+ * "nothing gated" — the page shows — because hiding the whole site on a
+ * hiccup is the worse failure.
+ */
+type WipMap = Record<string, { is_wip: boolean; is_hidden: boolean }>;
+let wipCache: { at: number; value: WipMap } | null = null;
+const WIP_TTL_MS = 15_000;
+
+async function wipStatus(origin: string): Promise<WipMap> {
+    const now = Date.now();
+    if (wipCache && now - wipCache.at < WIP_TTL_MS) return wipCache.value;
+    try {
+        const res = await fetch(`${origin}/api/wip-status`, { cache: 'no-store' });
+        const value = res.ok ? ((await res.json()) as WipMap) : {};
+        wipCache = { at: now, value };
+        return value;
+    } catch {
+        return wipCache?.value ?? {};
+    }
+}
+
 export async function middleware(request: NextRequest) {
+    const { pathname } = request.nextUrl;
+
     /*
      * On the demo instance, nothing is allowed to persist — so writes never
      * reach their route at all.
@@ -41,11 +92,7 @@ export async function middleware(request: NextRequest) {
      * durable: the next GET returns the seeded data, which is exactly the
      * "change anything, refresh, it is all back" behaviour the demo wants.
      */
-    if (
-        isDemoMode()
-        && WRITE_METHODS.has(request.method)
-        && request.nextUrl.pathname.startsWith('/api/')
-    ) {
+    if (isDemoMode() && WRITE_METHODS.has(request.method) && pathname.startsWith('/api/')) {
         let echo: Record<string, unknown> = {};
         // Only JSON is echoed. A multipart upload's body is not ours to parse,
         // and reading it here would consume the stream for nothing.
@@ -70,53 +117,49 @@ export async function middleware(request: NextRequest) {
         });
     }
 
-    /*
-     * The admin API requires the admin cookie.
-     *
-     * It did not, until now: the matcher covered `/admin/*` but the API routes
-     * under `/api/admin/*` checked nothing themselves, so anyone who could reach
-     * the site could rewrite the guest list, delete photographs or edit any page
-     * with a bare `curl` — no login involved. Verified against a running
-     * instance before fixing: a cookie-less PATCH returned 200 and the row
-     * changed.
-     *
-     * Done here rather than in each of the thirty-odd handlers for the same
-     * reason as the demo write-block above: one place covers every route,
-     * including the ones added next month.
-     *
-     * The three exceptions below are why this was awkward to begin with. Those
-     * endpoints live under `/api/admin/` by an accident of naming but serve the
-     * *public* site — the nav and the RSVP form read the site config, the
-     * registry page reads the registry, the our-story page reads the timeline —
-     * so requiring a cookie for them would take the public pages down. They are
-     * reads of content that is already on public pages. Everything else under
-     * `/api/admin/` — the guest list, the RSVPs, the finances, the honeymoon,
-     * the seating — needs the cookie for *every* method, GET included: those are
-     * names, addresses and dietary requirements, and reading them was as open as
-     * writing them.
-     */
-    if (request.nextUrl.pathname.startsWith('/api/admin')) {
-        const publicRead = request.method === 'GET'
-            && PUBLIC_ADMIN_READS.has(request.nextUrl.pathname);
-        // The demo instance opens the whole admin panel deliberately, and its
-        // writes were already answered above without ever reaching a handler.
-        if (!publicRead && !isDemoMode()) {
-            const token = request.cookies.get('admin_token')?.value;
-            let authorised = false;
-            if (token) {
-                try { await jwtVerify(token, JWT_SECRET); authorised = true; } catch { /* expired or forged */ }
-            }
-            if (!authorised) {
-                // JSON, not a redirect: the caller is fetch(), not a browser
-                // following links, and a 307 to a login page would arrive as an
-                // unparseable HTML body.
-                return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-            }
+    // Rate limits on the endpoints the public can write to.
+    const limitRule = WRITE_METHODS.has(request.method) ? PUBLIC_WRITE_LIMITS[pathname] : undefined;
+    if (limitRule) {
+        const verdict = rateLimit(`${pathname}:${clientIp(request.headers)}`, limitRule.limit, limitRule.windowMs);
+        if (!verdict.ok) {
+            return NextResponse.json(
+                { error: 'Too many requests — please wait a moment and try again.' },
+                { status: 429, headers: { 'Retry-After': String(verdict.retryAfterSeconds) } },
+            );
         }
     }
 
-    // Only protect /admin routes
-    if (request.nextUrl.pathname.startsWith('/admin')) {
+    // One verification per request, shared by every branch below.
+    const token = request.cookies.get(ADMIN_COOKIE)?.value;
+    const session = token ? await verifyAdminToken(token) : null;
+
+    /*
+     * The admin API requires the admin cookie.
+     *
+     * Done here rather than in each of the thirty-odd handlers for the same
+     * reason as the demo write-block above: one place covers every route,
+     * including the ones added next month. Every method, GET included — the
+     * guest list, the RSVPs, the finances, the honeymoon and the seating are
+     * names, addresses and dietary requirements, and reading them was once as
+     * open as writing them.
+     *
+     * The three exceptions live under `/api/admin/` by an accident of naming but
+     * serve the *public* site; see PUBLIC_ADMIN_READS.
+     */
+    if (pathname.startsWith('/api/admin')) {
+        const publicRead = request.method === 'GET' && PUBLIC_ADMIN_READS.has(pathname);
+        // The demo instance opens the whole admin panel deliberately, and its
+        // writes were already answered above without ever reaching a handler.
+        if (!publicRead && !isDemoMode() && !session) {
+            // JSON, not a redirect: the caller is fetch(), not a browser
+            // following links, and a 307 to a login page would arrive as an
+            // unparseable HTML body.
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        return withRefreshedSession(request, session, NextResponse.next());
+    }
+
+    if (pathname.startsWith('/admin')) {
         /*
          * The demo instance has no door.
          *
@@ -124,44 +167,66 @@ export async function middleware(request: NextRequest) {
          * does to it is kept — and a login page in front of a demo just stops
          * people looking. So the whole admin panel is open, and the login page
          * itself sends you inside rather than asking for a password nobody has
-         * been given.
-         *
-         * This is safe only *because* the instance cannot be changed; see
-         * `src/lib/demo.ts` for how hard the flag is to turn on by accident, and
-         * why every default fails towards "this is production".
+         * been given. Safe only *because* the instance cannot be changed; see
+         * `src/lib/demo.ts` for how hard the flag is to turn on by accident.
          */
         if (isDemoMode()) {
-            if (request.nextUrl.pathname === '/admin/login') {
+            if (pathname === '/admin/login') {
                 return NextResponse.redirect(new URL('/admin', request.url));
             }
             return NextResponse.next();
         }
 
-        // Allow access to login page
-        if (request.nextUrl.pathname === '/admin/login') {
-            return NextResponse.next();
-        }
+        if (pathname === '/admin/login') return NextResponse.next();
 
-        const token = request.cookies.get('admin_token')?.value;
-
-        if (!token) {
+        if (!session) {
             return NextResponse.redirect(new URL('/admin/login', request.url));
         }
+        return withRefreshedSession(request, session, NextResponse.next());
+    }
 
-        try {
-            await jwtVerify(token, JWT_SECRET);
-            return NextResponse.next();
-        } catch (error) {
-            // Token invalid or expired
-            return NextResponse.redirect(new URL('/admin/login', request.url));
-        }
+    // Work-in-progress gating for the public pages. Admins see everything.
+    if (GATED_PAGES.has(pathname) && !session) {
+        const entry = (await wipStatus(request.nextUrl.origin))[pathname];
+        if (entry?.is_hidden) return NextResponse.redirect(new URL('/', request.url));
+        if (entry?.is_wip) return NextResponse.redirect(new URL('/work-in-progress', request.url));
     }
 
     return NextResponse.next();
 }
 
+/**
+ * Sliding sessions.
+ *
+ * A token lasts two hours from its last refresh, and any authenticated request
+ * made in its final hour re-issues it. An afternoon spent in the seating chart
+ * or the budget no longer ends with every save quietly returning 401 at the
+ * two-hour mark; only two hours of genuine inactivity signs you out.
+ */
+async function withRefreshedSession(
+    request: NextRequest,
+    session: Awaited<ReturnType<typeof verifyAdminToken>>,
+    response: NextResponse,
+): Promise<NextResponse> {
+    if (!session || !shouldRefresh(session)) return response;
+    const fresh = await signAdminToken();
+    if (!fresh) return response;
+    response.cookies.set(ADMIN_COOKIE, fresh, cookieOptions(isSecureRequest(request)));
+    return response;
+}
+
 export const config = {
-    // `/api/*` joins the matcher for the demo write block above. On a normal
-    // instance those requests fall straight through to `NextResponse.next()`.
-    matcher: ['/admin/:path*', '/api/:path*'],
+    // `/api/*` joins the matcher for the demo write block and the rate limits;
+    // the public pages join it for the WIP gate. On a normal instance anything
+    // not handled above falls straight through to `NextResponse.next()`.
+    matcher: [
+        '/admin/:path*',
+        '/api/:path*',
+        '/our-story',
+        '/wedding-party',
+        '/schedule',
+        '/photos',
+        '/registry',
+        '/rsvp',
+    ],
 };

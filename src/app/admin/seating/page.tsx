@@ -53,6 +53,14 @@ function SeatingCanvas({
   // Sync local room when prop changes
   React.useEffect(() => { setLocalRoom(room); }, [room]);
 
+  // The room editor's legend promises "Press Esc to exit".
+  useEffect(() => {
+    if (!roomEditMode) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setRoomEditMode(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [roomEditMode]);
+
   // Compute split party group IDs using party_group_id
   const splitPartyGroupIds = useCallback((): Set<number> => {
     const split = new Set<number>();
@@ -134,14 +142,18 @@ function SeatingCanvas({
       });
     }
 
-    // Additional party members beyond primary + plus_one
+    // Additional party members beyond primary + plus_one, by name when the
+    // guest list has one for the slot and "X's guest n" otherwise.
+    const memberNames = (guest.party_members ?? [])
+      .map(m => (m?.name ?? '').trim())
+      .filter(n => n && n.toLowerCase() !== (guest.plus_one_name ?? '').trim().toLowerCase());
     const extraCount = (guest.party_size ?? 1) - (guest.plus_one_name ? 2 : 1);
     for (let i = 0; i < extraCount; i++) {
       payload.push({
         seating_table_id: tableId,
         seat_index: nextIndex(),
         guest_list_id: null,
-        display_name: `${guest.guest_name.split(' ')[0]}'s guest ${i + 1}`,
+        display_name: memberNames[i] || `${guest.guest_name.split(' ')[0]}'s guest ${i + 1}`,
         party_group_id: guest.id,
       });
     }
@@ -168,15 +180,9 @@ function SeatingCanvas({
     tableId: number,
     ordered: { seat_index: number; display_name: string; guest_list_id: number | null; party_group_id: number | null }[]
   ) => {
-    // Delete all existing seats for this table then re-insert with new indices
-    // We send the ordered list as a bulk re-assign: delete old, insert new
-    await fetch('/api/admin/seating/assign', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ seating_table_id: tableId, delete_all: true }),
-    });
-
-    const payload = ordered.map((seat, newIndex) => ({
+    // One request, one transaction: the table's seat list is replaced in
+    // place, so a network failure can never leave it empty.
+    const seats = ordered.map((seat, newIndex) => ({
       seating_table_id: tableId,
       seat_index: newIndex,
       guest_list_id: seat.guest_list_id,
@@ -187,7 +193,7 @@ function SeatingCanvas({
     await fetch('/api/admin/seating/assign', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ seating_table_id: tableId, replace: true, seats }),
     });
     onRefresh();
   }, [onRefresh]);
@@ -605,6 +611,7 @@ export default function SeatingPage() {
         id: g.id,
         guest_name: g.guest_name,
         plus_one_name: g.plus_one_name ?? null,
+        party_members: g.party_members ?? [],
         party_size: g.party_size ?? 1,
         side: g.side ?? null,
         rsvp_status: g.rsvp_status ?? null,
@@ -614,6 +621,7 @@ export default function SeatingPage() {
     setLoading(false);
   }, []);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { refresh(); }, [refresh]);
 
   if (loading) {

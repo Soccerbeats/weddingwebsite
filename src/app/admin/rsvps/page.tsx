@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { FundItem } from '@/lib/config';
+import type { FundItem, SiteConfig } from '@/lib/config';
 import AddressReconcileModal from '@/components/admin/AddressReconcileModal';
 import { MAILING_HEADERS, mailingRows, toCsv } from '@/lib/mailing';
 
@@ -107,7 +107,7 @@ export default function RSVPDashboard() {
     // Feedback for the type-a-name-then-Enter rapid check-off flow.
     const guestSearchRef = useRef<HTMLInputElement | null>(null);
     const [quickPick, setQuickPick] = useState<{ text: string; ok: boolean } | null>(null);
-    const [config, setConfig] = useState<any>(null);
+    const [config, setConfig] = useState<Partial<SiteConfig> | null>(null);
     const [rsvpSubtitle, setRsvpSubtitle] = useState('');
     const [subtitleSaving, setSubtitleSaving] = useState(false);
     const [showImportModal, setShowImportModal] = useState(false);
@@ -404,11 +404,12 @@ export default function RSVPDashboard() {
             if (!d) return i;
             return { ...i, funded: Math.max(0, Math.min(i.price, i.funded + d)) };
         });
-        freshConfig.registry = { ...(freshConfig.registry || {}), items };
+        // Only the registry key: posting the whole config back would overwrite
+        // anything another admin tab saved in the meantime.
         await fetch('/api/admin/site-config', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(freshConfig),
+            body: JSON.stringify({ registry: { ...(freshConfig.registry || {}), items } }),
         });
     };
 
@@ -768,7 +769,8 @@ export default function RSVPDashboard() {
                 for (let ci = 0; ci < line.length; ci++) {
                     const ch = line[ci];
                     if (ch === '"') {
-                        inQuotes = !inQuotes;
+                        if (inQuotes && line[ci + 1] === '"') { current += '"'; ci++; }
+                        else inQuotes = !inQuotes;
                     } else if (ch === ',' && !inQuotes) {
                         result.push(current.trim());
                         current = '';
@@ -788,7 +790,7 @@ export default function RSVPDashboard() {
 
                 if (values.length === 0 || !values[0]) continue;
 
-                const guestData: any = {};
+                const guestData: Record<string, string> = {};
                 headers.forEach((header, index) => {
                     guestData[header] = values[index] || '';
                 });
@@ -849,7 +851,12 @@ export default function RSVPDashboard() {
     if (loading) return <div className="p-8">Loading...</div>;
 
     const totalGuests = rsvps.reduce((acc, curr) => acc + (curr.attending ? curr.number_of_guests : 0), 0);
-    const totalDeclinedGuests = rsvps.filter(r => !r.attending).reduce((acc, curr) => acc + (curr.number_of_guests || 1), 0);
+    // A declined RSVP is stored with number_of_guests = 0, so count the household
+    // from the guest list (falling back to 1 when the name isn't on it).
+    const partySizeByName = new Map(guests.map(g => [g.guest_name.trim().toLowerCase(), g.party_size || 1]));
+    const totalDeclinedGuests = rsvps
+        .filter(r => !r.attending)
+        .reduce((acc, curr) => acc + (partySizeByName.get(curr.guest_name.trim().toLowerCase()) ?? 1), 0);
     const totalInvited = guests.filter(g => g.invited).reduce((acc, curr) => acc + curr.party_size, 0);
     const totalNotInvited = guests.filter(g => !g.invited).reduce((acc, curr) => acc + curr.party_size, 0);
     const likelyNotComingCount = guests.filter(g => g.rsvp_status === 'likely_not_coming').reduce((acc, curr) => acc + curr.party_size, 0);
@@ -1981,8 +1988,8 @@ export default function RSVPDashboard() {
                                         className="w-full px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
                                     >
                                         <option value="">Not Specified</option>
-                                        <option value="bride">{config?.brideName || "Bride"}'s Side</option>
-                                        <option value="groom">{config?.groomName || "Groom"}'s Side</option>
+                                        <option value="bride">{config?.brideName || "Bride"}&apos;s Side</option>
+                                        <option value="groom">{config?.groomName || "Groom"}&apos;s Side</option>
                                     </select>
                                 </div>
                             </div>
@@ -2254,7 +2261,7 @@ export default function RSVPDashboard() {
                                         </code>
                                     </div>
                                     <p className="text-xs text-gray-500 mt-2">
-                                        Example: John Doe,john@email.com,555-1234,2,bride,Vegan meal,Jane Doe,"123 Main St, Milwaukee, WI 53201"
+                                        Example: John Doe,john@email.com,555-1234,2,bride,Vegan meal,Jane Doe,&quot;123 Main St, Milwaukee, WI 53201&quot;
                                     </p>
                                 </div>
 

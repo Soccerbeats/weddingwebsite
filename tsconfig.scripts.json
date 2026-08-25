@@ -8,5 +8,5 @@
     "allowImportingTsExtensions": true
   },
   "include": ["scripts/**/*.mts", "scripts/**/*.ts", "src/**/*.ts", "src/**/*.tsx"],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "scripts/verify-finance-ui.mts"]
 }

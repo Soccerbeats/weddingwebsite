@@ -1,12 +1,43 @@
 import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
+import { writeJsonAtomic } from '@/lib/config';
+import { PHOTOS_DIR, rejectUpload, resolveInPhotos, safeImageFilename } from '@/lib/uploads';
 
 const CONFIG_PATH = path.join(process.cwd(), 'public/config/timeline.json');
-const PHOTOS_DIR = path.join(process.cwd(), 'public/photos');
+
+interface Milestone {
+    id: number;
+    title: string;
+    date: string;
+    dateFormat?: string;
+    description: string;
+    photos?: string[];
+    photoAligns?: string[];
+    /** Legacy single-photo field from before `photos`. */
+    photo?: string;
+}
+
+/** Save an uploaded milestone photo, or return the reason it was refused. */
+function storePhoto(file: File, slot: 1 | 2): Promise<{ filename: string } | { error: string }> {
+    const problem = rejectUpload(file);
+    if (problem) return Promise.resolve({ error: problem });
+    const filename = safeImageFilename(file.name, `${Date.now()}-${slot}-`);
+    if (!filename) return Promise.resolve({ error: 'Unsupported image type' });
+    if (!fs.existsSync(PHOTOS_DIR)) fs.mkdirSync(PHOTOS_DIR, { recursive: true });
+    return file.arrayBuffer().then((buf) => {
+        fs.writeFileSync(path.join(PHOTOS_DIR, filename), Buffer.from(buf));
+        return { filename };
+    });
+}
+
+function removeStored(filename: string) {
+    const filePath = resolveInPhotos(path.basename(filename));
+    if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
+}
 
 // Helper to read timeline data
-function getTimeline() {
+function getTimeline(): Milestone[] {
     if (!fs.existsSync(CONFIG_PATH)) {
         return [];
     }
@@ -15,19 +46,15 @@ function getTimeline() {
 }
 
 // Helper to save timeline data
-function saveTimeline(milestones: any[]) {
-    const dir = path.dirname(CONFIG_PATH);
-    if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-    }
-    fs.writeFileSync(CONFIG_PATH, JSON.stringify({ milestones }, null, 2));
+function saveTimeline(milestones: Milestone[]) {
+    writeJsonAtomic(CONFIG_PATH, { milestones });
 }
 
 export async function GET() {
     const milestones = getTimeline();
 
     // Sort by date (oldest first)
-    milestones.sort((a: any, b: any) => {
+    milestones.sort((a: Milestone, b: Milestone) => {
         const dateA = new Date(a.date);
         const dateB = new Date(b.date);
         return dateA.getTime() - dateB.getTime();
@@ -55,33 +82,16 @@ export async function POST(request: Request) {
         const photos: string[] = [];
         const photoAligns: string[] = [];
 
-        // Ensure directory exists
-        if (!fs.existsSync(PHOTOS_DIR)) {
-            fs.mkdirSync(PHOTOS_DIR, { recursive: true });
-        }
-
-        // Handle file1 upload if provided
-        if (file1) {
-            const buffer = Buffer.from(await file1.arrayBuffer());
-            const filename = `${Date.now()}-1-${file1.name.replace(/\s/g, '-')}`;
-            const filePath = path.join(PHOTOS_DIR, filename);
-            fs.writeFileSync(filePath, buffer);
-            photos.push(filename);
-            photoAligns.push(photo1Align);
-        }
-
-        // Handle file2 upload if provided
-        if (file2) {
-            const buffer = Buffer.from(await file2.arrayBuffer());
-            const filename = `${Date.now()}-2-${file2.name.replace(/\s/g, '-')}`;
-            const filePath = path.join(PHOTOS_DIR, filename);
-            fs.writeFileSync(filePath, buffer);
-            photos.push(filename);
-            photoAligns.push(photo2Align);
+        for (const [file, align, slot] of [[file1, photo1Align, 1], [file2, photo2Align, 2]] as const) {
+            if (!(file instanceof File)) continue;
+            const stored = await storePhoto(file, slot);
+            if ('error' in stored) return NextResponse.json({ error: stored.error }, { status: 400 });
+            photos.push(stored.filename);
+            photoAligns.push(align);
         }
 
         const milestones = getTimeline();
-        const newMilestone = {
+        const newMilestone: Milestone = {
             id: Date.now(),
             title,
             date,
@@ -117,25 +127,18 @@ export async function PATCH(request: Request) {
         const photo2Align = formData.get('photo2Align') as string || 'center';
 
         const milestones = getTimeline();
-        const milestoneIndex = milestones.findIndex((m: any) => m.id === id);
+        const milestoneIndex = milestones.findIndex((m: Milestone) => m.id === id);
 
         if (milestoneIndex === -1) {
             return NextResponse.json({ error: 'Milestone not found' }, { status: 404 });
         }
 
-        // Update text fields
-        if (title !== undefined) {
-            milestones[milestoneIndex].title = title;
-        }
-        if (date !== undefined) {
-            milestones[milestoneIndex].date = date;
-        }
-        if (dateFormat !== undefined) {
-            milestones[milestoneIndex].dateFormat = dateFormat;
-        }
-        if (description !== undefined) {
-            milestones[milestoneIndex].description = description;
-        }
+        // Update text fields. formData.get() returns null (not undefined) for
+        // an absent field, so an omitted field must leave the value alone.
+        if (title != null) milestones[milestoneIndex].title = title;
+        if (date != null) milestones[milestoneIndex].date = date;
+        if (dateFormat != null) milestones[milestoneIndex].dateFormat = dateFormat;
+        if (description != null) milestones[milestoneIndex].description = description;
 
         // Parse existing photos and alignments
         let existingPhotos: string[] = [];
@@ -143,7 +146,7 @@ export async function PATCH(request: Request) {
         try {
             existingPhotos = JSON.parse(existingPhotosStr || '[]');
             existingAligns = JSON.parse(existingAlignsStr || '[]');
-        } catch (e) {
+        } catch {
             existingPhotos = [];
             existingAligns = [];
         }
@@ -151,39 +154,18 @@ export async function PATCH(request: Request) {
         // Delete photos that were removed
         const oldPhotos = milestones[milestoneIndex].photos || [];
         const photosToDelete = oldPhotos.filter((p: string) => !existingPhotos.includes(p));
-        photosToDelete.forEach((photo: string) => {
-            const filePath = path.join(PHOTOS_DIR, photo);
-            if (fs.existsSync(filePath)) {
-                fs.unlinkSync(filePath);
-            }
-        });
+        photosToDelete.forEach((photo: string) => removeStored(photo));
 
         // Start with existing photos and alignments
         const updatedPhotos = [...existingPhotos];
         const updatedAligns = [...existingAligns];
 
-        // Ensure directory exists
-        if (!fs.existsSync(PHOTOS_DIR)) {
-            fs.mkdirSync(PHOTOS_DIR, { recursive: true });
-        }
-
-        // Add new photos if provided
-        if (file1 && updatedPhotos.length < 2) {
-            const buffer = Buffer.from(await file1.arrayBuffer());
-            const filename = `${Date.now()}-1-${file1.name.replace(/\s/g, '-')}`;
-            const filePath = path.join(PHOTOS_DIR, filename);
-            fs.writeFileSync(filePath, buffer);
-            updatedPhotos.push(filename);
-            updatedAligns.push(photo1Align);
-        }
-
-        if (file2 && updatedPhotos.length < 2) {
-            const buffer = Buffer.from(await file2.arrayBuffer());
-            const filename = `${Date.now()}-2-${file2.name.replace(/\s/g, '-')}`;
-            const filePath = path.join(PHOTOS_DIR, filename);
-            fs.writeFileSync(filePath, buffer);
-            updatedPhotos.push(filename);
-            updatedAligns.push(photo2Align);
+        for (const [file, align, slot] of [[file1, photo1Align, 1], [file2, photo2Align, 2]] as const) {
+            if (!(file instanceof File) || updatedPhotos.length >= 2) continue;
+            const stored = await storePhoto(file, slot);
+            if ('error' in stored) return NextResponse.json({ error: stored.error }, { status: 400 });
+            updatedPhotos.push(stored.filename);
+            updatedAligns.push(align);
         }
 
         milestones[milestoneIndex].photos = updatedPhotos;
@@ -201,7 +183,7 @@ export async function DELETE(request: Request) {
     try {
         const { id } = await request.json();
         const milestones = getTimeline();
-        const milestoneIndex = milestones.findIndex((m: any) => m.id === id);
+        const milestoneIndex = milestones.findIndex((m: Milestone) => m.id === id);
 
         if (milestoneIndex === -1) {
             return NextResponse.json({ error: 'Milestone not found' }, { status: 404 });
@@ -211,20 +193,10 @@ export async function DELETE(request: Request) {
 
         // Delete associated photos if they exist
         if (milestone.photos && Array.isArray(milestone.photos)) {
-            milestone.photos.forEach((photo: string) => {
-                const filePath = path.join(PHOTOS_DIR, photo);
-                if (fs.existsSync(filePath)) {
-                    fs.unlinkSync(filePath);
-                }
-            });
+            milestone.photos.forEach((photo: string) => removeStored(photo));
         }
         // Backwards compatibility: handle old single photo field
-        if (milestone.photo) {
-            const filePath = path.join(PHOTOS_DIR, milestone.photo);
-            if (fs.existsSync(filePath)) {
-                fs.unlinkSync(filePath);
-            }
-        }
+        if (milestone.photo) removeStored(milestone.photo);
 
         milestones.splice(milestoneIndex, 1);
         saveTimeline(milestones);

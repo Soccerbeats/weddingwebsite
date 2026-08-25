@@ -34,7 +34,6 @@ interface Photo {
 
 interface SortablePhotoProps {
     photo: Photo;
-    siteConfig: any;
     onSetHero: (type: 'homeHero' | 'aboutHero' | 'footerHeroImage' | 'weddingLogo' | 'venuePhoto', filename: string) => void;
     onDelete: (id: number) => void;
     onToggleHeart: (id: number, hearted: boolean) => void;
@@ -42,7 +41,7 @@ interface SortablePhotoProps {
     onOpen: () => void;
 }
 
-function SortablePhoto({ photo, siteConfig, onSetHero, onDelete, onToggleHeart, onEdit, onOpen }: SortablePhotoProps) {
+function SortablePhoto({ photo, onSetHero, onDelete, onToggleHeart, onEdit, onOpen }: SortablePhotoProps) {
     const {
         attributes,
         listeners,
@@ -538,7 +537,7 @@ export default function AdminPhotos() {
                         <span className="text-xs font-bold text-gray-500 uppercase">Home Page</span>
                         {siteConfig.homeHero ? (
                             <div className="h-20 w-32 bg-gray-200 mt-1 relative rounded-lg overflow-hidden shadow-md">
-                                <img src={`/api/photos/${siteConfig.homeHero}?w=320`} className="h-full w-full object-cover" />
+                                <img src={`/api/photos/${siteConfig.homeHero}?w=320`} alt="Home hero" className="h-full w-full object-cover" />
                             </div>
                         ) : <div className="h-20 w-32 bg-gray-200 mt-1 flex items-center justify-center text-xs rounded-lg">None</div>}
                     </div>
@@ -546,7 +545,7 @@ export default function AdminPhotos() {
                         <span className="text-xs font-bold text-gray-500 uppercase">About Page</span>
                         {siteConfig.aboutHero ? (
                             <div className="h-20 w-32 bg-gray-200 mt-1 relative rounded-lg overflow-hidden shadow-md">
-                                <img src={`/api/photos/${siteConfig.aboutHero}?w=320`} className="h-full w-full object-cover" />
+                                <img src={`/api/photos/${siteConfig.aboutHero}?w=320`} alt="About hero" className="h-full w-full object-cover" />
                             </div>
                         ) : <div className="h-20 w-32 bg-gray-200 mt-1 flex items-center justify-center text-xs rounded-lg">None</div>}
                     </div>
@@ -554,7 +553,7 @@ export default function AdminPhotos() {
                         <span className="text-xs font-bold text-gray-500 uppercase">Footer</span>
                         {siteConfig.footerHeroImage ? (
                             <div className="h-20 w-32 bg-gray-200 mt-1 relative rounded-lg overflow-hidden shadow-md">
-                                <img src={`/api/photos/${siteConfig.footerHeroImage}?w=320`} className="h-full w-full object-cover" />
+                                <img src={`/api/photos/${siteConfig.footerHeroImage}?w=320`} alt="Footer hero" className="h-full w-full object-cover" />
                             </div>
                         ) : <div className="h-20 w-32 bg-gray-200 mt-1 flex items-center justify-center text-xs rounded-lg">None</div>}
                     </div>
@@ -562,7 +561,7 @@ export default function AdminPhotos() {
                         <span className="text-xs font-bold text-gray-500 uppercase">Wedding Logo</span>
                         {siteConfig.weddingLogo ? (
                             <div className="h-20 w-32 bg-gray-200 mt-1 relative rounded-lg overflow-hidden shadow-md">
-                                <img src={`/api/photos/${siteConfig.weddingLogo}?w=320`} className="h-full w-full object-cover" />
+                                <img src={`/api/photos/${siteConfig.weddingLogo}?w=320`} alt="Wedding logo" className="h-full w-full object-cover" />
                             </div>
                         ) : <div className="h-20 w-32 bg-gray-200 mt-1 flex items-center justify-center text-xs rounded-lg">None</div>}
                     </div>
@@ -570,7 +569,7 @@ export default function AdminPhotos() {
                         <span className="text-xs font-bold text-gray-500 uppercase">Venue Photo</span>
                         {siteConfig.venuePhoto ? (
                             <div className="h-20 w-32 bg-gray-200 mt-1 relative rounded-lg overflow-hidden shadow-md">
-                                <img src={`/api/photos/${siteConfig.venuePhoto}?w=320`} className="h-full w-full object-cover" />
+                                <img src={`/api/photos/${siteConfig.venuePhoto}?w=320`} alt="Venue" className="h-full w-full object-cover" />
                             </div>
                         ) : <div className="h-20 w-32 bg-gray-200 mt-1 flex items-center justify-center text-xs rounded-lg">None</div>}
                     </div>
@@ -588,7 +587,6 @@ export default function AdminPhotos() {
                             <SortablePhoto
                                 key={photo.id}
                                 photo={photo}
-                                siteConfig={siteConfig}
                                 onSetHero={setHero}
                                 onDelete={handleDelete}
                                 onToggleHeart={handleToggleHeart}

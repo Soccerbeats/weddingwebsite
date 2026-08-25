@@ -9,12 +9,11 @@ export default function PhotoGallery() {
     const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
     useEffect(() => {
-        fetch('/config/photos.json')
+        // Served by /api/photos (hearted + ordered), read at request time — a
+        // static /config/photos.json is not served for files written after boot.
+        fetch('/api/photos', { cache: 'no-store' })
             .then(res => res.json())
-            .then(data => {
-                const heartedPhotos = (data.photos || []).filter((photo: Photo) => photo.hearted === true);
-                setPhotos(heartedPhotos);
-            })
+            .then(data => setPhotos((data.photos || []) as Photo[]))
             .catch(err => console.error('Error loading photos:', err));
     }, []);
 

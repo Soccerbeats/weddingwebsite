@@ -55,6 +55,9 @@ export function useHoneymoon() {
         setBusy(inFlight.current);
         try {
             const res = await fn();
+            if (res.status === 401) {
+                throw new Error('Your session has expired — sign in again to keep editing.');
+            }
             if (!res.ok) {
                 const body = await res.json().catch(() => ({}));
                 throw new Error(body.error || 'Save failed');
@@ -164,6 +167,8 @@ export function useHoneymoon() {
         if (!clean) return null;
         const key = normalizeCategoryKey(clean);
         try {
+            // Already a row? Then it is simply selected — no request at all.
+            if (data?.categories.some((c) => c.key === key)) return key;
             const res = await fetch(`${BASE}/categories`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -175,15 +180,17 @@ export function useHoneymoon() {
                     sort_order: 999,
                 }),
             });
-            // A duplicate key just means it already exists, which is fine.
-            if (!res.ok && res.status !== 500) throw new Error('Could not add that category');
+            // 409 is the API saying the key exists (a race with another tab),
+            // which is fine. Anything else is a real failure and says so —
+            // this used to treat every 500 as "duplicate, carry on".
+            if (!res.ok && res.status !== 409) throw new Error('Could not add that category');
             await refresh();
             return key;
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Could not add that category');
             return null;
         }
-    }, [refresh]);
+    }, [refresh, data?.categories]);
 
     /** Delete a whole selection in one request rather than N. */
     const removeMany = useCallback((resource: Resource, ids: number[]) => run(
@@ -212,11 +219,14 @@ export function useHoneymoon() {
     }, []);
 
     const quietPatch = useCallback(async (resource: Resource, body: unknown) => {
-        await fetch(`${BASE}/${resource}`, {
+        const res = await fetch(`${BASE}/${resource}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
         });
+        // A failed re-link during an undo is data loss that nothing else would
+        // report — surface it rather than swallowing the status.
+        if (!res.ok) throw new Error('Restore did not finish — a link could not be put back');
     }, []);
 
     /**
@@ -344,19 +354,36 @@ export function useHoneymoon() {
         );
     }, [data?.days, withUndo, remove, removeMany, quietPost, quietPatch]);
 
-    /** Delete a day, and be able to put it back with its stops and travel legs. */
+    /**
+     * Delete a day, and be able to put it back with its stops and travel legs.
+     *
+     * The remaining days are renumbered to close the gap, exactly as dragging
+     * one does — otherwise deleting day 2 of 4 left days 1, 3, 4 with day 3
+     * still on the third date and the calendar one day short. Undo re-inserts
+     * the day at its old position by reordering again.
+     */
     const removeDay = useCallback(async (day: Day) => withUndo(
         `Deleted day ${day.day_number}`,
-        () => remove('days', day.id),
         async () => {
+            const ok = await remove('days', day.id);
+            if (!ok) return false;
+            const rest = (data?.days ?? []).filter((d) => d.id !== day.id).map((d) => d.id);
+            if (rest.length) await reorder('days', rest);
+            return true;
+        },
+        async () => {
+            // Append, then splice back into place: day_number is UNIQUE and the
+            // old number now belongs to a neighbour.
             const created = await quietPost('days', {
-                day_number: day.day_number,
                 title: day.title ?? '',
                 base_place_id: day.base_place_id,
                 notes: day.notes ?? '',
             });
             const dayId = created?.id;
             if (dayId == null) return;
+            const ids = (data?.days ?? []).filter((d) => d.id !== day.id).map((d) => d.id);
+            ids.splice(Math.max(0, day.day_number - 1), 0, dayId);
+            await quietPatch('days', ids.map((id) => ({ id })));
             if (day.stops.length) {
                 await quietPost('stops', day.stops.map(({ id, day_id, ...rest }) => {
                     void id; void day_id;
@@ -370,7 +397,7 @@ export function useHoneymoon() {
                 }));
             }
         },
-    ), [withUndo, remove, quietPost]);
+    ), [withUndo, remove, reorder, quietPost, quietPatch, data?.days]);
 
     /** Delete one ordinary row — a stop, a note, a to-do — reversibly. */
     const removeRow = useCallback(async (

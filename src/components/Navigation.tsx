@@ -43,7 +43,6 @@ export default function Navigation({
     const logoRef  = useRef<HTMLDivElement>(null);
     const linksRef = useRef<HTMLDivElement>(null);
     const pathname = usePathname();
-    const isHome = pathname === '/';
     const [aboutInView, setAboutInView] = useState(false);
 
     // All pages: full banner at top, island when scrolled.
@@ -88,6 +87,7 @@ export default function Navigation({
     // Navigation lives in the layout and never unmounts, so `scrolled` state
     // would carry over from the previous page without this reset.
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setScrolled(window.scrollY > 60);
         setIsOpen(false);
     }, [pathname]);
@@ -103,6 +103,7 @@ export default function Navigation({
     // cutoff moved whenever anyone edited an FAQ. Whether the section spans a
     // fixed band depends on neither the section's height nor the viewport's.
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         if (pathname !== '/') { setAboutInView(false); return; }
         const el = document.getElementById('about');
         if (!el) return;

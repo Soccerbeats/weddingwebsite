@@ -162,15 +162,27 @@ function parseAmount(raw: unknown): number | null {
     return Number.isFinite(n) ? n : null;
 }
 
-function coerce(field: Field, raw: unknown): unknown {
+/** Thrown by coerce(); turned into a 400 by the handlers. */
+class BadValue extends Error {}
+
+function coerce(field: Field, raw: unknown, key = 'value'): unknown {
     switch (field.kind) {
         case 'text':
             return raw == null ? null : String(raw);
-        case 'number':
-            return parseAmount(raw) ?? 0;
-        case 'int': {
+        case 'number': {
+            // A blank means zero; anything that is not a number is refused.
+            // Writing 0 over a real amount because "abc" arrived is the worst
+            // failure a ledger can have, so it is a 400, not a default.
+            if (raw == null || raw === '') return 0;
             const n = parseAmount(raw);
-            return n == null ? 0 : Math.trunc(n);
+            if (n == null) throw new BadValue(`${key} must be a number`);
+            return n;
+        }
+        case 'int': {
+            if (raw == null || raw === '') return 0;
+            const n = parseAmount(raw);
+            if (n == null) throw new BadValue(`${key} must be a whole number`);
+            return Math.trunc(n);
         }
         case 'bool':
             return raw === true || raw === 'true' || raw === 1 || raw === '1';
@@ -181,7 +193,8 @@ function coerce(field: Field, raw: unknown): unknown {
             return n != null && n > 0 ? Math.trunc(n) : null;
         }
         case 'enum':
-            return field.values?.includes(String(raw)) ? String(raw) : field.values?.[0] ?? null;
+            if (field.values?.includes(String(raw))) return String(raw);
+            throw new BadValue(`${key} must be one of ${field.values?.join(', ')}`);
     }
 }
 
@@ -192,7 +205,7 @@ function collect(def: ResourceDef, body: Record<string, unknown>) {
     for (const [key, field] of Object.entries(def.fields)) {
         if (key in body) {
             columns.push(key);
-            values.push(coerce(field, body[key]));
+            values.push(coerce(field, body[key], key));
         }
     }
     return { columns, values };
@@ -222,7 +235,7 @@ export async function POST(request: Request, { params }: Params) {
             const columns: string[] = [];
             const values: unknown[] = [];
             for (const [key, field] of Object.entries(SETTINGS_FIELDS)) {
-                if (key in body) { columns.push(key); values.push(coerce(field, body[key])); }
+                if (key in body) { columns.push(key); values.push(coerce(field, body[key], key)); }
             }
             if (!columns.length) return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
             const sets = columns.map((c, i) => `${c} = $${i + 1}`).join(', ');
@@ -237,7 +250,9 @@ export async function POST(request: Request, { params }: Params) {
 
         for (const key of def.required) {
             const value = body[key];
-            if (value == null || value === '') {
+            const missing = value == null || value === ''
+                || (def.fields[key]?.kind === 'ref' && coerce(def.fields[key], value, key) == null);
+            if (missing) {
                 return NextResponse.json({ error: `${key} is required` }, { status: 400 });
             }
         }
@@ -253,6 +268,7 @@ export async function POST(request: Request, { params }: Params) {
         );
         return NextResponse.json(result.rows[0]);
     } catch (error) {
+        if (error instanceof BadValue) return NextResponse.json({ error: error.message }, { status: 400 });
         console.error(`Error creating ${resource}:`, error);
         return NextResponse.json({ error: `Failed to create ${resource}` }, { status: 500 });
     }
@@ -325,6 +341,7 @@ export async function PATCH(request: Request, { params }: Params) {
         if (!result.rowCount) return NextResponse.json({ error: 'Not found' }, { status: 404 });
         return NextResponse.json(result.rows[0]);
     } catch (error) {
+        if (error instanceof BadValue) return NextResponse.json({ error: error.message }, { status: 400 });
         console.error(`Error updating ${resource}:`, error);
         return NextResponse.json({ error: `Failed to update ${resource}` }, { status: 500 });
     }
@@ -346,6 +363,7 @@ export async function DELETE(request: Request, { params }: Params) {
         if (!result.rowCount) return NextResponse.json({ error: 'Not found' }, { status: 404 });
         return NextResponse.json({ success: true });
     } catch (error) {
+        if (error instanceof BadValue) return NextResponse.json({ error: error.message }, { status: 400 });
         console.error(`Error deleting ${resource}:`, error);
         return NextResponse.json({ error: `Failed to delete ${resource}` }, { status: 500 });
     }

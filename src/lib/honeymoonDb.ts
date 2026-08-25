@@ -224,7 +224,11 @@ function num(value: unknown): number | null {
 
 function isoDate(value: unknown): string | null {
     if (!value) return null;
-    if (value instanceof Date) return value.toISOString().slice(0, 10);
+    // lib/db hands DATE columns back as `YYYY-MM-DD` text, so this is only a
+    // trim. A Date here would depend on the server's time zone.
+    if (value instanceof Date) {
+        return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
+    }
     return String(value).slice(0, 10);
 }
 

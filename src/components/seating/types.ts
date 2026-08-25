@@ -49,4 +49,5 @@ export interface GuestListEntry {
   rsvp_status: string | null;
   invited: boolean;
   assigned_seat?: { table_name: string; seat_index: number } | null;
+  party_members?: { name: string | null }[];
 }

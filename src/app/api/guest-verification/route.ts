@@ -5,7 +5,7 @@ export async function POST(request: Request) {
   try {
     const { guest_name } = await request.json();
 
-    if (!guest_name) {
+    if (typeof guest_name !== 'string' || !guest_name.trim()) {
       return NextResponse.json(
         { verified: false, message: 'Guest name is required' },
         { status: 400 }

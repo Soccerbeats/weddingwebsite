@@ -13,6 +13,8 @@ export default function SchedulePage() {
         }
     ];
     const bgColor = config.pageBgColors?.schedule || '#ffffff';
+    const shuttleText = (config.scheduleShuttleText || '').trim();
+    const dressCode = (config.scheduleDressCode || '').trim();
 
     return (
         <div style={{ backgroundColor: bgColor }} className="py-16">
@@ -33,7 +35,7 @@ export default function SchedulePage() {
                             RSVP Now
                         </Link>
                         <Link
-                            href="/about#faqs"
+                            href="/#faqs"
                             className="px-8 py-3 bg-transparent border-2 border-accent text-accent hover:bg-accent hover:text-white transition-colors rounded-full uppercase tracking-widest text-sm font-bold shadow-lg hover:shadow-xl"
                         >
                             View FAQs
@@ -85,22 +87,25 @@ export default function SchedulePage() {
                     </div>
                 </div>
 
-                {/* Transportation & Details */}
-                <div className="mt-20 grid gap-8 grid-cols-1 md:grid-cols-2 max-w-4xl mx-auto">
-                    <FadeIn animation="slide-right" className="bg-gray-900 text-white p-8 rounded-2xl text-center shadow-xl">
-                        <h3 className="text-xl font-serif mb-4">Shuttle Service</h3>
-                        <p className="text-gray-300">
-                            Shuttles will depart from the [Hotel Name] every 30 minutes starting at 2:30 PM. Return service begins at 9:00 PM.
-                        </p>
-                    </FadeIn>
-                    <FadeIn animation="slide-left" delay={80} className="bg-accent/10 p-8 rounded-2xl text-center border-2 border-accent/20 shadow-lg">
-                        <h3 className="text-xl font-serif mb-4 text-gray-900">Dress Code</h3>
-                        <p className="text-gray-600">
-                            <strong>Black Tie Optional</strong><br />
-                            Tuxedos or dark suits; floor-length or cocktail dresses.
-                        </p>
-                    </FadeIn>
-                </div>
+                {/* Transportation & Details — only the cards that have content.
+                    These used to be hard-coded placeholders ("[Hotel Name]",
+                    "Black Tie Optional") that every guest could read. */}
+                {(shuttleText || dressCode) && (
+                    <div className="mt-20 grid gap-8 grid-cols-1 md:grid-cols-2 max-w-4xl mx-auto">
+                        {shuttleText && (
+                            <FadeIn animation="slide-right" className="bg-gray-900 text-white p-8 rounded-2xl text-center shadow-xl">
+                                <h3 className="text-xl font-serif mb-4">Getting There</h3>
+                                <p className="text-gray-300 whitespace-pre-line">{shuttleText}</p>
+                            </FadeIn>
+                        )}
+                        {dressCode && (
+                            <FadeIn animation="slide-left" delay={80} className="bg-accent/10 p-8 rounded-2xl text-center border-2 border-accent/20 shadow-lg">
+                                <h3 className="text-xl font-serif mb-4 text-gray-900">Dress Code</h3>
+                                <p className="text-gray-600 whitespace-pre-line">{dressCode}</p>
+                            </FadeIn>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     );

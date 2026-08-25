@@ -308,11 +308,17 @@ export function CustomisableSelect({
 }
 
 /** Category picker, including any custom categories already in use. */
-export function CategorySelect({ value, places, onChange, onManage }: {
+export function CategorySelect({ value, places, onChange, onManage, onCreateCategory }: {
     value: string;
     places: { category: string }[];
     onChange: (next: string) => void;
     onManage?: () => void;
+    /**
+     * Makes a typed category a real row (so it can be renamed, recoloured and
+     * bulk-applied) and returns its key. Without it the key is only derived,
+     * and the category exists solely on the places that use it.
+     */
+    onCreateCategory?: (label: string) => Promise<string | null>;
 }) {
     const options: CategoryMeta[] = categoriesOf(places);
     // The current value may be a custom category that nothing else uses yet.
@@ -326,7 +332,9 @@ export function CategorySelect({ value, places, onChange, onManage }: {
             placeholder="Beach club, hot springs…"
             options={all.map((c) => ({ key: c.key, label: `${c.icon} ${c.label}` }))}
             onChange={onChange}
-            onCreate={(typed) => normalizeCategoryKey(typed)}
+            onCreate={(typed) => (onCreateCategory
+                ? onCreateCategory(typed).then((key) => key ?? normalizeCategoryKey(typed))
+                : normalizeCategoryKey(typed))}
             onManage={onManage}
         />
     );

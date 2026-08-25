@@ -24,7 +24,15 @@ export default function AdminColorSettings() {
     useEffect(() => {
         fetch('/api/admin/site-config')
             .then(res => res.json())
-            .then(data => setConfig(prev => ({ ...prev, ...data })));
+            // Only this page's keys — see Settings for why.
+            .then(data => setConfig(prev => ({
+                ...prev,
+                accentColor: data.accentColor ?? prev.accentColor,
+                accentLightColor: data.accentLightColor ?? prev.accentLightColor,
+                accentDarkColor: data.accentDarkColor ?? prev.accentDarkColor,
+                weddingColorPalette: data.weddingColorPalette ?? prev.weddingColorPalette,
+                pageBgColors: { ...prev.pageBgColors, ...(data.pageBgColors ?? {}) },
+            })));
     }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {

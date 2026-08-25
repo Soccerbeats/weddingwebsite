@@ -358,7 +358,8 @@ console.log('\nNightly price formatting');
     // The trip's own currency wins when it isn't dollars.
     check('honours a non-USD trip currency', f('250', 'GBP') === '£250 per night', f('250','GBP'));
     check('unknown currency codes fall back to the code',
-        f('250', 'IDR') === 'IDR 250 per night', f('250','IDR'));
+        f('250', 'THB') === 'THB 250 per night', f('250','THB'));
+    check('rupiah has a symbol', f('250', 'IDR') === 'Rp250 per night', f('250','IDR'));
     check('a GBP amount is not re-prefixed', f('£250 per night', 'GBP') === '£250 per night');
 }
 
@@ -837,6 +838,7 @@ function makePlace(id: number, name: string, lat: number | null, lng: number | n
         status: 'idea', price_note: null, links: [], photos: [],
         source: 'manual', needs_review: false, sort_order: 0,
         rating: null, is_excursion: false, image_url: null, country: '', rank: null,
+    archived: false,
     };
 }
 

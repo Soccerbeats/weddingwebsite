@@ -3,9 +3,6 @@ import pool from '@/lib/db';
 
 export async function GET() {
   try {
-    // Self-heal: ensure the flag + relationship columns exist.
-    await pool.query(`ALTER TABLE guest_list ADD COLUMN IF NOT EXISTS flag VARCHAR(20)`);
-    await pool.query(`ALTER TABLE guest_list ADD COLUMN IF NOT EXISTS relationship VARCHAR(255)`);
     const result = await pool.query('SELECT * FROM guest_list ORDER BY guest_name');
     return NextResponse.json(result.rows);
   } catch (error) {
@@ -16,35 +13,37 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const { guest_name, email, phone, party_size, notes, invited, party_members, address, flag, relationship, upsert } = await request.json();
+    const { guest_name, email, phone, party_size, notes, invited, party_members, address, flag, relationship, plus_one_name, upsert } = await request.json();
 
-    await pool.query(
-      `CREATE UNIQUE INDEX IF NOT EXISTS guest_list_name_unique ON guest_list (LOWER(guest_name))`
-    );
-    await pool.query(`ALTER TABLE guest_list ADD COLUMN IF NOT EXISTS flag VARCHAR(20)`);
-    await pool.query(`ALTER TABLE guest_list ADD COLUMN IF NOT EXISTS relationship VARCHAR(255)`);
+    if (typeof guest_name !== 'string' || !guest_name.trim()) {
+      return NextResponse.json({ error: 'guest_name is required' }, { status: 400 });
+    }
 
+    // Schema lives in database/init.sql (including the unique index the
+    // upsert relies on); nothing is created per request any more.
     const membersJson = party_members ? JSON.stringify(party_members) : null;
+    const plusOne = typeof plus_one_name === 'string' && plus_one_name.trim() ? plus_one_name.trim() : null;
 
     let result;
     if (upsert) {
       result = await pool.query(
-        `INSERT INTO guest_list (guest_name, email, phone, party_size, notes, invited, party_members, address, flag, relationship, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+        `INSERT INTO guest_list (guest_name, email, phone, party_size, notes, invited, party_members, address, flag, relationship, plus_one_name, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
          ON CONFLICT (LOWER(guest_name)) DO UPDATE SET
            party_size = EXCLUDED.party_size,
            party_members = COALESCE(EXCLUDED.party_members, guest_list.party_members),
            address = CASE WHEN EXCLUDED.address <> '' THEN EXCLUDED.address ELSE guest_list.address END,
+           plus_one_name = COALESCE(EXCLUDED.plus_one_name, guest_list.plus_one_name),
            updated_at = NOW()
          RETURNING *, (xmax = 0) AS inserted`,
-        [guest_name, email, phone, party_size, notes, invited ?? true, membersJson, address ?? '', flag ?? null, relationship ?? null]
+        [guest_name.trim(), email, phone, party_size, notes, invited ?? true, membersJson, address ?? '', flag ?? null, relationship ?? null, plusOne]
       );
     } else {
       result = await pool.query(
-        `INSERT INTO guest_list (guest_name, email, phone, party_size, notes, invited, party_members, address, flag, relationship, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+        `INSERT INTO guest_list (guest_name, email, phone, party_size, notes, invited, party_members, address, flag, relationship, plus_one_name, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
          RETURNING *`,
-        [guest_name, email, phone, party_size, notes, invited ?? true, membersJson, address ?? '', flag ?? null, relationship ?? null]
+        [guest_name.trim(), email, phone, party_size, notes, invited ?? true, membersJson, address ?? '', flag ?? null, relationship ?? null, plusOne]
       );
     }
 
@@ -58,9 +57,6 @@ export async function POST(request: Request) {
 export async function PUT(request: Request) {
   try {
     const { id, guest_name, email, phone, party_size, notes, invited, party_members, address, rsvp_status, flag, relationship, side } = await request.json();
-
-    await pool.query(`ALTER TABLE guest_list ADD COLUMN IF NOT EXISTS flag VARCHAR(20)`);
-    await pool.query(`ALTER TABLE guest_list ADD COLUMN IF NOT EXISTS relationship VARCHAR(255)`);
 
     const membersJson = party_members ? JSON.stringify(party_members) : null;
 
@@ -114,8 +110,6 @@ export async function PATCH(request: Request) {
     if (targets.length === 0) {
       return NextResponse.json({ error: 'No guest ids given' }, { status: 400 });
     }
-
-    await pool.query(`ALTER TABLE guest_list ADD COLUMN IF NOT EXISTS flag VARCHAR(20)`);
 
     const sets: string[] = [];
     const params: unknown[] = [];

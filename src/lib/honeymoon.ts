@@ -700,7 +700,7 @@ export function cleanListingTitle(title: string): string | null {
 
 /** Symbols for the currencies a honeymoon is plausibly priced in. */
 const CURRENCY_SYMBOLS: Record<string, string> = {
-    USD: '$', EUR: '€', GBP: '£', AUD: 'A$', CAD: 'C$', SGD: 'S$', NZD: 'NZ$',
+    USD: '$', EUR: '€', GBP: '£', AUD: 'A$', CAD: 'C$', SGD: 'S$', NZD: 'NZ$', IDR: 'Rp',
 };
 
 export function currencySymbol(code: string | null | undefined): string {
@@ -772,9 +772,14 @@ export function formatPrice(raw: string, currency?: string | null): string {
  */
 export function priceValue(note: string | null | undefined): number | null {
     if (!note) return null;
-    const match = note.replace(/,/g, '').match(/-?\d+(\.\d+)?/);
+    const text = note.replace(/,/g, '');
+    // Prefer the figure that is visibly money — "2 bed villa $300" is 300, not
+    // 2 — and fall back to the first number when nothing is marked.
+    const marked = text.match(/(?:[$€£]|Rp|A\$|C\$|S\$|NZ\$)\s*(\d+(?:\.\d+)?)/i)
+        ?? text.match(/(\d+(?:\.\d+)?)\s*(?:USD|EUR|GBP|AUD|CAD|SGD|NZD|IDR|k\b)/i);
+    const match = marked ? marked[1] : text.match(/-?\d+(\.\d+)?/)?.[0];
     if (!match) return null;
-    const value = Number(match[0]);
+    const value = Number(match);
     return Number.isFinite(value) && value >= 0 ? value : null;
 }
 
@@ -1160,8 +1165,10 @@ export function buildIcs(events: IcsEvent[], stamp: string, calendarName = 'Hone
 
 function addHour(time: string): string {
     const [h, m] = time.split(':').map(Number);
-    const hour = Math.min(23, (h ?? 0) + 1);
-    return `${String(hour).padStart(2, '0')}:${String(m ?? 0).padStart(2, '0')}`;
+    // A 23:xx start cannot end an hour later on the same date; 23:59 keeps the
+    // event non-zero-length rather than making DTEND equal DTSTART.
+    if ((h ?? 0) >= 23) return '23:59';
+    return `${String((h ?? 0) + 1).padStart(2, '0')}:${String(m ?? 0).padStart(2, '0')}`;
 }
 
 /**
@@ -1172,10 +1179,21 @@ function addHour(time: string): string {
  * travel leg and every stop that has a time, which are the things you can
  * actually be late for.
  */
+/** Colours for overlaid day routes, one per day; wraps after sixteen. */
+export const DAY_COLORS = [
+    '#0f172a', '#be123c', '#0891b2', '#a16207', '#7c3aed', '#059669', '#ea580c', '#db2777',
+    '#4d7c0f', '#0284c7', '#9333ea', '#b45309', '#15803d', '#e11d48', '#334155', '#c026d3',
+];
+
+export function dayColor(dayNumber: number): string {
+    return DAY_COLORS[(Math.max(1, dayNumber) - 1) % DAY_COLORS.length];
+}
+
 export function tripEvents(
     trip: { start_date: string | null; title: string },
     days: Day[],
     placeName: (id: number) => string | undefined,
+    placeAddress: (id: number) => string | undefined = () => undefined,
 ): IcsEvent[] {
     if (!trip.start_date) return [];
     const events: IcsEvent[] = [];
@@ -1221,10 +1239,12 @@ export function tripEvents(
 
         for (const stop of day.stops) {
             if (!stop.start_time) continue;
+            const address = stop.place_id != null ? placeAddress(stop.place_id) : undefined;
             events.push({
                 uid: `honeymoon-stop-${stop.id}@wedding`,
                 summary: label(stop),
                 description: stop.notes ?? undefined,
+                location: address || undefined,
                 date: iso,
                 start: stop.start_time,
             });
@@ -1278,6 +1298,7 @@ export function searchHoneymoon(
     const needle = term.trim().toLowerCase();
     if (needle.length < 2) return [];
     const hits: SearchHit[] = [];
+    const placeNames = new Map(data.places.map((p) => [p.id, p.name]));
 
     for (const place of data.places) {
         const score = scoreOf(needle, place.name, `${place.description ?? ''} ${place.address ?? ''}`);
@@ -1316,7 +1337,9 @@ export function searchHoneymoon(
         }
     }
     for (const day of data.days) {
-        const stops = day.stops.map((s) => s.custom_label ?? '').join(' ');
+        const stops = day.stops
+            .map((s) => s.custom_label || (s.place_id != null ? placeNames.get(s.place_id) : '') || '')
+            .join(' ');
         const score = scoreOf(needle, day.title || `Day ${day.day_number}`, `${day.notes ?? ''} ${stops}`);
         if (score != null) {
             hits.push({

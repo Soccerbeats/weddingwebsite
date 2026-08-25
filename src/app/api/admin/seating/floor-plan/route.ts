@@ -29,7 +29,7 @@ export async function GET() {
   const client = await pool.connect();
   try {
     // Get or create floor plan
-    let fpResult = await client.query(
+    const fpResult = await client.query(
       'SELECT * FROM floor_plans ORDER BY id ASC LIMIT 1'
     );
 
@@ -91,7 +91,9 @@ export async function GET() {
         id: table.id,
         name: table.name,
         table_type: table.table_type,
-        seat_count: seats.length,
+        // Declared capacity when the table has one, otherwise the seats in use —
+        // the dashboard reads the same rule.
+        seat_count: Math.max(Number(table.seat_count) || 0, seats.length),
         x: table.x,
         y: table.y,
         rotation: table.rotation,
@@ -117,7 +119,7 @@ export async function POST(request: Request) {
     const { name, room_width, room_height } = await request.json();
 
     // Get existing floor plan or create one
-    let fpResult = await client.query(
+    const fpResult = await client.query(
       'SELECT id FROM floor_plans ORDER BY id ASC LIMIT 1'
     );
 

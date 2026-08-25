@@ -73,14 +73,32 @@ export default function DateRangePicker({ start, end, onChange, months = 2 }: {
 
     const nights = preview ? (daysBetween(preview.start, preview.end) ?? 0) : 0;
 
+    /**
+     * Find the cell under the pointer by hit-testing.
+     *
+     * `pointerenter` on each cell does not fire during a touch drag — the
+     * finger's events all go to the element first touched — so on a phone the
+     * range never grew past one day. Reading the element under the pointer
+     * works for mouse and touch alike.
+     */
+    const hoverAt = (clientX: number, clientY: number) => {
+        if (!dragging) return;
+        const el = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
+        const iso = el?.closest<HTMLElement>('[data-day]')?.dataset.day;
+        if (iso && iso !== dragging.hover) setDragging({ ...dragging, hover: iso });
+    };
+
     return (
         <div
             // Bound here rather than on each cell: releasing outside the calendar
             // still has to end the drag, or the range would follow the cursor
-            // around the page.
+            // around the page. Pointer capture keeps the move events coming even
+            // when the pointer leaves the grid.
+            onPointerDown={(e) => e.currentTarget.setPointerCapture?.(e.pointerId)}
+            onPointerMove={(e) => hoverAt(e.clientX, e.clientY)}
             onPointerUp={finish}
-            onPointerLeave={() => { if (dragging) finish(); }}
-            className="select-none"
+            onPointerCancel={finish}
+            className="select-none touch-none"
         >
             <div className="flex items-center justify-between gap-2 mb-2">
                 <Button className="!px-2.5" onClick={() => step(-1)} aria-label="Previous month">‹</Button>
@@ -117,14 +135,12 @@ export default function DateRangePicker({ start, end, onChange, months = 2 }: {
                                     <button
                                         key={cell.key}
                                         type="button"
+                                        data-day={cell.key}
                                         onPointerDown={(e) => {
                                             // Stops the browser turning the drag
                                             // into a text selection across cells.
                                             e.preventDefault();
                                             beginAt(cell.key);
-                                        }}
-                                        onPointerEnter={() => {
-                                            if (dragging) setDragging({ ...dragging, hover: cell.key });
                                         }}
                                         aria-label={cell.key}
                                         aria-pressed={!!inRange}

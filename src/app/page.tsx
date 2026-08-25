@@ -4,6 +4,7 @@ import CountdownClock from '@/components/CountdownClock';
 import FadeIn from '@/components/FadeIn';
 import HeroCollapse from '@/components/HeroCollapse';
 import NavCards from '@/components/NavCards';
+import { photoSrc, photoSrcSet } from '@/lib/photoSrc';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,9 +13,12 @@ function renderWithLinks(text: string) {
     const parts = text.split(/(\[[^\]]+\]\([^)]+\))/g);
     return parts.map((part, i) => {
         const match = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
-        if (match) {
-            return <a key={i} href={match[2]} target="_blank" rel="noopener noreferrer" className="text-accent underline hover:text-accent-dark">{match[1]}</a>;
+        // Only web and mail links; a `javascript:` href typed into an answer
+        // would otherwise run on every guest's browser.
+        if (match && /^(https?:\/\/|mailto:|tel:|\/)/i.test(match[2].trim())) {
+            return <a key={i} href={match[2].trim()} target="_blank" rel="noopener noreferrer" className="text-accent underline hover:text-accent-dark">{match[1]}</a>;
         }
+        if (match) return <span key={i}>{match[1]}</span>;
         return <span key={i}>{part}</span>;
     });
 }
@@ -30,6 +34,8 @@ export default function Home() {
   const slideshowInterval = config.heroSlideshowInterval || 5000;
 
   const heroImages = slideshowEnabled ? slideshowImages : (config.homeHero ? [config.homeHero] : []);
+  // A question with no text yet is a draft, not content.
+  const faqs = (config.faqs || []).filter((f) => f.question?.trim() || f.answer?.trim());
 
   return (
     <div style={{ backgroundColor: bgColor }}>
@@ -183,7 +189,7 @@ export default function Home() {
                 <div className="mt-10 lg:mt-0 relative">
                   <div className="aspect-w-3 aspect-h-4 rounded-3xl overflow-hidden bg-gray-100 shadow-xl border-4 border-white transform md:rotate-2 hover:rotate-0 transition-transform duration-500">
                     {config.aboutHero ? (
-                      <img src={`/api/photos/${config.aboutHero}`} alt="About Couple" className="h-full w-full object-cover" />
+                      <img src={photoSrc(config.aboutHero, 'large')} srcSet={photoSrcSet(config.aboutHero)} sizes="(max-width: 1024px) 100vw, 50vw" alt="About Couple" className="h-full w-full object-cover" loading="lazy" />
                     ) : (
                       <div className="flex items-center justify-center h-full w-full bg-gray-200 text-gray-400 p-8 text-center">
                         [Couple Photo Placeholder]
@@ -204,7 +210,10 @@ export default function Home() {
                 <FadeIn animation="slide-up">
                   <div className="mb-10 max-w-3xl mx-auto rounded-2xl overflow-hidden shadow-xl border border-gray-100">
                     <img
-                      src={`/api/photos/${config.venuePhoto}`}
+                      src={photoSrc(config.venuePhoto, 'large')}
+                      srcSet={photoSrcSet(config.venuePhoto)}
+                      sizes="(max-width: 768px) 100vw, 768px"
+                      loading="lazy"
                       alt={config.weddingVenue || 'The Venue'}
                       className="w-full h-72 sm:h-96 object-cover"
                     />
@@ -268,9 +277,9 @@ export default function Home() {
                   Details &amp; FAQ
                 </h2>
               </FadeIn>
-              {config.faqs && config.faqs.length > 0 ? (
+              {faqs.length > 0 ? (
                 <dl className="space-y-8">
-                  {config.faqs.map((faq, index) => (
+                  {faqs.map((faq, index) => (
                     <FadeIn key={index} animation="slide-up" delay={index * 60}>
                       <div>
                         <dt className="text-lg leading-6 font-medium text-gray-900">{faq.question}</dt>

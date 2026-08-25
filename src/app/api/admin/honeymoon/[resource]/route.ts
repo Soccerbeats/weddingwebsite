@@ -359,6 +359,11 @@ export async function POST(request: Request, { params }: Params) {
         );
         return NextResponse.json(result.rows[0]);
     } catch (error) {
+        // unique_violation: a day number or category key that already exists
+        // is the caller's to resolve, not a server fault.
+        if ((error as { code?: string })?.code === '23505') {
+            return NextResponse.json({ error: `That ${resource === 'days' ? 'day number' : 'value'} already exists` }, { status: 409 });
+        }
         console.error(`Error creating ${resource}:`, error);
         return NextResponse.json({ error: `Failed to create ${resource}` }, { status: 500 });
     }
@@ -525,6 +530,24 @@ export async function DELETE(request: Request, { params }: Params) {
                 .map((raw) => Math.trunc(Number(raw.trim())))
                 .filter((n) => Number.isFinite(n) && n > 0);
             if (!ids.length) return NextResponse.json({ error: 'No valid ids' }, { status: 400 });
+            if (def.table === 'honeymoon_categories') {
+                // Same rule as the single delete below: the fallback stays, and
+                // places filed under a deleted category move to it.
+                const rows = await pool.query(
+                    'SELECT id, key FROM honeymoon_categories WHERE id = ANY($1)', [ids],
+                );
+                const keep = rows.rows.filter((r) => r.key !== 'misc');
+                if (keep.length) {
+                    await pool.query(
+                        "UPDATE honeymoon_places SET category = 'misc' WHERE category = ANY($1)",
+                        [keep.map((r) => r.key)],
+                    );
+                }
+                const result = await pool.query(
+                    'DELETE FROM honeymoon_categories WHERE id = ANY($1)', [keep.map((r) => r.id)],
+                );
+                return NextResponse.json({ success: true, deleted: result.rowCount });
+            }
             const result = await pool.query(
                 `DELETE FROM ${def.table} WHERE id = ANY($1)`, [ids],
             );

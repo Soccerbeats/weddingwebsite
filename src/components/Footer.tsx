@@ -1,4 +1,5 @@
 interface FooterProps {
+    /** Unused for display, kept so the shell's props still type-check. */
     brideName?: string;
     groomName?: string;
     weddingDate?: string;
@@ -6,13 +7,18 @@ interface FooterProps {
     footerHeroImage?: string;
 }
 
+import { parseDateParts } from '@/lib/weddingDate';
+
 export default function Footer({
-    brideName = 'Sarah',
-    groomName = 'James',
-    weddingDate = 'June 15, 2024',
-    weddingLocation = 'Napa Valley, CA',
+    brideName = '',
+    groomName = '',
+    weddingDate = '',
     footerHeroImage
 }: FooterProps) {
+    // The copyright year is the wedding's year, not a number typed into the
+    // template in 2026.
+    const year = parseDateParts(weddingDate)?.year ?? new Date().getFullYear();
+    const couple = brideName && groomName ? `${brideName} & ${groomName}` : '';
     const imageUrl = footerHeroImage
         ? `/api/photos/${footerHeroImage}`
         : '/images/Gemini_Generated_Image_7xzkxd7xzkxd7xzk.png';
@@ -29,7 +35,7 @@ export default function Footer({
                 </div>
                 <div className="mt-0 md:mt-0 md:order-1 w-full">
                     <p className="text-center text-base text-gray-900 font-serif">
-                        &copy; 2026 {brideName} & {groomName}. We can't wait to celebrate with you!
+                        &copy; {year}{couple ? ` ${couple}.` : ''} We can&apos;t wait to celebrate with you!
                     </p>
                 </div>
             </div>

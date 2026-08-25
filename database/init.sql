@@ -77,6 +77,23 @@ ALTER TABLE donations ADD COLUMN IF NOT EXISTS thank_you_sent_at TIMESTAMP;
 ALTER TABLE donations ALTER COLUMN amount SET DEFAULT 0;
 ALTER TABLE donations ALTER COLUMN amount DROP NOT NULL;
 
+-- One guest-list row per household name. The RSVP form and the CSV import both
+-- upsert on this. Guarded: an existing database with duplicate names must not
+-- fail to boot — it gets a NOTICE and the upsert path keeps failing loudly until
+-- the duplicates are merged in the admin.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'guest_list_name_unique') THEN
+    IF EXISTS (
+      SELECT LOWER(guest_name) FROM guest_list GROUP BY LOWER(guest_name) HAVING COUNT(*) > 1
+    ) THEN
+      RAISE NOTICE 'guest_list has duplicate names; guest_list_name_unique not created';
+    ELSE
+      CREATE UNIQUE INDEX guest_list_name_unique ON guest_list (LOWER(guest_name));
+    END IF;
+  END IF;
+END $$;
+
 -- Migrate plus_one_name into party_members and backfill remaining slots as null
 DO $$
 BEGIN
@@ -335,3 +352,135 @@ ALTER TABLE honeymoon_travel ADD COLUMN IF NOT EXISTS to_lng DOUBLE PRECISION;
 
 CREATE INDEX IF NOT EXISTS honeymoon_places_region_idx ON honeymoon_places (region_id);
 CREATE INDEX IF NOT EXISTS honeymoon_stops_day_idx ON honeymoon_stops (day_id);
+
+-- ---------------------------------------------------------------------------
+-- Finance suite
+--
+-- Mirrored by createTables() in src/lib/financeDb.ts, which runs the same
+-- statements once per process. Both must stay in step.
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS finance_settings (
+  id INTEGER PRIMARY KEY DEFAULT 1,
+  adult_count INTEGER NOT NULL DEFAULT 0,
+  minor_count INTEGER NOT NULL DEFAULT 0,
+  plan_horizon_months INTEGER,
+  paycheck_interval_days INTEGER NOT NULL DEFAULT 14,
+  CONSTRAINT finance_settings_singleton CHECK (id = 1)
+);
+
+CREATE TABLE IF NOT EXISTS finance_categories (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS finance_items (
+  id SERIAL PRIMARY KEY,
+  category_id INTEGER NOT NULL REFERENCES finance_categories(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  unit_cost NUMERIC NOT NULL DEFAULT 0,
+  quantity NUMERIC NOT NULL DEFAULT 1,
+  qty_source TEXT NOT NULL DEFAULT 'manual',
+  use_subitems BOOLEAN NOT NULL DEFAULT FALSE,
+  is_paid BOOLEAN NOT NULL DEFAULT FALSE,
+  notes TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS finance_subitems (
+  id SERIAL PRIMARY KEY,
+  item_id INTEGER NOT NULL REFERENCES finance_items(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  unit_cost NUMERIC NOT NULL DEFAULT 0,
+  quantity NUMERIC NOT NULL DEFAULT 1,
+  sort_order INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS finance_payers (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  share_pct NUMERIC NOT NULL DEFAULT 0,
+  sort_order INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS finance_purchases (
+  id SERIAL PRIMARY KEY,
+  payer_id INTEGER REFERENCES finance_payers(id) ON DELETE SET NULL,
+  item_id INTEGER REFERENCES finance_items(id) ON DELETE SET NULL,
+  description TEXT NOT NULL,
+  amount NUMERIC NOT NULL DEFAULT 0,
+  purchased_on DATE,
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS finance_contributors (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  pledged NUMERIC NOT NULL DEFAULT 0,
+  notes TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS finance_receipts (
+  id SERIAL PRIMARY KEY,
+  contributor_id INTEGER NOT NULL REFERENCES finance_contributors(id) ON DELETE CASCADE,
+  item_id INTEGER REFERENCES finance_items(id) ON DELETE SET NULL,
+  amount NUMERIC NOT NULL DEFAULT 0,
+  received_on DATE,
+  note TEXT,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS finance_schedule (
+  id SERIAL PRIMARY KEY,
+  item_id INTEGER REFERENCES finance_items(id) ON DELETE CASCADE,
+  category_id INTEGER REFERENCES finance_categories(id) ON DELETE CASCADE,
+  label TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'installment',
+  amount NUMERIC NOT NULL DEFAULT 0,
+  due_on DATE,
+  settled BOOLEAN NOT NULL DEFAULT FALSE,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS finance_snapshots (
+  taken_on DATE PRIMARY KEY,
+  budget_total NUMERIC NOT NULL DEFAULT 0,
+  paid_total NUMERIC NOT NULL DEFAULT 0,
+  bill_remaining NUMERIC NOT NULL DEFAULT 0,
+  gift_received NUMERIC NOT NULL DEFAULT 0,
+  still_to_spend NUMERIC NOT NULL DEFAULT 0,
+  item_count INTEGER NOT NULL DEFAULT 0
+);
+
+ALTER TABLE finance_categories ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE finance_items ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE finance_purchases ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE finance_contributors ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE finance_purchases ADD COLUMN IF NOT EXISTS receipt_path TEXT;
+ALTER TABLE finance_contributors ADD COLUMN IF NOT EXISTS thank_you_sent BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE finance_contributors ADD COLUMN IF NOT EXISTS thank_you_sent_at TIMESTAMP;
+ALTER TABLE finance_purchases ADD COLUMN IF NOT EXISTS category_id INTEGER REFERENCES finance_categories(id) ON DELETE SET NULL;
+ALTER TABLE finance_receipts ADD COLUMN IF NOT EXISTS category_id INTEGER REFERENCES finance_categories(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS finance_items_category_idx ON finance_items(category_id);
+CREATE INDEX IF NOT EXISTS finance_purchases_category_idx ON finance_purchases(category_id);
+CREATE INDEX IF NOT EXISTS finance_schedule_item_idx ON finance_schedule(item_id);
+CREATE INDEX IF NOT EXISTS finance_schedule_category_idx ON finance_schedule(category_id);
+CREATE INDEX IF NOT EXISTS finance_subitems_item_idx ON finance_subitems(item_id);
+CREATE INDEX IF NOT EXISTS finance_receipts_contributor_idx ON finance_receipts(contributor_id);
+INSERT INTO finance_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+
+-- Honeymoon categories are rows so they can be renamed and deleted like
+-- anything else; honeymoonDb.ts seeds the built-in list on first request.
+CREATE TABLE IF NOT EXISTS honeymoon_categories (
+  id SERIAL PRIMARY KEY,
+  key TEXT NOT NULL UNIQUE,
+  label TEXT NOT NULL,
+  color TEXT NOT NULL DEFAULT '#6b7280',
+  icon TEXT NOT NULL DEFAULT '●',
+  sort_order INTEGER NOT NULL DEFAULT 0
+);

@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
-import { Pool } from 'pg';
+import pool from '@/lib/db';
 import { buildActivityFeed } from '@/lib/activity';
 import { loadFinanceData } from '@/lib/financeDb';
 import { buildSummary } from '@/lib/finance';
-
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+import { weddingDateTime } from '@/lib/weddingDate';
 
 const SITE_CONFIG_PATH = path.join(process.cwd(), 'public/config/site.json');
 const PHOTOS_CONFIG_PATH = path.join(process.cwd(), 'public/config/photos.json');
@@ -28,8 +27,8 @@ export async function GET() {
     const photosData = readJson(PHOTOS_CONFIG_PATH) || { photos: [] };
     const timelineData = readJson(TIMELINE_CONFIG_PATH) || { milestones: [] };
 
-    const photos: any[] = photosData.photos || [];
-    const milestones: any[] = timelineData.milestones || [];
+    const photos: { id?: unknown; hearted?: boolean; title?: unknown; alt?: unknown; filename?: unknown }[] = photosData.photos || [];
+    const milestones: { id?: unknown; title?: unknown; date?: unknown }[] = timelineData.milestones || [];
 
     // RSVP stats
     const rsvpResult = await client.query(`
@@ -87,13 +86,18 @@ export async function GET() {
            ORDER BY t.name`, [fpId]
         );
         const rows = tablesResult.rows;
+        // Tables are created without a fixed capacity (seat_count 0) and grow as
+        // guests are dropped on them, so the denominator is whichever is larger:
+        // a declared capacity, or the seats actually filled.
+        const capacity = (r: { seat_count?: number; assigned?: number }) =>
+          Math.max(r.seat_count || 0, r.assigned || 0);
         seating = {
           tables: rows.length,
-          totalSeats: rows.reduce((s: number, r: any) => s + (r.seat_count || 0), 0),
-          assignedSeats: rows.reduce((s: number, r: any) => s + (r.assigned || 0), 0),
-          tableList: rows.map((r: any) => ({
+          totalSeats: rows.reduce((s: number, r: { seat_count?: number; assigned?: number }) => s + capacity(r), 0),
+          assignedSeats: rows.reduce((s: number, r: { assigned?: number }) => s + (r.assigned || 0), 0),
+          tableList: rows.map((r: { name: string; seat_count?: number; assigned?: number; table_type: string; x?: number; y?: number; rotation?: number }) => ({
             name: r.name,
-            seat_count: r.seat_count || 0,
+            seat_count: capacity(r),
             assigned: r.assigned || 0,
             table_type: r.table_type,
             x: r.x || 0,
@@ -161,10 +165,9 @@ export async function GET() {
 
     // Countdown
     let daysUntil: number | null = null;
-    if (siteConfig.weddingDate) {
-      const weddingMs = new Date(siteConfig.weddingDate).getTime();
-      const nowMs = Date.now();
-      daysUntil = Math.ceil((weddingMs - nowMs) / (1000 * 60 * 60 * 24));
+    const weddingAt = weddingDateTime(siteConfig.weddingDate, siteConfig.weddingTime);
+    if (weddingAt) {
+      daysUntil = Math.ceil((weddingAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
     }
 
     // Days left before the RSVP deadline. Stored as YYYY-MM-DD (date picker) or
@@ -199,7 +202,7 @@ export async function GET() {
       },
       photos: {
         total: photos.length,
-        hearted: photos.filter((p: any) => p.hearted).length,
+        hearted: photos.filter((p) => p.hearted).length,
       },
       timeline: {
         milestones: milestones.length,

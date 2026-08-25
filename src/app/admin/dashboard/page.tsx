@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import type { SiteConfig } from '@/lib/config';
 
 interface DashboardData {
-  siteConfig: any;
+  siteConfig: Partial<SiteConfig>;
   countdown: { daysUntil: number | null; rsvpDaysLeft: number | null };
   rsvp: { total: number; attending: number; declined: number; totalGuests: number };
   guestList: {
@@ -210,8 +211,6 @@ function ActivityFeed({ events }: { events: ActivityEvent[] }) {
     );
   }
 
-  let lastDay = '';
-
   return (
     <div className="relative">
       {/* Padding must be symmetric with the rows' -mx-2 below, or they overhang
@@ -219,11 +218,11 @@ function ActivityFeed({ events }: { events: ActivityEvent[] }) {
           overflow-x to `auto` too, so it can't be left implicit either. */}
       <div className="-mx-2 px-2 max-h-72 overflow-y-auto overflow-x-hidden" data-activity-feed>
       <ol className="relative">
-        {events.map(e => {
+        {events.map((e, index) => {
           const style = ACTIVITY_STYLE[e.kind] ?? ACTIVITY_STYLE.guest;
           const day = dayLabel(e.at, now);
-          const showDay = day !== lastDay;
-          lastDay = day;
+          // A header wherever the day changes from the previous row.
+          const showDay = index === 0 || day !== dayLabel(events[index - 1].at, now);
 
           const row = (
             <div className="flex items-start gap-3 py-2 px-2 -mx-2 rounded-lg hover:bg-gray-50 transition-colors">
@@ -701,14 +700,14 @@ export default function DashboardPage() {
             <div className="space-y-3">
               <div>
                 <div className="flex justify-between text-sm mb-1">
-                  <span className="text-gray-600" style={{ fontFamily: gs }}>Bride's side</span>
+                  <span className="text-gray-600" style={{ fontFamily: gs }}>Bride&apos;s side</span>
                   <span className="font-bold text-gray-900" style={{ fontFamily: gs }}>{guestList.brideSide}</span>
                 </div>
                 <Bar pct={guestList.totalInvited ? (guestList.brideSide / guestList.totalInvited) * 100 : 0} color="bg-pink-400" />
               </div>
               <div>
                 <div className="flex justify-between text-sm mb-1">
-                  <span className="text-gray-600" style={{ fontFamily: gs }}>Groom's side</span>
+                  <span className="text-gray-600" style={{ fontFamily: gs }}>Groom&apos;s side</span>
                   <span className="font-bold text-gray-900" style={{ fontFamily: gs }}>{guestList.groomSide}</span>
                 </div>
                 <Bar pct={guestList.totalInvited ? (guestList.groomSide / guestList.totalInvited) * 100 : 0} color="bg-blue-400" />

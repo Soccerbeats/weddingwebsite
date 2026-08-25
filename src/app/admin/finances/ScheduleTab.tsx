@@ -5,7 +5,7 @@ import type { ScheduleKind } from '@/lib/finance';
 import type { FinanceApi, FinancePayload } from './useFinances';
 import {
     AddButton, Card, DeleteButton, EmptyState, InlineNumber, InlineText, Modal, PillButton,
-    RowDate, RowField, RowSelect, SelectField, StatTile, TextField, Toggle, formatMoney,
+    RowDate, RowField, RowSelect, SelectField, StatTile, TextField, Toggle, formatMoney, todayLocal,
 } from './ui';
 
 /**
@@ -54,7 +54,7 @@ export default function ScheduleTab({ data, api }: { data: FinancePayload; api: 
             label: 'New payment',
             kind: 'installment',
             amount: 0,
-            due_on: new Date().toISOString().slice(0, 10),
+            due_on: todayLocal(),
             sort_order: summary.schedule.length,
         });
 
@@ -234,7 +234,7 @@ function SplitBill({ data, api, onClose }: {
     const [target, setTarget] = useState(firstSection ? `c:${firstSection.id}` : '');
     const [count, setCount] = useState(4);
     const [deposit, setDeposit] = useState(0);
-    const [firstDue, setFirstDue] = useState(new Date().toISOString().slice(0, 10));
+    const [firstDue, setFirstDue] = useState(todayLocal());
     const [everyDays, setEveryDays] = useState(30);
     const [busy, setBusy] = useState(false);
 

@@ -12,6 +12,8 @@ interface ScheduleEvent {
 export default function AdminSchedule() {
     const [events, setEvents] = useState<ScheduleEvent[]>([]);
     const [scheduleSubtitle, setScheduleSubtitle] = useState('');
+    const [shuttleText, setShuttleText] = useState('');
+    const [dressCode, setDressCode] = useState('');
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState('');
 
@@ -26,13 +28,13 @@ export default function AdminSchedule() {
                     setEvents([{ time: '4:00 PM', title: 'Ceremony', description: '', location: '' }]);
                 }
                 if (data.scheduleSubtitle) setScheduleSubtitle(data.scheduleSubtitle);
+                if (data.scheduleShuttleText) setShuttleText(data.scheduleShuttleText);
+                if (data.scheduleDressCode) setDressCode(data.scheduleDressCode);
             });
     }, []);
 
     const handleEventChange = (index: number, field: keyof ScheduleEvent, value: string) => {
-        const newEvents = [...events];
-        newEvents[index][field] = value;
-        setEvents(newEvents);
+        setEvents(events.map((ev, i) => (i === index ? { ...ev, [field]: value } : ev)));
     };
 
     const addEvent = () => {
@@ -54,7 +56,12 @@ export default function AdminSchedule() {
             const res = await fetch('/api/admin/site-config', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ scheduleEvents: events, scheduleSubtitle }),
+                body: JSON.stringify({
+                    scheduleEvents: events,
+                    scheduleSubtitle,
+                    scheduleShuttleText: shuttleText,
+                    scheduleDressCode: dressCode,
+                }),
             });
 
             if (res.ok) {
@@ -153,6 +160,32 @@ export default function AdminSchedule() {
                         Add New Event
                     </button>
 
+                </div>
+
+                {/* Extra cards under the timeline. Blank = not shown. */}
+                <div className="space-y-4 bg-gradient-to-br from-accent/5 to-accent-light/10 rounded-xl p-6 border border-accent/10">
+                    <h2 className="text-xl font-semibold text-gray-900">Details Cards</h2>
+                    <p className="text-sm text-gray-500">Two optional cards shown under the schedule. Leave one blank to hide it.</p>
+                    <div>
+                        <label className="block text-xs font-medium text-gray-500 uppercase">Getting There (shuttles, parking, transport)</label>
+                        <textarea
+                            rows={3}
+                            value={shuttleText}
+                            onChange={(e) => setShuttleText(e.target.value)}
+                            className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
+                            placeholder="e.g. Shuttles leave the hotel every 30 minutes from 2:30 PM. Return service starts at 9:00 PM."
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-medium text-gray-500 uppercase">Dress Code</label>
+                        <textarea
+                            rows={2}
+                            value={dressCode}
+                            onChange={(e) => setDressCode(e.target.value)}
+                            className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
+                            placeholder="e.g. Cocktail attire — suits or dresses, no jeans please."
+                        />
+                    </div>
                 </div>
 
                 {/* Nav Card Subtitle */}

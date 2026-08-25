@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import {
-    STATUSES, categoriesOf, categoryMeta, countriesInUse, effectiveCountry, formatDayDate,
+    STATUSES, categoriesOf, categoryMeta, countriesInUse, dayColor, effectiveCountry, formatDayDate,
     hasCoords, legEnds, sourceLabel, sourcesOf, travelModeMeta,
     type Day, type Place, type PlaceStatus,
 } from '@/lib/honeymoon';
@@ -105,6 +105,7 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
     const areaRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         if (localStorage.getItem(SPLIT_KEY) === '1') setSplit(true);
         const saved = localStorage.getItem(WIDTHS_KEY);
         if (!saved) return;
@@ -243,6 +244,7 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
         lastCountryRef.current = country;
         // A new destination frames the whole destination, not the day you were
         // last looking at.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setFitPoints(null);
         setFitSignal((n) => n + 1);
     }, [country]);
@@ -257,12 +259,6 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
         }
         return present;
     }, [visibleIgnoringCategory, categoryFilter]);
-
-    /** Distinct, readable line colours for overlaid days. */
-    const DAY_COLORS = [
-        '#0f172a', '#be123c', '#0891b2', '#a16207', '#7c3aed',
-        '#059669', '#ea580c', '#db2777', '#4d7c0f', '#0284c7',
-    ];
 
     const pointsForDay = useCallback((day: Day) => day.stops
         .map((stop) => {
@@ -281,13 +277,12 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
     const routes = useMemo(() => {
         const forDay = (day: Day) => ({
             points: pointsForDay(day),
-            color: DAY_COLORS[(day.day_number - 1) % DAY_COLORS.length],
+            color: dayColor(day.day_number),
             label: `Day ${day.day_number}${day.title ? ` — ${day.title}` : ''}`,
         });
         if (selectedDay) return [forDay(selectedDay)].filter((r) => r.points.length > 0);
         if (!showItinerary) return [];
         return days.map(forDay).filter((r) => r.points.length > 0);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedDay, showItinerary, days, pointsForDay]);
 
     /**
@@ -479,8 +474,11 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
         // Skip anything already on that day rather than stacking duplicates.
         const already = new Set(day.stops.map((s) => s.place_id).filter((v): v is number => v != null));
         const toAdd = [...lassoed].filter((id) => !already.has(id));
-        for (const placeId of toAdd) {
-            await api.create('stops', { day_id: dayId, place_id: placeId });
+        // One transaction for the whole selection, then one refetch — not a
+        // create and a full reload per place.
+        if (toAdd.length) {
+            await api.createMany('stops', toAdd.map((place_id) => ({ day_id: dayId, place_id })));
+            await api.refresh();
         }
         setLassoed(new Set());
         setSelectMode(false);

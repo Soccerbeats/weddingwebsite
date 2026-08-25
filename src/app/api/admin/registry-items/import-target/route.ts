@@ -1,19 +1,8 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
+import { getSiteConfig, updateSiteConfig } from '@/lib/config';
 import { RegistryItem } from '../route';
 
-const CONFIG_PATH = path.join(process.cwd(), 'public/config/site.json');
 
-function getConfig() {
-  if (!fs.existsSync(CONFIG_PATH)) return {};
-  try { return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); }
-  catch { return {}; }
-}
-
-function saveConfig(config: Record<string, unknown>) {
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
-}
 
 function genId() {
   return Math.random().toString(36).slice(2, 10);
@@ -46,8 +35,8 @@ function parseCsvLine(line: string): string[] {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const config = getConfig();
-    const existing: RegistryItem[] = config.registryItems || [];
+    const config = getSiteConfig();
+    const existing: RegistryItem[] = (config.registryItems as RegistryItem[] | undefined) || [];
     const added: RegistryItem[] = [];
     const skipped: string[] = [];
 
@@ -57,8 +46,8 @@ export async function POST(req: Request) {
         const title: string = (item.title || item.name || '').trim();
         if (!title) continue;
 
-        if (existing.some(e => e.title.toLowerCase() === title.toLowerCase()) ||
-            added.some(e => e.title.toLowerCase() === title.toLowerCase())) {
+        if (existing.some(e => (e.title ?? '').toLowerCase() === title.toLowerCase()) ||
+            added.some(e => (e.title ?? '').toLowerCase() === title.toLowerCase())) {
           skipped.push(title);
           continue;
         }
@@ -109,8 +98,8 @@ export async function POST(req: Request) {
         const title = (cols[colTitle] ?? '').trim();
         if (!title) continue;
 
-        if (existing.some(e => e.title.toLowerCase() === title.toLowerCase()) ||
-            added.some(e => e.title.toLowerCase() === title.toLowerCase())) {
+        if (existing.some(e => (e.title ?? '').toLowerCase() === title.toLowerCase()) ||
+            added.some(e => (e.title ?? '').toLowerCase() === title.toLowerCase())) {
           skipped.push(title);
           continue;
         }
@@ -130,7 +119,7 @@ export async function POST(req: Request) {
     }
 
     const updated = [...existing, ...added];
-    saveConfig({ ...config, registryItems: updated });
+    await updateSiteConfig((c) => { c.registryItems = updated; });
 
     return NextResponse.json({ success: true, added: added.length, skipped: skipped.length });
   } catch (err) {

@@ -271,6 +271,7 @@ export default function PlaceEditor({ api, place, open, onClose }: {
                             value={category}
                             places={api.data?.places ?? []}
                             onChange={setCategory}
+                            onCreateCategory={api.createCategory}
                             onManage={() => setManaging('categories')}
                         />
                     </div>

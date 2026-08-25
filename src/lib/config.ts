@@ -22,6 +22,23 @@ export interface FundItem {
     funded: number;
 }
 
+export interface WeddingPartyMember {
+    id?: string;
+    name: string;
+    role: string;
+    relationship: string;
+    photo?: string;
+    photoAlign?: 'top' | 'top-center' | 'center' | 'center-bottom' | 'bottom';
+    bio?: string;
+}
+
+export interface WeddingParty {
+    brideParty?: WeddingPartyMember[];
+    groomParty?: WeddingPartyMember[];
+    somethingBlueCrew?: WeddingPartyMember[];
+    officiant?: Omit<WeddingPartyMember, 'role'> & { role?: string };
+}
+
 export interface SiteConfig {
     homeHero?: string;
     heroSlideshowEnabled?: boolean;
@@ -38,6 +55,8 @@ export interface SiteConfig {
     weddingVenue?: string;
     weddingTime: string;
     rsvpDeadline?: string;
+    /** Shown on the RSVP page for guests having trouble. */
+    contactEmail?: string;
     // Accommodations / room block (shown on RSVP confirmation)
     roomBlockHotel?: string;
     roomBlockUrl?: string;
@@ -59,8 +78,15 @@ export interface SiteConfig {
     faqs?: FAQItem[];
     // Schedule Page
     scheduleEvents?: ScheduleEvent[];
+    /** Optional "Getting there" card under the schedule (shuttles, parking). */
+    scheduleShuttleText?: string;
+    /** Optional dress-code card under the schedule. */
+    scheduleDressCode?: string;
     // Wedding Party Page
+    weddingParty?: WeddingParty;
     weddingPartySubtitle?: string;
+    bridePartyTitle?: string;
+    groomPartyTitle?: string;
     somethingBlueCrewTitle?: string;
     // Basic Mode (pre-release mode)
     basicMode?: boolean;
@@ -95,6 +121,7 @@ export interface SiteConfig {
     // Registry
     registry?: {
         enabled: boolean;
+        showFinancials?: boolean;
         title: string;
         subtitle: string;
         description: string;
@@ -104,9 +131,20 @@ export interface SiteConfig {
         paypal?: { handle: string; label: string };
         items?: FundItem[];
     };
+    /** Target/Amazon/other wish-list items, managed by /api/admin/registry-items. */
+    registryItems?: unknown[];
 }
 
-const CONFIG_PATH = path.join(process.cwd(), 'public/config/site.json');
+const CONFIG_DIR = path.join(process.cwd(), 'public/config');
+const CONFIG_PATH = path.join(CONFIG_DIR, 'site.json');
+
+export const DEFAULT_SITE_CONFIG: SiteConfig = {
+    brideName: 'Sarah',
+    groomName: 'James',
+    weddingDate: 'June 15, 2024',
+    weddingLocation: 'The Garden Estate',
+    weddingTime: '4:00 PM',
+};
 
 export function getSiteConfig(): SiteConfig {
     try {
@@ -118,11 +156,51 @@ export function getSiteConfig(): SiteConfig {
         console.error('Error reading site config', e);
     }
 
-    return {
-        brideName: 'Sarah',
-        groomName: 'James',
-        weddingDate: 'June 15, 2024',
-        weddingLocation: 'The Garden Estate',
-        weddingTime: '4:00 PM'
-    };
+    return { ...DEFAULT_SITE_CONFIG };
+}
+
+/**
+ * Write a JSON file so it is never half-written.
+ *
+ * `writeFileSync` straight onto the target leaves a truncated file if the
+ * process dies mid-write — and a truncated `site.json` is not an error anyone
+ * sees: `getSiteConfig()` fails to parse it and quietly returns the template
+ * defaults, so the whole site turns back into "Sarah & James, June 15, 2024".
+ * Writing beside the file and renaming is atomic on every filesystem we run on.
+ */
+export function writeJsonAtomic(filePath: string, data: unknown) {
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const tmp = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
+    fs.renameSync(tmp, filePath);
+}
+
+/**
+ * Serialise every change to site.json through one queue.
+ *
+ * A dozen routes each did read → modify → write on the same file. Two admin
+ * tabs saving within the same second — or the RSVP page updating a fund total
+ * while Settings saved — meant the second write carried a stale copy of the
+ * first's keys and silently undid it. Funnelling every mutation through this
+ * promise chain makes each one read the file the previous one wrote.
+ *
+ * The mutator receives the current config and returns the next one (or mutates
+ * and returns the same object). Any exception rolls the queue on to the next
+ * caller; nothing is written.
+ */
+let queue: Promise<unknown> = Promise.resolve();
+
+export function updateSiteConfig(
+    mutate: (current: SiteConfig) => SiteConfig | void,
+): Promise<SiteConfig> {
+    const run = queue.then(() => {
+        const current = getSiteConfig();
+        const next = mutate(current) ?? current;
+        writeJsonAtomic(CONFIG_PATH, next);
+        return next;
+    });
+    // Keep the chain alive even when a step throws.
+    queue = run.catch(() => undefined);
+    return run;
 }

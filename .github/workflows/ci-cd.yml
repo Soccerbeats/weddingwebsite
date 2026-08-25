@@ -70,6 +70,19 @@ jobs:
       - name: Changelog check
         run: npm run check:changelog
 
+      # The rest of the offline check suite. AGENTS.md says to run these before
+      # every change; running them here is what makes that true even when
+      # someone forgets. (check:finance:db needs a database; check:finance:ui
+      # needs a browser — both stay manual.)
+      - name: Type check (app and scripts)
+        run: npm run check:types
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Photo route, finance maths, honeymoon checks
+        run: npm run check:photos && npm run check:finance && npm run check:honeymoon
+
   docker:
     name: "Wedding Planner · pack & publish the image"
     runs-on: ubuntu-latest

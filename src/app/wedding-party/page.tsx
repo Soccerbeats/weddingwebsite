@@ -13,10 +13,13 @@ interface WeddingPartyMember {
 
 export default function WeddingPartyPage() {
   const config = getSiteConfig();
-  const weddingParty = (config as any).weddingParty || {
-    brideParty: [],
-    groomParty: []
+  const weddingParty = {
+    brideParty: [] as WeddingPartyMember[],
+    groomParty: [] as WeddingPartyMember[],
+    ...(config.weddingParty ?? {}),
   };
+  const bridePartyTitle = config.bridePartyTitle || `${config.brideName}'s Bridesmaids`;
+  const groomPartyTitle = config.groomPartyTitle || `${config.groomName}'s Groomsmen`;
   const bgColor = config.pageBgColors?.weddingParty || '#ffffff';
 
   const getObjectPositionClass = (align?: 'top' | 'top-center' | 'center' | 'center-bottom' | 'bottom') => {
@@ -54,7 +57,7 @@ export default function WeddingPartyPage() {
         {/* Bride's Party */}
         <div className="mb-20">
           <h2 className="text-3xl font-serif font-bold text-center text-gray-900 mb-12">
-            {config.brideName}'s Bridesmaids
+            {bridePartyTitle}
           </h2>
 
           {weddingParty.brideParty.length === 0 ? (
@@ -109,7 +112,7 @@ export default function WeddingPartyPage() {
         {/* Groom's Party */}
         <div className="mb-20">
           <h2 className="text-3xl font-serif font-bold text-center text-gray-900 mb-12">
-            {config.groomName}'s Groomsmen
+            {groomPartyTitle}
           </h2>
 
           {weddingParty.groomParty.length === 0 ? (

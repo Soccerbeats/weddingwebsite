@@ -5,6 +5,12 @@ import { formatMoney } from '@/lib/finance';
 
 export { formatMoney };
 
+/** Today as YYYY-MM-DD in the browser's own time zone — toISOString() would date an evening entry tomorrow. */
+export function todayLocal(): string {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 /** Cents-accurate display that dims true zeroes so real numbers stand out. */
 export function Money({ value, className = '' }: { value: number; className?: string }) {
     const negative = value < 0;

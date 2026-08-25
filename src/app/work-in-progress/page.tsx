@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 export default function WorkInProgressPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-primary/5 to-white flex items-center justify-center px-4">
@@ -19,20 +21,20 @@ export default function WorkInProgressPage() {
         </div>
 
         <h1 className="text-4xl font-serif font-bold text-gray-900 mb-4">
-          We're Working on Something Special
+          We&apos;re Working on Something Special
         </h1>
 
         <p className="text-lg text-gray-600 mb-8">
-          This page is currently under construction. We're putting the finishing touches on it to make sure everything is perfect for your experience.
+          This page is currently under construction. We&apos;re putting the finishing touches on it to make sure everything is perfect for your experience.
         </p>
 
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <a
+          <Link
             href="/"
             className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-accent hover:bg-accent/90 transition-colors"
           >
             Return to Home
-          </a>
+          </Link>
         </div>
 
         <div className="mt-12 pt-8 border-t border-gray-200">

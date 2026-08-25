@@ -306,7 +306,7 @@ export default function AdminTimeline() {
 
                 {milestones.length === 0 && (
                     <div className="text-center py-12 bg-gradient-to-br from-accent/5 to-accent-light/10 rounded-2xl border border-accent/10">
-                        <p className="text-gray-500">No milestones added yet. Click "Add Milestone" to get started.</p>
+                        <p className="text-gray-500">No milestones added yet. Click &quot;Add Milestone&quot; to get started.</p>
                     </div>
                 )}
             </div>

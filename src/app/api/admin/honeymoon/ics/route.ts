@@ -23,7 +23,8 @@ export async function GET() {
         }
 
         const names = new Map(data.places.map((p) => [p.id, p.name]));
-        const events = tripEvents(data.trip, data.days, (id) => names.get(id));
+        const addresses = new Map(data.places.map((p) => [p.id, p.address ?? undefined]));
+        const events = tripEvents(data.trip, data.days, (id) => names.get(id), (id) => addresses.get(id));
         // Second precision, UTC, no punctuation — the DTSTAMP format.
         const stamp = `${new Date().toISOString().replace(/[-:]/g, '').slice(0, 15)}Z`;
         const body = buildIcs(events, stamp, data.trip.title);

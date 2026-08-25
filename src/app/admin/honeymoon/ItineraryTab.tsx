@@ -207,7 +207,7 @@ export default function ItineraryTab({ api, panel = false, onFocusDay }: {
 
             <div className="flex justify-center pt-1">
                 <Button tone="primary" onClick={() => api.create('days', {})}>
-                    + Add day {days.length + 1}
+                    + Add day {Math.max(0, ...days.map((d) => d.day_number)) + 1}
                 </Button>
             </div>
 
@@ -273,9 +273,12 @@ function CalendarView({ api, days, onEditPlace, onFocusDay, beyond }: {
     const startDate = api.data?.trip.start_date ?? null;
     const [openDayId, setOpenDayId] = useState<number | null>(null);
 
+    // The highest day number, not the count: the two differ whenever numbering
+    // has a gap, and a grid built from the count drops the last day.
+    const lastDay = useMemo(() => Math.max(0, ...days.map((d) => d.day_number)), [days]);
     const months = useMemo(
-        () => calendarMonths(startDate, days.length),
-        [startDate, days.length],
+        () => calendarMonths(startDate, lastDay),
+        [startDate, lastDay],
     );
     const dayByNumber = useMemo(() => {
         const map = new Map<number, Day>();
@@ -855,8 +858,16 @@ function StopRow({ stop, index, api, dayNumber, hopKm, onEditPlace }: {
                 </span>
                 <input
                     type="time"
+                    // Keyed on the stored value so a change made elsewhere shows
+                    // here; saved only when it actually changed, so tabbing through
+                    // a day is not one PATCH and refetch per field.
+                    key={stop.start_time ?? ''}
                     defaultValue={stop.start_time ?? ''}
-                    onBlur={(e) => api.update('stops', { id: stop.id, start_time: e.target.value })}
+                    onBlur={(e) => {
+                        if (e.target.value !== (stop.start_time ?? '')) {
+                            api.update('stops', { id: stop.id, start_time: e.target.value });
+                        }
+                    }}
                     // 6.75rem, not 5.5: "09:30 AM" plus the picker icon does not
                     // fit in 5.5 and Chromium silently clipped the M, so every
                     // afternoon stop read "03:30 PI".

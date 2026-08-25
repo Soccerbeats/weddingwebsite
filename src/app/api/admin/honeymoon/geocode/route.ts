@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { safeFetch } from '@/lib/safeFetch';
 
 /**
  * Coordinate lookup for the honeymoon place editor.
@@ -161,11 +162,12 @@ export function coordsFromPair(input: string): { lat: number; lng: number } | nu
  */
 async function expandShortLink(url: string): Promise<string | null> {
     try {
-        const res = await fetch(url, {
-            redirect: 'follow',
-            headers: { 'User-Agent': USER_AGENT },
-            signal: AbortSignal.timeout(8000),
-        });
+        // Only Google's own shorteners, matched on the hostname — a URL that
+        // merely *contains* "goo.gl" is not one — and followed through
+        // safeFetch so a redirect cannot land on a LAN address.
+        const host = new URL(url).hostname.toLowerCase();
+        if (host !== 'goo.gl' && host !== 'maps.app.goo.gl') return null;
+        const res = await safeFetch(url, { headers: { 'User-Agent': USER_AGENT }, timeoutMs: 8000 });
         return res.url || null;
     } catch {
         return null;
@@ -190,9 +192,7 @@ export async function GET(request: Request) {
         // 2. A URL — Google Maps or a shortened one.
         if (/^https?:\/\//i.test(raw)) {
             let target = raw;
-            if (/goo\.gl|maps\.app\.goo\.gl/i.test(raw)) {
-                target = (await expandShortLink(raw)) ?? raw;
-            }
+            target = (await expandShortLink(raw)) ?? raw;
             const fromUrl = coordsFromMapsUrl(target);
             if (fromUrl) {
                 const name = nameFromMapsUrl(target);

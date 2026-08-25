@@ -32,6 +32,7 @@ function ContributeModal({ item, fund, onClose }: { item: FundItem; fund: FundCo
     // Render via a portal to <body> so the fixed overlay isn't trapped by a
     // transformed ancestor (FadeIn uses CSS transforms). Lock body scroll while open.
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setMounted(true);
         const prev = document.body.style.overflow;
         document.body.style.overflow = 'hidden';
@@ -41,10 +42,10 @@ function ContributeModal({ item, fund, onClose }: { item: FundItem; fund: FundCo
     const suggestedAmount = remaining > 0 ? remaining : item.price;
     const showFinancials = fund.showFinancials !== false;
 
-    const venmoHandle = fund.venmo?.handle.replace('@', '') ?? '';
+    const venmoHandle = (fund.venmo?.handle ?? '').replace('@', '');
     const cashHandle = fund.cashapp?.handle ?? '';
     const cashTag = cashHandle.startsWith('$') ? cashHandle : `$${cashHandle}`;
-    const paypalHandle = fund.paypal?.handle.replace('@', '') ?? '';
+    const paypalHandle = (fund.paypal?.handle ?? '').replace('@', '');
     const note = encodeURIComponent('Registry - ' + item.title);
 
     const methods = [
@@ -197,7 +198,7 @@ function ContributeModal({ item, fund, onClose }: { item: FundItem; fund: FundCo
 }
 
 function ProgressBar({ funded, price }: { funded: number; price: number }) {
-    const pct = Math.min(100, Math.round((funded / price) * 100));
+    const pct = price > 0 ? Math.min(100, Math.round((funded / price) * 100)) : 0;
     return (
         <div className="mt-3">
             <div className="flex justify-between text-xs text-gray-500 mb-1">
@@ -331,7 +332,7 @@ export default function RegistryPage() {
                         {items.length > 0 ? (
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-12">
                                 {items.map(item => {
-                                    const pct = Math.min(100, Math.round((item.funded / item.price) * 100));
+                                    const pct = item.price > 0 ? Math.min(100, Math.round((item.funded / item.price) * 100)) : 0;
                                     const fullyFunded = pct >= 100;
                                     return (
                                         <div

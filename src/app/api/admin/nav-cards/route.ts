@@ -1,54 +1,51 @@
 import { NextResponse } from 'next/server';
-import { getSiteConfig } from '@/lib/config';
+import { getSiteConfig, updateSiteConfig } from '@/lib/config';
 import fs from 'fs';
 import path from 'path';
+import { extensionOf, IMAGE_EXTENSIONS, PHOTOS_DIR, rejectUpload, resolveInPhotos } from '@/lib/uploads';
 
-const CONFIG_PATH = path.join(process.cwd(), 'public/config/site.json');
-const NAV_CARDS_DIR = path.join(process.cwd(), 'public/photos/nav-cards');
+const NAV_CARDS_DIR = path.join(PHOTOS_DIR, 'nav-cards');
 
-const VALID_SLUGS = ['about', 'our-story', 'wedding-party', 'schedule', 'photos', 'registry', 'rsvp'];
+// The pages the public /api/nav-cards route actually renders. 'about' used to
+// be accepted here but had no card, so an upload for it went nowhere.
+const VALID_SLUGS = ['our-story', 'wedding-party', 'schedule', 'photos', 'registry', 'rsvp'];
 
-function saveConfig(config: Record<string, unknown>) {
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
+function removeOldVariants(slug: string, keep: string) {
+  for (const oldExt of IMAGE_EXTENSIONS) {
+    const old = path.join(NAV_CARDS_DIR, `${slug}.${oldExt}`);
+    if (old !== keep && fs.existsSync(old)) fs.unlinkSync(old);
+  }
+}
+
+async function record(slug: string, filename: string) {
+  await updateSiteConfig((config) => {
+    config.navCards = { ...(config.navCards ?? {}), [slug]: filename };
+  });
 }
 
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
-    const slug = formData.get('slug') as string;
-    const file = formData.get('file') as File;
+    const slug = String(formData.get('slug') ?? '');
+    const file = formData.get('file');
 
-    if (!slug || !file) {
+    if (!slug || !(file instanceof File)) {
       return NextResponse.json({ error: 'slug and file required' }, { status: 400 });
     }
-
     if (!VALID_SLUGS.includes(slug)) {
       return NextResponse.json({ error: 'Invalid slug' }, { status: 400 });
     }
+    const problem = rejectUpload(file);
+    if (problem) return NextResponse.json({ error: problem }, { status: 400 });
 
-    if (!fs.existsSync(NAV_CARDS_DIR)) {
-      fs.mkdirSync(NAV_CARDS_DIR, { recursive: true });
-    }
+    if (!fs.existsSync(NAV_CARDS_DIR)) fs.mkdirSync(NAV_CARDS_DIR, { recursive: true });
 
-    const ext = file.name.split('.').pop() || 'jpg';
-    const filename = `${slug}.${ext}`;
+    const filename = `${slug}.${extensionOf(file.name)}`;
     const filepath = path.join(NAV_CARDS_DIR, filename);
+    removeOldVariants(slug, filepath);
+    fs.writeFileSync(filepath, Buffer.from(await file.arrayBuffer()));
 
-    // Remove old file if extension changed
-    for (const oldExt of ['jpg', 'jpeg', 'png', 'webp', 'avif']) {
-      const old = path.join(NAV_CARDS_DIR, `${slug}.${oldExt}`);
-      if (old !== filepath && fs.existsSync(old)) fs.unlinkSync(old);
-    }
-
-    const buffer = Buffer.from(await file.arrayBuffer());
-    fs.writeFileSync(filepath, buffer);
-
-    const config = getSiteConfig() as unknown as Record<string, unknown>;
-    const navCards = (config.navCards as Record<string, string>) || {};
-    navCards[slug] = filename;
-    config.navCards = navCards;
-    saveConfig(config);
-
+    await record(slug, filename);
     return NextResponse.json({ success: true, filename });
   } catch (error) {
     console.error('nav-cards POST error:', error);
@@ -60,40 +57,32 @@ export async function PATCH(request: Request) {
   try {
     const { slug, sourceFilename } = await request.json();
 
-    if (!slug || !sourceFilename) {
+    if (!slug || typeof sourceFilename !== 'string' || !sourceFilename) {
       return NextResponse.json({ error: 'slug and sourceFilename required' }, { status: 400 });
     }
     if (!VALID_SLUGS.includes(slug)) {
       return NextResponse.json({ error: 'Invalid slug' }, { status: 400 });
     }
 
-    const sourcePath = path.join(process.cwd(), 'public/photos', sourceFilename);
-    if (!fs.existsSync(sourcePath)) {
+    // A gallery filename, and only a gallery filename — no path segments, and
+    // it has to be an image the photo route already serves.
+    const sourcePath = resolveInPhotos(path.basename(sourceFilename));
+    const ext = extensionOf(sourceFilename);
+    if (!sourcePath || !IMAGE_EXTENSIONS.has(ext)) {
+      return NextResponse.json({ error: 'Invalid source file' }, { status: 400 });
+    }
+    if (!fs.existsSync(sourcePath) || !fs.statSync(sourcePath).isFile()) {
       return NextResponse.json({ error: 'Source file not found' }, { status: 404 });
     }
 
-    if (!fs.existsSync(NAV_CARDS_DIR)) {
-      fs.mkdirSync(NAV_CARDS_DIR, { recursive: true });
-    }
+    if (!fs.existsSync(NAV_CARDS_DIR)) fs.mkdirSync(NAV_CARDS_DIR, { recursive: true });
 
-    const ext = sourceFilename.split('.').pop() || 'jpg';
     const filename = `${slug}.${ext}`;
     const destPath = path.join(NAV_CARDS_DIR, filename);
-
-    // Remove old files for this slug
-    for (const oldExt of ['jpg', 'jpeg', 'png', 'webp', 'avif']) {
-      const old = path.join(NAV_CARDS_DIR, `${slug}.${oldExt}`);
-      if (old !== destPath && fs.existsSync(old)) fs.unlinkSync(old);
-    }
-
+    removeOldVariants(slug, destPath);
     fs.copyFileSync(sourcePath, destPath);
 
-    const config = getSiteConfig() as unknown as Record<string, unknown>;
-    const navCards = (config.navCards as Record<string, string>) || {};
-    navCards[slug] = filename;
-    config.navCards = navCards;
-    saveConfig(config);
-
+    await record(slug, filename);
     return NextResponse.json({ success: true, filename });
   } catch (error) {
     console.error('nav-cards PATCH error:', error);
@@ -104,17 +93,17 @@ export async function PATCH(request: Request) {
 export async function DELETE(request: Request) {
   try {
     const { slug } = await request.json();
-    if (!slug) return NextResponse.json({ error: 'slug required' }, { status: 400 });
+    if (!slug || !VALID_SLUGS.includes(slug)) return NextResponse.json({ error: 'slug required' }, { status: 400 });
 
-    const config = getSiteConfig() as unknown as Record<string, unknown>;
-    const navCards = (config.navCards as Record<string, string>) || {};
-
-    if (navCards[slug]) {
-      const filepath = path.join(NAV_CARDS_DIR, navCards[slug]);
+    const current = getSiteConfig().navCards ?? {};
+    if (current[slug]) {
+      const filepath = path.join(NAV_CARDS_DIR, path.basename(current[slug]));
       if (fs.existsSync(filepath)) fs.unlinkSync(filepath);
-      delete navCards[slug];
-      config.navCards = navCards;
-      saveConfig(config);
+      await updateSiteConfig((config) => {
+        const navCards = { ...(config.navCards ?? {}) };
+        delete navCards[slug];
+        config.navCards = navCards;
+      });
     }
 
     return NextResponse.json({ success: true });

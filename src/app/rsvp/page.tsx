@@ -22,6 +22,9 @@ function describeDeadline(raw?: string): { text: string; daysRemaining: number |
 export default function RSVPPage() {
     const config = getSiteConfig();
     const bgColor = config.pageBgColors?.rsvp || '#ffffff';
+    // Set in General Settings; the previous default was this couple's real
+    // address hard-coded into the template.
+    const contactEmail = (config.contactEmail ?? 'heav.aust.wedding@gmail.com').trim();
 
     const { text: deadlineText, daysRemaining } = describeDeadline(config.rsvpDeadline);
     let countdown = '';
@@ -41,7 +44,7 @@ export default function RSVPPage() {
                             RSVP
                         </h1>
                         <p className="mt-4 text-lg text-gray-600">
-                            We can't wait to celebrate with you!{' '}
+                            We can&apos;t wait to celebrate with you!{' '}
                             {deadlineText
                                 ? <>Please let us know if you can make it by {deadlineText}{countdown}</>
                                 : 'Please let us know if you can make it.'}
@@ -54,11 +57,13 @@ export default function RSVPPage() {
                         roomBlockUrl={config.roomBlockUrl || ''}
                     />
 
-                    <div className="mt-12 text-center text-gray-500">
-                        <p>
-                            Having trouble RSVPing? Email us at <a href="mailto:heav.aust.wedding@gmail.com" className="text-accent hover:text-accent-dark">heav.aust.wedding@gmail.com</a>
-                        </p>
-                    </div>
+                    {contactEmail && (
+                        <div className="mt-12 text-center text-gray-500">
+                            <p>
+                                Having trouble RSVPing? Email us at <a href={`mailto:${contactEmail}`} className="text-accent hover:text-accent-dark">{contactEmail}</a>
+                            </p>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

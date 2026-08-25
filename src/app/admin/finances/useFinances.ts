@@ -70,6 +70,9 @@ export function useFinances() {
         setBusy(inFlight.current);
         try {
             const res = await fn();
+            if (res.status === 401) {
+                throw new Error('Your session has expired — sign in again to keep editing.');
+            }
             if (!res.ok) {
                 const body = await res.json().catch(() => ({}));
                 throw new Error(body.error || 'Request failed');

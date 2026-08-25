@@ -104,6 +104,7 @@ interface WeddingPartyData {
 }
 
 export default function AdminWeddingPartyPage() {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [config, setConfig] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -121,6 +122,15 @@ export default function AdminWeddingPartyPage() {
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [oldPhoto, setOldPhoto] = useState<string | null>(null);
+  // One object URL per selected file, revoked when it changes — creating one
+  // in render leaked a blob on every keystroke in the form.
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!selectedFile) { setPreviewUrl(null); return; }
+    const url = URL.createObjectURL(selectedFile);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [selectedFile]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const sensors = useSensors(
@@ -134,6 +144,7 @@ export default function AdminWeddingPartyPage() {
     fetchConfig();
   }, []);
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const ensureIds = (members: any[]) => {
     return members.map((member, index) => ({
       ...member,
@@ -177,17 +188,29 @@ export default function AdminWeddingPartyPage() {
       const oldIndex = members.findIndex((m: WeddingPartyMember) => m.id === active.id);
       const newIndex = members.findIndex((m: WeddingPartyMember) => m.id === over.id);
 
-      config.weddingParty[partyKey] = arrayMove(members, oldIndex, newIndex);
-      setConfig({ ...config });
-      persistConfig(config).catch((e) => console.error('Error saving order:', e));
+      const next = {
+        ...config,
+        weddingParty: { ...config.weddingParty, [partyKey]: arrayMove(members, oldIndex, newIndex) },
+      };
+      setConfig(next);
+      persistConfig(next).catch((e) => console.error('Error saving order:', e));
     }
   };
 
+  // Only the keys this page edits — see the Settings page for why the whole
+  // config is never posted back.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const persistConfig = async (cfg: any) => {
     const response = await fetch('/api/admin/site-config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(cfg),
+      body: JSON.stringify({
+        weddingParty: cfg.weddingParty,
+        weddingPartySubtitle: cfg.weddingPartySubtitle,
+        somethingBlueCrewTitle: cfg.somethingBlueCrewTitle,
+        bridePartyTitle: cfg.bridePartyTitle,
+        groomPartyTitle: cfg.groomPartyTitle,
+      }),
     });
     if (!response.ok) {
       throw new Error('Save failed');
@@ -386,7 +409,7 @@ export default function AdminWeddingPartyPage() {
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Subtitle Text (appears below "Our Wedding Party" header)
+              Subtitle Text (appears below &quot;Our Wedding Party&quot; header)
             </label>
             <input
               type="text"
@@ -398,6 +421,28 @@ export default function AdminWeddingPartyPage() {
             <p className="mt-2 text-sm text-gray-500">
               This text appears at the top of the Wedding Party page
             </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">{config.brideName}&apos;s section title</label>
+              <input
+                type="text"
+                value={config.bridePartyTitle || ''}
+                onChange={(e) => setConfig({ ...config, bridePartyTitle: e.target.value })}
+                placeholder={`${config.brideName}'s Bridesmaids`}
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">{config.groomName}&apos;s section title</label>
+              <input
+                type="text"
+                value={config.groomPartyTitle || ''}
+                onChange={(e) => setConfig({ ...config, groomPartyTitle: e.target.value })}
+                placeholder={`${config.groomName}'s Groomsmen`}
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+              />
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -420,7 +465,7 @@ export default function AdminWeddingPartyPage() {
       {/* Bride's Party */}
       <div className="mb-12">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold">{config.brideName}'s Party</h2>
+          <h2 className="text-2xl font-bold">{config.brideName}&apos;s Party</h2>
           <button
             onClick={() => addMember('bride')}
             className="bg-accent text-white px-4 py-2 rounded-md hover:bg-accent/90"
@@ -474,7 +519,7 @@ export default function AdminWeddingPartyPage() {
       {/* Groom's Party */}
       <div className="mb-12">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold">{config.groomName}'s Party</h2>
+          <h2 className="text-2xl font-bold">{config.groomName}&apos;s Party</h2>
           <button
             onClick={() => addMember('groom')}
             className="bg-accent text-white px-4 py-2 rounded-md hover:bg-accent/90"
@@ -732,7 +777,7 @@ export default function AdminWeddingPartyPage() {
                   <div className="mb-3 flex items-center gap-4">
                     <div className="relative w-24 h-24 rounded-lg overflow-hidden border-2 border-green-500">
                       <Image
-                        src={URL.createObjectURL(selectedFile)}
+                        src={previewUrl ?? ''}
                         alt="New photo"
                         fill
                         unoptimized

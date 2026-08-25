@@ -19,7 +19,15 @@ export default function AdminAbout() {
     useEffect(() => {
         fetch('/api/admin/site-config')
             .then(res => res.json())
-            .then(data => setConfig(prev => ({ ...prev, ...data })));
+            // Only this page's keys — see Settings for why the whole config is
+            // never spread into state and posted back.
+            .then(data => setConfig(prev => {
+                const next = { ...prev };
+                for (const key of Object.keys(prev) as (keyof typeof prev)[]) {
+                    if (typeof data[key] === 'string') next[key] = data[key];
+                }
+                return next;
+            }));
     }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -76,7 +84,7 @@ export default function AdminAbout() {
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">"How We Met" Section Title</label>
+                        <label className="block text-sm font-medium text-gray-700">&quot;How We Met&quot; Section Title</label>
                         <input
                             type="text"
                             value={config.howWeMetTitle || ''}
@@ -84,7 +92,7 @@ export default function AdminAbout() {
                             className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
                             placeholder="e.g. How We Met, Our Beginning, etc."
                         />
-                        <p className="text-xs text-gray-500 mt-1">This will be the heading above your story. Leave blank to use "How We Met"</p>
+                        <p className="text-xs text-gray-500 mt-1">This will be the heading above your story. Leave blank to use &quot;How We Met&quot;</p>
                     </div>
 
                     <div>
@@ -117,7 +125,7 @@ export default function AdminAbout() {
 
                     <div>
                         <label className="block text-sm font-medium text-gray-700">Venue Address (for Maps)</label>
-                        <p className="text-xs text-gray-500 mb-2">Entering an address here will create a "Get Directions" link on the website.</p>
+                        <p className="text-xs text-gray-500 mb-2">Entering an address here will create a &quot;Get Directions&quot; link on the website.</p>
                         <input
                             type="text"
                             value={config.venueAddress || ''}
@@ -129,7 +137,7 @@ export default function AdminAbout() {
 
                     <div>
                         <label className="block text-sm font-medium text-gray-700">The Ceremony Box Text</label>
-                        <p className="text-xs text-gray-500 mb-2">Text displayed in "The Ceremony" box below the venue description.</p>
+                        <p className="text-xs text-gray-500 mb-2">Text displayed in &quot;The Ceremony&quot; box below the venue description.</p>
                         <textarea
                             rows={3}
                             value={config.ceremonyText || ''}
@@ -141,7 +149,7 @@ export default function AdminAbout() {
 
                     <div>
                         <label className="block text-sm font-medium text-gray-700">The Reception Box Text</label>
-                        <p className="text-xs text-gray-500 mb-2">Text displayed in "The Reception" box below the venue description.</p>
+                        <p className="text-xs text-gray-500 mb-2">Text displayed in &quot;The Reception&quot; box below the venue description.</p>
                         <textarea
                             rows={3}
                             value={config.receptionText || ''}

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 
 export default function AdminHome() {
-    const [config, setConfig] = useState<any>({
+    const [config, setConfig] = useState({
         homeHeadline: '',
         homeIntroTitle: '',
         homeIntroBody: '',
@@ -18,7 +18,15 @@ export default function AdminHome() {
     useEffect(() => {
         fetch('/api/admin/site-config')
             .then(res => res.json())
-            .then(data => setConfig((prev: any) => ({ ...prev, ...data, heroSlideshowImages: data.heroSlideshowImages || [] })));
+            // Only this page's keys — see Settings for why.
+            .then(data => setConfig((prev: typeof config) => ({
+                homeHeadline: data.homeHeadline ?? prev.homeHeadline,
+                homeIntroTitle: data.homeIntroTitle ?? prev.homeIntroTitle,
+                homeIntroBody: data.homeIntroBody ?? prev.homeIntroBody,
+                heroSlideshowEnabled: data.heroSlideshowEnabled ?? prev.heroSlideshowEnabled,
+                heroSlideshowImages: data.heroSlideshowImages || [],
+                heroSlideshowInterval: data.heroSlideshowInterval ?? prev.heroSlideshowInterval,
+            })));
         fetch('/api/admin/photos')
             .then(res => res.json())
             .then(data => setAllPhotos(data.photos || []));
@@ -125,7 +133,11 @@ export default function AdminHome() {
                                     min={2}
                                     max={30}
                                     value={Math.round((config.heroSlideshowInterval || 5000) / 1000)}
-                                    onChange={(e) => setConfig({ ...config, heroSlideshowInterval: parseInt(e.target.value) * 1000 })}
+                                    onChange={(e) => {
+                                        // An emptied field parses to NaN; keep the previous value rather than saving NaN.
+                                        const seconds = parseInt(e.target.value, 10);
+                                        if (Number.isFinite(seconds)) setConfig({ ...config, heroSlideshowInterval: Math.min(30, Math.max(2, seconds)) * 1000 });
+                                    }}
                                     className="block w-32 rounded-lg border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
                                 />
                             </div>
@@ -144,7 +156,7 @@ export default function AdminHome() {
                                         <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Order</p>
                                         {(config.heroSlideshowImages as string[]).map((filename: string, i: number) => (
                                             <div key={filename} className="flex items-center gap-3 bg-white rounded-lg p-2 border border-accent/30 shadow-sm">
-                                                <img src={`/api/photos/${filename}/thumb`} alt="" className="h-10 w-16 object-cover rounded" loading="lazy" />
+                                                <img src={`/api/photos/${filename}/thumb`} alt={filename} className="h-10 w-16 object-cover rounded" loading="lazy" />
                                                 <span className="flex-1 text-sm text-gray-700 truncate">{filename}</span>
                                                 <button type="button" onClick={() => moveSlideshowImage(i, -1)} disabled={i === 0} className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-30">↑</button>
                                                 <button type="button" onClick={() => moveSlideshowImage(i, 1)} disabled={i === (config.heroSlideshowImages || []).length - 1} className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-30">↓</button>
@@ -165,7 +177,7 @@ export default function AdminHome() {
                                                 onClick={() => toggleSlideshowImage(photo.filename)}
                                                 className={`relative cursor-pointer rounded-lg overflow-hidden border-2 transition-all ${selected ? 'border-accent shadow-lg' : 'border-transparent hover:border-gray-300'}`}
                                             >
-                                                <img src={`/api/photos/${photo.filename}/thumb`} alt="" className="h-20 w-full object-cover" loading="lazy" />
+                                                <img src={`/api/photos/${photo.filename}/thumb`} alt={photo.title || photo.filename} className="h-20 w-full object-cover" loading="lazy" />
                                                 {selected && (
                                                     <div className="absolute inset-0 bg-accent/20 flex items-center justify-center">
                                                         <span className="bg-accent text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">

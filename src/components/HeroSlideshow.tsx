@@ -64,7 +64,6 @@ export default function HeroSlideshow({ images, interval = 5000, fallbackImage }
       setCurrent(c => (c + 1) % srcs.length);
     }, interval);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [firstReady, srcs.length, interval]);
 
   const goTo = (i: number) => {

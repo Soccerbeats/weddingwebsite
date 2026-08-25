@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 
 interface FAQItem {
     question: string;
@@ -33,33 +33,28 @@ export default function AdminFAQ() {
     const [faqs, setFaqs] = useState<FAQItem[]>([]);
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState('');
-    const [config, setConfig] = useState<any>({});
-
     useEffect(() => {
         fetch('/api/admin/site-config')
             .then(res => res.json())
-            .then(data => {
-                setConfig(data);
-                setFaqs(data.faqs || []);
-            });
+            .then(data => setFaqs(data.faqs || []));
     }, []);
 
     const saveConfig = async (newFaqs: FAQItem[]) => {
         setLoading(true);
         setMessage('');
-        const newConfig = { ...config, faqs: newFaqs };
 
         try {
+            // Only the FAQs — posting the whole config back would overwrite
+            // whatever another page saved since this one loaded.
             const res = await fetch('/api/admin/site-config', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(newConfig),
+                body: JSON.stringify({ faqs: newFaqs }),
             });
 
             if (res.ok) {
                 setMessage('FAQs updated successfully!');
                 setFaqs(newFaqs);
-                setConfig(newConfig);
             } else {
                 setMessage('Failed to update.');
             }
@@ -71,9 +66,10 @@ export default function AdminFAQ() {
         }
     };
 
+    // Added locally and saved with the Save button. Saving a placeholder
+    // straight away used to put "New Question / New Answer" on the live site.
     const handleAdd = () => {
-        const newFaqs = [...faqs, { question: 'New Question', answer: 'New Answer' }];
-        saveConfig(newFaqs);
+        setFaqs([...faqs, { question: '', answer: '' }]);
     };
 
     const checkDelete = (index: number) => {
@@ -107,17 +103,6 @@ export default function AdminFAQ() {
         setFaqs(newFaqs);
     };
 
-    const handleBlur = () => {
-        // Save on blur to avoid too many requests, or just rely on a save button?
-        // For reordering/adding/deleting we save immediately.
-        // For text editing, let's have a manual save button at the top or bottom, 
-        // OR just save when the user is done with a field?
-        // To keep it simple and consistent with previous pages, let's use a manual "Save Changes" button for text edits
-        // but reordering saves immediately.
-    };
-
-    // Actually, for consistency with the Schedule page pattern (if I recall correctly), I might have done immediate saves or a big form. 
-    // Let's use a "Save All Changes" button for text edits to be safe and efficient.
 
     return (
         <div className="max-w-4xl">
@@ -178,6 +163,7 @@ export default function AdminFAQ() {
                                 <input
                                     type="text"
                                     value={faq.question}
+                                    placeholder="Question"
                                     onChange={(e) => handleChange(index, 'question', e.target.value)}
                                     className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
                                 />

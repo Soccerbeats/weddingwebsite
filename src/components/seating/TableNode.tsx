@@ -155,6 +155,7 @@ function ReorderModal({
   const [seats, setSeats] = useState<SeatData[]>([...table.seats]);
   const [mounted, setMounted] = useState(false);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setMounted(true); }, []);
 
   const sensors = useSensors(

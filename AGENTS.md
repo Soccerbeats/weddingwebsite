@@ -43,8 +43,10 @@ docker compose -f docker/docker-compose.dev.yml up -d
 
 ## Checks — run before calling a change done
 
-None need a network except `check:finance:db` (live database), so they are
-cheap to run before a commit:
+None need a network except `check:finance:db` (live database) and
+`check:finance:ui` (a browser), so they are cheap to run before a commit — and
+CI runs `check:types`, `lint`, `check:photos`, `check:finance` and
+`check:honeymoon` on every push, so a red one blocks the image:
 
 | Command | What it covers |
 |---|---|
@@ -54,7 +56,7 @@ cheap to run before a commit:
 | `npm run check:photos` | The photo route: thumbs, resizing, 404s, the traversal guard |
 | `npm run check:finance` | Budget arithmetic |
 | `npm run check:finance:db` | The same against a live database |
-| `npm run check:finance:ui` | The finance UI's contracts |
+| `npm run check:finance:ui` | The finance UI's contracts (needs a browser; fetches Playwright on demand) |
 | `npm run audit:finance` | A deeper sweep over the finance logic |
 | `npm run check:honeymoon` | Distances, date maths, URL parsing, the calendar grid, `.ics` output, search ranking, seed integrity |
 
@@ -76,7 +78,9 @@ idempotent — matches on place name, never reverts an edit) and
    only — created at runtime by their owning code (`finance_*` in
    `src/lib/financeDb.ts`, `honeymoon_*` in `src/lib/honeymoonDb.ts`,
    `donations` in its route). **If you add one of those, add it to
-   `init.sql` too, or a fresh install comes up without it.**
+   `init.sql` too, or a fresh install comes up without it.** (As of v0.9.42
+   `init.sql` really does hold every table, plus the `guest_list_name_unique`
+   index the guest upserts need.)
 3. **Photos are served through `/api/photos/[filename]`, never `/photos/…`** —
    with `output: "standalone"`, files written into a volume at runtime are not
    served statically.
@@ -146,6 +150,8 @@ Set in the Portainer stack (or `docker/.env` for local compose runs):
 ```env
 DATABASE_URL=postgresql://user:password@db:5432/dbname
 ADMIN_PASSWORD=securepassword
+# optional — signs the admin cookie; defaults to ADMIN_PASSWORD
+JWT_SECRET=a-long-random-string
 NODE_ENV=production
 POSTGRES_USER=user
 POSTGRES_PASSWORD=password
@@ -222,9 +228,15 @@ order, before the commit:
 ### Key mechanisms
 
 - **Auth** — one admin password (`ADMIN_PASSWORD`); a JWT session in an
-  HTTP-only cookie; `src/middleware.ts` protects `/admin/*` (redirecting
-  non-admins away from WIP pages) **and `/api/admin/*`, for every method
-  including GET**. Three GETs are allowlisted as public in that file —
+  HTTP-only cookie, signed with `JWT_SECRET` (falls back to `ADMIN_PASSWORD`;
+  with neither set, nothing signs and nothing verifies — never a default
+  secret). All of it lives in `src/lib/auth.ts`; import from there rather than
+  re-deriving the key. Sessions last 2h and are re-issued by the middleware
+  when under an hour remains. `src/middleware.ts` protects `/admin/*` **and
+  `/api/admin/*`, for every method including GET**, rate-limits the public
+  write endpoints (`/api/auth/login`, `/api/rsvp`, `/api/guest-verification`;
+  `src/lib/rateLimit.ts`), and **gates the WIP/hidden public pages
+  server-side** (it asks `/api/wip-status`, cached 15s). Three GETs are allowlisted as public in that file —
   `site-config`, `registry-items`, `timeline` — because the nav, the RSVP form,
   the registry page and our-story read them; they return content that is
   already on public pages. **Adding to that list makes something
@@ -232,11 +244,29 @@ order, before the commit:
   covers every route, including the ones added later. (Until v0.9.35 the API
   half was missing entirely and the whole admin API accepted anonymous reads
   and writes.)
+- **Config writes** — anything that changes `public/config/site.json` goes
+  through `updateSiteConfig(mutator)` in `src/lib/config.ts`: one queue, an
+  atomic write-then-rename. Editors POST only the keys they own to
+  `/api/admin/site-config` (which merges shallowly, `pageBgColors` one level
+  down). Never `writeFileSync` the config directly — two tabs saving together
+  used to lose each other's keys, and a truncated file silently reset the site
+  to its template defaults. `writeJsonAtomic()` is there for `photos.json` and
+  `timeline.json`.
+- **Uploads** — every route that writes into or deletes from `public/photos`
+  uses `src/lib/uploads.ts`: `rejectUpload()` (image extensions, 25 MB),
+  `safeImageFilename()` (basename, timestamped) and `resolveInPhotos()` (refuses
+  anything that escapes the directory). The photo route serves SVG as a
+  download, never `image/svg+xml`.
+- **Outbound fetches of admin-typed URLs** (`fetch-meta`, the geocoder's
+  short-link expander) go through `src/lib/safeFetch.ts`, which refuses
+  private/loopback addresses on every redirect hop and caps the body.
 - **Photo serving** — admin uploads land in the `public/photos` volume;
   `GET /api/photos/[filename]` serves them (with thumbs and resizing). Every
   `<Image>` uses `src=/api/photos/…` plus `unoptimized` (required for volume
   photos). The public gallery shows **only the hearted photos**, in the `order`
-  the admin's drag-and-drop set — both fields live in `photos.json`.
+  the admin's drag-and-drop set — both fields live in `photos.json`, which the
+  gallery reads through `GET /api/photos` (never `/config/photos.json`: Next
+  lists the `public/` folder once at boot).
 - **Docker** — multi-stage (deps → dev | builder → production), standalone
   output, non-root `nextjs:nodejs` (UID 1001). On every boot `init-db.sh`
   waits for Postgres, then applies `database/init.sql`. Volumes hold

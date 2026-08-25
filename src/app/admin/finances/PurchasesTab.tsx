@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import type { FinanceApi, FinancePayload } from './useFinances';
 import {
     Card, DeleteButton, EmptyState, GlyphButton, InlineNumber, InlineText, Modal, PillButton,
-    RowDate, RowField, RowSelect, SelectField, StatTile, TextField, formatMoney,
+    RowDate, RowField, RowSelect, SelectField, StatTile, TextField, formatMoney, todayLocal,
 } from './ui';
 
 /**
@@ -147,7 +147,7 @@ export default function PurchasesTab({ data, api }: { data: FinancePayload; api:
             description: 'New purchase',
             amount: 0,
             payer_id: typeof payerFilter === 'number' ? payerFilter : payers[0]?.id ?? null,
-            purchased_on: new Date().toISOString().slice(0, 10),
+            purchased_on: todayLocal(),
         });
 
     return (

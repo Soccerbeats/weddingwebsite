@@ -176,11 +176,17 @@ export default function SettingsTab({ data, api }: { data: FinancePayload; api: 
                         <input
                             type="number"
                             min={1}
-                            value={settings.plan_horizon_months ?? ''}
+                            // Uncontrolled and committed on blur: typing "12" used to
+                            // save 1 and then 12, each with a full refetch.
+                            key={settings.plan_horizon_months ?? 'auto'}
+                            defaultValue={settings.plan_horizon_months ?? ''}
                             placeholder={weddingDate ? 'Auto — to wedding day' : 'Auto'}
-                            onChange={(e) => api.update('settings', {
-                                plan_horizon_months: e.target.value === '' ? null : e.target.value,
-                            })}
+                            onBlur={(e) => {
+                                const next = e.target.value === '' ? null : e.target.value;
+                                if (String(next ?? '') !== String(settings.plan_horizon_months ?? '')) {
+                                    api.update('settings', { plan_horizon_months: next });
+                                }
+                            }}
                             className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-3 py-2
                                 text-base md:text-sm focus:outline-none focus:ring-2 focus:ring-accent/30"
                         />

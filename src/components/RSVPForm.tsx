@@ -7,6 +7,42 @@ interface PartyMember {
     name: string | null;
 }
 
+interface DietaryEntry {
+    name?: string | null;
+    vegetarian?: boolean;
+    vegan?: boolean;
+    gluten_free?: boolean;
+    nut_allergy?: boolean;
+    other?: boolean;
+    other_text?: string;
+}
+
+interface VerifiedGuest {
+    name: string;
+    party_size: number;
+    email?: string | null;
+    phone?: string | null;
+    party_members?: PartyMember[];
+}
+
+interface ExistingRsvp {
+    id?: number | null;
+    attending?: boolean;
+    guestCount?: number;
+    email?: string | null;
+    phone?: string | null;
+    dietaryRestrictions?: DietaryEntry[] | null;
+    message?: string | null;
+}
+
+interface RsvpPageConfig {
+    brideName?: string;
+    groomName?: string;
+    roomBlockHotel?: string;
+    roomBlockUrl?: string;
+    roomBlockMessage?: string;
+}
+
 // Attendance is a tri-state on purpose: null means "not answered yet", which is
 // distinct from an explicit 'no'. A plain boolean silently counted anyone the guest
 // forgot to tick as declined, so parties got under-counted with no warning.
@@ -24,7 +60,7 @@ interface MemberCard {
     other_text: string;
 }
 
-function buildCards(primaryName: string, partyMembers: PartyMember[], existingDietary: any[], hasExistingRsvp: boolean): MemberCard[] {
+function buildCards(primaryName: string, partyMembers: PartyMember[], existingDietary: DietaryEntry[], hasExistingRsvp: boolean): MemberCard[] {
     const totalSlots = 1 + partyMembers.length;
     return Array.from({ length: totalSlots }, (_, i) => {
         const isFirst = i === 0;
@@ -81,14 +117,14 @@ function renderRoomBlockMessage(message: string, names: string, hotel: string, b
 
 export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBlockUrl = '' }: RSVPFormProps = {}) {
     const [step, setStep] = useState<'verification' | 'form'>('verification');
-    const [verifiedGuest, setVerifiedGuest] = useState<any>(null);
+    const [verifiedGuest, setVerifiedGuest] = useState<VerifiedGuest | null>(null);
     // Who typed their name in — may be a plus-one/party member rather than the primary guest.
     const [matched, setMatched] = useState<{ name: string; isPrimary: boolean } | null>(null);
-    const [existingRsvp, setExistingRsvp] = useState<any>(null);
+    const [existingRsvp, setExistingRsvp] = useState<ExistingRsvp | null>(null);
     const [guestNameInput, setGuestNameInput] = useState('');
     const [verificationError, setVerificationError] = useState('');
     const [verifying, setVerifying] = useState(false);
-    const [config, setConfig] = useState<any>(null);
+    const [config, setConfig] = useState<RsvpPageConfig | null>(null);
 
     const [formData, setFormData] = useState({
         guestName: '',
@@ -99,6 +135,8 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
     });
 
     const [cards, setCards] = useState<MemberCard[]>([]);
+    // Whether the last submission changed an RSVP that already existed.
+    const [wasUpdate, setWasUpdate] = useState(false);
     const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
     const [errorMessage, setErrorMessage] = useState('');
 
@@ -210,6 +248,7 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
 
         try {
             const isUpdate = existingRsvp !== null;
+            setWasUpdate(isUpdate);
             const response = await fetch('/api/rsvp', {
                 method: isUpdate ? 'PUT' : 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -223,16 +262,28 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
                 }),
             });
 
+            const data = await response.json().catch(() => ({}));
             if (!response.ok) {
-                const data = await response.json().catch(() => ({}));
                 throw new Error(data.error || 'Failed to submit RSVP');
             }
 
+            // Remember the saved row so "Make changes" edits it rather than
+            // trying to update an RSVP that this form never knew the id of.
+            setExistingRsvp((prev) => ({
+                ...(prev || {}),
+                id: data.id ?? prev?.id ?? null,
+                attending: formData.attending === 'yes',
+                email: formData.email,
+                phone: formData.phone,
+                message: formData.message,
+                guestCount,
+                dietaryRestrictions,
+            }));
             setStatus('success');
-        } catch (error: any) {
+        } catch (error) {
             console.error(error);
             setStatus('error');
-            setErrorMessage(error.message || 'Something went wrong. Please try again later.');
+            setErrorMessage(error instanceof Error && error.message ? error.message : 'Something went wrong. Please try again later.');
         }
     };
 
@@ -259,7 +310,7 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
                         <path className="confirm-tick" fill="none" d="M14 27 L22.5 35.5 L38 18" />
                     </svg>
                 </div>
-                <h3 className="text-lg leading-6 font-medium text-gray-900">RSVP {existingRsvp ? 'Updated' : 'Received'}!</h3>
+                <h3 className="text-lg leading-6 font-medium text-gray-900">RSVP {wasUpdate ? 'Updated' : 'Received'}!</h3>
                 <p className="mt-2 text-base text-gray-500">
                     Thank you for letting us know. We&apos;ve sent a confirmation to the happy couple♥
                 </p>
@@ -300,7 +351,7 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
                         onClick={() => {
                             setStatus('idle');
                             setStep('form');
-                            setExistingRsvp({ ...existingRsvp, id: existingRsvp?.id });
+                            // existingRsvp was set on submit; nothing to rebuild here.
                         }}
                         className="inline-flex justify-center py-2 px-6 border border-gray-300 rounded-full text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent transition-all"
                     >
