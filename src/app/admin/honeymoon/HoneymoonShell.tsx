@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { daysBeyondRange, daysBetween, hasCoords } from '@/lib/honeymoon';
 import { HoneymoonProvider } from './HoneymoonContext';
 import SearchPalette from './SearchPalette';
@@ -38,8 +38,12 @@ const TABS = [
 export default function HoneymoonShell({ children }: { children: React.ReactNode }) {
     const api = useHoneymoon();
     const pathname = usePathname();
+    const router = useRouter();
     const { data, loading, error, saving } = api;
     const [searching, setSearching] = useState(false);
+    const [showKeys, setShowKeys] = useState(false);
+    /** True while waiting for the second key of a `g`-prefixed jump. */
+    const [goto, setGoto] = useState(false);
 
     /*
      * Portal-wide keys, bound on the shell because they must work on every tab
@@ -50,25 +54,73 @@ export default function HoneymoonShell({ children }: { children: React.ReactNode
      * editing a note feel broken to fix a problem it doesn't have.
      */
     useEffect(() => {
-        const onKey = (event: KeyboardEvent) => {
-            if (!(event.metaKey || event.ctrlKey)) return;
-            const key = event.key.toLowerCase();
-            if (key === 'k') {
-                event.preventDefault();
-                setSearching((v) => !v);
-                return;
-            }
-            if (key !== 'z' || event.shiftKey) return;
+        const typing = (event: KeyboardEvent) => {
             const target = event.target as HTMLElement | null;
             const tag = target?.tagName;
-            if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return;
-            if (!api.undo) return;
-            event.preventDefault();
-            void api.undoLast();
+            return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+                || target?.isContentEditable === true;
+        };
+
+        const onKey = (event: KeyboardEvent) => {
+            if (event.metaKey || event.ctrlKey) {
+                const key = event.key.toLowerCase();
+                if (key === 'k') {
+                    event.preventDefault();
+                    setSearching((v) => !v);
+                    return;
+                }
+                if (key !== 'z' || event.shiftKey || typing(event) || !api.undo) return;
+                event.preventDefault();
+                void api.undoLast();
+                return;
+            }
+
+            /*
+             * Bare keys, only when you are not typing into something.
+             *
+             * `/` for search is the convention every list-shaped app follows;
+             * `[` and `]` walk the days on the Today view, which is the one
+             * screen where the next thing you want is almost always the next
+             * day; `?` lists the lot, because a shortcut nobody can discover is
+             * a shortcut nobody uses.
+             */
+            if (typing(event) || event.altKey) return;
+            if (event.key === '/') { event.preventDefault(); setSearching(true); return; }
+            if (event.key === '?') { event.preventDefault(); setShowKeys((v) => !v); return; }
+            if (event.key === 'g') { event.preventDefault(); setGoto(true); return; }
+            if (event.key === 'n') {
+                event.preventDefault();
+                window.dispatchEvent(new CustomEvent('honeymoon:new-place'));
+                return;
+            }
+            if (event.key === '[' || event.key === ']') {
+                window.dispatchEvent(new CustomEvent('honeymoon:step-day', {
+                    detail: event.key === '[' ? -1 : 1,
+                }));
+            }
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
     }, [api]);
+
+    /* `g` then a letter: the two-key jump every keyboard-driven app has. */
+    useEffect(() => {
+        if (!goto) return;
+        const targets: Record<string, string> = {
+            d: BASE, t: `${BASE}/today`, m: `${BASE}/map`, i: `${BASE}/itinerary`,
+            v: `${BASE}/travel`, p: `${BASE}/places`, s: `${BASE}/stays`,
+            e: `${BASE}/excursions`, c: `${BASE}/checklist`, u: `${BASE}/guide`,
+            g: `${BASE}/settings`,
+        };
+        const onKey = (event: KeyboardEvent) => {
+            setGoto(false);
+            const href = targets[event.key.toLowerCase()];
+            if (href) { event.preventDefault(); router.push(href); }
+        };
+        window.addEventListener('keydown', onKey, { once: true });
+        const timer = setTimeout(() => setGoto(false), 2000);
+        return () => { window.removeEventListener('keydown', onKey); clearTimeout(timer); };
+    }, [goto, router]);
 
     // The map owns the viewport outright and never scrolls. The dashboard is
     // sized to fit too, but inside a scroller: its own min-height is the floor,
@@ -211,6 +263,51 @@ export default function HoneymoonShell({ children }: { children: React.ReactNode
             </div>
 
             <SearchPalette api={api} open={searching} onClose={() => setSearching(false)} />
+
+            {goto && (
+                <div className="fixed bottom-5 left-5 z-[75] rounded-2xl bg-gray-900 px-4 py-2
+                    text-sm text-white shadow-xl">
+                    Go to… <span className="text-white/60">d t m i v p s e c u g</span>
+                </div>
+            )}
+
+            {showKeys && (
+                <div className="fixed inset-0 z-[85] flex items-center justify-center p-4
+                    bg-gray-900/40 backdrop-blur-sm">
+                    <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
+                        <div className="flex items-baseline justify-between gap-2">
+                            <h2 className="text-base font-semibold text-gray-900">Shortcuts</h2>
+                            <button
+                                onClick={() => setShowKeys(false)}
+                                className="text-xl leading-none text-gray-400 hover:text-gray-700"
+                                aria-label="Close"
+                            >
+                                ×
+                            </button>
+                        </div>
+                        <dl className="mt-3 space-y-1.5 text-sm">
+                            {[
+                                ['⌘K or /', 'Find anything'],
+                                ['⌘Z', 'Undo the last delete'],
+                                ['g then d/t/m/i/v/p/s/e/c/u/g', 'Jump to a tab'],
+                                ['n', 'New place'],
+                                ['[ ]', 'Previous / next day on Today'],
+                                ['?', 'This list'],
+                            ].map(([keys, what]) => (
+                                <div key={keys} className="flex items-baseline justify-between gap-3">
+                                    <dt className="shrink-0 font-mono text-xs text-gray-500">
+                                        {keys}
+                                    </dt>
+                                    <dd className="text-right text-gray-800">{what}</dd>
+                                </div>
+                            ))}
+                        </dl>
+                        <p className="mt-3 text-[11px] text-gray-400">
+                            Bare keys are ignored while you are typing in a field.
+                        </p>
+                    </div>
+                </div>
+            )}
 
             {/* One offer at a time, above everything, wherever you are — deleting
                 on the map and undoing from the itinerary is fine. */}

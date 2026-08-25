@@ -472,6 +472,21 @@ export interface CurrencyRate {
     fetched_at: string | null;
 }
 
+/**
+ * A price read off a listing on a date.
+ *
+ * Only the two most recent per place travel in the payload: "up 12% since the
+ * 3rd" needs exactly two numbers, and a shortlist that has been checked weekly
+ * for two months does not need eighty rows on every page load.
+ */
+export interface PriceCheck {
+    place_id: number;
+    amount: number | null;
+    currency: string | null;
+    price_note: string | null;
+    checked_at: string | null;
+}
+
 /** A frozen trip, listed without its payload — those are large. */
 export interface TripArchiveMeta {
     id: number;
@@ -496,6 +511,7 @@ export interface HoneymoonPayload {
     views: SavedView[];
     rates: CurrencyRate[];
     shares: ShareLink[];
+    price_checks: PriceCheck[];
     archives: TripArchiveMeta[];
 }
 
@@ -1516,7 +1532,7 @@ export function tripEvents(
 /* ------------------------------------------------------------------ */
 
 export interface SearchHit {
-    kind: 'place' | 'note' | 'todo' | 'day' | 'region';
+    kind: 'place' | 'note' | 'todo' | 'day' | 'region' | 'travel' | 'booking';
     id: number;
     label: string;
     /** Where it lives, shown under the label. */
@@ -1538,7 +1554,43 @@ function scoreOf(term: string, title: string, body = ''): number | null {
     if (t.startsWith(term)) return 1;
     if (t.includes(term)) return 2;
     if (body.toLowerCase().includes(term)) return 4;
+    // Last resort: a typo. Only for terms long enough that a near-match means
+    // something — "ubd" should find Ubud, "ub" should not start guessing.
+    if (term.length >= 4 && isNearMatch(term, t)) return 6;
     return null;
+}
+
+/**
+ * Is one word a typo of another?
+ *
+ * A bounded edit distance: at most one substitution, insertion or deletion, and
+ * only against whole words in the title. Cheap, and it covers the mistakes that
+ * actually happen — a dropped letter, a doubled one, two swapped.
+ */
+export function isNearMatch(term: string, title: string): boolean {
+    for (const word of title.split(/[^a-z0-9]+/i)) {
+        if (word.length < 3) continue;
+        if (withinOneEdit(term, word.toLowerCase())) return true;
+    }
+    return false;
+}
+
+function withinOneEdit(a: string, b: string): boolean {
+    if (Math.abs(a.length - b.length) > 1) return false;
+    if (a === b) return true;
+    // Walk both, allowing exactly one divergence.
+    let i = 0;
+    let j = 0;
+    let slack = 1;
+    while (i < a.length && j < b.length) {
+        if (a[i] === b[j]) { i += 1; j += 1; continue; }
+        if (!slack) return false;
+        slack = 0;
+        if (a.length === b.length) { i += 1; j += 1; }        // substitution
+        else if (a.length > b.length) i += 1;                  // deletion from a
+        else j += 1;                                          // insertion into a
+    }
+    return true;
 }
 
 export function searchHoneymoon(
@@ -1549,6 +1601,8 @@ export function searchHoneymoon(
         todos: TodoItem[];
         days: Day[];
         regions: Region[];
+        /** Optional: older callers (and the check script) do not pass these. */
+        bookings?: Booking[];
     },
     limit = 12,
 ): SearchHit[] {
@@ -1558,7 +1612,13 @@ export function searchHoneymoon(
     const placeNames = new Map(data.places.map((p) => [p.id, p.name]));
 
     for (const place of data.places) {
-        const score = scoreOf(needle, place.name, `${place.description ?? ''} ${place.address ?? ''}`);
+        // Everything written on a place is searchable, not just its name and
+        // description: "AMK-9931" and "1.2m a night" are things people look for.
+        const score = scoreOf(needle, place.name, [
+            place.description ?? '', place.address ?? '', place.price_note ?? '',
+            place.best_time ?? '', place.opening_hours ?? '',
+            place.links.map((link) => `${link.label} ${link.url}`).join(' '),
+        ].join(' '));
         if (score != null) {
             hits.push({
                 kind: 'place',
@@ -1595,7 +1655,8 @@ export function searchHoneymoon(
     }
     for (const day of data.days) {
         const stops = day.stops
-            .map((s) => s.custom_label || (s.place_id != null ? placeNames.get(s.place_id) : '') || '')
+            .map((s) => `${s.custom_label ?? ''} ${s.notes ?? ''} `
+                + `${s.place_id != null ? placeNames.get(s.place_id) ?? '' : ''}`)
             .join(' ');
         const score = scoreOf(needle, day.title || `Day ${day.day_number}`, `${day.notes ?? ''} ${stops}`);
         if (score != null) {
@@ -1604,6 +1665,49 @@ export function searchHoneymoon(
                 id: day.id,
                 label: `Day ${day.day_number}${day.title ? ` — ${day.title}` : ''}`,
                 detail: `${day.stops.length} stop${day.stops.length === 1 ? '' : 's'}`,
+                score,
+            });
+        }
+
+        /*
+         * Travel legs, which were not searchable at all.
+         *
+         * The thing you actually search for is a confirmation reference or an
+         * airport code — "KX7QP2", "DPS" — and neither was indexed anywhere.
+         */
+        for (const leg of day.travel) {
+            const label = [leg.from_text, leg.to_text].filter(Boolean).join(' → ')
+                || travelModeMeta(leg.mode).label;
+            const legScore = scoreOf(needle, label, [
+                leg.confirmation_ref ?? '', leg.flight_no ?? '', leg.notes ?? '',
+                leg.booked_by ?? '', leg.aircraft ?? '',
+            ].join(' '));
+            if (legScore != null) {
+                hits.push({
+                    kind: 'travel',
+                    id: leg.id,
+                    label: `${travelModeMeta(leg.mode).icon} ${label}`,
+                    detail: `Day ${day.day_number}${leg.flight_no ? ` · ${leg.flight_no}` : ''}`,
+                    score: legScore,
+                });
+            }
+        }
+    }
+
+    for (const booking of data.bookings ?? []) {
+        const name = booking.place_id != null
+            ? placeNames.get(booking.place_id) ?? 'Booking'
+            : booking.provider || 'Booking';
+        const score = scoreOf(needle, `${name} ${booking.confirmation ?? ''}`, [
+            booking.provider ?? '', booking.contact ?? '', booking.notes ?? '',
+            booking.url ?? '',
+        ].join(' '));
+        if (score != null) {
+            hits.push({
+                kind: 'booking',
+                id: booking.id,
+                label: `${name}${booking.confirmation ? ` · ${booking.confirmation}` : ''}`,
+                detail: booking.provider || 'Booking',
                 score,
             });
         }
@@ -1622,7 +1726,8 @@ export function searchHoneymoon(
      */
     const seen = new Set<SearchHit>();
     const spread: SearchHit[] = [];
-    for (const kind of ['place', 'day', 'note', 'todo', 'region'] as SearchHit['kind'][]) {
+    for (const kind of
+        ['place', 'day', 'note', 'todo', 'region', 'travel', 'booking'] as SearchHit['kind'][]) {
         const best = hits.find((h) => h.kind === kind);
         if (best) { spread.push(best); seen.add(best); }
     }

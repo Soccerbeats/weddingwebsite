@@ -9,6 +9,8 @@ import {
     type Day, type Place, type PlaceStatus,
 } from '@/lib/honeymoon';
 import { useTripIntel } from './useTripIntel';
+import { useLocalPref } from './useLocalPref';
+import { MAP_LAYERS, type MapLayerKey } from './TripMap';
 import type { HoneymoonApi } from './useHoneymoon';
 import ItineraryTab from './ItineraryTab';
 import PlacesTab from './PlacesTab';
@@ -71,6 +73,22 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
     const [selectedId, setSelectedId] = useState<number | null>(null);
     const [editing, setEditing] = useState<Place | null>(null);
     const [editorOpen, setEditorOpen] = useState(false);
+
+    /*
+     * Base map, pin colouring and the two drawing tools.
+     *
+     * The layer and the colouring are remembered per browser — they are how you
+     * like to read a map, not facts about the trip. The tools are not: a measure
+     * or a boundary draw is a thing you are doing right now, and coming back to
+     * a map that eats your clicks would be baffling.
+     */
+    const [layer, setLayer] = useLocalPref<MapLayerKey>('hm-map-layer', 'streets');
+    const [colourBy, setColourBy] = useLocalPref<'category' | 'region'>(
+        'hm-map-colour', 'category',
+    );
+    const [tool, setTool] = useState<'none' | 'measure' | 'draw'>('none');
+    const [drawTarget, setDrawTarget] = useState('');
+    const [drawn, setDrawn] = useState<{ lat: number; lng: number }[] | null>(null);
 
     // Lasso
     const [selectMode, setSelectMode] = useState(false);
@@ -362,6 +380,44 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
         return days.flatMap(forDay);
     }, [selectedDay, showItinerary, days, intel]);
 
+    /**
+     * A colour per region, for the "which area is this in" question.
+     *
+     * Only the fill changes; the icon stays the category's, because a pin whose
+     * shape means nothing is a dot. Colours come from a fixed wheel so the same
+     * region keeps its colour between visits.
+     */
+    const pinColors = useMemo(() => {
+        if (colourBy !== 'region') return undefined;
+        const wheel = [
+            '#2563eb', '#059669', '#d97706', '#7c3aed', '#db2777', '#0891b2',
+            '#65a30d', '#dc2626', '#4f46e5', '#0d9488',
+        ];
+        const colourOf = new Map<number, string>();
+        (data?.regions ?? []).forEach((region, index) => {
+            colourOf.set(region.id, wheel[index % wheel.length]);
+        });
+        const map = new Map<number, string>();
+        for (const place of visible) {
+            map.set(place.id, place.region_id != null
+                ? colourOf.get(place.region_id) ?? '#6b7280'
+                : '#9ca3af');
+        }
+        return map;
+    }, [colourBy, data?.regions, visible]);
+
+    /** Save a drawn loop as a region's boundary. */
+    const saveBoundary = async () => {
+        const regionId = Number(drawTarget);
+        if (!drawn || drawn.length < 3 || !Number.isFinite(regionId)) return;
+        const ok = await api.update('regions', { id: regionId, boundary: drawn });
+        if (ok) {
+            setTool('none');
+            setDrawn(null);
+            setDrawTarget('');
+        }
+    };
+
     const pinnedCount = visible.filter(hasCoords).length;
     const unpinnedCount = visible.length - pinnedCount;
     /** Pins on screen whose country nobody has set — the ones worth classifying. */
@@ -623,6 +679,50 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                     >
                         + Add
                     </button>
+                    <MiniSelect
+                        value={layer}
+                        onChange={(e) => setLayer(e.target.value as MapLayerKey)}
+                        aria-label="Base map"
+                        title="Satellite for beaches, terrain for waterfalls"
+                    >
+                        {MAP_LAYERS.map((entry) => (
+                            <option key={entry.key} value={entry.key}>{entry.label}</option>
+                        ))}
+                    </MiniSelect>
+                    <MiniSelect
+                        value={colourBy}
+                        onChange={(e) => setColourBy(e.target.value as 'category' | 'region')}
+                        aria-label="Colour the pins by"
+                        title="Colour pins by what they are, or by which area they are in"
+                    >
+                        <option value="category">Colour: type</option>
+                        <option value="region">Colour: area</option>
+                    </MiniSelect>
+                    <button
+                        onClick={() => setTool(tool === 'measure' ? 'none' : 'measure')}
+                        title="Click two points for the distance and bearing between them"
+                        className={`shrink-0 rounded-2xl px-2.5 py-1.5 text-sm font-medium border
+                            transition ${tool === 'measure'
+                            ? 'bg-slate-900 border-slate-900 text-white'
+                            : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}
+                    >
+                        📏 Measure
+                    </button>
+                    {(data?.regions ?? []).length > 0 && (
+                        <button
+                            onClick={() => {
+                                setTool(tool === 'draw' ? 'none' : 'draw');
+                                setDrawn(null);
+                            }}
+                            title="Draw a boundary around an area, so places file themselves into it"
+                            className={`shrink-0 rounded-2xl px-2.5 py-1.5 text-sm font-medium border
+                                transition ${tool === 'draw'
+                                ? 'bg-violet-700 border-violet-700 text-white'
+                                : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}
+                        >
+                            ✏️ Draw an area
+                        </button>
+                    )}
                     <button
                         onClick={() => {
                             if (selectMode) setLassoed(new Set());
@@ -685,6 +785,48 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                         Reset
                     </button>
                 </div>
+
+                {tool === 'measure' && (
+                    <p className="mt-1.5 rounded-xl bg-slate-100 px-2.5 py-1.5 text-[11px]
+                        text-slate-800">
+                        Click two points on the map for the distance and bearing. A third click
+                        starts again.
+                    </p>
+                )}
+
+                {tool === 'draw' && (
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2 rounded-xl
+                        bg-violet-50 px-2.5 py-1.5">
+                        <span className="text-[11px] text-violet-900">
+                            Click round the edge of an area
+                            {drawn ? ` — ${drawn.length} points` : ''}. Then save it to:
+                        </span>
+                        <MiniSelect
+                            value={drawTarget}
+                            onChange={(e) => setDrawTarget(e.target.value)}
+                            aria-label="Which region this boundary belongs to"
+                        >
+                            <option value="">a region…</option>
+                            {(data?.regions ?? []).map((region) => (
+                                <option key={region.id} value={region.id}>
+                                    {region.name}{region.boundary ? ' (has one)' : ''}
+                                </option>
+                            ))}
+                        </MiniSelect>
+                        <button
+                            onClick={saveBoundary}
+                            disabled={!drawn || drawn.length < 3 || !drawTarget}
+                            className="rounded-full bg-violet-700 px-3 py-1 text-[11px]
+                                font-semibold text-white disabled:opacity-40"
+                        >
+                            Save boundary
+                        </button>
+                        <span className="text-[11px] text-violet-700">
+                            Once saved, &ldquo;assign regions by location&rdquo; on the Places tab files
+                            pins into it exactly, instead of guessing by nearest centre.
+                        </span>
+                    </div>
+                )}
             </div>
 
             {/* ---- Map, with a column either side of it in split view ---- */}
@@ -732,6 +874,11 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                         onSelect={setSelectedId}
                         fitSignal={fitSignal}
                         fitPoints={fitPoints}
+                        layer={layer}
+                        pinColors={pinColors}
+                        measureMode={tool === 'measure'}
+                        drawMode={tool === 'draw'}
+                        onDrawn={setDrawn}
                         selectMode={selectMode}
                         selectedIds={lassoed}
                         onLassoSelect={(ids, additive) => setLassoed((prev) => {

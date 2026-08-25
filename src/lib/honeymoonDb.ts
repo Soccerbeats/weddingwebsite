@@ -10,7 +10,8 @@ import { CATEGORIES } from './honeymoon';
 import type {
     Booking, BookingKind, CategoryRow, CostPer, CurrencyRate, Day, DocumentKind, GuideNote,
     HoneymoonPayload, LatLng, Place, PlaceComment, Region, SavedView, ShareLink, ShareScope, Stop,
-    StopOutcome, TodoItem, TodoKind, TravelLeg, Trip, TripArchiveMeta, TripDocument, TripInfo,
+    PriceCheck, StopOutcome, TodoItem, TodoKind, TravelLeg, Trip, TripArchiveMeta, TripDocument,
+    TripInfo,
 } from './honeymoon';
 
 let ready: Promise<void> | null = null;
@@ -535,7 +536,7 @@ export async function getHoneymoonPayload(): Promise<HoneymoonPayload> {
 
     const [
         tripRes, categoryRes, regionRes, placeRes, dayRes, stopRes, travelRes, noteRes, todoRes,
-        bookingRes, documentRes, commentRes, viewRes, rateRes, shareRes, archiveRes,
+        bookingRes, documentRes, commentRes, viewRes, rateRes, shareRes, priceRes, archiveRes,
     ] = await Promise.all([
         pool.query('SELECT * FROM honeymoon_trip WHERE id = 1'),
         pool.query('SELECT * FROM honeymoon_categories ORDER BY sort_order, label'),
@@ -556,6 +557,16 @@ export async function getHoneymoonPayload(): Promise<HoneymoonPayload> {
         pool.query('SELECT * FROM honeymoon_views ORDER BY sort_order, name'),
         pool.query('SELECT * FROM honeymoon_rates ORDER BY pair'),
         pool.query('SELECT * FROM honeymoon_shares ORDER BY created_at DESC, id DESC'),
+        // The two most recent price checks per place: enough for "up since last
+        // time" without carrying a whole history nobody is looking at.
+        pool.query(`
+            SELECT place_id, amount, currency, price_note, checked_at FROM (
+                SELECT *, ROW_NUMBER() OVER (
+                    PARTITION BY place_id ORDER BY checked_at DESC
+                ) AS rn
+                FROM honeymoon_price_checks
+            ) ranked WHERE rn <= 2
+        `),
         // The payloads are whole trips; a list of them only needs the shape.
         pool.query(`
             SELECT id, name, created_at,
@@ -814,8 +825,16 @@ export async function getHoneymoonPayload(): Promise<HoneymoonPayload> {
         days: Number(r.days) || 0,
     }));
 
+    const price_checks: PriceCheck[] = priceRes.rows.map((r) => ({
+        place_id: r.place_id,
+        amount: money(r.amount),
+        currency: r.currency ?? null,
+        price_note: r.price_note ?? null,
+        checked_at: isoStamp(r.checked_at),
+    }));
+
     return {
         trip, categories, regions, places, days, notes, todos,
-        bookings, documents, comments, views, rates, shares, archives,
+        bookings, documents, comments, views, rates, shares, price_checks, archives,
     };
 }

@@ -649,7 +649,7 @@ export default function PlaceEditor({ api, place, open, onClose }: {
                     open={managing === 'categories'}
                     onClose={() => setManaging(null)}
                     title="Edit categories"
-                    hint="Renaming keeps every place filed under it. Deleting moves them to Other."
+                    hint="Renaming keeps every place filed under it. Deleting moves them to Other. The colour and the emoji are what the map draws."
                     items={(api.data?.categories ?? []).map((c) => {
                         const used = (api.data?.places ?? [])
                             .filter((p) => p.category === c.key).length;
@@ -657,7 +657,9 @@ export default function PlaceEditor({ api, place, open, onClose }: {
                             id: c.id,
                             // Label only — what you edit is exactly what is stored.
                             label: c.label,
-                            detail: `${c.icon}  ${used ? `${used} place${used === 1 ? '' : 's'}` : 'unused'}`,
+                            color: c.color,
+                            icon: c.icon,
+                            detail: used ? `${used} place${used === 1 ? '' : 's'}` : 'unused',
                             warn: used
                                 ? `Delete "${c.label}"? ${used} place(s) will move to Other.`
                                 : `Delete "${c.label}"?`,
@@ -667,6 +669,7 @@ export default function PlaceEditor({ api, place, open, onClose }: {
                         };
                     })}
                     onRename={(id, label) => api.update('categories', { id, label })}
+                    onRestyle={(id, fields) => api.update('categories', { id, ...fields })}
                     onDelete={(id) => api.remove('categories', id)}
                 />
 

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { searchHoneymoon, type SearchHit } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
 import PlaceEditor from './PlaceEditor';
+import { useLocalPref } from './useLocalPref';
 import { Modal } from './ui';
 
 const BASE = '/admin/honeymoon';
@@ -15,6 +16,8 @@ const KIND_LABEL: Record<SearchHit['kind'], string> = {
     note: 'Guide',
     todo: 'To do',
     day: 'Day',
+    travel: 'Travel',
+    booking: 'Booking',
 };
 
 const KIND_HREF: Record<SearchHit['kind'], string> = {
@@ -23,7 +26,13 @@ const KIND_HREF: Record<SearchHit['kind'], string> = {
     note: `${BASE}/guide`,
     todo: `${BASE}/checklist`,
     day: `${BASE}/itinerary`,
+    travel: `${BASE}/travel`,
+    booking: `${BASE}/stays`,
 };
+
+/** The last few searches, per browser — most searches are a repeat. */
+const RECENT_KEY = 'hm-recent-searches';
+const RECENT_MAX = 6;
 
 /**
  * Find anything, from anywhere.
@@ -77,6 +86,14 @@ function SearchBody({ api, onPick }: { api: HoneymoonApi; onPick: (hit: SearchHi
     const [term, setTerm] = useState('');
     const [cursor, setCursor] = useState(0);
     const listRef = useRef<HTMLUListElement | null>(null);
+    const [recent, setRecent] = useLocalPref<string[]>(RECENT_KEY, []);
+
+    /** Remember a search that actually went somewhere, not every keystroke. */
+    const remember = (used: string) => {
+        const clean = used.trim();
+        if (clean.length < 2) return;
+        setRecent([clean, ...recent.filter((item) => item !== clean)].slice(0, RECENT_MAX));
+    };
 
     const hits = useMemo(() => {
         if (!api.data) return [];
@@ -86,6 +103,7 @@ function SearchBody({ api, onPick }: { api: HoneymoonApi; onPick: (hit: SearchHi
             todos: api.data.todos,
             days: api.data.days,
             regions: api.data.regions,
+            bookings: api.data.bookings,
         });
     }, [term, api.data]);
 
@@ -109,6 +127,7 @@ function SearchBody({ api, onPick }: { api: HoneymoonApi; onPick: (hit: SearchHi
                     setCursor(Math.max(active - 1, 0));
                 } else if (e.key === 'Enter' && hits[active]) {
                     e.preventDefault();
+                    remember(term);
                     onPick(hits[active]);
                 }
             }}
@@ -117,16 +136,40 @@ function SearchBody({ api, onPick }: { api: HoneymoonApi; onPick: (hit: SearchHi
                 autoFocus
                 value={term}
                 onChange={(e) => { setTerm(e.target.value); setCursor(0); }}
-                placeholder="Places, guide notes, to-dos, days…"
+                placeholder="Places, notes, to-dos, days, flights, confirmations…"
                 className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-4 py-2.5
                     text-base focus:outline-none focus:ring-2 focus:ring-accent/30
                     focus:border-accent/40"
             />
 
             {term.trim().length < 2 ? (
-                <p className="text-xs text-gray-400 mt-3 px-1">
-                    Type at least two letters. ↑↓ to move, Enter to open, Esc to close.
-                </p>
+                <div className="mt-3 px-1">
+                    {recent.length > 0 && (
+                        <div className="mb-3 flex flex-wrap items-center gap-1.5">
+                            <span className="text-[11px] text-gray-400">Recent:</span>
+                            {recent.map((item) => (
+                                <button
+                                    key={item}
+                                    onClick={() => { setTerm(item); setCursor(0); }}
+                                    className="rounded-full border border-gray-200 px-2.5 py-0.5
+                                        text-xs text-gray-600 hover:bg-gray-50"
+                                >
+                                    {item}
+                                </button>
+                            ))}
+                            <button
+                                onClick={() => setRecent([])}
+                                className="text-[11px] text-gray-400 underline decoration-dotted"
+                            >
+                                clear
+                            </button>
+                        </div>
+                    )}
+                    <p className="text-xs text-gray-400">
+                        Type at least two letters — a typo is forgiven. ↑↓ to move, Enter to open,
+                        Esc to close.
+                    </p>
+                </div>
             ) : hits.length === 0 ? (
                 <p className="text-sm text-gray-500 mt-3 px-1">
                     Nothing matches &ldquo;{term.trim()}&rdquo;.
@@ -136,7 +179,7 @@ function SearchBody({ api, onPick }: { api: HoneymoonApi; onPick: (hit: SearchHi
                     {hits.map((hit, index) => (
                         <li key={`${hit.kind}-${hit.id}`}>
                             <button
-                                onClick={() => onPick(hit)}
+                                onClick={() => { remember(term); onPick(hit); }}
                                 onMouseEnter={() => setCursor(index)}
                                 className={`w-full text-left rounded-xl px-3 py-2 flex items-center gap-3
                                     ${index === active ? 'bg-accent/10' : 'hover:bg-gray-50'}`}

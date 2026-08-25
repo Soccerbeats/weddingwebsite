@@ -9,16 +9,19 @@ import {
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
-    RATINGS, byRank, cleanListingTitle, formatPerNight, hasCoords, isStayUrl, nameFromStayUrl,
-    priceValue, stayUrlsFromText,
+    RATINGS, STATUSES, byRank, cleanListingTitle, formatPerNight, hasCoords, isStayUrl,
+    nameFromStayUrl, priceValue, stayUrlsFromText,
     type Place, type PlaceStatus,
 } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
 import PlaceEditor from './PlaceEditor';
+import CompareTable from './CompareTable';
+import PriceWatch from './PriceWatch';
 import LinkPreview from './LinkPreview';
+import RateQueue from './RateQueue';
 import {
-    Button, Card, ColumnDivider, CustomisableSelect, EmptyState, InlineText, ManageListModal,
-    MiniSelect, OverflowMenu, StatusChip, TextArea,
+    BulkFieldMenu, Button, Card, ColumnDivider, CustomisableSelect, EmptyState, InlineText,
+    ManageListModal, MiniSelect, OverflowMenu, StatusChip, TextArea,
 } from './ui';
 
 // Leaflet reaches for `window` on import, so the map is never in the server
@@ -31,7 +34,7 @@ const TripMap = dynamic(() => import('./TripMap'), {
 type SortKey = 'rank' | 'added' | 'price' | 'name' | 'status';
 
 /** Cards to compare them, ranking to put them in order. */
-type View = 'cards' | 'ranking';
+type View = 'cards' | 'ranking' | 'compare';
 
 const VIEW_KEY = 'honeymoon.stays.view';
 const MAP_WIDTH_KEY = 'honeymoon.stays.mapWidth';
@@ -105,7 +108,7 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
     const [view, setView] = useState<View>('cards');
     useEffect(() => {
         const saved = localStorage.getItem(VIEW_KEY);
-        if (saved === 'ranking' || saved === 'cards') setView(saved);
+        if (saved === 'ranking' || saved === 'cards' || saved === 'compare') setView(saved);
     }, []);
     const chooseView = (next: View) => {
         setView(next);
@@ -116,6 +119,13 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
         if (next === 'ranking') setFilter((f) => (f === 'removed' ? 'all' : f));
     };
     const [preview, setPreview] = useState<Place | null>(null);
+    const [triaging, setTriaging] = useState(false);
+    /*
+     * Multi-select, for the same reason the Places tab has it: which verbs you
+     * get should not depend on which tab you happened to be looking at when you
+     * decided to restatus six villas.
+     */
+    const [selected, setSelected] = useState<Set<number>>(new Set());
     /**
      * The stay being pointed at, and which side pointed at it.
      *
@@ -404,6 +414,10 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
         address?: string;
         lat?: number | null;
         lng?: number | null;
+        /** The JSON-LD extras: the chips that make a card worth reading. */
+        starRating?: number | null;
+        priceRange?: string;
+        amenities?: string[];
     }
 
     /**
@@ -426,6 +440,9 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                 address: body.address || undefined,
                 lat: typeof body.lat === 'number' ? body.lat : null,
                 lng: typeof body.lng === 'number' ? body.lng : null,
+                starRating: typeof body.starRating === 'number' ? body.starRating : null,
+                priceRange: body.priceRange || undefined,
+                amenities: Array.isArray(body.amenities) ? body.amenities : undefined,
             };
         } catch {
             return {};
@@ -458,6 +475,9 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                     source: 'Added by me',
                     image_url: meta.image ?? '',
                     address: meta.address ?? '',
+                    star_rating: meta.starRating ?? '',
+                    price_range: meta.priceRange ?? '',
+                    amenities: meta.amenities ?? [],
                     // The listing's own coordinates, so a pasted link is on the
                     // map immediately rather than after a round of geocoding.
                     ...(meta.lat != null && meta.lng != null
@@ -509,6 +529,13 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                 const meta = await previewOf(url);
                 const fields: Record<string, unknown> = {};
                 if (meta.address && !stay.address) fields.address = meta.address;
+                if (meta.starRating != null && stay.star_rating == null) {
+                    fields.star_rating = meta.starRating;
+                }
+                if (meta.priceRange && !stay.price_range) fields.price_range = meta.priceRange;
+                if (meta.amenities?.length && !stay.amenities.length) {
+                    fields.amenities = meta.amenities;
+                }
                 if (meta.lat != null && meta.lng != null && !hasCoords(stay)) {
                     fields.lat = meta.lat;
                     fields.lng = meta.lng;
@@ -589,6 +616,62 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                 </div>
             </Card>
 
+            {selected.size > 0 && (
+                <Card className="sticky top-2 z-10 flex flex-wrap items-center gap-2 p-3">
+                    <span className="text-sm font-medium text-gray-700">
+                        {selected.size} selected
+                    </span>
+                    <div className="flex-1" />
+                    <BulkFieldMenu
+                        fields={[
+                            {
+                                key: 'status',
+                                label: 'Status',
+                                options: STATUSES.map((entry) => ({
+                                    value: entry.key, label: entry.label,
+                                })),
+                            },
+                            {
+                                key: 'rating',
+                                label: 'Rating',
+                                options: [
+                                    ...RATINGS.map((entry) => ({
+                                        value: entry.key, label: `${entry.icon} ${entry.label}`,
+                                    })),
+                                    { value: '', label: '— unrated —' },
+                                ],
+                            },
+                            {
+                                key: 'region_id',
+                                label: 'Area',
+                                options: [
+                                    { value: null, label: '— no area —' },
+                                    ...(data?.regions ?? []).map((region) => ({
+                                        value: region.id, label: region.name,
+                                    })),
+                                ],
+                            },
+                        ]}
+                        onApply={async (key, value) => {
+                            await api.update('places', { ids: [...selected], [key]: value });
+                            setSelected(new Set());
+                        }}
+                        label="Change a field on all selected"
+                    />
+                    <Button
+                        onClick={async () => {
+                            await api.update('places', { ids: [...selected], archived: true });
+                            setSelected(new Set());
+                        }}
+                    >
+                        Remove from shortlist
+                    </Button>
+                    <Button tone="ghost" onClick={() => setSelected(new Set())}>Clear</Button>
+                </Card>
+            )}
+
+            {stays.length > 0 && <PriceWatch api={api} />}
+
             {/* ---- Filters ---- */}
             <div className="flex flex-wrap items-center gap-1.5">
                 {/* The pills step aside in the ranking view: see `ranking`. */}
@@ -646,6 +729,14 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                 {view === 'ranking' && stays.some((st) => st.rank != null) && (
                     <Button onClick={clearRanking}>Clear ranking</Button>
                 )}
+                {counts.unrated > 0 && view === 'cards' && (
+                    <Button
+                        onClick={() => setTriaging(true)}
+                        title="One at a time, big photo, three buttons — the fast way through a long list"
+                    >
+                        ⚡ Rate {counts.unrated} unrated
+                    </Button>
+                )}
                 {missingLocation.length > 0 && (
                     <Button
                         onClick={fetchMissingLocations}
@@ -676,8 +767,12 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                 </p>
             )}
 
-            {/* ---- Ranking ---- */}
-            {view === 'ranking' ? (
+            {/* ---- Ranking / compare / cards ---- */}
+            {view === 'compare' ? (
+                <Card className="p-3">
+                    <CompareTable api={api} stays={shown} onPick={(place) => setPreview(place)} />
+                </Card>
+            ) : view === 'ranking' ? (
                 <RankingList
                     stays={rankedRows}
                     pickedId={picked?.id ?? null}
@@ -719,7 +814,26 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                                 className={`rounded-2xl transition
                                     ${active ? 'ring-2 ring-accent' : ''}`}
                             >
-                            <Card className="overflow-hidden">
+                            <Card className="relative overflow-hidden">
+                                {/* Bottom-left of the photo rather than the top:
+                                    the top-right corner is where the rank and the
+                                    status chips already are. */}
+                                <label className="absolute bottom-2 left-2 z-10 flex size-7
+                                    cursor-pointer items-center justify-center rounded-full
+                                    bg-white/90 shadow">
+                                    <input
+                                        type="checkbox"
+                                        checked={selected.has(stay.id)}
+                                        onChange={() => setSelected((prev) => {
+                                            const next = new Set(prev);
+                                            if (next.has(stay.id)) next.delete(stay.id);
+                                            else next.add(stay.id);
+                                            return next;
+                                        })}
+                                        className="size-4 rounded accent-accent"
+                                        aria-label={`Select ${stay.name}`}
+                                    />
+                                </label>
                                 {stay.image_url && (
                                     // Plain <img>: the host is a third-party CDN, and
                                     // next/image would need every booking domain
@@ -772,6 +886,45 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                                         {stay.status !== 'idea' && (
                                             <div className="mt-0.5">
                                                 <StatusChip status={stay.status} />
+                                            </div>
+                                        )}
+                                        {/* What the listing itself said. Free with
+                                            the photo fetch, and exactly the detail
+                                            you would otherwise open six tabs to
+                                            compare. */}
+                                        {(stay.star_rating != null || stay.price_range
+                                            || stay.amenities.length > 0) && (
+                                            <div className="mt-1 flex flex-wrap items-center gap-1">
+                                                {stay.star_rating != null && (
+                                                    <span className="rounded-full bg-amber-50 px-2
+                                                        py-0.5 text-[10px] font-medium
+                                                        text-amber-800">
+                                                        {stay.star_rating}★
+                                                    </span>
+                                                )}
+                                                {stay.price_range && (
+                                                    <span className="rounded-full bg-gray-100 px-2
+                                                        py-0.5 text-[10px] text-gray-600">
+                                                        {stay.price_range}
+                                                    </span>
+                                                )}
+                                                {stay.amenities.slice(0, 3).map((amenity) => (
+                                                    <span
+                                                        key={amenity}
+                                                        className="rounded-full bg-gray-100 px-2
+                                                            py-0.5 text-[10px] text-gray-600"
+                                                    >
+                                                        {amenity}
+                                                    </span>
+                                                ))}
+                                                {stay.amenities.length > 3 && (
+                                                    <span
+                                                        className="text-[10px] text-gray-400"
+                                                        title={stay.amenities.join(' · ')}
+                                                    >
+                                                        +{stay.amenities.length - 3}
+                                                    </span>
+                                                )}
                                             </div>
                                         )}
                                         <InlineText
@@ -1032,6 +1185,14 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                 onClose={() => { setEditorOpen(false); setEditing(null); }}
             />
 
+            <RateQueue
+                api={api}
+                open={triaging}
+                onClose={() => setTriaging(false)}
+                title="Rate the stays"
+                filter={(place) => place.category === 'stay' && !place.is_excursion}
+            />
+
             {/* Renaming an area keeps every place filed under it; deleting one
                 leaves the places and clears their area. The counts include
                 everything in the region, not just stays, because that is what
@@ -1064,6 +1225,8 @@ function ViewToggle({ view, onChange }: { view: View; onChange: (view: View) => 
     const options: { key: View; label: string }[] = [
         { key: 'cards', label: '▦ Cards' },
         { key: 'ranking', label: '① Ranking' },
+        // Ranking answers "which order"; the table answers "why".
+        { key: 'compare', label: '⊞ Compare' },
     ];
     return (
         <div className="shrink-0 inline-flex rounded-full border border-gray-200 bg-white p-0.5">

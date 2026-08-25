@@ -1,16 +1,61 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import Image from 'next/image';
 import {
-    STATUSES, categoriesOf, countriesInUse, hasCoords, sourceLabel, sourcesOf,
+    STATUSES, categoriesOf, countriesInUse, distanceKm, formatDistance, hasCoords, sourceLabel,
+    sourcesOf,
     type Place, type PlaceStatus,
 } from '@/lib/honeymoon';
+import {
+    assignRegions, placesToCsv, placesToGeoJson, placesToKml,
+} from '@/lib/honeymoonPlaces';
 import type { HoneymoonApi } from './useHoneymoon';
 import PlaceEditor from './PlaceEditor';
+import PlaceDrawer from './PlaceDrawer';
+import ImportPlaces from './ImportPlaces';
+import SavedViews from './SavedViews';
+import { useLocalPref } from './useLocalPref';
 import {
     BulkFieldMenu, Button, Card, CategoryChip, EmptyState, MiniSelect, OverflowMenu, SelectField,
     StatusChip, TextField, TriToggle, type TriState,
 } from './ui';
+
+/** The orders the list can be read in. */
+type SortKey = 'name' | 'recent' | 'region' | 'status' | 'rating' | 'distance';
+
+const SORTS: { key: SortKey; label: string }[] = [
+    { key: 'name', label: 'Name' },
+    { key: 'recent', label: 'Recently added' },
+    { key: 'region', label: 'Region' },
+    { key: 'status', label: 'Status' },
+    { key: 'rating', label: 'Rating' },
+    { key: 'distance', label: 'Distance from base' },
+];
+
+/**
+ * Hand the browser a file.
+ *
+ * A blob URL rather than a data: URI, because a two-hundred-place KML is bigger
+ * than some browsers will accept in a URL; revoked immediately after, since the
+ * click has already started the download.
+ */
+function download(content: string, filename: string, type: string) {
+    const url = URL.createObjectURL(new Blob([content], { type }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+}
+
+/** Liked first, then unrated, then mid, then rejected. */
+function rank(place: Place): number {
+    if (place.rating === 'yes') return 3;
+    if (place.rating == null) return 2;
+    if (place.rating === 'mid') return 1;
+    return 0;
+}
 
 /**
  * The place library — every candidate from the guide plus anything added by hand.
@@ -29,14 +74,27 @@ export default function PlacesTab({ api, panel = false }: {
 }) {
     const { data } = api;
     const [search, setSearch] = useState('');
-    const [regionFilter, setRegionFilter] = useState('');
-    const [categoryFilter, setCategoryFilter] = useState('');
-    const [statusFilter, setStatusFilter] = useState('');
-    const [reviewState, setReviewState] = useState<TriState>('off');
-    const [pinState, setPinState] = useState<TriState>('off');
-    const [sourceFilter, setSourceFilter] = useState('');
+    /*
+     * Filters, sort and density are remembered per browser.
+     *
+     * They reset on every visit before this, which the map (which remembers its
+     * split) made look like an oversight rather than a decision. Search is
+     * deliberately *not* remembered: a stale search term hiding two hundred rows
+     * on arrival reads as data loss.
+     */
+    const [regionFilter, setRegionFilter] = useLocalPref('hm-places-region', '');
+    const [categoryFilter, setCategoryFilter] = useLocalPref('hm-places-category', '');
+    const [statusFilter, setStatusFilter] = useLocalPref('hm-places-status', '');
+    const [reviewState, setReviewState] = useLocalPref<TriState>('hm-places-review', 'off');
+    const [pinState, setPinState] = useLocalPref<TriState>('hm-places-pin', 'off');
+    const [sourceFilter, setSourceFilter] = useLocalPref('hm-places-source', '');
+    const [sort, setSort] = useLocalPref<SortKey>('hm-places-sort', 'name');
+    const [dense, setDense] = useLocalPref('hm-places-dense', false);
     const [editing, setEditing] = useState<Place | null>(null);
     const [editorOpen, setEditorOpen] = useState(false);
+    const [viewing, setViewing] = useState<Place | null>(null);
+    const [importing, setImporting] = useState(false);
+    const [filing, setFiling] = useState('');
     const [selected, setSelected] = useState<Set<number>>(new Set());
 
     // Stable identity — see MapTab: a fresh `?? []` per render would defeat
@@ -60,6 +118,57 @@ export default function PlacesTab({ api, panel = false }: {
         });
     }, [places, search, regionFilter, categoryFilter, statusFilter,
         reviewState, pinState, sourceFilter]);
+
+    /**
+     * The order the list is in.
+     *
+     * Name was the only option, which is the wrong default for two of the three
+     * things you come here to do: "what did I add last night" and "what is near
+     * where we are staying" are both orderings, not searches. Distance sorts from
+     * whichever base is set on the earliest day that has one — the trip's centre
+     * of gravity — and says so in the label.
+     */
+    const distanceFrom = useMemo(() => {
+        for (const day of data?.days ?? []) {
+            if (day.base_place_id == null) continue;
+            const base = api.placeById.get(day.base_place_id);
+            if (base && hasCoords(base)) return base;
+        }
+        return null;
+    }, [data?.days, api.placeById]);
+
+    const sorted = useMemo(() => {
+        const rows = [...filtered];
+        switch (sort) {
+            case 'recent':
+                // Highest id first: `created_at` is only on places, and the id
+                // is the same order without a parse.
+                return rows.sort((a, b) => b.id - a.id);
+            case 'region':
+                return rows.sort((a, b) => (api.regionById.get(a.region_id ?? -1) ?? '~')
+                    .localeCompare(api.regionById.get(b.region_id ?? -1) ?? '~')
+                    || a.name.localeCompare(b.name));
+            case 'status':
+                return rows.sort((a, b) => STATUSES.findIndex((s) => s.key === b.status)
+                    - STATUSES.findIndex((s) => s.key === a.status)
+                    || a.name.localeCompare(b.name));
+            case 'rating':
+                return rows.sort((a, b) => rank(b) - rank(a) || a.name.localeCompare(b.name));
+            case 'distance': {
+                if (!distanceFrom) return rows;
+                const from = { lat: distanceFrom.lat as number, lng: distanceFrom.lng as number };
+                return rows.sort((a, b) => {
+                    const left = hasCoords(a)
+                        ? distanceKm(from, { lat: a.lat, lng: a.lng }) : Infinity;
+                    const right = hasCoords(b)
+                        ? distanceKm(from, { lat: b.lat, lng: b.lng }) : Infinity;
+                    return left - right;
+                });
+            }
+            default:
+                return rows.sort((a, b) => a.name.localeCompare(b.name));
+        }
+    }, [filtered, sort, api.regionById, distanceFrom]);
 
     /** Built from the data, so a new batch of suggestions shows up on its own. */
     const sources = useMemo(() => sourcesOf(places), [places]);
@@ -149,6 +258,38 @@ export default function PlacesTab({ api, panel = false }: {
         },
     ], [data?.categories, data?.regions, places, sources]);
 
+    /* `n` from anywhere in the portal opens the new-place editor here. */
+    useEffect(() => {
+        const onNew = () => { setEditing(null); setEditorOpen(true); };
+        window.addEventListener('honeymoon:new-place', onNew);
+        return () => window.removeEventListener('honeymoon:new-place', onNew);
+    }, []);
+
+    /**
+     * File the unfiled places by where they are.
+     *
+     * A drawn region boundary decides outright; otherwise the nearest region
+     * centre, which is a guess and is described as one. Only places with no
+     * region are touched — re-filing something you put somewhere on purpose is
+     * the kind of help that loses work — and it is one request, not one per row.
+     */
+    const fileByLocation = async () => {
+        const matches = assignRegions(places, data?.regions ?? []);
+        if (!matches.length) {
+            setFiling('Nothing to file: every pinned place already has a region.');
+            return;
+        }
+        const ok = await api.updateMany('places', matches.map((match) => ({
+            id: match.placeId, region_id: match.regionId,
+        })));
+        const drawn = matches.filter((match) => match.how === 'boundary').length;
+        setFiling(ok
+            ? `Filed ${matches.length} place${matches.length === 1 ? '' : 's'}`
+                + `${drawn ? `, ${drawn} by a drawn boundary` : ''}`
+                + `${matches.length - drawn ? `, ${matches.length - drawn} by nearest region centre — worth a glance` : ''}.`
+            : 'Could not file those.');
+    };
+
     /** Schedule the whole selection onto a day, skipping anything already on it. */
     const addToDay = async (dayId: number) => {
         const day = (data?.days ?? []).find((d) => d.id === dayId);
@@ -234,6 +375,86 @@ export default function PlacesTab({ api, panel = false }: {
                         invertedLabel="Pinned"
                     />
                 </div>
+
+                <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 pt-2">
+                    <MiniSelect
+                        value={sort}
+                        onChange={(e) => setSort(e.target.value as SortKey)}
+                        aria-label="Sort by"
+                    >
+                        {SORTS.map((option) => (
+                            <option key={option.key} value={option.key}>
+                                {option.key === 'distance' && !distanceFrom
+                                    ? 'Distance (set a base first)'
+                                    : option.label}
+                            </option>
+                        ))}
+                    </MiniSelect>
+                    <Button onClick={() => setDense(!dense)}>
+                        {dense ? 'Comfortable rows' : 'Dense rows'}
+                    </Button>
+                    <SavedViews
+                        api={api}
+                        current={{
+                            region: regionFilter, category: categoryFilter, status: statusFilter,
+                            source: sourceFilter, review: reviewState, pin: pinState, sort,
+                        }}
+                        onApply={(filters: Record<string, unknown>) => {
+                            setRegionFilter(String(filters.region ?? ''));
+                            setCategoryFilter(String(filters.category ?? ''));
+                            setStatusFilter(String(filters.status ?? ''));
+                            setSourceFilter(String(filters.source ?? ''));
+                            setReviewState((filters.review as TriState) ?? 'off');
+                            setPinState((filters.pin as TriState) ?? 'off');
+                            setSort((filters.sort as SortKey) ?? 'name');
+                        }}
+                    />
+                    <div className="flex-1" />
+                    {(regionFilter || categoryFilter || statusFilter || sourceFilter
+                        || reviewState !== 'off' || pinState !== 'off') && (
+                        <Button
+                            tone="ghost"
+                            onClick={() => {
+                                setRegionFilter(''); setCategoryFilter(''); setStatusFilter('');
+                                setSourceFilter(''); setReviewState('off'); setPinState('off');
+                            }}
+                        >
+                            Clear filters
+                        </Button>
+                    )}
+                    <Button onClick={() => setImporting(true)}>Import…</Button>
+                    <OverflowMenu items={[
+                        {
+                            label: 'Export as CSV',
+                            onClick: () => download(
+                                placesToCsv(sorted, (id) => (id != null
+                                    ? api.regionById.get(id) ?? '' : '')),
+                                'places.csv', 'text/csv',
+                            ),
+                        },
+                        {
+                            label: 'Export as GeoJSON',
+                            onClick: () => download(
+                                placesToGeoJson(sorted, (id) => (id != null
+                                    ? api.regionById.get(id) ?? '' : '')),
+                                'places.geojson', 'application/geo+json',
+                            ),
+                        },
+                        {
+                            label: 'Export as KML (Google My Maps)',
+                            onClick: () => download(
+                                placesToKml(sorted, data?.trip.title ?? 'Honeymoon places'),
+                                'places.kml', 'application/vnd.google-earth.kml+xml',
+                            ),
+                        },
+                        { label: 'Assign regions by location', onClick: fileByLocation },
+                    ]} />
+                </div>
+                {filing && (
+                    <p className="rounded-xl bg-sky-50 px-2.5 py-1.5 text-[11px] text-sky-900">
+                        {filing}
+                    </p>
+                )}
             </Card>
 
             {/* ---- Bulk bar ---- */}
@@ -288,7 +509,7 @@ export default function PlacesTab({ api, panel = false }: {
 
             {/* ---- List ---- */}
             <Card>
-                {filtered.length === 0 ? (
+                {sorted.length === 0 ? (
                     <EmptyState
                         title={places.length ? 'No places match those filters' : 'No places yet'}
                         hint={places.length
@@ -297,11 +518,15 @@ export default function PlacesTab({ api, panel = false }: {
                     />
                 ) : (
                     <ul className="divide-y divide-gray-100">
-                        {filtered.map((place) => {
+                        {sorted.map((place) => {
                             const onDays = api.dayOfPlace.get(place.id) ?? [];
                             const scheduled = onDays.length > 0;
                             return (
-                                <li key={place.id} className="flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50">
+                                <li
+                                    key={place.id}
+                                    className={`flex items-center gap-3 px-3 hover:bg-gray-50
+                                        ${dense ? 'py-1' : 'py-2.5'}`}
+                                >
                                     <input
                                         type="checkbox"
                                         checked={selected.has(place.id)}
@@ -309,8 +534,24 @@ export default function PlacesTab({ api, panel = false }: {
                                         className="w-4 h-4 rounded accent-accent shrink-0"
                                         aria-label={`Select ${place.name}`}
                                     />
+                                    {/* The cover photo, when there is one: a
+                                        shortlist of villas is much easier to read
+                                        by picture than by name. Hidden in dense
+                                        mode, which is for scanning names. */}
+                                    {!dense && place.photos.length > 0 && (
+                                        <div className="relative size-10 shrink-0 overflow-hidden
+                                            rounded-lg bg-gray-100">
+                                            <Image
+                                                src={`/api/photos/${place.photos[0]}`}
+                                                alt=""
+                                                fill
+                                                unoptimized
+                                                className="object-cover"
+                                            />
+                                        </div>
+                                    )}
                                     <button
-                                        onClick={() => { setEditing(place); setEditorOpen(true); }}
+                                        onClick={() => setViewing(place)}
                                         className="flex-1 min-w-0 text-left"
                                     >
                                         <div className="flex items-center gap-2 flex-wrap">
@@ -333,7 +574,8 @@ export default function PlacesTab({ api, panel = false }: {
                                                 </span>
                                             )}
                                         </div>
-                                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                                        <div className={`flex items-center gap-1.5 flex-wrap
+                                            ${dense ? 'hidden' : 'mt-1'}`}>
                                             <CategoryChip category={place.category} />
                                             <StatusChip status={place.status} />
                                             {place.region_id != null && (
@@ -346,8 +588,28 @@ export default function PlacesTab({ api, panel = false }: {
                                             </span>
                                         </div>
                                     </button>
+                                    {sort === 'distance' && distanceFrom && hasCoords(place) && (
+                                        <span className="shrink-0 text-[11px] text-gray-400
+                                            tabular-nums">
+                                            {formatDistance(distanceKm(
+                                                { lat: distanceFrom.lat as number,
+                                                  lng: distanceFrom.lng as number },
+                                                { lat: place.lat, lng: place.lng },
+                                            ))}
+                                        </span>
+                                    )}
                                     <OverflowMenu
                                         items={[
+                                            {
+                                                label: 'Open details',
+                                                onClick: () => setViewing(place),
+                                            },
+                                            {
+                                                label: 'Edit',
+                                                onClick: () => {
+                                                    setEditing(place); setEditorOpen(true);
+                                                },
+                                            },
                                             ...STATUSES
                                                 .filter((s) => s.key !== place.status)
                                                 .map((s) => ({
@@ -378,9 +640,9 @@ export default function PlacesTab({ api, panel = false }: {
                 )}
             </Card>
 
-            {filtered.length > 0 && (
+            {sorted.length > 0 && (
                 <p className="text-[11px] text-gray-400 px-1">
-                    Showing {filtered.length} of {places.length}.
+                    Showing {sorted.length} of {places.length}.
                 </p>
             )}
 
@@ -390,6 +652,15 @@ export default function PlacesTab({ api, panel = false }: {
                 open={editorOpen}
                 onClose={() => { setEditorOpen(false); setEditing(null); }}
             />
+
+            <PlaceDrawer
+                api={api}
+                place={viewing ? api.placeById.get(viewing.id) ?? viewing : null}
+                onClose={() => setViewing(null)}
+                onEdit={(place) => { setViewing(null); setEditing(place); setEditorOpen(true); }}
+            />
+
+            <ImportPlaces api={api} open={importing} onClose={() => setImporting(false)} />
         </div>
     );
 }

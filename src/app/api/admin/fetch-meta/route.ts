@@ -86,10 +86,18 @@ function addressLine(address: PostalAddress): string {
  *   3. A bare "latitude"/"longitude" pair anywhere in the page, as a last resort
  *      for other booking sites.
  */
-function extractPlace(html: string): { address: string; lat: number | null; lng: number | null } {
+function extractPlace(html: string): {
+    address: string; lat: number | null; lng: number | null;
+    /** From the same JSON-LD block the address came from — see extractExtras. */
+    starRating: number | null; priceRange: string; amenities: string[]; rating: number | null;
+} {
     let address = '';
     let lat: number | null = null;
     let lng: number | null = null;
+    let starRating: number | null = null;
+    let priceRange = '';
+    let amenities: string[] = [];
+    let rating: number | null = null;
 
     const blocks = [...html.matchAll(
         /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi,
@@ -114,6 +122,45 @@ function extractPlace(html: string): { address: string; lat: number | null; lng:
             } else if (!address && typeof row.address === 'string') {
                 address = row.address.trim();
             }
+            /*
+             * The rest of what a listing already tells us.
+             *
+             * `starRating`, `priceRange` and `amenityFeature` are in the same
+             * JSON-LD node as the address, on the sites that publish any of it —
+             * so they cost nothing to read and they are exactly the chips that
+             * make a shortlist card worth looking at. `aggregateRating` is the
+             * guest score, which is the other number people actually compare.
+             */
+            if (starRating == null) {
+                const star = row.starRating as { ratingValue?: unknown } | undefined;
+                const value = Number(
+                    typeof star === 'object' && star ? star.ratingValue : row.starRating,
+                );
+                if (Number.isFinite(value) && value > 0 && value <= 5) starRating = value;
+            }
+            if (!priceRange && typeof row.priceRange === 'string') {
+                priceRange = row.priceRange.trim().slice(0, 40);
+            }
+            if (!amenities.length && Array.isArray(row.amenityFeature)) {
+                amenities = (row.amenityFeature as unknown[])
+                    .map((entry) => {
+                        if (typeof entry === 'string') return entry;
+                        const feature = entry as { name?: unknown; value?: unknown };
+                        // A feature with value:false is a facility the place does
+                        // *not* have, which is worse than not listing it.
+                        if (feature.value === false) return '';
+                        return typeof feature.name === 'string' ? feature.name : '';
+                    })
+                    .map((name) => name.trim())
+                    .filter(Boolean)
+                    .slice(0, 12);
+            }
+            if (rating == null) {
+                const aggregate = row.aggregateRating as { ratingValue?: unknown } | undefined;
+                const value = Number(aggregate?.ratingValue);
+                if (Number.isFinite(value) && value > 0) rating = value;
+            }
+
             const geo = row.geo as { latitude?: unknown; longitude?: unknown } | undefined;
             if (lat == null && geo && typeof geo === 'object') {
                 const gLat = Number(geo.latitude);
@@ -142,6 +189,10 @@ function extractPlace(html: string): { address: string; lat: number | null; lng:
         address,
         lat: lat == null ? null : Number(lat.toFixed(6)),
         lng: lng == null ? null : Number(lng.toFixed(6)),
+        starRating,
+        priceRange,
+        amenities,
+        rating,
     };
 }
 
@@ -191,6 +242,10 @@ function extractMeta(html: string, url: string) {
         address: decodeEntities(place.address),
         lat: place.lat,
         lng: place.lng,
+        starRating: place.starRating,
+        priceRange: place.priceRange,
+        amenities: place.amenities.map((name) => decodeEntities(name)),
+        rating: place.rating,
     };
 }
 
@@ -248,6 +303,10 @@ export async function POST(req: Request) {
             address: '',
             lat: null,
             lng: null,
+            starRating: null,
+            priceRange: '',
+            amenities: [],
+            rating: null,
         });
     } catch (err) {
         const msg = err instanceof Error ? err.message : 'Fetch failed';
@@ -262,6 +321,10 @@ export async function POST(req: Request) {
             address: '',
             lat: null,
             lng: null,
+            starRating: null,
+            priceRange: '',
+            amenities: [],
+            rating: null,
         });
     }
 }

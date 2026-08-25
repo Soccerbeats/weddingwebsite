@@ -39,6 +39,25 @@ export default function TodayTab({ api }: { api: HoneymoonApi }) {
             .catch(() => setOffline('failed'));
     }, []);
 
+    /* `[` and `]` step the day, from the shell's key handler. */
+    useEffect(() => {
+        const onStep = (event: Event) => {
+            const delta = (event as CustomEvent<number>).detail;
+            setDayNumber((current) => {
+                const days = (data?.days ?? []).map((day) => day.day_number)
+                    .sort((a, b) => a - b);
+                if (!days.length) return current;
+                const from = current ?? planForToday(data ?? { days: [] } as never).dayNumber
+                    ?? days[0];
+                const at = days.indexOf(from);
+                const next = days[Math.min(Math.max(at + delta, 0), days.length - 1)];
+                return next ?? current;
+            });
+        };
+        window.addEventListener('honeymoon:step-day', onStep);
+        return () => window.removeEventListener('honeymoon:step-day', onStep);
+    }, [data]);
+
     if (!data) return null;
 
     const plan = dayNumber == null ? planForToday(data) : planForDay(data, dayNumber);

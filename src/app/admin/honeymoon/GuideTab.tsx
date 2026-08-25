@@ -2,8 +2,11 @@
 
 import { useMemo, useState } from 'react';
 import { sourceLabel } from '@/lib/honeymoon';
+import Markdown from './Markdown';
 import type { HoneymoonApi } from './useHoneymoon';
-import { Button, Card, EmptyState, InlineText, OverflowMenu, TextField } from './ui';
+import {
+    Button, Card, EmptyState, InlineText, MiniSelect, OverflowMenu, TextField,
+} from './ui';
 
 /**
  * Know Before You Go, plus the per-region write-ups.
@@ -177,12 +180,29 @@ export default function GuideTab({ api }: { api: HoneymoonApi }) {
                                                     <InlineText
                                                         multiline
                                                         value={note.body}
-                                                        placeholder="Details…"
+                                                        placeholder="Details… **bold**, *italic*, - lists, [links](https://…)"
                                                         className="text-sm text-gray-600 -ml-2 mt-0.5"
                                                         onCommit={(body) => api.update('notes', {
                                                             id: note.id, body,
                                                         })}
                                                     />
+                                                    {/* Rendered underneath rather
+                                                        than instead: the editor is
+                                                        the plain text, and seeing
+                                                        both is how you learn what
+                                                        the markup does. */}
+                                                    {/[*`\[#>-]/.test(note.body) && (
+                                                        <details className="mt-1">
+                                                            <summary className="cursor-pointer
+                                                                text-[11px] text-gray-400">
+                                                                Formatted
+                                                            </summary>
+                                                            <Markdown
+                                                                source={note.body}
+                                                                className="mt-1 text-sm text-gray-700"
+                                                            />
+                                                        </details>
+                                                    )}
                                                 </div>
                                                 <OverflowMenu items={[{
                                                     label: 'Delete note',
@@ -193,7 +213,7 @@ export default function GuideTab({ api }: { api: HoneymoonApi }) {
                                                     ),
                                                 }]} />
                                             </div>
-                                            <div className="flex items-center gap-2 mt-1">
+                                            <div className="flex flex-wrap items-center gap-2 mt-1">
                                                 <InlineText
                                                     value={note.category ?? ''}
                                                     placeholder="Category"
@@ -202,6 +222,27 @@ export default function GuideTab({ api }: { api: HoneymoonApi }) {
                                                         id: note.id, category: cat,
                                                     })}
                                                 />
+                                                {/* What the note is about. A note
+                                                    tied to a region shows up on the
+                                                    itinerary whenever that region is
+                                                    where you are sleeping — which is
+                                                    the moment you want to read it. */}
+                                                <MiniSelect
+                                                    value={note.region_id != null
+                                                        ? String(note.region_id) : ''}
+                                                    onChange={(e) => api.update('notes', {
+                                                        id: note.id,
+                                                        region_id: e.target.value || null,
+                                                    })}
+                                                    aria-label="About which region"
+                                                >
+                                                    <option value="">Trip-wide</option>
+                                                    {regions.map((region) => (
+                                                        <option key={region.id} value={region.id}>
+                                                            About {region.name}
+                                                        </option>
+                                                    ))}
+                                                </MiniSelect>
                                                 <span className="text-[11px] text-gray-300 shrink-0 pr-1">
                                                     {sourceLabel(note.source)}
                                                 </span>

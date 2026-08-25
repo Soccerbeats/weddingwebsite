@@ -39,6 +39,11 @@ import {
     nightsAtBase, unbookedDays,
 } from '../src/lib/honeymoonBudget';
 import {
+    assignRegions, findDuplicates, nearbyPlaces, parseImport, placesToCsv, placesToGeoJson,
+    placesToKml, providerOf, regionForPlace, suggestDay,
+} from '../src/lib/honeymoonPlaces';
+import { markdownToText, parseInline, parseMarkdown } from '../src/lib/honeymoonMarkdown';
+import {
     coordsFromMapsUrl, coordsFromPair, nameFromMapsUrl,
 } from '../src/app/api/admin/honeymoon/geocode/route';
 import { SEED_PLACES, SEED_REGIONS, SEED_NOTES } from '../src/lib/honeymoonSeed';
@@ -932,7 +937,7 @@ console.log('\nTrip mode — today');
     const payload = {
         trip,
         categories: [], regions: [], notes: [], todos: [], documents: [], comments: [],
-        views: [], rates: [], shares: [], archives: [],
+        views: [], rates: [], shares: [], price_checks: [], archives: [],
         bookings: [{
             id: 1, place_id: 200, travel_id: null, stop_id: null, kind: 'stay' as const,
             provider: 'Direct', confirmation: 'AMK-9931', url: null, contact: null,
@@ -1387,6 +1392,241 @@ console.log('\nWhat still needs doing');
         gap.missingTravel.join(',') === '2', gap.missingTravel.join(','));
     check('and it costs the score', gap.score < 100);
     check('an empty trip scores zero', completenessOf({ places: [], days: [], bookings: [] }).score === 0);
+}
+
+console.log('\nFiling places, and finding them again');
+{
+    const ubud = { ...REGION_DEFAULTS, id: 1, name: 'Ubud', center_lat: -8.5069, center_lng: 115.2625 };
+    const south = { ...REGION_DEFAULTS, id: 2, name: 'South Bali', center_lat: -8.7, center_lng: 115.17 };
+    const drawn = {
+        ...REGION_DEFAULTS,
+        id: 3,
+        name: 'Sidemen valley',
+        center_lat: -8.45,
+        center_lng: 115.44,
+        boundary: [
+            { lat: -8.40, lng: 115.40 }, { lat: -8.40, lng: 115.50 },
+            { lat: -8.50, lng: 115.50 }, { lat: -8.50, lng: 115.40 },
+        ],
+    };
+
+    const inUbud = makePlace(10, 'Ubud cafe', -8.51, 115.26);
+    const inCanggu = makePlace(11, 'Canggu beach club', -8.65, 115.13);
+    const inSidemen = makePlace(12, 'Rice terrace hut', -8.45, 115.45);
+    const nowhere = makePlace(13, 'Unpinned idea', null, null);
+
+    check('a place inside a drawn boundary is filed by geometry',
+        regionForPlace(inSidemen, [ubud, south, drawn])?.how === 'boundary');
+    check('and it goes to that region',
+        regionForPlace(inSidemen, [ubud, south, drawn])?.regionId === 3);
+    check('a place with no boundary goes to the nearest centre',
+        regionForPlace(inUbud, [ubud, south])?.regionId === 1);
+    check('the far one goes to the other region',
+        regionForPlace(inCanggu, [ubud, south])?.regionId === 2);
+    check('and it says the answer is a guess',
+        regionForPlace(inCanggu, [ubud, south])?.how === 'nearest');
+    check('an unpinned place is not filed at all',
+        regionForPlace(nowhere, [ubud, south]) === null);
+
+    const assignments = assignRegions([inUbud, inCanggu, nowhere], [ubud, south]);
+    check('only the pinned, unfiled places are offered', assignments.length === 2);
+    check('a place already filed is left alone',
+        assignRegions([{ ...inUbud, region_id: 2 }], [ubud, south]).length === 0);
+    check('unless you ask for everything',
+        assignRegions([{ ...inUbud, region_id: 2 }], [ubud, south], true).length === 1);
+
+    const hotel = makePlace(20, 'Hotel', -8.5069, 115.2625);
+    const near = makePlace(21, 'Cafe', -8.5074, 115.2631);
+    const mid = makePlace(22, 'Temple', -8.52, 115.28);
+    const far = makePlace(23, 'Volcano', -8.24, 115.37);
+    const nearby = nearbyPlaces(hotel, [near, mid, far, nowhere], 10);
+    check('nearby is nearest first', nearby.map((n) => n.place.name).join(',') === 'Cafe,Temple');
+    check('and drops what is too far', !nearby.some((n) => n.place.name === 'Volcano'));
+    check('an unpinned place is never nearby', !nearby.some((n) => n.place.name === 'Unpinned idea'));
+    check('a place is not near itself', !nearbyPlaces(hotel, [hotel], 10).length);
+}
+
+console.log('\nSuggesting a day');
+{
+    const base = { ...makePlace(1, 'Villa', -8.5069, 115.2625), category: 'stay' };
+    const liked = [
+        { ...makePlace(2, 'Waterfall', -8.52, 115.27), category: 'nature', rating: 'yes' as const },
+        { ...makePlace(3, 'Warung', -8.51, 115.265), category: 'food', rating: 'yes' as const },
+        { ...makePlace(4, 'Second warung', -8.505, 115.26), category: 'food', rating: 'yes' as const },
+        { ...makePlace(5, 'Temple', -8.515, 115.28), category: 'temple', rating: null },
+        { ...makePlace(6, 'Rejected spa', -8.508, 115.262), category: 'spa', rating: 'no' as const },
+        { ...makePlace(7, 'Miles away', -9.2, 116.0), category: 'nature', rating: 'yes' as const },
+    ];
+
+    const suggestion = suggestDay(base, [base, ...liked], new Set<number>());
+    check('a day is suggested', suggestion != null && suggestion.places.length === 3);
+    check('a place you rejected is never suggested',
+        !suggestion?.places.some((place) => place.name === 'Rejected spa'));
+    check('nor is one miles away',
+        !suggestion?.places.some((place) => place.name === 'Miles away'));
+    check('nor the base itself', !suggestion?.places.some((place) => place.id === base.id));
+    check('the categories are mixed rather than three warungs',
+        new Set(suggestion?.places.map((place) => place.category)).size === 3,
+        suggestion?.places.map((p) => p.category).join(','));
+    check('it says why', (suggestion?.why ?? '').includes('within'));
+    check('the loop has a length', (suggestion?.km ?? 0) > 0);
+    check('already-scheduled places are skipped',
+        !suggestDay(base, [base, ...liked], new Set([2, 3]))?.places
+            .some((place) => place.id === 2 || place.id === 3));
+    check('nothing nearby means no suggestion',
+        suggestDay(base, [base], new Set<number>()) === null);
+    check('an unpinned base cannot suggest anything',
+        suggestDay(makePlace(99, 'Nowhere', null, null), liked, new Set<number>()) === null);
+}
+
+console.log('\nExport');
+{
+    const places = [
+        { ...makePlace(1, 'Ibu Oka, "the one"', -8.5069, 115.2625), category: 'food',
+          address: 'Ubud', links: [{ label: 'Site', url: 'https://example.com' }] },
+        makePlace(2, 'Unpinned', null, null),
+    ];
+    const csv = placesToCsv(places, () => 'Ubud');
+    check('the CSV has a header and a row per place', csv.split('\r\n').length === 3);
+    check('a comma and a quote in a name are escaped',
+        csv.includes('"Ibu Oka, ""the one"""'), csv.split('\r\n')[1].slice(0, 40));
+    check('an unpinned place still exports', csv.includes('Unpinned'));
+
+    const geo = JSON.parse(placesToGeoJson(places, () => 'Ubud'));
+    check('GeoJSON only carries the pinned ones', geo.features.length === 1);
+    check('and in lng,lat order',
+        geo.features[0].geometry.coordinates[0] === 115.2625);
+
+    const kml = placesToKml(places);
+    check('KML carries a placemark for the pinned one',
+        (kml.match(/<Placemark>/g) ?? []).length === 1);
+    check('and escapes the name', kml.includes('Ibu Oka, &quot;the one&quot;')
+        || kml.includes('Ibu Oka, "the one"'));
+}
+
+console.log('\nImport');
+{
+    const csv = [
+        'Name,Category,Lat,Lng,Notes',
+        'Tegallalang,nature,-8.4312,115.2792,"Rice terraces, go early"',
+        'Ibu Oka,food,,,Best babi guling',
+        ',food,,,A row with no name',
+    ].join('\n');
+    const fromCsv = parseImport(csv);
+    check('a spreadsheet is recognised', fromCsv.format === 'spreadsheet');
+    check('and its rows become places', fromCsv.places.length === 2);
+    check('coordinates come through', fromCsv.places[0].lat === -8.4312);
+    check('a quoted note with a comma survives',
+        fromCsv.places[0].description === 'Rice terraces, go early');
+    check('a row with no name is skipped and reported',
+        fromCsv.skipped.length === 1 && fromCsv.skipped[0].line === 4);
+    check('a place with no coordinates still imports', fromCsv.places[1].lat === null);
+
+    const tabbed = parseImport('Title\tType\nTanah Lot\ttemple');
+    check('tab-separated works too', tabbed.places[0].name === 'Tanah Lot'
+        && tabbed.places[0].category === 'temple');
+
+    const bare = parseImport('Tirta Empul\nGoa Gajah');
+    check('a bare list of names works', bare.places.length === 2
+        && bare.places[1].name === 'Goa Gajah');
+
+    const kml = `<?xml version="1.0"?><kml><Document>
+      <Placemark><name>Sidemen</name><description><![CDATA[<b>Valley</b> walk]]></description>
+      <Point><coordinates>115.45,-8.45,0</coordinates></Point></Placemark>
+      <Placemark><Point><coordinates>1,2,0</coordinates></Point></Placemark>
+    </Document></kml>`;
+    const fromKml = parseImport(kml);
+    check('KML is recognised', fromKml.format === 'KML');
+    check('and its placemarks become places',
+        fromKml.places.length === 1 && fromKml.places[0].name === 'Sidemen');
+    check('lat and lng are read the GeoJSON way round',
+        fromKml.places[0].lat === -8.45 && fromKml.places[0].lng === 115.45);
+    check('CDATA and tags are stripped from the description',
+        fromKml.places[0].description === 'Valley walk', fromKml.places[0].description ?? '');
+    check('a placemark with no name is reported', fromKml.skipped.length === 1);
+
+    const takeout = JSON.stringify({
+        type: 'FeatureCollection',
+        features: [{
+            geometry: { coordinates: [115.2625, -8.5069] },
+            properties: {
+                location: { name: 'Ubud Palace', address: 'Jl. Raya Ubud' },
+                google_maps_url: 'https://maps.google.com/?cid=1',
+            },
+        }],
+    });
+    const fromTakeout = parseImport(takeout);
+    check('Takeout JSON is recognised', fromTakeout.format === 'Google Takeout');
+    check('and gives a named, pinned place with its link',
+        fromTakeout.places[0].name === 'Ubud Palace'
+        && fromTakeout.places[0].lat === -8.5069
+        && (fromTakeout.places[0].links?.[0].url.includes('maps.google.com') ?? false));
+    check('the wrong JSON says so, rather than importing nothing quietly',
+        parseImport('{"a":1}').skipped[0].why.includes('features'));
+
+    const existing = [
+        makePlace(1, 'Ibu Oka', -8.5069, 115.2625),
+        makePlace(2, 'Tegallalang', -8.4312, 115.2792),
+    ];
+    const dupes = findDuplicates(fromCsv.places, existing);
+    check('an existing name at the same spot is a duplicate',
+        dupes.get(0)?.id === 2, String(dupes.get(0)?.id));
+    check('and a name match with no coordinates counts too', dupes.get(1)?.id === 1);
+    check('a new name is not a duplicate',
+        findDuplicates([{ name: 'Somewhere new', line: 1 }], existing).size === 0);
+    check('the same name a long way away is not a duplicate',
+        findDuplicates([{ name: 'Ibu Oka', lat: 1, lng: 1, line: 1 }], existing).size === 0);
+}
+
+console.log('\nProviders and Markdown');
+{
+    check('a Klook link is Klook', providerOf('https://www.klook.com/activity/123') === 'Klook');
+    check('a GetYourGuide link is GetYourGuide',
+        providerOf('https://www.getyourguide.com/x') === 'GetYourGuide');
+    check('an unknown host falls back to the host',
+        providerOf('https://warungmurah.co.id/menu') === 'warungmurah.co.id');
+    check('nonsense is not a provider', providerOf('not a url') === null);
+
+    const blocks = parseMarkdown([
+        '## Getting around',
+        'Use **Grab** in the south, and *cash* in Ubud.',
+        '',
+        '- 50k to the airport',
+        '- 100k to Canggu',
+        '',
+        '1. Book the driver',
+        '2. Confirm the day before',
+        '',
+        '> Ask for Wayan',
+        'See [the guide](https://example.com) and `Mo-Fr 09:00`.',
+    ].join('\n'));
+    check('a heading is a heading', blocks[0].kind === 'h' && blocks[0].level === 2);
+    check('bold and italic are spans',
+        blocks[1].kind === 'p'
+        && blocks[1].spans.some((span) => span.kind === 'strong' && span.text === 'Grab')
+        && blocks[1].spans.some((span) => span.kind === 'em' && span.text === 'cash'));
+    check('a bullet list groups its items',
+        blocks[2].kind === 'ul' && blocks[2].items.length === 2);
+    check('a numbered list is its own block',
+        blocks[3].kind === 'ol' && blocks[3].items.length === 2);
+    check('a quote is a quote', blocks[4].kind === 'quote');
+    check('a link keeps its href',
+        blocks[5].kind === 'p'
+        && blocks[5].spans.some((span) => span.kind === 'link'
+            && span.href === 'https://example.com'));
+    check('and code stays code',
+        blocks[5].kind === 'p'
+        && blocks[5].spans.some((span) => span.kind === 'code' && span.text === 'Mo-Fr 09:00'));
+
+    check('bold inside backticks is left alone',
+        parseInline('`**not bold**`').every((span) => span.kind === 'code'));
+    check('a javascript: link is not a link',
+        parseInline('[click](javascript:alert(1))').every((span) => span.kind === 'text'));
+    check('plain text is one span',
+        parseInline('just words').length === 1 && parseInline('just words')[0].kind === 'text');
+    check('a note reduces to plain text for search',
+        markdownToText('## Hi\n\nUse **Grab** here') === 'Hi Use Grab here',
+        markdownToText('## Hi\n\nUse **Grab** here'));
 }
 
 console.log(`\n${failures === 0 ? 'PASS' : 'FAIL'} — ${checks - failures}/${checks} checks passed.\n`);

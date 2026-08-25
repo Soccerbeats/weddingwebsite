@@ -7,9 +7,10 @@ import {
 } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
 import LinkPreview from './LinkPreview';
+import RateQueue from './RateQueue';
 import PlaceEditor from './PlaceEditor';
 import {
-    Button, Card, CategorySelect, EmptyState, InlineText, OverflowMenu, TextArea,
+    BulkFieldMenu, Button, Card, CategorySelect, EmptyState, InlineText, OverflowMenu, TextArea,
 } from './ui';
 
 /**
@@ -30,23 +31,41 @@ export default function ExcursionsTab({ api }: { api: HoneymoonApi }) {
     const { data } = api;
     const [bulk, setBulk] = useState('');
     const [adding, setAdding] = useState(false);
-    const [rated, setRated] = useState<'all' | 'yes' | 'mid' | 'no' | 'unrated'>('all');
+    const [rated, setRated] = useState<
+        'all' | 'yes' | 'mid' | 'no' | 'unrated' | 'removed'
+    >('all');
     const [typeFilter, setTypeFilter] = useState('');
     const [preview, setPreview] = useState<Place | null>(null);
     const [editing, setEditing] = useState<Place | null>(null);
     const [editorOpen, setEditorOpen] = useState(false);
     const [fetching, setFetching] = useState(0);
+    const [triaging, setTriaging] = useState(false);
+    /** Multi-select, matching the Places and Stays tabs. */
+    const [selected, setSelected] = useState<Set<number>>(new Set());
 
     const places = useMemo(() => data?.places ?? [], [data]);
     // Removed places stay out of the shortlist, as on the Stays tab.
     const excursions = useMemo(() => places.filter((p) => p.is_excursion && !p.archived), [places]);
+    /*
+     * Removed excursions, kept.
+     *
+     * "Remove" used to flip `is_excursion` off, which does not delete the place
+     * but does make it vanish from the only tab that lists excursions — so a
+     * dive you ruled out was findable solely by remembering its name. Archiving
+     * matches Stays exactly: a Removed bucket you can restore from or empty for
+     * good, and the same word meaning the same thing on both tabs.
+     */
+    const removed = useMemo(() => places.filter((p) => p.is_excursion && p.archived), [places]);
 
-    const shown = useMemo(() => excursions.filter((e) => {
-        if (typeFilter && e.category !== typeFilter) return false;
-        if (rated === 'all') return true;
-        if (rated === 'unrated') return e.rating == null;
-        return e.rating === rated;
-    }), [excursions, rated, typeFilter]);
+    const shown = useMemo(() => {
+        const source = rated === 'removed' ? removed : excursions;
+        return source.filter((e) => {
+            if (typeFilter && e.category !== typeFilter) return false;
+            if (rated === 'all' || rated === 'removed') return true;
+            if (rated === 'unrated') return e.rating == null;
+            return e.rating === rated;
+        });
+    }, [excursions, removed, rated, typeFilter]);
 
     const counts = useMemo(() => ({
         all: excursions.length,
@@ -54,7 +73,8 @@ export default function ExcursionsTab({ api }: { api: HoneymoonApi }) {
         mid: excursions.filter((e) => e.rating === 'mid').length,
         no: excursions.filter((e) => e.rating === 'no').length,
         unrated: excursions.filter((e) => e.rating == null).length,
-    }), [excursions]);
+        removed: removed.length,
+    }), [excursions, removed]);
 
     /** The types actually in use here, so the filter reflects the list. */
     const types = useMemo(() => {
@@ -172,6 +192,9 @@ export default function ExcursionsTab({ api }: { api: HoneymoonApi }) {
                     ['mid', `😐 Mid tier ${counts.mid}`],
                     ['no', `👎 Not interested ${counts.no}`],
                     ['unrated', `Unrated ${counts.unrated}`],
+                    // Only once there is something in it, as on Stays.
+                    ...(counts.removed
+                        ? [['removed', `🗑 Removed ${counts.removed}`] as const] : []),
                 ] as const).map(([key, label]) => (
                     <button
                         key={key}
@@ -198,12 +221,73 @@ export default function ExcursionsTab({ api }: { api: HoneymoonApi }) {
                     </button>
                 ))}
                 <div className="flex-1" />
+                {counts.unrated > 0 && (
+                    <Button onClick={() => setTriaging(true)}>
+                        ⚡ Rate {counts.unrated} unrated
+                    </Button>
+                )}
                 {missingImages.length > 0 && (
                     <Button onClick={fetchMissingImages} disabled={fetching > 0}>
                         {fetching > 0 ? `Fetching… ${fetching} left` : `Get photos for ${missingImages.length}`}
                     </Button>
                 )}
             </div>
+
+            {selected.size > 0 && (
+                <Card className="sticky top-2 z-10 flex flex-wrap items-center gap-2 p-3">
+                    <span className="text-sm font-medium text-gray-700">
+                        {selected.size} selected
+                    </span>
+                    <div className="flex-1" />
+                    <BulkFieldMenu
+                        fields={[
+                            {
+                                key: 'rating',
+                                label: 'Rating',
+                                options: [
+                                    { value: 'yes', label: '👍 Interested' },
+                                    { value: 'mid', label: '😐 Mid tier' },
+                                    { value: 'no', label: '👎 Not interested' },
+                                    { value: '', label: '— unrated —' },
+                                ],
+                            },
+                            {
+                                key: 'status',
+                                label: 'Status',
+                                options: [
+                                    { value: 'idea', label: 'Idea' },
+                                    { value: 'shortlisted', label: 'Shortlisted' },
+                                    { value: 'booked', label: 'Booked' },
+                                ],
+                            },
+                            {
+                                key: 'region_id',
+                                label: 'Area',
+                                options: [
+                                    { value: null, label: '— no area —' },
+                                    ...(data?.regions ?? []).map((region) => ({
+                                        value: region.id, label: region.name,
+                                    })),
+                                ],
+                            },
+                        ]}
+                        onApply={async (key, value) => {
+                            await api.update('places', { ids: [...selected], [key]: value });
+                            setSelected(new Set());
+                        }}
+                        label="Change a field on all selected"
+                    />
+                    <Button
+                        onClick={async () => {
+                            await api.update('places', { ids: [...selected], archived: true });
+                            setSelected(new Set());
+                        }}
+                    >
+                        Remove from shortlist
+                    </Button>
+                    <Button tone="ghost" onClick={() => setSelected(new Set())}>Clear</Button>
+                </Card>
+            )}
 
             {/* ---- Cards ---- */}
             {shown.length === 0 ? (
@@ -235,6 +319,21 @@ export default function ExcursionsTab({ api }: { api: HoneymoonApi }) {
                                 )}
                                 <div className="p-4">
                                     <div className="flex items-start justify-between gap-2">
+                                        <label className="mt-0.5 flex shrink-0 cursor-pointer
+                                            items-center">
+                                            <input
+                                                type="checkbox"
+                                                checked={selected.has(item.id)}
+                                                onChange={() => setSelected((prev) => {
+                                                    const next = new Set(prev);
+                                                    if (next.has(item.id)) next.delete(item.id);
+                                                    else next.add(item.id);
+                                                    return next;
+                                                })}
+                                                className="size-4 rounded accent-accent"
+                                                aria-label={`Select ${item.name}`}
+                                            />
+                                        </label>
                                         <div className="min-w-0 flex-1">
                                             <InlineText
                                                 value={item.name}
@@ -252,14 +351,26 @@ export default function ExcursionsTab({ api }: { api: HoneymoonApi }) {
                                                     label: 'Clear rating',
                                                     onClick: () => api.update('places', { id: item.id, rating: '' }),
                                                 }] : []),
+                                                // Archive, not un-flag: see `removed`.
+                                                ...(item.archived ? [{
+                                                    label: 'Put back on the shortlist',
+                                                    onClick: () => api.patchPlace(item.id, {
+                                                        archived: false,
+                                                    }),
+                                                }] : [{
+                                                    label: 'Remove from the shortlist',
+                                                    onClick: () => api.patchPlace(item.id, {
+                                                        archived: true,
+                                                    }),
+                                                }]),
                                                 {
-                                                    label: 'Remove from excursions',
+                                                    label: 'Not an excursion',
                                                     onClick: () => api.update('places', {
                                                         id: item.id, is_excursion: false,
                                                     }),
                                                 },
                                                 {
-                                                    label: 'Delete',
+                                                    label: 'Delete for good',
                                                     danger: true,
                                                     onClick: () => api.removePlaces([item]),
                                                 },
@@ -360,6 +471,14 @@ export default function ExcursionsTab({ api }: { api: HoneymoonApi }) {
                     onRate={(rating) => api.patchPlace(preview.id, { rating })}
                 />
             )}
+
+            <RateQueue
+                api={api}
+                open={triaging}
+                onClose={() => setTriaging(false)}
+                title="Rate the excursions"
+                filter={(place) => place.is_excursion}
+            />
 
             <PlaceEditor
                 api={api}

@@ -5,9 +5,27 @@ import 'leaflet/dist/leaflet.css';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
 import type * as LeafletNS from 'leaflet';
 import {
-    arcPoints, boundsOf, categoryMeta, hasCoords, placesInPolygon,
+    arcPoints, boundsOf, categoryMeta, distanceKm, formatDistance, hasCoords, placesInPolygon,
     type LatLng, type Place,
 } from '@/lib/honeymoon';
+
+/**
+ * A compass bearing between two points, as the eight-point word.
+ *
+ * The measure tool's second half: "12 km" answers how far, and "NE" answers the
+ * thing you actually wanted, which is whether the beach is on the far side of
+ * the headland.
+ */
+function bearingOf(from: LatLng, to: LatLng): string {
+    const toRad = (deg: number) => (deg * Math.PI) / 180;
+    const dLng = toRad(to.lng - from.lng);
+    const y = Math.sin(dLng) * Math.cos(toRad(to.lat));
+    const x = Math.cos(toRad(from.lat)) * Math.sin(toRad(to.lat))
+        - Math.sin(toRad(from.lat)) * Math.cos(toRad(to.lat)) * Math.cos(dLng);
+    const degrees = ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+    const points = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+    return points[Math.round(degrees / 45) % 8];
+}
 
 /**
  * The trip map.
@@ -59,6 +77,48 @@ export interface TravelArc {
     road?: [number, number][] | null;
 }
 
+/**
+ * The base maps on offer.
+ *
+ * OSM's raster is beige and green everywhere, which is exactly wrong for the two
+ * questions this map gets asked most: is that beach a beach, and is that
+ * waterfall in a gorge. Imagery answers the first, terrain the second, and the
+ * clean style is for when the pins are the point and the map should get out of
+ * the way. All four are free and need no key.
+ */
+export const MAP_LAYERS = [
+    {
+        key: 'streets',
+        label: 'Streets',
+        url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+        attribution: '&copy; OpenStreetMap contributors',
+        maxZoom: 19,
+    },
+    {
+        key: 'satellite',
+        label: 'Satellite',
+        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        attribution: 'Imagery &copy; Esri, Maxar, Earthstar Geographics',
+        maxZoom: 19,
+    },
+    {
+        key: 'terrain',
+        label: 'Terrain',
+        url: 'https://tile.opentopomap.org/{z}/{x}/{y}.png',
+        attribution: '&copy; OpenTopoMap (CC-BY-SA), &copy; OpenStreetMap contributors',
+        maxZoom: 17,
+    },
+    {
+        key: 'clean',
+        label: 'Clean',
+        url: 'https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+        attribution: '&copy; OpenStreetMap contributors, &copy; CARTO',
+        maxZoom: 19,
+    },
+] as const;
+
+export type MapLayerKey = typeof MAP_LAYERS[number]['key'];
+
 export interface TripMapProps {
     places: Place[];
     /** Ordered routes to draw — one per day being shown. */
@@ -106,8 +166,28 @@ export interface TripMapProps {
      * the ground under the click that made it.
      */
     panToSelected?: boolean;
+    /** Which base map to draw. Defaults to streets. */
+    layer?: MapLayerKey;
+    /**
+     * Colour override per place id.
+     *
+     * Used by the region-colour toggle: the pin's shape and icon stay the
+     * category's, because that is what makes a pin readable, and only the fill
+     * changes — so "which region is this in" becomes visible without losing
+     * "what kind of thing is it".
+     */
+    pinColors?: Map<number, string>;
     /** While true, dragging draws a lasso instead of panning the map. */
     selectMode?: boolean;
+    /**
+     * While true, clicking drops measuring points instead of selecting a pin.
+     * Two clicks give a distance; a third starts again.
+     */
+    measureMode?: boolean;
+    /** While true, clicking adds a vertex to a polygon; used to draw a region. */
+    drawMode?: boolean;
+    /** Fired with the drawn polygon when `drawMode` is on and it is closed. */
+    onDrawn?: (points: LatLng[]) => void;
     /** Ids currently lasso-selected, drawn with a highlight ring. */
     selectedIds?: Set<number>;
     /** Fired on release with everything inside the drawn loop. */
@@ -117,11 +197,24 @@ export interface TripMapProps {
 
 export default function TripMap({
     places, routes = [], legs = [], selectedId = null, onSelect, fitSignal = 0, fitPoints = null,
-    cluster = true, panToSelected = false, pinLabels,
-    selectMode = false, selectedIds, onLassoSelect, className = '',
+    cluster = true, panToSelected = false, pinLabels, layer: layerKey = 'streets', pinColors,
+    selectMode = false, selectedIds, onLassoSelect,
+    measureMode = false, drawMode = false, onDrawn, className = '',
 }: TripMapProps) {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const mapRef = useRef<LeafletNS.Map | null>(null);
+    /** The base map, swapped in place rather than by rebuilding the map. */
+    const baseRef = useRef<LeafletNS.TileLayer | null>(null);
+    /** Measuring and drawing overlays, cleared on mode change. */
+    const toolLayerRef = useRef<LeafletNS.LayerGroup | null>(null);
+    const measurePointsRef = useRef<LatLng[]>([]);
+    const drawPointsRef = useRef<LatLng[]>([]);
+    const measureModeRef = useRef(measureMode);
+    measureModeRef.current = measureMode;
+    const drawModeRef = useRef(drawMode);
+    drawModeRef.current = drawMode;
+    const onDrawnRef = useRef(onDrawn);
+    onDrawnRef.current = onDrawn;
     const layerRef = useRef<LeafletNS.LayerGroup | LeafletNS.MarkerClusterGroup | null>(null);
     const routeLayerRef = useRef<LeafletNS.LayerGroup | null>(null);
     const leafletRef = useRef<typeof LeafletNS | null>(null);
@@ -139,6 +232,35 @@ export default function TripMap({
     // without every marker being rebuilt when the parent re-renders.
     const onSelectRef = useRef(onSelect);
     onSelectRef.current = onSelect;
+
+    /* The base map, swapped in place: rebuilding the map would lose the view. */
+    useEffect(() => {
+        const map = mapRef.current;
+        const L = leafletRef.current;
+        if (!map || !L || !ready) return;
+        const base = MAP_LAYERS.find((entry) => entry.key === layerKey) ?? MAP_LAYERS[0];
+        baseRef.current?.remove();
+        baseRef.current = L.tileLayer(base.url, {
+            maxZoom: base.maxZoom,
+            attribution: base.attribution,
+        }).addTo(map);
+        // Behind everything else: Leaflet keeps panes in order, but a fresh tile
+        // layer joins at the top of its own pane.
+        baseRef.current.bringToBack();
+    }, [layerKey, ready]);
+
+    /* Leaving a tool clears what it drew, and forgets where it had got to. */
+    useEffect(() => {
+        if (measureMode) return;
+        measurePointsRef.current = [];
+        toolLayerRef.current?.clearLayers();
+    }, [measureMode]);
+
+    useEffect(() => {
+        if (drawMode) return;
+        drawPointsRef.current = [];
+        toolLayerRef.current?.clearLayers();
+    }, [drawMode]);
 
     // The lasso handlers are bound once and read everything current through
     // refs, so toggling a filter never rebinds them mid-draw.
@@ -181,12 +303,78 @@ export default function TripMap({
                 worldCopyJump: true,
             });
 
-            L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 19,
-                attribution: '&copy; OpenStreetMap contributors',
+            const base = MAP_LAYERS.find((entry) => entry.key === layerKey) ?? MAP_LAYERS[0];
+            baseRef.current = L.tileLayer(base.url, {
+                maxZoom: base.maxZoom,
+                attribution: base.attribution,
             }).addTo(map);
 
             routeLayerRef.current = L.layerGroup().addTo(map);
+            toolLayerRef.current = L.layerGroup().addTo(map);
+
+            /*
+             * Measuring and drawing share the map's click, and both are off by
+             * default. Bound once, reading the current mode through refs, so
+             * toggling a tool never rebuilds the map.
+             */
+            map.on('click', (event: LeafletNS.LeafletMouseEvent) => {
+                const point = { lat: event.latlng.lat, lng: event.latlng.lng };
+                const tools = toolLayerRef.current;
+                if (!tools) return;
+
+                if (measureModeRef.current) {
+                    const points = measurePointsRef.current;
+                    // A third click starts again: two points is a measurement,
+                    // and a growing chain of them is a different feature.
+                    if (points.length >= 2) {
+                        measurePointsRef.current = [];
+                        tools.clearLayers();
+                    }
+                    measurePointsRef.current = [...measurePointsRef.current, point];
+                    const all = measurePointsRef.current;
+                    L.circleMarker([point.lat, point.lng], {
+                        radius: 5, color: '#0f172a', fillColor: '#fff', fillOpacity: 1, weight: 2,
+                    }).addTo(tools);
+                    if (all.length === 2) {
+                        L.polyline(all.map((p) => [p.lat, p.lng] as [number, number]), {
+                            color: '#0f172a', weight: 2, dashArray: '6 4',
+                        }).addTo(tools);
+                        const km = distanceKm(all[0], all[1]);
+                        const bearing = bearingOf(all[0], all[1]);
+                        L.marker([
+                            (all[0].lat + all[1].lat) / 2, (all[0].lng + all[1].lng) / 2,
+                        ], {
+                            interactive: false,
+                            icon: L.divIcon({
+                                className: '',
+                                html: `<div style="background:#0f172a;color:#fff;font:600 11px/1.4 system-ui;`
+                                    + `padding:2px 6px;border-radius:999px;white-space:nowrap">`
+                                    + `${formatDistance(km)} · ${bearing}</div>`,
+                                iconSize: [0, 0],
+                            }),
+                        }).addTo(tools);
+                    }
+                    return;
+                }
+
+                if (drawModeRef.current) {
+                    drawPointsRef.current = [...drawPointsRef.current, point];
+                    const all = drawPointsRef.current;
+                    tools.clearLayers();
+                    for (const vertex of all) {
+                        L.circleMarker([vertex.lat, vertex.lng], {
+                            radius: 4, color: '#7c3aed', fillColor: '#fff', fillOpacity: 1,
+                            weight: 2,
+                        }).addTo(tools);
+                    }
+                    if (all.length >= 2) {
+                        L.polygon(all.map((p) => [p.lat, p.lng] as [number, number]), {
+                            color: '#7c3aed', weight: 2, fillOpacity: 0.08,
+                        }).addTo(tools);
+                    }
+                    if (all.length >= 3) onDrawnRef.current?.(all);
+                }
+            });
             mapRef.current = map;
             setReady(true);
 
@@ -258,6 +446,8 @@ export default function TripMap({
 
         for (const place of pinned) {
             const meta = categoryMeta(place.category);
+            // Region colouring replaces only the fill; see `pinColors`.
+            const fill = pinColors?.get(place.id) ?? meta.color;
             const selected = place.id === selectedId;
             // An unconfirmed pin gets a dashed amber ring so a bulk-geocoded
             // guess never looks as trustworthy as one you placed yourself.
@@ -279,7 +469,7 @@ export default function TripMap({
                 html: `<span style="
                     display:flex;align-items:center;justify-content:center;
                     width:${size}px;height:${size}px;
-                    background:${meta.color};${ring}
+                    background:${fill};${ring}
                     border-radius:9999px;
                     box-shadow:0 1px 4px rgba(0,0,0,.4);
                     color:#fff;font-weight:700;

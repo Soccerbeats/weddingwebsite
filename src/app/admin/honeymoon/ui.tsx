@@ -348,13 +348,27 @@ export function CategorySelect({ value, places, onChange, onManage, onCreateCate
  * the confirmation can name the actual consequence — "12 places move to Other"
  * rather than a generic are-you-sure.
  */
-export function ManageListModal({ open, onClose, title, items, onRename, onDelete, hint }: {
+export function ManageListModal({
+    open, onClose, title, items, onRename, onDelete, onRestyle, hint,
+}: {
     open: boolean;
     onClose: () => void;
     title: string;
-    items: { id: number; label: string; detail?: string; warn?: string; locked?: string }[];
+    items: {
+        id: number; label: string; detail?: string; warn?: string; locked?: string;
+        /** Present for categories, which carry a colour and an icon. */
+        color?: string; icon?: string;
+    }[];
     onRename: (id: number, label: string) => void;
     onDelete: (id: number) => void;
+    /**
+     * Change a category's colour or icon.
+     *
+     * The rows have always been editable in the database and only the label was
+     * editable here, which meant every category anyone added was a grey circle —
+     * on a map whose whole legibility rests on the pins being distinguishable.
+     */
+    onRestyle?: (id: number, fields: { color?: string; icon?: string }) => void;
     hint?: string;
 }) {
     if (!open) return null;
@@ -367,6 +381,37 @@ export function ManageListModal({ open, onClose, title, items, onRename, onDelet
                 <ul className="divide-y divide-gray-100">
                     {items.map((item) => (
                         <li key={item.id} className="flex items-center gap-2 py-2">
+                            {onRestyle && item.color != null && (
+                                <>
+                                    {/* A real colour input: a palette of swatches
+                                        would be a smaller set than the map needs,
+                                        and the browser's picker is right there. */}
+                                    <input
+                                        type="color"
+                                        value={item.color}
+                                        onChange={(e) => onRestyle(item.id, {
+                                            color: e.target.value,
+                                        })}
+                                        aria-label={`Colour for ${item.label}`}
+                                        title="Pin colour"
+                                        className="size-7 shrink-0 cursor-pointer rounded-lg
+                                            border border-gray-200 bg-white p-0.5"
+                                    />
+                                    <input
+                                        value={item.icon ?? ''}
+                                        onChange={(e) => onRestyle(item.id, {
+                                            // One glyph: two do not fit in a pin.
+                                            icon: [...e.target.value.trim()][0] ?? '',
+                                        })}
+                                        aria-label={`Icon for ${item.label}`}
+                                        title="One emoji"
+                                        className="w-9 shrink-0 rounded-lg border border-gray-200
+                                            bg-gray-50 px-1 py-1 text-center text-sm
+                                            focus:bg-white focus:outline-none focus:ring-2
+                                            focus:ring-accent/30"
+                                    />
+                                </>
+                            )}
                             <div className="flex-1 min-w-0">
                                 <InlineText
                                     value={item.label}

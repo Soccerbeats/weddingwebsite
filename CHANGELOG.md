@@ -11,6 +11,33 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.48 — [Released] The planner's second half, part five: the library (`main`, 2026-08-25 19:45)
+
+Wave 5 of seven, and the largest: everything about getting places *into* the portal, deciding between them, and finding them again.
+
+### Added
+- **A place detail panel.** The editor is a form and the map's card truncates; this is the third thing — photos, links labelled with who they are with (Klook, Booking.com, Instagram…), opening hours, cost, what you two said about it, its booking, which days it is on, and what is within 8 km. Street View and Mapillary are one tap from any pinned place.
+- **Photos on places.** The `photos` column has existed since the first schema and was always empty. Upload several at once; the first is the cover, which is what the list and the map popup show. Uploads go through the portal's own route, which deliberately never registers them in `photos.json` — nothing here can end up in the public wedding gallery.
+- **Per-person ratings and comments.** With two people rating one shortlist, a single rating meant the last person to tap decided and a disagreement was invisible; now each of you has a mark, a split is called out ("you two disagree about this one"), and a place can be argued about in writing.
+- **A triage queue** — one unrated place at a time, big photo, three big buttons. Forty stays through a card grid is a bad afternoon; this is the fast way to turn a hundred ideas into a shortlist, and it works with a thumb.
+- **A comparison table** for the shortlist (third view, beside Cards and Ranking). Ranking answers *which order*; this answers *why* — price, area, rank, what you each thought, and the average distance from that stay to every excursion you rated 👍, which is the number that quietly decides how much of the trip is spent in a car.
+- **Import from a spreadsheet, Google My Maps or Google Takeout.** Paste or pick a file: CSV, TSV, a bare list of names, KML, or Takeout's saved-places JSON. Columns are matched by whatever they are called, nothing is written until you have seen the list, anything already in the library is flagged as a duplicate (same name within a kilometre) and skipped, and skipped rows are reported by line number rather than silently dropped. Every import is labelled with a source, so "everything Amy suggested that I haven't rated" is a filter.
+- **Export as CSV, GeoJSON or KML** — the last of which is what Google My Maps imports, so the library can travel to a phone map.
+- **Filing places by where they are.** One action fills in the region for every unfiled pinned place: inside a drawn boundary it is certain, otherwise nearest region centre and it says which it used. Only unfiled places are touched.
+- **Boundaries and a measure tool on the map.** Draw round an area and save it to a region (which is what makes filing exact); click two points for the distance and bearing. Plus **four base maps** — streets, satellite, terrain and a clean style — because beaches and waterfalls read on imagery and not on OSM's beige, and the option to **colour pins by area** instead of by type.
+- **Category colours and icons are editable** in Manage categories. They were editable in the database and not in the UI, so every category anyone added was a grey circle — on a map whose legibility rests on pins being distinguishable.
+- **A price watcher.** Booking.com blocks server-side fetches, so this follows the registry's Target-import pattern: a bookmarklet reads the price off the page you are already looking at, you paste the line back, and the change since last time is recorded and shown. A shortlist sits for weeks and prices move.
+- **More from listings.** The same fetch that gets a photo now also reads star rating, price range and amenities out of a listing's JSON-LD, shown as chips on the card.
+- **Markdown in notes** — bold, italics, links, lists, headings, quotes — rendered from a parsed tree rather than injected as HTML, so nothing pasted from the internet reaches `innerHTML`. Guide notes can also be tied to a region, and then surface on the itinerary on the days you are actually sleeping there.
+- **Suggest a day.** On any day card: three places near that day's base you have not scheduled and have not ruled out, one per category so it is not four temples, ordered by a nearest-neighbour walk so the driving is not absurd. A draft for a free day beats an empty one.
+- **Keyboard shortcuts** — `/` or ⌘K to search, `g` then a letter to jump to a tab, `n` for a new place, `[` `]` to step days on Today, `⌘Z` to undo, `?` for the list. Bare keys are ignored while you are typing.
+- **Bulk edit on Stays and Excursions**, matching Places and the map's lasso: which verbs you get should not depend on which tab you happened to be on.
+
+### Changed
+- **The Places tab remembers itself** — filters, sort and density survive a visit (search deliberately does not: a stale term hiding two hundred rows reads as data loss), and a set of filters can be **saved as a named view**. New orderings: recently added, region, status, rating, and distance from the trip's first base. A dense mode for scanning two hundred rows, and cover thumbnails when not dense.
+- **Search finds everything.** It now indexes addresses, price notes, best-time and opening-hours text, link labels, stop notes, **travel legs** (a confirmation reference or an airport code was searchable nowhere) and **bookings**; it forgives a typo on terms of four letters or more; and it keeps your recent searches.
+- **"Remove" on an excursion archives it** into a Removed bucket you can restore from — exactly as Stays already worked — instead of flipping `is_excursion` off and making it findable only by remembering its name.
+
 ## v0.9.47 — [Released] The planner's second half, part four: money (`main`, 2026-08-25 18:50)
 
 Wave 4 of seven. The dashboard's cost card used to apologise for itself — "a sense of scale, not a budget" — because the only price on a place was free text. Now the total is arithmetic, and the three questions that depended on it can be answered.

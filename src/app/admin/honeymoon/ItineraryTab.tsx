@@ -19,7 +19,9 @@ import {
 import { describeHours, stopIsOutsideHours } from '@/lib/honeymoonHours';
 import { isAfterDark } from '@/lib/honeymoonSun';
 import { buildTimeline, formatDuration } from '@/lib/honeymoonTimeline';
+import { scheduledPlaceIds, suggestDay } from '@/lib/honeymoonPlaces';
 import type { TimelineRow } from '@/lib/honeymoonTimeline';
+import Markdown from './Markdown';
 import { useTripIntel } from './useTripIntel';
 import type { TripIntel } from './useTripIntel';
 import type { HoneymoonApi } from './useHoneymoon';
@@ -486,6 +488,7 @@ function DayCard({
     const [pickPlace, setPickPlace] = useState('');
     const [customLabel, setCustomLabel] = useState('');
     const [showNotes, setShowNotes] = useState(false);
+    const [suggestion, setSuggestion] = useState<{ names: string[]; why: string } | null>(null);
 
     const startDate = api.data?.trip.start_date ?? null;
     const realDate = formatDayDate(startDate, day.day_number);
@@ -515,6 +518,26 @@ function DayCard({
     const timeline = buildTimeline(day.stops, api.placeById, base, intel.hopFor);
     const rowFor = (stopId: number) => timeline.rows.find((row) => row.stop.id === stopId) ?? null;
     const dayIntel = intel.intelFor(day.day_number);
+
+    /**
+     * The guide, filtered to where you are.
+     *
+     * The region's own description plus any note filed against that region. Only
+     * shown when the day has a base with a region — otherwise there is no "where
+     * you are" to be about.
+     */
+    const baseRegion = base?.region_id != null
+        ? (api.data?.regions ?? []).find((region) => region.id === base.region_id) ?? null
+        : null;
+    const regionName = baseRegion?.name ?? null;
+    const regionNotes = [
+        ...(baseRegion?.description?.trim()
+            ? [{ key: `region-${baseRegion.id}`, title: baseRegion.name, body: baseRegion.description }]
+            : []),
+        ...(api.data?.notes ?? [])
+            .filter((note) => baseRegion != null && note.region_id === baseRegion.id)
+            .map((note) => ({ key: `note-${note.id}`, title: note.title, body: note.body })),
+    ];
     const dayDate = startDate
         ? (() => {
             const date = dateForDay(startDate, day.day_number);
@@ -539,6 +562,43 @@ function DayCard({
         // Optimistic: the stop stays where it was dropped instead of snapping
         // back for the length of a whole-payload refetch.
         api.reorderStops(day.id, ids);
+    };
+
+    /**
+     * Fill an empty day from what is nearby and already liked.
+     *
+     * Not clever, and not meant to be: places within 15 km of the base that you
+     * have not already scheduled and have not said no to, one per category so
+     * the day is not four temples, ordered by a nearest-neighbour walk so the
+     * driving is not absurd. A draft for a free day beats an empty one, and every
+     * stop it adds is an ordinary stop you can delete.
+     */
+    const suggest = async () => {
+        if (!base) {
+            setSuggestion({ names: [], why: 'Set a stay for this day first — the suggestions are places near it.' });
+            return;
+        }
+        const proposal = suggestDay(
+            base,
+            api.data?.places ?? [],
+            scheduledPlaceIds(api.data?.days ?? []),
+        );
+        if (!proposal) {
+            setSuggestion({ names: [], why: 'Nothing nearby that is unscheduled and not already ruled out.' });
+            return;
+        }
+        const ok = await api.createMany('stops', proposal.places.map((place, index) => ({
+            day_id: day.id,
+            place_id: place.id,
+            sort_order: day.stops.length + index,
+        })));
+        await api.refresh();
+        if (ok) {
+            setSuggestion({
+                names: proposal.places.map((place) => place.name),
+                why: `${proposal.why} · about ${formatDistance(proposal.km)} of driving in total`,
+            });
+        }
     };
 
     const addStop = async () => {
@@ -806,6 +866,32 @@ function DayCard({
                 )}
             </div>
 
+            {/* The region you are in, and what the guide says about it.
+                A note tied to a region, or the region's own write-up, surfaces on
+                the day you are actually sleeping there — which is the only moment
+                either of them is worth reading. */}
+            {regionNotes.length > 0 && (
+                <details className="mt-2 rounded-xl bg-amber-50/60 px-2.5 py-1.5">
+                    <summary className="cursor-pointer text-[11px] font-medium text-amber-900">
+                        {regionName ? `About ${regionName}` : 'Guide notes'}
+                        {' '}({regionNotes.length})
+                    </summary>
+                    <div className="mt-1.5 space-y-2">
+                        {regionNotes.map((note) => (
+                            <div key={note.key}>
+                                <p className="text-[11px] font-semibold text-amber-900">
+                                    {note.title}
+                                </p>
+                                <Markdown
+                                    source={note.body}
+                                    className="text-[11px] text-amber-900/90"
+                                />
+                            </div>
+                        ))}
+                    </div>
+                </details>
+            )}
+
             {/* Weather, daylight and the day's driving: three lines that answer
                 "is this a good day for this" without leaving the card. */}
             {(dayIntel.weather || dayIntel.sunrise || timeline.driveMinutes > 0) && (
@@ -896,12 +982,35 @@ function DayCard({
                     </div>
                 </div>
             ) : (
-                <button
-                    onClick={() => setAdding(true)}
-                    className="mt-3 text-sm text-gray-400 hover:text-gray-700"
-                >
-                    + Add stop
-                </button>
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                    <button
+                        onClick={() => setAdding(true)}
+                        className="text-sm text-gray-400 hover:text-gray-700"
+                    >
+                        + Add stop
+                    </button>
+                    <button
+                        onClick={suggest}
+                        title="Three places near the stay that you have not scheduled or ruled out"
+                        className="text-sm text-gray-400 hover:text-accent"
+                    >
+                        ✨ Suggest a day
+                    </button>
+                </div>
+            )}
+
+            {suggestion && (
+                <p className="mt-2 rounded-xl bg-sky-50 px-2.5 py-1.5 text-[11px] text-sky-900">
+                    {suggestion.names.length > 0
+                        ? `Added ${suggestion.names.join(', ')} — ${suggestion.why}`
+                        : suggestion.why}
+                    <button
+                        onClick={() => setSuggestion(null)}
+                        className="ml-2 underline decoration-dotted"
+                    >
+                        dismiss
+                    </button>
+                </p>
             )}
         </Card>
         </div>
