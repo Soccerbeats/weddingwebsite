@@ -17,6 +17,23 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - NODE_ENV=production
+      # Optional, and all `:-` so an unset one is an empty string rather than a
+      # compose warning. Each feature checks its own var and says so in the UI
+      # when it is missing, so leaving any of these blank is a supported state.
+      - JWT_SECRET=${JWT_SECRET:-}
+      # RapidAPI key for AeroDataBox — turns on "Fill in from schedule" on a
+      # honeymoon travel leg. Without it the button explains itself.
+      - FLIGHT_API_KEY=${FLIGHT_API_KEY:-}
+      - FLIGHT_API_HOST=${FLIGHT_API_HOST:-}
+      # A private OSRM, if you ever run one. Defaults to the public demo server.
+      - OSRM_URL=${OSRM_URL:-}
+      # RSVP email notifications.
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - NOTIFICATION_EMAIL=${NOTIFICATION_EMAIL:-}
+      - GEOCODER_USER_AGENT=${GEOCODER_USER_AGENT:-}
     volumes:
       - photos_data:/app/public/photos
       - config_data:/app/public/config

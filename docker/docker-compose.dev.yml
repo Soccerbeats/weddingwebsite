@@ -26,6 +26,17 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - NODE_ENV=${NODE_ENV}
+      # Same optional set as the production stack — see docker-compose.prod.yml.
+      - JWT_SECRET=${JWT_SECRET:-}
+      - FLIGHT_API_KEY=${FLIGHT_API_KEY:-}
+      - FLIGHT_API_HOST=${FLIGHT_API_HOST:-}
+      - OSRM_URL=${OSRM_URL:-}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - NOTIFICATION_EMAIL=${NOTIFICATION_EMAIL:-}
+      - GEOCODER_USER_AGENT=${GEOCODER_USER_AGENT:-}
     volumes:
       - ../:/app
       - /app/node_modules

@@ -11,6 +11,11 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.51 — [Released] The optional environment variables actually reach the container (`main`, 2026-08-25 22:10)
+
+### Fixed
+- **The Docker stacks passed only three environment variables through to the app** — `DATABASE_URL`, `ADMIN_PASSWORD` and `NODE_ENV` — so anything else set on the stack never arrived. `FLIGHT_API_KEY` was the one that surfaced it (flight lookup kept reporting itself unconfigured with a key set), but `JWT_SECRET`, the four `SMTP_*` variables and `NOTIFICATION_EMAIL` had the same problem despite being documented: RSVP email notifications could not have worked through the committed compose file. All of them now pass through both the production and dev stacks, written as `${VAR:-}` so an unset one is an empty string rather than a compose warning — every feature checks its own variable and says so in the UI when it is missing, so blank stays a supported state. `docker/.env.example` documents the optional set, including `OSRM_URL` and `GEOCODER_USER_AGENT`.
+
 ## v0.9.50 — [Released] The planner's second half, part seven: taking it with you (`main`, 2026-08-25 21:30)
 
 Wave 7 of seven, and the last: the exports, the settings, and the parts of the trip that come after it. Every item on `docs/honeymoon-improvements-2026-08-25.md` that you marked *want* is now built.
