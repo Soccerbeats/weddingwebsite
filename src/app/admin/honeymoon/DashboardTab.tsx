@@ -10,6 +10,7 @@ import { todayIso } from '@/lib/honeymoon';
 import {
     buildBudget, completenessOf, deadlinesOf, formatMoney, perPerson, phaseHint, unbookedDays,
 } from '@/lib/honeymoonBudget';
+import { dueSoon } from '@/lib/honeymoonChecks';
 import type { HoneymoonApi } from './useHoneymoon';
 import { Card, CategoryChip } from './ui';
 
@@ -53,6 +54,8 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
     const unbooked = useMemo(() => (data ? unbookedDays(data, today) : []), [data, today]);
     const completeness = useMemo(() => (data ? completenessOf(data) : null), [data]);
     const nudge = useMemo(() => (trip ? phaseHint(trip, today) : null), [trip, today]);
+    /** Checklist items due in the next week — `due_on` finally doing something. */
+    const soon = useMemo(() => dueSoon(data?.todos ?? [], today), [data?.todos, today]);
 
     // Removed stays are not in the running, so they are not in the count either —
     // a headline number that includes the ones you rejected is a wrong number.
@@ -555,9 +558,41 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
                 Three answers that were unanswerable before bookings existed. Each
                 one only appears when it has something to say: an empty card on a
                 dashboard is a card you learn to ignore. */}
-            {(deadlines.length > 0 || unbooked.length > 0 || nudge
+            {(deadlines.length > 0 || unbooked.length > 0 || soon.length > 0 || nudge
                 || (completeness && completeness.score < 100 && completeness.days > 0)) && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 shrink-0">
+                    {soon.length > 0 && (
+                        <Card className="p-3">
+                            <h2 className="mb-2 text-sm font-semibold text-gray-900">
+                                Due this week
+                            </h2>
+                            <ul className="space-y-1.5">
+                                {soon.slice(0, 4).map((entry) => (
+                                    <li key={entry.todo.id}>
+                                        <Link
+                                            href={`${BASE}/checklist`}
+                                            className={`flex items-baseline justify-between gap-2
+                                                rounded-xl px-2.5 py-1.5 text-sm ${
+                                                entry.bucket === 'overdue'
+                                                    ? 'bg-rose-50 text-rose-800 hover:bg-rose-100'
+                                                    : 'bg-gray-50 text-gray-700 hover:bg-gray-100'}`}
+                                        >
+                                            <span className="min-w-0 truncate">
+                                                {entry.todo.text}
+                                            </span>
+                                            <span className="shrink-0 text-[11px] tabular-nums">
+                                                {entry.bucket === 'overdue'
+                                                    ? `${Math.abs(entry.daysAway ?? 0)}d late`
+                                                    : entry.bucket === 'today'
+                                                        ? 'today' : `${entry.daysAway}d`}
+                                            </span>
+                                        </Link>
+                                    </li>
+                                ))}
+                            </ul>
+                        </Card>
+                    )}
+
                     {deadlines.length > 0 && (
                         <Card className="p-3">
                             <h2 className="text-sm font-semibold text-gray-900 mb-2">

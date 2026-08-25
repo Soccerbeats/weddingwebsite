@@ -20,6 +20,8 @@ import { describeHours, stopIsOutsideHours } from '@/lib/honeymoonHours';
 import { isAfterDark } from '@/lib/honeymoonSun';
 import { buildTimeline, formatDuration } from '@/lib/honeymoonTimeline';
 import { scheduledPlaceIds, suggestDay } from '@/lib/honeymoonPlaces';
+import { conflictsOf, stayStretches } from '@/lib/honeymoonChecks';
+import { DROP_TYPES, PLACE_DRAG, STOP_DRAG } from './dragTypes';
 import type { TimelineRow } from '@/lib/honeymoonTimeline';
 import Markdown from './Markdown';
 import { useTripIntel } from './useTripIntel';
@@ -64,6 +66,9 @@ export default function ItineraryTab({ api, panel = false, onFocusDay }: {
      * and the modal) does not ask twice.
      */
     const intel = useTripIntel(data);
+    const [showAllConflicts, setShowAllConflicts] = useState(false);
+    const conflicts = useMemo(() => (data ? conflictsOf(data) : []), [data]);
+    const stretches = useMemo(() => (data ? stayStretches(data) : []), [data]);
 
     // Remembered like the other view preferences, but locally: which way you
     // like to read the trip is about you and this browser, not about the trip.
@@ -185,6 +190,93 @@ export default function ItineraryTab({ api, panel = false, onFocusDay }: {
                         earlier days, delete the days you don&apos;t need, or set the dates back in
                         Settings.
                     </p>
+                </div>
+            )}
+
+            {/* ---- What is wrong, and where you are sleeping ----
+                Both are read-outs over the payload, and both were previously
+                things you had to notice yourself by reading every card. */}
+            {!panel && (conflicts.length > 0 || stretches.length > 0) && (
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                    {conflicts.length > 0 && (
+                        <div className="rounded-2xl border border-gray-200 bg-white p-3">
+                            <div className="mb-1.5 flex items-baseline justify-between gap-2">
+                                <h3 className="text-sm font-semibold text-gray-900">
+                                    Worth a look
+                                </h3>
+                                <span className="text-[11px] text-gray-400">
+                                    {conflicts.filter((entry) => entry.severity === 'warn').length}
+                                    {' '}to fix
+                                </span>
+                            </div>
+                            <ul className="space-y-1">
+                                {conflicts.slice(0, showAllConflicts ? 40 : 5).map((entry, index) => (
+                                    <li
+                                        key={`${entry.kind}-${entry.dayNumber}-${index}`}
+                                        className={`rounded-xl px-2.5 py-1.5 text-[11px] ${
+                                            entry.severity === 'warn'
+                                                ? 'bg-amber-50 text-amber-900'
+                                                : 'bg-gray-50 text-gray-600'}`}
+                                    >
+                                        {entry.message}
+                                    </li>
+                                ))}
+                            </ul>
+                            {conflicts.length > 5 && (
+                                <button
+                                    onClick={() => setShowAllConflicts((v) => !v)}
+                                    className="mt-1.5 text-[11px] text-gray-500 underline
+                                        decoration-dotted"
+                                >
+                                    {showAllConflicts
+                                        ? 'Show fewer'
+                                        : `Show all ${conflicts.length}`}
+                                </button>
+                            )}
+                        </div>
+                    )}
+
+                    {stretches.length > 0 && (
+                        <div className="rounded-2xl border border-gray-200 bg-white p-3">
+                            <h3 className="mb-1.5 text-sm font-semibold text-gray-900">
+                                Where you sleep
+                            </h3>
+                            <ul className="space-y-1">
+                                {stretches.map((stretch) => (
+                                    <li
+                                        key={`${stretch.place?.id ?? 'none'}-${stretch.firstDay}`}
+                                        className="flex flex-wrap items-baseline gap-x-2 text-[11px]"
+                                    >
+                                        <span className="tabular-nums text-gray-400">
+                                            {stretch.firstDay === stretch.lastDay
+                                                ? `Day ${stretch.firstDay}`
+                                                : `Days ${stretch.firstDay}–${stretch.lastDay}`}
+                                        </span>
+                                        <span className="font-medium text-gray-800">
+                                            {stretch.place?.name ?? 'nowhere set'}
+                                        </span>
+                                        <span className="text-gray-400">
+                                            {stretch.nights} night{stretch.nights === 1 ? '' : 's'}
+                                        </span>
+                                        {stretch.booking?.confirmation && (
+                                            <span className="text-emerald-700">
+                                                {stretch.booking.confirmation}
+                                            </span>
+                                        )}
+                                        {stretch.mismatch && (
+                                            <span className="text-rose-700">
+                                                booked dates do not match these nights
+                                            </span>
+                                        )}
+                                    </li>
+                                ))}
+                            </ul>
+                            <p className="mt-1.5 text-[11px] text-gray-400">
+                                A base is set per day; a stay is a stretch. This is the sentence a
+                                confirmation email gets checked against.
+                            </p>
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -489,6 +581,10 @@ function DayCard({
     const [customLabel, setCustomLabel] = useState('');
     const [showNotes, setShowNotes] = useState(false);
     const [suggestion, setSuggestion] = useState<{ names: string[]; why: string } | null>(null);
+    /** True while something droppable is over this card. */
+    const [dropping, setDropping] = useState(false);
+    /** Index the "+ here" row is open at, or null. */
+    const [insertAt, setInsertAt] = useState<number | null>(null);
 
     const startDate = api.data?.trip.start_date ?? null;
     const realDate = formatDayDate(startDate, day.day_number);
@@ -518,6 +614,18 @@ function DayCard({
     const timeline = buildTimeline(day.stops, api.placeById, base, intel.hopFor);
     const rowFor = (stopId: number) => timeline.rows.find((row) => row.stop.id === stopId) ?? null;
     const dayIntel = intel.intelFor(day.day_number);
+    /** How many days the trip has, for "Day 3 of 14". */
+    const totalDays = api.data?.days.length ?? 0;
+    /**
+     * The base's cover photo, if it has one.
+     *
+     * `photos[0]` is the one uploaded here; `image_url` is the one scraped from a
+     * listing. Either is better than nothing, and the uploaded one wins because
+     * you chose it.
+     */
+    const baseImage = base?.photos?.[0]
+        ? `/api/photos/${base.photos[0]}`
+        : base?.image_url ?? null;
 
     /**
      * The guide, filtered to where you are.
@@ -602,14 +710,28 @@ function DayCard({
     };
 
     const addStop = async () => {
+        // `insertAt` is a position, not a flag: the new stop takes that index and
+        // everything from there down shifts by one, in the same transaction that
+        // creates it.
+        const at = insertAt;
+        const base = { day_id: day.id, ...(at != null ? { sort_order: at } : {}) };
+        let created = false;
         if (pickPlace) {
-            await api.create('stops', { day_id: day.id, place_id: Number(pickPlace) });
+            created = await api.create('stops', { ...base, place_id: Number(pickPlace) });
         } else if (customLabel.trim()) {
-            await api.create('stops', { day_id: day.id, custom_label: customLabel.trim() });
+            created = await api.create('stops', { ...base, custom_label: customLabel.trim() });
         } else return;
+
+        if (created && at != null) {
+            // Renumber the day around the insertion, in one request.
+            const ids = (api.data?.days.find((d) => d.id === day.id)?.stops ?? [])
+                .map((stop) => stop.id);
+            if (ids.length) await api.reorder('stops', ids);
+        }
         setPickPlace('');
         setCustomLabel('');
         setAdding(false);
+        setInsertAt(null);
     };
 
     /**
@@ -642,7 +764,7 @@ function DayCard({
      * rebuilding it stop by stop, and it lands at the end where a new day
      * belongs — moving it is a drag away.
      */
-    const duplicate = async () => {
+    const duplicate = async (where: 'end' | 'after' = 'end') => {
         const next = Math.max(0, ...(api.data?.days ?? []).map((d) => d.day_number)) + 1;
         const created = await api.createRow('days', {
             day_number: next,
@@ -657,9 +779,30 @@ function DayCard({
                 place_id: stop.place_id,
                 custom_label: stop.custom_label,
                 start_time: stop.start_time,
+                duration_minutes: stop.duration_minutes,
                 notes: stop.notes,
                 sort_order: stop.sort_order,
             })));
+        }
+        // The travel legs come too: "the same again" includes how you got there.
+        if (day.travel.length) {
+            await api.createMany('travel', day.travel.map(({ id, day_id, ...rest }) => {
+                void id; void day_id;
+                return { ...rest, day_id: created.id };
+            }));
+        }
+        if (where === 'after') {
+            /*
+             * Splice it in rather than leaving it at the end.
+             *
+             * Day numbers are unique and the reorder endpoint renumbers the whole
+             * trip in one transaction — the same call the drag handle makes — so
+             * the dates of every later day follow along.
+             */
+            const ids = (api.data?.days ?? []).map((d) => d.id).filter((id) => id !== created.id);
+            const at = ids.indexOf(day.id) + 1;
+            ids.splice(Math.max(0, at), 0, created.id);
+            await api.reorder('days', ids);
         }
         await api.refresh();
     };
@@ -673,8 +816,59 @@ function DayCard({
             // one wins up to the order Tailwind happened to emit them in.
             className={`${dayDragging ? 'opacity-60' : ''}
                 ${beyondRange ? 'rounded-2xl ring-2 ring-rose-300' : ''}`}
+            /*
+             * Native drag-and-drop, deliberately not dnd-kit.
+             *
+             * The in-day stop list is a dnd-kit sortable and stays one — that is
+             * what it is good at. Dropping *onto* a day is a different problem:
+             * the thing being dragged may live in another component tree
+             * entirely (the Places panel beside the map on the split view), and
+             * sharing a dnd-kit context across two panels means hoisting it into
+             * the map's layout and threading it through both tabs. The browser's
+             * own drag API crosses trees for free, which is exactly the property
+             * needed here.
+             */
+            onDragOver={(event) => {
+                if (!event.dataTransfer.types.some((type) => DROP_TYPES.includes(type))) return;
+                event.preventDefault();
+                setDropping(true);
+            }}
+            onDragLeave={() => setDropping(false)}
+            onDrop={(event) => {
+                setDropping(false);
+                const placeId = Number(event.dataTransfer.getData(PLACE_DRAG));
+                const stopPayload = event.dataTransfer.getData(STOP_DRAG);
+                if (Number.isFinite(placeId) && placeId > 0) {
+                    event.preventDefault();
+                    void api.create('stops', { day_id: day.id, place_id: placeId });
+                    return;
+                }
+                if (!stopPayload) return;
+                event.preventDefault();
+                const [stopId, fromDayId] = stopPayload.split(':').map(Number);
+                if (!Number.isFinite(stopId) || fromDayId === day.id) return;
+                void api.update('stops', {
+                    id: stopId, day_id: day.id, sort_order: day.stops.length,
+                });
+            }}
         >
-        <Card className="p-4">
+        <Card className={`overflow-hidden p-4 transition ${dropping
+            ? 'ring-2 ring-accent bg-accent/5' : ''}`}>
+            {/* The stay's own photo, as a band across the top. A trip of fourteen
+                identical white cards is hard to navigate; the picture of where you
+                are sleeping is the fastest way to know which day you are looking
+                at. Only when there is one — no placeholder. */}
+            {baseImage && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                    src={baseImage}
+                    alt=""
+                    referrerPolicy="no-referrer"
+                    loading="lazy"
+                    className="-mx-4 -mt-4 mb-3 h-20 w-[calc(100%+2rem)] object-cover bg-gray-100"
+                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                />
+            )}
             {beyondRange && (
                 <p className="mb-2 rounded-xl bg-rose-50 border border-rose-200 px-2.5 py-1.5
                     text-[11px] text-rose-700">
@@ -700,6 +894,9 @@ function DayCard({
                         </button>
                         <span className="text-sm font-semibold text-gray-900 shrink-0">
                             Day {day.day_number}
+                            {totalDays > 1 && (
+                                <span className="font-normal text-gray-400"> of {totalDays}</span>
+                            )}
                         </span>
                         {realDate && <span className="text-xs text-gray-400">{realDate}</span>}
                     </div>
@@ -738,7 +935,11 @@ function DayCard({
                             label: 'Add travel leg',
                             onClick: () => api.create('travel', { day_id: day.id, mode: 'flight' }),
                         },
-                        { label: 'Duplicate day', onClick: duplicate },
+                        { label: 'Duplicate day (at the end)', onClick: () => duplicate('end') },
+                        // The common case: "the same again tomorrow". Appending
+                        // and then dragging it back seven positions was the only
+                        // way to say that.
+                        { label: 'Duplicate right after this one', onClick: () => duplicate('after') },
                         {
                             label: showNotes ? 'Hide notes' : 'Add a note',
                             onClick: () => setShowNotes((v) => !v),
@@ -857,7 +1058,18 @@ function DayCard({
                                         row={rowFor(stop.id)}
                                         dayDate={dayDate}
                                         sunset={dayIntel.sunset}
+                                        previousEnd={index > 0
+                                            ? timeline.rows[index - 1]?.leave
+                                                ?? timeline.rows[index - 1]?.arrive ?? null
+                                            : null}
                                         onEditPlace={onEditPlace}
+                                        // Insert *above* this row: the gesture is
+                                        // "something goes here", and the row you
+                                        // point at is the one it goes before.
+                                        onInsertBefore={() => {
+                                            setInsertAt(index);
+                                            setAdding(true);
+                                        }}
                                     />
                                 ))}
                             </ul>
@@ -958,6 +1170,11 @@ function DayCard({
             {/* ---- Add stop ---- */}
             {adding ? (
                 <div className="mt-3 rounded-2xl border border-gray-200 p-3 space-y-2">
+                    {insertAt != null && (
+                        <p className="text-[11px] text-accent">
+                            Inserting at position {insertAt + 1} of {day.stops.length + 1}.
+                        </p>
+                    )}
                     <SelectField value={pickPlace} onChange={(e) => setPickPlace(e.target.value)}>
                         <option value="">— pick a place from your library —</option>
                         {(api.data?.places ?? []).map((p) => (
@@ -971,7 +1188,9 @@ function DayCard({
                         placeholder="Something not in the library — lunch near the rice terraces"
                     />
                     <div className="flex justify-end gap-2">
-                        <Button onClick={() => setAdding(false)}>Cancel</Button>
+                        <Button onClick={() => { setAdding(false); setInsertAt(null); }}>
+                            Cancel
+                        </Button>
                         <Button
                             tone="primary"
                             onClick={addStop}
@@ -1018,7 +1237,8 @@ function DayCard({
 }
 
 function StopRow({
-    stop, index, api, dayNumber, hopKm, row, dayDate, sunset, onEditPlace,
+    stop, index, api, dayNumber, hopKm, row, dayDate, sunset, previousEnd, onEditPlace,
+    onInsertBefore,
 }: {
     stop: Stop;
     index: number;
@@ -1032,6 +1252,13 @@ function StopRow({
     dayDate: string | null;
     /** Sunset at the day's base, to flag a stop planned after dark. */
     sunset: string | null;
+    /**
+     * When the stop before this one is done, for the "+ start here" chip.
+     * Null when the day has not established a clock yet.
+     */
+    previousEnd: string | null;
+    /** Open the add row above this stop. */
+    onInsertBefore: () => void;
 }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
         useSortable({ id: stop.id });
@@ -1052,10 +1279,9 @@ function StopRow({
     /**
      * Move a stop to another day.
      *
-     * Dragging between days would mean one DnD context spanning every card
-     * instead of one per card, and reordering within a day is the common case
-     * that arrangement serves well. A menu gets a stop to Thursday in two
-     * clicks without giving that up.
+     * Still a menu as well as a drag: on a phone there is no drag, and "move to
+     * day 7" through a list is two taps against a scroll-and-hold. The drag is
+     * the native one — see dragTypes.ts for why it is not dnd-kit.
      */
     const moveTo = (dayId: number) => api.update('stops', {
         id: stop.id,
@@ -1071,7 +1297,36 @@ function StopRow({
             ref={setNodeRef}
             style={{ transform: CSS.Transform.toString(transform), transition }}
             className={isDragging ? 'opacity-50' : ''}
+            draggable
+            onDragStart={(event) => {
+                // The day id travels with it so a drop onto its own day is a
+                // no-op rather than a pointless write.
+                event.dataTransfer.setData(STOP_DRAG, `${stop.id}:${stop.day_id}`);
+                event.dataTransfer.effectAllowed = 'move';
+            }}
         >
+            {/* A hairline that becomes a button on hover: adding a stop in the
+                middle of a day used to mean adding it at the bottom and dragging
+                it up past four others. */}
+            {index > 0 && (
+                <div className="group/insert relative -my-0.5 h-2">
+                    <button
+                        type="button"
+                        onClick={onInsertBefore}
+                        aria-label="Add a stop here"
+                        className="absolute inset-x-8 top-1/2 flex h-4 -translate-y-1/2
+                            items-center justify-center opacity-0 transition
+                            group-hover/insert:opacity-100"
+                    >
+                        <span className="h-px flex-1 bg-accent/40" />
+                        <span className="mx-1 rounded-full bg-accent px-1.5 text-[10px]
+                            font-semibold leading-4 text-white">
+                            + here
+                        </span>
+                        <span className="h-px flex-1 bg-accent/40" />
+                    </button>
+                </div>
+            )}
             <div className="flex items-center gap-2 rounded-2xl border border-gray-100 bg-white px-2.5 py-2">
                 <button
                     {...attributes}
@@ -1104,6 +1359,37 @@ function StopRow({
                         focus:ring-2 focus:ring-accent/30"
                     aria-label="Start time"
                 />
+                {/* Three chips and a nudge, for the times a day is actually made
+                    of. Typing 09:00 into a time input on a phone is four taps
+                    and a scroll wheel; this is one. */}
+                {!stop.start_time && (
+                    <span className="flex shrink-0 gap-0.5">
+                        {['09:00', '12:30', '19:00'].map((time) => (
+                            <button
+                                key={time}
+                                type="button"
+                                onClick={() => api.patchStop(stop.id, { start_time: time })}
+                                className="rounded-md px-1 py-0.5 text-[10px] text-gray-400
+                                    hover:bg-gray-100 hover:text-gray-700 tabular-nums"
+                                title={`Start at ${time}`}
+                            >
+                                {time}
+                            </button>
+                        ))}
+                        {previousEnd && (
+                            <button
+                                type="button"
+                                onClick={() => api.patchStop(stop.id, { start_time: previousEnd })}
+                                className="rounded-md px-1 py-0.5 text-[10px] text-accent
+                                    hover:bg-accent/10 tabular-nums"
+                                title={`Straight after the stop before (${previousEnd})`}
+                            >
+                                +{previousEnd}
+                            </button>
+                        )}
+                    </span>
+                )}
+
                 {/* How long you mean to be here. Optional, and the timeline says
                     so: without it a stop is a point in the day; with it the day
                     becomes a sequence that can be checked against the clock. */}
@@ -1169,6 +1455,22 @@ function StopRow({
                         .map((d) => ({
                             label: `Move to day ${d.day_number}${d.title ? ` — ${d.title}` : ''}`,
                             onClick: () => moveTo(d.id),
+                        })),
+                    // Copy rather than move: the same beach twice in a week is a
+                    // plan, not a mistake, and rebuilding the stop by hand to
+                    // say so is busywork.
+                    ...(api.data?.days ?? [])
+                        .filter((d) => d.day_number !== dayNumber)
+                        .map((d) => ({
+                            label: `Copy to day ${d.day_number}${d.title ? ` — ${d.title}` : ''}`,
+                            onClick: () => api.create('stops', {
+                                day_id: d.id,
+                                place_id: stop.place_id,
+                                custom_label: stop.custom_label,
+                                start_time: stop.start_time,
+                                duration_minutes: stop.duration_minutes,
+                                notes: stop.notes,
+                            }),
                         })),
                     {
                         label: 'Remove stop',

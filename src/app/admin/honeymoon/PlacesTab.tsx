@@ -16,6 +16,7 @@ import PlaceDrawer from './PlaceDrawer';
 import ImportPlaces from './ImportPlaces';
 import SavedViews from './SavedViews';
 import { useLocalPref } from './useLocalPref';
+import { PLACE_DRAG } from './dragTypes';
 import {
     BulkFieldMenu, Button, Card, CategoryChip, EmptyState, MiniSelect, OverflowMenu, SelectField,
     StatusChip, TextField, TriToggle, type TriState,
@@ -524,6 +525,14 @@ export default function PlacesTab({ api, panel = false }: {
                             return (
                                 <li
                                     key={place.id}
+                                    // Draggable straight onto a day card — the
+                                    // point of the map's split view, and the
+                                    // reason the day cards accept a native drop.
+                                    draggable
+                                    onDragStart={(event) => {
+                                        event.dataTransfer.setData(PLACE_DRAG, String(place.id));
+                                        event.dataTransfer.effectAllowed = 'copy';
+                                    }}
                                     className={`flex items-center gap-3 px-3 hover:bg-gray-50
                                         ${dense ? 'py-1' : 'py-2.5'}`}
                                 >
@@ -643,6 +652,7 @@ export default function PlacesTab({ api, panel = false }: {
             {sorted.length > 0 && (
                 <p className="text-[11px] text-gray-400 px-1">
                     Showing {sorted.length} of {places.length}.
+                    {panel && ' Drag a row onto a day to schedule it.'}
                 </p>
             )}
 

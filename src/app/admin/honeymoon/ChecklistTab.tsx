@@ -7,7 +7,10 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { formatDate } from '@/lib/honeymoon';
 import type { TodoItem } from '@/lib/honeymoon';
+import { bucketTodos, dueSoon, packingSuggestions } from '@/lib/honeymoonChecks';
+import { partnersOf } from './PlaceNotes';
 import type { HoneymoonApi } from './useHoneymoon';
 import { Button, Card, EmptyState, InlineText, Modal, OverflowMenu, TextArea, TextField } from './ui';
 
@@ -23,15 +26,53 @@ export default function ChecklistTab({ api }: { api: HoneymoonApi }) {
     const [text, setText] = useState('');
     const [group, setGroup] = useState('');
     const [hideDone, setHideDone] = useState(false);
+    /** task | packing — two lists, one table. */
+    const [kind, setKind] = useState<'task' | 'packing'>('task');
+    const [byDue, setByDue] = useState(false);
+    const [suggesting, setSuggesting] = useState(false);
+    const partners = useMemo(
+        () => partnersOf(data?.trip.partner_names),
+        [data?.trip.partner_names],
+    );
     /** The item whose outcome we're asking about, right after it was ticked. */
     const [asking, setAsking] = useState<TodoItem | null>(null);
 
     const todos = useMemo(() => data?.todos ?? [], [data]);
 
-    const visible = useMemo(
-        () => (hideDone ? todos.filter((t) => !t.done) : todos),
-        [todos, hideDone],
+    /*
+     * Two lists in one table.
+     *
+     * A packing list is a checklist with a different question — "is it in the
+     * bag" rather than "is it done" — and keeping them in one table means one
+     * set of code for ordering, grouping, dates and undo. `kind` is the switch.
+     */
+    const ofKind = useMemo(
+        () => todos.filter((todo) => (todo.kind ?? 'task') === kind),
+        [todos, kind],
     );
+
+    /** Dates, bucketed: late, today, this week, later. */
+    const dated = useMemo(() => {
+        const map = new Map<number, ReturnType<typeof bucketTodos>[number]>();
+        for (const entry of bucketTodos(ofKind)) map.set(entry.todo.id, entry);
+        return map;
+    }, [ofKind]);
+
+    /** What is due in the next week — the strip nobody had to ask for. */
+    const soon = useMemo(() => dueSoon(ofKind), [ofKind]);
+
+    const visible = useMemo(() => {
+        const rows = hideDone ? ofKind.filter((t) => !t.done) : ofKind;
+        if (!byDue) return rows;
+        // Undated last: a list sorted by date should not bury everything that
+        // has no date above the things that do.
+        return [...rows].sort((a, b) => {
+            if (!a.due_on && !b.due_on) return 0;
+            if (!a.due_on) return 1;
+            if (!b.due_on) return -1;
+            return a.due_on.localeCompare(b.due_on);
+        });
+    }, [ofKind, hideDone, byDue]);
 
     /** Grouped by category, in the order the groups first appear. */
     const grouped = useMemo(() => {
@@ -59,7 +100,8 @@ export default function ChecklistTab({ api }: { api: HoneymoonApi }) {
         if (!clean) return;
         await api.create('todos', {
             text: clean,
-            category: group.trim() || 'General',
+            kind,
+            category: group.trim() || (kind === 'packing' ? 'Bag' : 'General'),
             // New items land at the bottom of the list.
             sort_order: (todos.at(-1)?.sort_order ?? 0) + 1,
         });
@@ -84,8 +126,83 @@ export default function ChecklistTab({ api }: { api: HoneymoonApi }) {
         api.reorder('todos', ids);
     };
 
+    /** Add every packing suggestion that is not already on the list. */
+    const addSuggestions = async () => {
+        if (!data) return;
+        const existing = new Set(todos.map((todo) => todo.text.trim().toLowerCase()));
+        const rows = packingSuggestions(data)
+            .filter((entry) => !existing.has(entry.text.trim().toLowerCase()))
+            .map((entry, index) => ({
+                text: entry.text,
+                kind: 'packing',
+                category: 'Suggested',
+                result: null,
+                sort_order: (todos.at(-1)?.sort_order ?? 0) + 1 + index,
+            }));
+        if (!rows.length) { setSuggesting(false); return; }
+        await api.createMany('todos', rows);
+        await api.refresh();
+        setSuggesting(false);
+    };
+
     return (
         <div className="space-y-3">
+            {/* ---- Which list ---- */}
+            <div className="flex flex-wrap items-center gap-1.5">
+                {([['task', 'To do'], ['packing', 'Packing']] as const).map(([key, label]) => (
+                    <button
+                        key={key}
+                        onClick={() => setKind(key)}
+                        className={`rounded-full border px-3 py-1.5 text-sm font-medium transition
+                            ${kind === key
+                            ? 'border-transparent bg-accent text-white'
+                            : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}
+                    >
+                        {label} {todos.filter((t) => (t.kind ?? 'task') === key).length || ''}
+                    </button>
+                ))}
+                <div className="flex-1" />
+                <Button onClick={() => setByDue((v) => !v)}>
+                    {byDue ? 'Sort: my order' : 'Sort: by date'}
+                </Button>
+                {kind === 'packing' && (
+                    <Button onClick={() => setSuggesting(true)}>Suggest from the trip</Button>
+                )}
+            </div>
+
+            {/* ---- Due soon ---- */}
+            {soon.length > 0 && (
+                <Card className="p-3">
+                    <h3 className="mb-1.5 text-sm font-semibold text-gray-900">Next seven days</h3>
+                    <ul className="space-y-1">
+                        {soon.slice(0, 6).map((entry) => (
+                            <li
+                                key={entry.todo.id}
+                                className={`flex items-baseline justify-between gap-2 rounded-xl
+                                    px-2.5 py-1.5 text-sm ${entry.bucket === 'overdue'
+                                    ? 'bg-rose-50 text-rose-900'
+                                    : entry.bucket === 'today'
+                                        ? 'bg-amber-50 text-amber-900'
+                                        : 'bg-gray-50 text-gray-700'}`}
+                            >
+                                <span className="min-w-0 truncate">{entry.todo.text}</span>
+                                <span className="shrink-0 text-[11px] tabular-nums">
+                                    {entry.bucket === 'overdue'
+                                        ? `${Math.abs(entry.daysAway ?? 0)}d late`
+                                        : entry.bucket === 'today'
+                                            ? 'today'
+                                            : `in ${entry.daysAway}d`}
+                                </span>
+                            </li>
+                        ))}
+                    </ul>
+                    <p className="mt-1.5 text-[11px] text-gray-400">
+                        From the due dates you have set. Anything due after you leave is flagged on
+                        the Itinerary.
+                    </p>
+                </Card>
+            )}
+
             {/* ---- Add ---- */}
             <Card className="p-3">
                 <div className="grid grid-cols-1 md:grid-cols-[1fr_12rem_auto] gap-2">
@@ -132,6 +249,36 @@ export default function ChecklistTab({ api }: { api: HoneymoonApi }) {
                 </Card>
             )}
 
+            {suggesting && (
+                <Modal open onClose={() => setSuggesting(false)} title="Packing suggestions">
+                    <p className="text-xs text-gray-500">
+                        Worked out from what you have planned — beach days want sunscreen, temples
+                        want covered shoulders, an overnight flight wants an eye mask. Each one
+                        becomes an ordinary checklist row you can edit or delete.
+                    </p>
+                    <ul className="mt-3 max-h-64 space-y-1 overflow-auto">
+                        {(data ? packingSuggestions(data) : []).map((entry) => (
+                            <li
+                                key={entry.text}
+                                className="flex items-baseline justify-between gap-2 rounded-xl
+                                    bg-gray-50 px-2.5 py-1.5"
+                            >
+                                <span className="text-sm text-gray-800">{entry.text}</span>
+                                <span className="shrink-0 text-[11px] text-gray-400">
+                                    {entry.why}
+                                </span>
+                            </li>
+                        ))}
+                    </ul>
+                    <div className="mt-4 flex justify-end gap-2">
+                        <Button onClick={() => setSuggesting(false)}>Cancel</Button>
+                        <Button tone="primary" onClick={addSuggestions}>
+                            Add the ones I don&apos;t have
+                        </Button>
+                    </div>
+                </Modal>
+            )}
+
             {/* ---- List ---- */}
             {visible.length === 0 ? (
                 <Card>
@@ -163,6 +310,8 @@ export default function ChecklistTab({ api }: { api: HoneymoonApi }) {
                                                 todo={todo}
                                                 api={api}
                                                 onTicked={setAsking}
+                                                due={dated.get(todo.id)}
+                                                partners={partners}
                                             />
                                         ))}
                                     </ul>
@@ -228,10 +377,14 @@ function ResultPrompt({ todo, onClose, onSave }: {
     );
 }
 
-function TodoRow({ todo, api, onTicked }: {
+function TodoRow({ todo, api, onTicked, due, partners }: {
     todo: TodoItem;
     api: HoneymoonApi;
     onTicked: (todo: TodoItem) => void;
+    /** This row's due bucket, for the badge. */
+    due?: { bucket: string; daysAway: number | null };
+    /** The names on the trip, so a packing row can be assigned. */
+    partners: string[];
 }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
         useSortable({ id: todo.id });
@@ -290,10 +443,42 @@ function TodoRow({ todo, api, onTicked }: {
                     value={todo.due_on ?? ''}
                     onChange={(e) => api.update('todos', { id: todo.id, due_on: e.target.value })}
                     aria-label={`Due date for ${todo.text}`}
-                    className="text-xs text-gray-500 bg-transparent rounded-lg px-1 py-1 shrink-0
+                    className={`text-xs bg-transparent rounded-lg px-1 py-1 shrink-0
                         hover:bg-gray-50 focus:bg-white focus:outline-none focus:ring-2
-                        focus:ring-accent/30 w-[8.5rem]"
+                        focus:ring-accent/30 w-[8.5rem] ${
+                        !todo.done && due?.bucket === 'overdue' ? 'text-rose-700 font-medium'
+                            : !todo.done && due?.bucket === 'today' ? 'text-amber-700 font-medium'
+                                : 'text-gray-500'}`}
                 />
+                {/* The badge is what makes a stored date do something. */}
+                {!todo.done && due && due.bucket !== 'none' && due.bucket !== 'later' && (
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold
+                        ${due.bucket === 'overdue' ? 'bg-rose-100 text-rose-800'
+                        : due.bucket === 'today' ? 'bg-amber-100 text-amber-800'
+                            : 'bg-gray-100 text-gray-600'}`}>
+                        {due.bucket === 'overdue'
+                            ? `${Math.abs(due.daysAway ?? 0)}d late`
+                            : due.bucket === 'today' ? 'today' : `${due.daysAway}d`}
+                    </span>
+                )}
+                {/* Whose bag, on a packing row. Free text through a select of the
+                    trip's names, and hidden entirely when there are none set. */}
+                {(todo.kind ?? 'task') === 'packing' && partners.length > 0 && (
+                    <select
+                        value={todo.person ?? ''}
+                        onChange={(e) => api.update('todos', {
+                            id: todo.id, person: e.target.value,
+                        })}
+                        aria-label={`Who packs ${todo.text}`}
+                        className="shrink-0 rounded-lg bg-transparent px-1 py-1 text-xs
+                            text-gray-500 hover:bg-gray-50 focus:bg-white focus:outline-none"
+                    >
+                        <option value="">both</option>
+                        {partners.map((person) => (
+                            <option key={person} value={person}>{person}</option>
+                        ))}
+                    </select>
+                )}
                 <OverflowMenu
                     items={[
                         {

@@ -44,6 +44,9 @@ import {
 } from '../src/lib/honeymoonPlaces';
 import { markdownToText, parseInline, parseMarkdown } from '../src/lib/honeymoonMarkdown';
 import {
+    bucketTodos, conflictsOf, dueSoon, packingSuggestions, stayStretches,
+} from '../src/lib/honeymoonChecks';
+import {
     coordsFromMapsUrl, coordsFromPair, nameFromMapsUrl,
 } from '../src/app/api/admin/honeymoon/geocode/route';
 import { SEED_PLACES, SEED_REGIONS, SEED_NOTES } from '../src/lib/honeymoonSeed';
@@ -1627,6 +1630,186 @@ console.log('\nProviders and Markdown');
     check('a note reduces to plain text for search',
         markdownToText('## Hi\n\nUse **Grab** here') === 'Hi Use Grab here',
         markdownToText('## Hi\n\nUse **Grab** here'));
+}
+
+console.log('\nWhat is wrong with the plan');
+{
+    const hotel = { ...makePlace(1, 'Amankila', -8.4788, 115.5628), category: 'stay' };
+    const villa = { ...makePlace(2, 'Ubud villa', -8.5069, 115.2625), category: 'stay' };
+    const temple = { ...makePlace(3, 'Besakih', -8.3742, 115.4508), category: 'temple' };
+    const faraway = makePlace(4, 'Pemuteran', -8.1400, 114.6500);
+
+    const trip = {
+        id: 1, title: 'T', start_date: '2026-09-12', end_date: null, home_currency: 'USD',
+        notes: null, focus_country: '', budget: null, partner_names: '', info: {},
+        time_format: '24h' as const, distance_unit: 'km' as const, phase: 'planning' as const,
+    };
+
+    const days: Day[] = [
+        { id: 1, day_number: 1, title: null, notes: null, base_place_id: 1, stops: [], travel: [] },
+        { id: 2, day_number: 2, title: null, notes: null, base_place_id: 1, stops: [], travel: [] },
+        // A move with no travel leg, a duplicate stop, two stops at one time, and
+        // a stop the far side of the island.
+        { id: 3, day_number: 3, title: null, notes: null, base_place_id: 2, travel: [], stops: [
+            { ...STOP_DEFAULTS, id: 1, day_id: 3, place_id: 3, start_time: '10:00' },
+            { ...STOP_DEFAULTS, id: 2, day_id: 3, place_id: 3, start_time: '10:00', sort_order: 1 },
+            { ...STOP_DEFAULTS, id: 3, day_id: 3, place_id: 4, sort_order: 2 },
+        ] },
+        { id: 4, day_number: 4, title: null, notes: null, base_place_id: null, stops: [], travel: [] },
+    ];
+
+    const bookings = [{
+        id: 1, place_id: 1, travel_id: null, stop_id: null, kind: 'stay' as const,
+        provider: null, confirmation: 'A1', url: null, contact: null,
+        check_in: '2026-09-12', check_out: '2026-09-15', check_in_time: null,
+        check_out_time: null, cost: null, cost_currency: null, cost_paid: null,
+        deposit_due_on: null, cancel_by: null, party_size: null, dress_code: null,
+        paid: false, documents: [], notes: null, created_at: null,
+    }];
+
+    const todos: TodoItem[] = [
+        { ...TODO_DEFAULTS, id: 1, text: 'Renew passport', due_on: '2026-08-01' },
+        { ...TODO_DEFAULTS, id: 2, text: 'Buy adapters', due_on: '2026-09-20' },
+        { ...TODO_DEFAULTS, id: 3, text: 'Done already', due_on: '2026-08-01', done: true },
+    ];
+
+    const payload = { trip, places: [hotel, villa, temple, faraway], days, bookings, todos };
+    const conflicts = conflictsOf(payload, '2026-08-25');
+    const kinds = conflicts.map((entry) => entry.kind);
+
+    check('a day with nowhere to sleep is the first thing said', kinds[0] === 'no-base');
+    check('a place scheduled twice on a day is noticed', kinds.includes('duplicate-stop'));
+    check('two stops at the same time are noticed', kinds.includes('same-time'));
+    check('a stop the far side of the island is noticed', kinds.includes('far-from-base'));
+    check('moving stay with no travel leg is noticed', kinds.includes('base-change-no-travel'));
+    check('a booking whose dates disagree with the days is noticed',
+        kinds.includes('booking-dates'));
+    check('an overdue to-do is noticed', kinds.includes('todo-overdue'));
+    check('a to-do due after departure is noticed', kinds.includes('todo-after-departure'));
+    check('a to-do already done is not', conflicts.filter(
+        (entry) => entry.message.includes('Done already'),
+    ).length === 0);
+
+    // The same trip with the holes filled: no conflicts at all.
+    const tidy = {
+        ...payload,
+        days: [
+            days[0], days[1],
+            { ...days[2], travel: [{ ...LEG_DEFAULTS, id: 9, day_id: 3, mode: 'car' as const }],
+              stops: [{ ...STOP_DEFAULTS, id: 1, day_id: 3, place_id: 3, start_time: '10:00' }] },
+            { ...days[3], base_place_id: 2 },
+        ],
+        bookings: [{ ...bookings[0], check_out: '2026-09-14' }],
+        todos: [todos[2]],
+    };
+    check('a tidy trip has nothing wrong with it',
+        conflictsOf(tidy, '2026-08-25').length === 0,
+        conflictsOf(tidy, '2026-08-25').map((c) => c.kind).join(','));
+
+    const overlapping = conflictsOf({
+        ...payload,
+        bookings: [
+            bookings[0],
+            { ...bookings[0], id: 2, place_id: 2, check_in: '2026-09-13', check_out: '2026-09-16' },
+        ],
+    }, '2026-08-25');
+    check('two stays booked over the same nights are noticed',
+        overlapping.some((entry) => entry.kind === 'two-stays'));
+    check('and the same stay booked twice is not counted as an overlap',
+        !conflictsOf({
+            ...payload,
+            bookings: [bookings[0], { ...bookings[0], id: 2 }],
+        }, '2026-08-25').some((entry) => entry.kind === 'two-stays'));
+}
+
+console.log('\nStays as stretches');
+{
+    const hotel = { ...makePlace(1, 'Amankila', -8.4, 115.5), category: 'stay' };
+    const villa = { ...makePlace(2, 'Ubud villa', -8.5, 115.2), category: 'stay' };
+    const trip = {
+        id: 1, title: 'T', start_date: '2026-09-12', end_date: null, home_currency: 'USD',
+        notes: null, focus_country: '', budget: null, partner_names: '', info: {},
+        time_format: '24h' as const, distance_unit: 'km' as const, phase: 'planning' as const,
+    };
+    const days: Day[] = [1, 2, 3, 4, 5].map((n) => ({
+        id: n, day_number: n, title: null, notes: null,
+        base_place_id: n <= 3 ? 1 : 2, stops: [], travel: [],
+    }));
+    const bookings = [{
+        id: 1, place_id: 1, travel_id: null, stop_id: null, kind: 'stay' as const,
+        provider: null, confirmation: null, url: null, contact: null,
+        check_in: '2026-09-12', check_out: '2026-09-15', check_in_time: null, check_out_time: null,
+        cost: null, cost_currency: null, cost_paid: null, deposit_due_on: null, cancel_by: null,
+        party_size: null, dress_code: null, paid: false, documents: [], notes: null,
+        created_at: null,
+    }];
+
+    const stretches = stayStretches({ trip, places: [hotel, villa], days, bookings });
+    check('consecutive days at one stay become one stretch', stretches.length === 2);
+    check('with the nights counted',
+        stretches[0].nights === 3 && stretches[0].firstDay === 1 && stretches[0].lastDay === 3);
+    check('check-out is the morning after the last night, so this booking matches',
+        stretches[0].mismatch === false);
+    check('and one day out is a mismatch',
+        stayStretches({
+            trip, places: [hotel, villa], days,
+            bookings: [{ ...bookings[0], check_out: '2026-09-16' }],
+        })[0].mismatch === true);
+    check('a stay with no booking is not a mismatch', stretches[1].mismatch === false);
+    check('returning to the same stay later is a second stretch',
+        stayStretches({
+            trip,
+            places: [hotel, villa],
+            days: days.map((d) => ({ ...d, base_place_id: d.day_number === 3 ? 2 : 1 })),
+            bookings: [],
+        }).length === 3);
+}
+
+console.log('\nChecklist dates');
+{
+    const todos: TodoItem[] = [
+        { ...TODO_DEFAULTS, id: 1, text: 'Late', due_on: '2026-08-20' },
+        { ...TODO_DEFAULTS, id: 2, text: 'Today', due_on: '2026-08-25' },
+        { ...TODO_DEFAULTS, id: 3, text: 'This week', due_on: '2026-08-30' },
+        { ...TODO_DEFAULTS, id: 4, text: 'Later', due_on: '2026-10-01' },
+        { ...TODO_DEFAULTS, id: 5, text: 'No date' },
+        { ...TODO_DEFAULTS, id: 6, text: 'Done', due_on: '2026-08-01', done: true },
+    ];
+    const buckets = bucketTodos(todos, '2026-08-25');
+    check('an overdue item is overdue', buckets[0].bucket === 'overdue' && buckets[0].daysAway === -5);
+    check('today is today', buckets[1].bucket === 'today' && buckets[1].daysAway === 0);
+    check('inside a week is this week', buckets[2].bucket === 'week');
+    check('beyond that is later', buckets[3].bucket === 'later');
+    check('no date is no bucket', buckets[4].bucket === 'none' && buckets[4].daysAway === null);
+
+    const soon = dueSoon(todos, '2026-08-25');
+    check('the next-week strip is soonest first',
+        soon.map((entry) => entry.todo.text).join(',') === 'Late,Today,This week');
+    check('and leaves out what is done', !soon.some((entry) => entry.todo.done));
+}
+
+console.log('\nPacking');
+{
+    const beach = { ...makePlace(1, 'Beach club', -8.6, 115.1), category: 'beach' };
+    const temple = { ...makePlace(2, 'Besakih', -8.3, 115.4), category: 'temple' };
+    const villa = { ...makePlace(3, 'Villa', -8.5, 115.2), category: 'stay' };
+    const days: Day[] = [{
+        id: 1, day_number: 1, title: null, notes: null, base_place_id: 3,
+        stops: [
+            { ...STOP_DEFAULTS, id: 1, day_id: 1, place_id: 1 },
+            { ...STOP_DEFAULTS, id: 2, day_id: 1, place_id: 2, sort_order: 1 },
+        ],
+        travel: [{ ...LEG_DEFAULTS, id: 1, day_id: 1, arrive_day_offset: 1 }],
+    }];
+    const suggestions = packingSuggestions({ places: [beach, temple, villa], days });
+    const texts = suggestions.map((entry) => entry.text).join(' | ');
+    check('a beach day suggests sunscreen', texts.includes('sunscreen'));
+    check('a temple suggests a sarong', texts.includes('Sarong'));
+    check('a flight suggests passports', texts.includes('Passports'));
+    check('an overnight flight suggests an eye mask', texts.includes('Eye mask'));
+    check('every suggestion says why', suggestions.every((entry) => entry.why.length > 0));
+    check('a trip with nothing planned still suggests the universals',
+        packingSuggestions({ places: [], days: [] }).length >= 2);
 }
 
 console.log(`\n${failures === 0 ? 'PASS' : 'FAIL'} — ${checks - failures}/${checks} checks passed.\n`);

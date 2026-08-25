@@ -64,11 +64,64 @@ export default function TravelLegCard({ leg, day, api }: {
                     </span>
                 )}
                 <div className="flex-1" />
-                <OverflowMenu items={[{
-                    label: 'Remove leg',
-                    danger: true,
-                    onClick: () => api.removeRow('travel', leg, 'Removed a travel leg'),
-                }]} />
+                <OverflowMenu items={[
+                    /*
+                     * Legs came back `ORDER BY id`, so one entered late sorted
+                     * last however early it departs — and a day with a taxi, a
+                     * flight and a transfer read in the order you happened to
+                     * type them. Now they have a `sort_order` and these move it.
+                     */
+                    ...(day.travel.length > 1 ? [
+                        {
+                            label: 'Move earlier',
+                            onClick: () => {
+                                const ids = day.travel.map((row) => row.id);
+                                const at = ids.indexOf(leg.id);
+                                if (at <= 0) return;
+                                ids.splice(at - 1, 0, ids.splice(at, 1)[0]);
+                                api.reorder('travel', ids);
+                            },
+                        },
+                        {
+                            label: 'Move later',
+                            onClick: () => {
+                                const ids = day.travel.map((row) => row.id);
+                                const at = ids.indexOf(leg.id);
+                                if (at < 0 || at === ids.length - 1) return;
+                                ids.splice(at + 1, 0, ids.splice(at, 1)[0]);
+                                api.reorder('travel', ids);
+                            },
+                        },
+                        {
+                            label: 'Sort the day by departure time',
+                            onClick: () => {
+                                const ids = [...day.travel]
+                                    .sort((a, b) => (a.depart_time ?? '~')
+                                        .localeCompare(b.depart_time ?? '~'))
+                                    .map((row) => row.id);
+                                api.reorder('travel', ids);
+                            },
+                        },
+                    ] : []),
+                    ...(day.travel.length > 1 ? [{
+                        label: `Move to another day…`,
+                        onClick: () => {
+                            const target = prompt(
+                                'Move this leg to which day number?',
+                                String(day.day_number),
+                            );
+                            const number = Number(target);
+                            const found = (api.data?.days ?? [])
+                                .find((row) => row.day_number === number);
+                            if (found) api.update('travel', { id: leg.id, day_id: found.id });
+                        },
+                    }] : []),
+                    {
+                        label: 'Remove leg',
+                        danger: true,
+                        onClick: () => api.removeRow('travel', leg, 'Removed a travel leg'),
+                    },
+                ]} />
             </div>
             <div className="mt-2 space-y-2">
                 <LegEnd leg={leg} end="from" api={api} />

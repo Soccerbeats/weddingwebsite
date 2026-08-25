@@ -11,6 +11,22 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.49 — [Released] The planner's second half, part six: the itinerary (`main`, 2026-08-25 20:40)
+
+Wave 6 of seven. The signals were all in the payload already and collected nowhere; the gestures were all one menu away from being direct.
+
+### Added
+- **A "worth a look" panel** on the Itinerary: a place scheduled twice on one day, two things set for the same time, a night with nowhere to sleep, two stays booked over the same nights, a move between stays with no travel leg, a booking whose dates disagree with the days it covers, a stop 60 km from that day's base, a to-do that is overdue or due after you have left. Expensive mistakes first.
+- **"Where you sleep"** — the trip as stays rather than as days: *Days 3–6, Amankila, 3 nights, AMK-9931*. That is the sentence a confirmation email gets checked against, and it flags a booking whose dates do not match the nights (check-out is the morning *after* the last night, which is the off-by-one that makes a right booking look wrong).
+- **Drag a place onto a day.** On the map's split view, drag any row from the Places panel onto a day card and it becomes a stop; drag a stop from one day card onto another to move it. Deliberately the browser's own drag API rather than dnd-kit — the two panels are separate component trees, and native drag crosses them for free. The in-day list stays a dnd-kit sortable, which is what it is good at.
+- **Copy, not just move.** Copy a stop to another day (the same beach twice in a week is a plan, not a mistake), and duplicate a day **right after this one** as well as at the end — with its travel legs, which "the same again" includes. The splice renumbers the trip in one transaction, so every later day's date follows.
+- **Insert a stop in the middle.** A hairline between two stops becomes a "+ here" button; the new stop takes that position and the rest shift down. Adding at the bottom and dragging up past four others was the only way to say that.
+- **Quick times** — 09:00, 12:30, 19:00 chips on an untimed stop, plus one that starts it when the stop before finishes. Typing a time into a phone's time input is four taps and a scroll wheel.
+- **Reorder travel legs** within a day, or sort the day by departure time, or move a leg to another day. Legs came back `ORDER BY id`, so one entered late sorted last however early it departs.
+- **A packing list**, as a second list on the To Do tab (same table, same ordering, dates and undo) with **who packs it**, and suggestions worked out from the trip itself: beach days want reef-safe sunscreen, temples want covered shoulders, an overnight flight wants an eye mask. Each suggestion becomes an ordinary row you can edit or delete, and each one says why it was suggested.
+- **Due dates that do something.** Late / today / this week badges on the rows, a **Next seven days** strip on the checklist, a **Due this week** card on the dashboard, and a sort-by-date toggle that keeps undated items at the bottom rather than burying the dated ones. `due_on` has been stored and shown nowhere since it shipped.
+- **"Day 3 of 14"** on each day card, and the stay's own photo as a band across the top of it — fourteen identical white cards are hard to navigate, and the picture of where you are sleeping is the fastest way to know which day you are looking at.
+
 ## v0.9.48 — [Released] The planner's second half, part five: the library (`main`, 2026-08-25 19:45)
 
 Wave 5 of seven, and the largest: everything about getting places *into* the portal, deciding between them, and finding them again.
