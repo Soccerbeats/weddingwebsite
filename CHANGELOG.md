@@ -11,7 +11,19 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
-## v0.9.39 — [Unreleased] Removed stays go in a bucket, not the bin (`main`, 2026-08-25 05:22)
+## v0.9.40 — [Unreleased] Filter the shortlist by area (`main`, 2026-08-25 05:28)
+
+### Added
+- **An area filter on the Stays tab**, beside the sort. Pick Ubud and the shortlist is the Ubud stays; the options are only the areas that actually hold one, each with its count — offering every region you have ever created when six of them have a hotel in makes the control useless, and an option that can only return nothing is a trap.
+- **It composes with the rating pills** rather than replacing them, so *"the ones I am interested in, in Ubud"* is a question you can ask. **No area set** appears when some stays have no area yet, so the ones needing tagging are one click away.
+- **The map deliberately does not follow it.** Filtering narrows the list; the map answers "where are these, relative to each other", which a map that empties out when you pick an area cannot. Same rule the rating filters have always followed.
+- The control hides itself when there is only one area to choose between, and the empty state now names the filter that is hiding things — *"No stays in that area with those ratings — try All areas"* — rather than saying "try All" when the area is the culprit.
+
+### Verified
+- The options list exactly the areas in use with correct counts (`Algarve 1 · Douro Valley 2 · Lisbon 1 · Madeira 1 · Porto 1 · Sintra 1`), filtering to Douro Valley shows precisely its two stays, the map stays at seven pins throughout, and a filter combination with no matches shows the area-aware hint.
+- **Deleting a removed stay works** — confirmed rather than assumed, since it was asked about: a live stay's ⋯ menu offers *Edit details* and *Remove from the shortlist* and no delete at all; the same menu on a stay inside the Removed bucket offers *Put back on the shortlist* and *Delete for good*, which returns `DELETE 200` and takes the row out of the database rather than re-archiving it. The portal's ten-second Undo covers it like any other delete.
+
+## v0.9.39 — [Released] Removed stays go in a bucket, not the bin (`main`, 2026-08-25 05:22)
 
 ### Added
 - **Stays can be removed without being deleted.** A stay's ⋯ menu offers **Remove from the shortlist**; it leaves the shortlist, disappears from both maps, and turns up in a **🗑 Removed** bucket beside the rating filters. **Put back on the shortlist** returns it. You ruled a hotel out for a reason, and *"why did we say no to that one?"* comes back a fortnight later.

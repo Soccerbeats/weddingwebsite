@@ -76,6 +76,8 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
     const [locating, setLocating] = useState(0);
     const [located, setLocated] = useState<number | null>(null);
     const [filter, setFilter] = useState<'all' | 'yes' | 'mid' | 'no' | 'unrated' | 'removed'>('all');
+    /** '' = every area, 'none' = the ones with no area set, otherwise a region id. */
+    const [area, setArea] = useState<string>('');
     /**
      * Newest first by default: a shortlist is worked from the top, and the thing
      * you just pasted in is the thing you want to look at. Remembered per
@@ -186,6 +188,10 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
         // The Removed bucket is a different list, not a filter over the live one.
         const source = filter === 'removed' ? removed : stays;
         const rows = source.filter((s) => {
+            // Area first: it composes with the rating pills rather than replacing
+            // them, so "Interested, in Ubud" is a question you can ask.
+            if (area === 'none' && s.region_id != null) return false;
+            if (area && area !== 'none' && String(s.region_id ?? '') !== area) return false;
             if (filter === 'all' || filter === 'removed') return true;
             if (filter === 'unrated') return s.rating == null;
             return s.rating === filter;
@@ -232,7 +238,7 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                 break;
         }
         return sorted;
-    }, [stays, removed, filter, sort]);
+    }, [stays, removed, filter, sort, area]);
 
     /**
      * The ranking view's rows: every stay, in rank order.
@@ -347,6 +353,41 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
         if (!picked || picked.from !== 'map') return;
         cardRefs.current.get(picked.id)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, [picked, shown]);
+
+    /**
+     * The areas worth offering, with their counts.
+     *
+     * Only the ones that actually hold a stay in the list you are looking at —
+     * the same rule the map's type dropdown follows. Offering all 224 regions
+     * when six of them have a hotel in makes the control useless, and an option
+     * that can only ever return nothing is a trap.
+     *
+     * The currently-selected area is kept even if it empties out, or choosing one
+     * and then removing its last stay would leave the control showing a value it
+     * no longer lists.
+     */
+    const areaOptions = useMemo(() => {
+        const source = filter === 'removed' ? removed : stays;
+        const byId = new Map<string, number>();
+        let unset = 0;
+        for (const s of source) {
+            if (s.region_id == null) { unset += 1; continue; }
+            const key = String(s.region_id);
+            byId.set(key, (byId.get(key) ?? 0) + 1);
+        }
+        if (area && area !== 'none' && !byId.has(area)) byId.set(area, 0);
+        const named = [...byId.entries()]
+            .map(([key, n]) => ({
+                key,
+                label: `${api.regionById.get(Number(key)) ?? 'Unknown area'} ${n}`,
+            }))
+            .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+        return [
+            { key: '', label: 'All areas' },
+            ...named,
+            ...(unset || area === 'none' ? [{ key: 'none', label: `No area set ${unset}` }] : []),
+        ];
+    }, [stays, removed, filter, area, api.regionById]);
 
     const counts = useMemo(() => ({
         all: stays.length,
@@ -576,6 +617,20 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                 {/* No sort control in the ranking view: the order *is* the
                     ranking, and offering to sort it by price would either lie or
                     make the next drag write nonsense. */}
+                {/* Only where there is more than one area to choose between:
+                    a filter offering "All areas" and nothing else is furniture. */}
+                {view === 'cards' && areaOptions.length > 2 && (
+                    <MiniSelect
+                        value={area}
+                        onChange={(e) => setArea(e.target.value)}
+                        aria-label="Filter the shortlist by area"
+                        title="Show only stays in one area"
+                    >
+                        {areaOptions.map((o) => (
+                            <option key={o.key} value={o.key}>{o.label}</option>
+                        ))}
+                    </MiniSelect>
+                )}
                 {view === 'cards' && (
                     <MiniSelect
                         value={sort}
@@ -631,9 +686,15 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
             ) : shown.length === 0 ? (
                 <Card>
                     <EmptyState
-                        title={stays.length ? 'Nothing matches that filter' : 'No places to stay yet'}
-                        hint={stays.length
-                            ? 'Try All.'
+                        title={stays.length || removed.length
+                            ? 'Nothing matches that filter'
+                            : 'No places to stay yet'}
+                        // Name the filter that is actually hiding things, rather
+                        // than saying "try All" when the area is the culprit.
+                        hint={stays.length || removed.length
+                            ? (area
+                                ? 'No stays in that area with those ratings — try All areas.'
+                                : 'Try All.')
                             : 'Paste a Booking.com link above to start a shortlist.'}
                     />
                 </Card>
