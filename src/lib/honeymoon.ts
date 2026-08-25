@@ -86,6 +86,12 @@ export interface Region {
     center_lat: number | null;
     center_lng: number | null;
     sort_order: number;
+    /**
+     * A drawn outline, so "which region is this place in" can be answered by
+     * geometry rather than by a dropdown. Null for the regions you never drew —
+     * those still match on nearest centre.
+     */
+    boundary: LatLng[] | null;
 }
 
 export interface Place {
@@ -132,7 +138,43 @@ export interface Place {
      */
     rank: number | null;
     sort_order: number;
+    /**
+     * Real money, beside the free-text `price_note` it replaces.
+     *
+     * The note stays — "about 1.2m IDR a night, breakfast in" is worth keeping —
+     * but only a number can be added up, and the trip total is what the budget
+     * needs. `cost_per` says what the number is per, so nights times rate is a
+     * sum and not a guess.
+     */
+    cost: number | null;
+    cost_currency: string | null;
+    cost_per: CostPer;
+    /** OSM's own `opening_hours` string, exactly as the geocoder returned it. */
+    opening_hours: string | null;
+    /** "sunset", "avoid weekends" — shown when you schedule it. */
+    best_time: string | null;
+    /**
+     * Who liked it: `{ "Austin": "yes", "Heaven": "no" }`.
+     *
+     * `rating` remains the shared verdict — everything that already reads it
+     * keeps working — and this is what makes a disagreement visible instead of
+     * letting the last person to tap decide.
+     */
+    ratings: Record<string, Exclude<PlaceRating, null>>;
+    /** Scraped from a listing's JSON-LD, alongside the name and the image. */
+    star_rating: number | null;
+    price_range: string | null;
+    amenities: string[];
 }
+
+/** What a place's `cost` is per. */
+export type CostPer = 'night' | 'person' | 'total';
+
+export const COST_PER_LABELS: Record<CostPer, string> = {
+    night: 'per night',
+    person: 'per person',
+    total: 'total',
+};
 
 export interface Stop {
     id: number;
@@ -142,7 +184,23 @@ export interface Stop {
     start_time: string | null;
     notes: string | null;
     sort_order: number;
+    /**
+     * How long you plan to be there.
+     *
+     * Optional, and the timeline says so: without it a stop is a point in the
+     * day, with it the day becomes a sequence that can be checked against the
+     * clock. Nothing is invented for the ones you leave blank.
+     */
+    duration_minutes: number | null;
+    /** Post-trip: what actually happened. */
+    outcome: StopOutcome;
+    favourite: boolean;
+    journal: string | null;
+    photos: string[];
 }
+
+/** Set once the trip is behind you — null while it is still a plan. */
+export type StopOutcome = 'did' | 'skipped' | null;
 
 export interface TravelLeg {
     id: number;
@@ -173,6 +231,27 @@ export interface TravelLeg {
     from_lng: number | null;
     to_lat: number | null;
     to_lng: number | null;
+    /**
+     * Order within the day. Legs used to come back `ORDER BY id`, so a leg
+     * added after the fact sorted last however early it departs.
+     */
+    sort_order: number;
+    cost: number | null;
+    cost_currency: string | null;
+    booked_by: string | null;
+    /**
+     * IANA zones for the two ends — `Asia/Makassar`, `America/Chicago`.
+     *
+     * Times are stored as the local clock at each end, which is what a ticket
+     * says and what you read at the airport. Without the zones a leg home looks
+     * like it takes minus four hours; with them the real duration is arithmetic.
+     */
+    depart_tz: string | null;
+    arrive_tz: string | null;
+    flight_no: string | null;
+    from_terminal: string | null;
+    to_terminal: string | null;
+    aircraft: string | null;
 }
 
 export interface Day {
@@ -193,6 +272,9 @@ export interface GuideNote {
     /** Same provenance label as a place carries. */
     source: string | null;
     sort_order: number;
+    /** What the note is about, so the itinerary can surface it in context. */
+    region_id: number | null;
+    place_id: number | null;
 }
 
 /** A checklist item — visas, jabs, insurance, the things that aren't places. */
@@ -205,7 +287,16 @@ export interface TodoItem {
     category: string | null;
     due_on: string | null;
     sort_order: number;
+    /** A task to do before you go, or a thing to put in a bag. */
+    kind: TodoKind;
+    /** Whose bag, or whose job. */
+    person: string | null;
+    /** "Book the Ubud driver" belongs to the Ubud day. */
+    place_id: number | null;
+    day_id: number | null;
 }
+
+export type TodoKind = 'task' | 'packing';
 
 export interface Trip {
     id: number;
@@ -230,6 +321,165 @@ export interface Trip {
      * per-session view preference.
      */
     focus_country: string;
+    /** What you mean to spend, against which the real total is measured. */
+    budget: number | null;
+    /**
+     * The two of you, comma-separated — "Austin, Heaven".
+     *
+     * Used for per-person ratings, packing lists and the shared link's greeting.
+     * Free text because a honeymoon has exactly the names it has.
+     */
+    partner_names: string;
+    /** Emergency numbers, embassy, insurer, the driver's WhatsApp. */
+    info: TripInfo;
+    time_format: '12h' | '24h';
+    distance_unit: 'km' | 'mi';
+    /**
+     * Which half of the trip's life it is in.
+     *
+     * `planning` is the shortlists and the map; `travelling` puts Today first;
+     * `after` turns the itinerary into a journal. One field rather than dates,
+     * so it stays yours to decide — a trip is not over because a date passed.
+     */
+    phase: TripPhase;
+}
+
+export type TripPhase = 'planning' | 'travelling' | 'after';
+
+/** Free-form sections on the trip: the things you need at 2am, not at leisure. */
+export interface TripInfo {
+    emergency?: string;
+    embassy?: string;
+    insurance?: string;
+    contacts?: string;
+    medical?: string;
+    money?: string;
+    [key: string]: string | undefined;
+}
+
+/**
+ * A booking: the paperwork behind `status: booked`.
+ *
+ * Exactly one of `place_id`, `travel_id` and `stop_id` is set — a stay or an
+ * excursion hangs off its place, a flight off its leg, a dinner table off the
+ * stop that is the dinner.
+ */
+export interface Booking {
+    id: number;
+    place_id: number | null;
+    travel_id: number | null;
+    stop_id: number | null;
+    kind: BookingKind;
+    provider: string | null;
+    confirmation: string | null;
+    url: string | null;
+    contact: string | null;
+    check_in: string | null;
+    check_out: string | null;
+    check_in_time: string | null;
+    check_out_time: string | null;
+    cost: number | null;
+    cost_currency: string | null;
+    cost_paid: number | null;
+    /** Money owed by this date; the dashboard counts down to it. */
+    deposit_due_on: string | null;
+    /** After this date, cancelling costs you. The one date worth an alarm. */
+    cancel_by: string | null;
+    party_size: number | null;
+    dress_code: string | null;
+    paid: boolean;
+    /** Filenames in the photos volume — a PDF, a screenshot of the email. */
+    documents: string[];
+    notes: string | null;
+    created_at: string | null;
+}
+
+export type BookingKind = 'stay' | 'excursion' | 'travel' | 'table' | 'other';
+
+export const BOOKING_KINDS: { key: BookingKind; label: string }[] = [
+    { key: 'stay', label: 'Stay' },
+    { key: 'excursion', label: 'Excursion' },
+    { key: 'travel', label: 'Travel' },
+    { key: 'table', label: 'Table' },
+    { key: 'other', label: 'Other' },
+];
+
+/** A file you would be sorry to be without at a border. */
+export interface TripDocument {
+    id: number;
+    name: string;
+    kind: DocumentKind;
+    path: string;
+    place_id: number | null;
+    travel_id: number | null;
+    person: string | null;
+    expires_on: string | null;
+    notes: string | null;
+    created_at: string | null;
+}
+
+export type DocumentKind = 'passport' | 'visa' | 'insurance' | 'ticket'
+    | 'vaccination' | 'reservation' | 'other';
+
+export const DOCUMENT_KINDS: { key: DocumentKind; label: string; icon: string }[] = [
+    { key: 'passport', label: 'Passport', icon: '🛂' },
+    { key: 'visa', label: 'Visa', icon: '📄' },
+    { key: 'insurance', label: 'Insurance', icon: '🩺' },
+    { key: 'ticket', label: 'Ticket', icon: '🎫' },
+    { key: 'vaccination', label: 'Vaccination', icon: '💉' },
+    { key: 'reservation', label: 'Reservation', icon: '📌' },
+    { key: 'other', label: 'Other', icon: '📎' },
+];
+
+/** A short note on a place, from one of you to the other. */
+export interface PlaceComment {
+    id: number;
+    place_id: number;
+    author: string;
+    body: string;
+    created_at: string | null;
+}
+
+/** A named set of filters on a tab. */
+export interface SavedView {
+    id: number;
+    name: string;
+    tab: string;
+    filters: Record<string, unknown>;
+    sort_order: number;
+}
+
+/** A read-only link handed to someone who is not the admin. */
+export interface ShareLink {
+    id: number;
+    token: string;
+    label: string;
+    scope: ShareScope;
+    expires_on: string | null;
+    revoked: boolean;
+    created_at: string | null;
+    last_seen_at: string | null;
+}
+
+export type ShareScope = 'today' | 'itinerary' | 'all';
+
+/** One stored exchange rate. `manual` means you set it and a fetch must not. */
+export interface CurrencyRate {
+    id: number;
+    pair: string;
+    rate: number;
+    manual: boolean;
+    fetched_at: string | null;
+}
+
+/** A frozen trip, listed without its payload — those are large. */
+export interface TripArchiveMeta {
+    id: number;
+    name: string;
+    created_at: string | null;
+    /** Rough size, so a list of snapshots says something about each. */
+    places: number;
+    days: number;
 }
 
 export interface HoneymoonPayload {
@@ -240,6 +490,13 @@ export interface HoneymoonPayload {
     places: Place[];
     days: Day[];
     notes: GuideNote[];
+    bookings: Booking[];
+    documents: TripDocument[];
+    comments: PlaceComment[];
+    views: SavedView[];
+    rates: CurrencyRate[];
+    shares: ShareLink[];
+    archives: TripArchiveMeta[];
 }
 
 /* ------------------------------------------------------------------ */

@@ -257,7 +257,7 @@ function TodoRow({ todo, api, onTicked }: {
                     checked={todo.done}
                     onChange={(e) => {
                         const done = e.target.checked;
-                        api.update('todos', { id: todo.id, done });
+                        api.patchTodo(todo.id, { done });
                         // Ask only on the way in. Un-ticking is a correction, not
                         // an outcome worth writing up.
                         if (done) onTicked(todo);

@@ -12,7 +12,11 @@ export interface UndoOffer {
 }
 
 export type Resource =
-    'categories' | 'regions' | 'places' | 'days' | 'stops' | 'travel' | 'notes' | 'todos' | 'trip';
+    'categories' | 'regions' | 'places' | 'days' | 'stops' | 'travel' | 'notes' | 'todos' | 'trip'
+    | 'bookings' | 'documents' | 'comments' | 'views' | 'rates';
+
+/** How many undos are kept. Ten is about as far back as anyone remembers. */
+const UNDO_DEPTH = 10;
 
 const BASE = '/api/admin/honeymoon';
 
@@ -30,6 +34,29 @@ export function useHoneymoon() {
     const [error, setError] = useState('');
     const [busy, setBusy] = useState(0);
     const inFlight = useRef(0);
+    /**
+     * The payload as it is right now, for the optimistic path.
+     *
+     * A ref as well as state because an optimistic write has to read the current
+     * payload, apply its change and keep the original to roll back to — and two
+     * taps in the same tick would both read the same stale closure otherwise.
+     */
+    const dataRef = useRef<HoneymoonPayload | null>(null);
+    const commit = useCallback((next: HoneymoonPayload | null) => {
+        dataRef.current = next;
+        setData(next);
+    }, []);
+
+    /**
+     * A save that came back 401.
+     *
+     * The admin session lasts two hours and planning sessions run longer, so
+     * this is a normal end to an afternoon rather than an error. The request is
+     * kept so signing in again can finish it instead of asking you to remember
+     * what you were doing.
+     */
+    const [sessionExpired, setSessionExpired] = useState(false);
+    const pending = useRef<(() => Promise<unknown>) | null>(null);
 
     const refresh = useCallback(async () => {
         try {
@@ -39,6 +66,7 @@ export function useHoneymoon() {
             // Publish before the state update so the first render that sees the
             // new places already resolves their colours and labels correctly.
             setCategoryRegistry(payload.categories);
+            dataRef.current = payload;
             setData(payload);
             setError('');
         } catch (e) {
@@ -56,7 +84,11 @@ export function useHoneymoon() {
         try {
             const res = await fn();
             if (res.status === 401) {
-                throw new Error('Your session has expired — sign in again to keep editing.');
+                // Hold the request, not just the news of it: signing back in
+                // replays this exact call, so nothing typed is retyped.
+                pending.current = fn;
+                setSessionExpired(true);
+                return false;
             }
             if (!res.ok) {
                 const body = await res.json().catch(() => ({}));
@@ -99,6 +131,143 @@ export function useHoneymoon() {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
+        }),
+    ), [run]);
+
+    /**
+     * A write you see land before the server has heard about it.
+     *
+     * For the hot paths only — a rating pill, a done tick, a stop's time, a drag
+     * — where the round trip is a whole-payload refetch and nine queries deep,
+     * and the honest-but-slow model is the difference between snappy and
+     * sluggish on a phone. `apply` edits the payload locally; the PATCH goes out
+     * behind it; a quiet refetch reconciles; a failure puts the old payload
+     * back and says so. Everything else still takes the plain path, because a
+     * rollback is only cheap when the change was small.
+     */
+    const optimistic = useCallback(async (
+        resource: Resource,
+        // Unknown rather than a record: a reorder's body is an array of ids, and
+        // the route reads the shape to decide what the write means.
+        body: unknown,
+        apply: (payload: HoneymoonPayload) => HoneymoonPayload,
+    ): Promise<boolean> => {
+        const before = dataRef.current;
+        if (before) commit(apply(before));
+        try {
+            const res = await fetch(`${BASE}/${resource}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            if (res.status === 401) {
+                if (before) commit(before);
+                pending.current = () => fetch(`${BASE}/${resource}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                setSessionExpired(true);
+                return false;
+            }
+            if (!res.ok) throw new Error('Save failed');
+            // The demo drops writes, so a refetch there would snap the pill back.
+            if (!(await isDemoClient())) await refresh();
+            return true;
+        } catch (e) {
+            if (before) commit(before);
+            setError(e instanceof Error ? e.message : 'Save failed');
+            return false;
+        }
+    }, [commit, refresh]);
+
+    /*
+     * The hot paths, each as one call that patches locally and saves behind.
+     *
+     * Named per row type rather than one generic helper taking a mutator,
+     * because the mutator is the part that is easy to get subtly wrong — a stop
+     * lives inside a day, a rating has to survive a refetch — and there is
+     * exactly one right version of each.
+     */
+    const patchPlace = useCallback((id: number, fields: Record<string, unknown>) => optimistic(
+        'places', { id, ...fields },
+        (payload) => ({
+            ...payload,
+            places: payload.places.map(
+                (place) => (place.id === id ? { ...place, ...fields } as Place : place),
+            ),
+        }),
+    ), [optimistic]);
+
+    const patchStop = useCallback((id: number, fields: Record<string, unknown>) => optimistic(
+        'stops', { id, ...fields },
+        (payload) => ({
+            ...payload,
+            days: payload.days.map((day) => ({
+                ...day,
+                stops: day.stops.map((stop) => (stop.id === id ? { ...stop, ...fields } : stop)),
+            })),
+        }),
+    ), [optimistic]);
+
+    const patchLeg = useCallback((id: number, fields: Record<string, unknown>) => optimistic(
+        'travel', { id, ...fields },
+        (payload) => ({
+            ...payload,
+            days: payload.days.map((day) => ({
+                ...day,
+                travel: day.travel.map((leg) => (leg.id === id ? { ...leg, ...fields } : leg)),
+            })),
+        }),
+    ), [optimistic]);
+
+    const patchTodo = useCallback((id: number, fields: Record<string, unknown>) => optimistic(
+        'todos', { id, ...fields },
+        (payload) => ({
+            ...payload,
+            todos: payload.todos.map((todo) => (todo.id === id ? { ...todo, ...fields } : todo)),
+        }),
+    ), [optimistic]);
+
+    /**
+     * A drop that stays where you dropped it.
+     *
+     * Reordering wrote `sort_order` and then waited for a nine-query refetch, so
+     * a dragged stop snapped back to its old place for a beat before landing.
+     * The local reorder is the same rule the server applies — array index
+     * becomes `sort_order` — so the reconciliation is a no-op when it lands.
+     */
+    const reorderStops = useCallback((dayId: number, ids: number[]) => optimistic(
+        'stops', ids.map((id) => ({ id })),
+        (payload) => ({
+            ...payload,
+            days: payload.days.map((day) => (day.id !== dayId ? day : {
+                ...day,
+                stops: ids
+                    .map((id, index) => {
+                        const stop = day.stops.find((s) => s.id === id);
+                        return stop ? { ...stop, sort_order: index } : null;
+                    })
+                    .filter((stop): stop is NonNullable<typeof stop> => stop != null),
+            })),
+        }),
+    ), [optimistic]);
+
+    /**
+     * Many rows, each with its own fields, in one request.
+     *
+     * `update` with `{ ids }` writes the same value to every row, which is the
+     * wrong shape for applying a range of days, filling in twenty stays'
+     * coordinates or timing each stop of a day — those were one request and one
+     * refetch per row.
+     */
+    const updateMany = useCallback((
+        resource: Resource, rows: Record<string, unknown>[],
+    ) => run(
+        () => fetch(`${BASE}/${resource}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rows }),
         }),
     ), [run]);
 
@@ -260,8 +429,18 @@ export function useHoneymoon() {
         }
     }, [quietPost]);
 
-    const [undo, setUndo] = useState<UndoOffer | null>(null);
-    const clearUndo = useCallback(() => setUndo(null), []);
+    /*
+     * A stack, not a slot.
+     *
+     * One undo was the right first move — it made deletes reversible without a
+     * confirm on every one — but the moment you trust it you reach for it twice.
+     * The most recent offer is the one the toast shows; the rest stay reachable
+     * with ⌘Z until they are used or the stack rolls past them.
+     */
+    const [undos, setUndos] = useState<UndoOffer[]>([]);
+    const undo = undos.length ? undos[undos.length - 1] : null;
+    const clearUndo = useCallback(() => setUndos((list) => list.slice(0, -1)), []);
+    const clearUndoStack = useCallback(() => setUndos([]), []);
 
     /**
      * Delete something, and offer to put it back.
@@ -279,10 +458,11 @@ export function useHoneymoon() {
     ) => {
         const ok = await remove();
         if (!ok) return false;
-        setUndo({
+        const offer: UndoOffer = {
             label,
             restore: async () => {
-                setUndo(null);
+                // Drop this offer only — anything undone before it stays undoable.
+                setUndos((list) => list.filter((entry) => entry !== offer));
                 try {
                     await restore();
                 } catch (e) {
@@ -290,9 +470,47 @@ export function useHoneymoon() {
                 }
                 await refresh();
             },
-        });
+        };
+        setUndos((list) => [...list, offer].slice(-UNDO_DEPTH));
         return true;
     }, [refresh]);
+
+    /** ⌘Z: put back the most recent thing, whatever tab it happened on. */
+    const undoLast = useCallback(async () => {
+        const top = undos[undos.length - 1];
+        if (top) await top.restore();
+    }, [undos]);
+
+    /**
+     * Sign in again and finish the save that was refused.
+     *
+     * Returns false on a wrong password so the modal can say so and stay open.
+     */
+    const reauthenticate = useCallback(async (password: string): Promise<boolean> => {
+        try {
+            const res = await fetch('/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password }),
+            });
+            if (!res.ok) return false;
+            setSessionExpired(false);
+            setError('');
+            const retry = pending.current;
+            pending.current = null;
+            if (retry) await retry();
+            await refresh();
+            return true;
+        } catch {
+            return false;
+        }
+    }, [refresh]);
+
+    /** Give up on the refused save and stop asking. */
+    const dismissSessionExpiry = useCallback(() => {
+        pending.current = null;
+        setSessionExpired(false);
+    }, []);
 
     /**
      * Delete places and be able to put them back — stops and all.
@@ -452,8 +670,12 @@ export function useHoneymoon() {
 
     return {
         data, loading, error, saving: busy > 0,
-        refresh, create, update, reorder, rankPlaces, remove, removeMany, createRegion, createCategory,
-        removePlaces, removeDay, removeRow, undo, clearUndo, createRow, createMany,
+        refresh, create, update, updateMany, optimistic, reorder, rankPlaces, remove, removeMany,
+        patchPlace, patchStop, patchLeg, patchTodo, reorderStops,
+        createRegion, createCategory,
+        removePlaces, removeDay, removeRow, undo, undos, clearUndo, clearUndoStack, undoLast,
+        createRow, createMany,
+        sessionExpired, reauthenticate, dismissSessionExpiry,
         placeById, regionById, scheduledPlaceIds, dayOfPlace,
         clearError: () => setError(''),
     };

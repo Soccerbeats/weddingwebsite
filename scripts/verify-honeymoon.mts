@@ -28,6 +28,53 @@ import { SEED_PLACES, SEED_REGIONS, SEED_NOTES } from '../src/lib/honeymoonSeed'
 let failures = 0;
 let checks = 0;
 
+/*
+ * Fixture defaults, one per row type.
+ *
+ * Spread rather than repeated: these objects are full rows, and every column
+ * added to the schema would otherwise have to be typed into a dozen literals
+ * that do not care about it. The literals below name only the fields their
+ * check is about.
+ */
+const PLACE_DEFAULTS = {
+    region_id: null, category: 'misc', address: null, description: null,
+    status: 'idea' as const, price_note: null, links: [], photos: [],
+    source: 'manual', needs_review: false, sort_order: 0,
+    rating: null, is_excursion: false, image_url: null, country: '', rank: null,
+    archived: false, cost: null, cost_currency: null, cost_per: 'total' as const,
+    opening_hours: null, best_time: null, ratings: {}, star_rating: null,
+    price_range: null, amenities: [],
+};
+
+const STOP_DEFAULTS = {
+    place_id: null, custom_label: null, start_time: null, notes: null, sort_order: 0,
+    duration_minutes: null, outcome: null, favourite: false, journal: null, photos: [],
+};
+
+const LEG_DEFAULTS = {
+    mode: 'flight' as const, from_text: null, to_text: null,
+    depart_time: null, arrive_time: null, confirmation_ref: null, notes: null,
+    arrive_day_offset: 0,
+    from_lat: null, from_lng: null, to_lat: null, to_lng: null,
+    sort_order: 0, cost: null, cost_currency: null, booked_by: null,
+    depart_tz: null, arrive_tz: null, flight_no: null,
+    from_terminal: null, to_terminal: null, aircraft: null,
+};
+
+const REGION_DEFAULTS = {
+    country: '', description: null, center_lat: null, center_lng: null,
+    sort_order: 0, boundary: null,
+};
+
+const NOTE_DEFAULTS = {
+    body: '', category: null, source: null, sort_order: 0, region_id: null, place_id: null,
+};
+
+const TODO_DEFAULTS = {
+    done: false, result: null, category: null, due_on: null, sort_order: 0,
+    kind: 'task' as const, person: null, place_id: null, day_id: null,
+};
+
 function check(label: string, condition: boolean, detail = '') {
     checks += 1;
     if (condition) {
@@ -603,9 +650,9 @@ console.log('\nTrip range');
 console.log('\nTravel legs');
 {
     const leg = {
-        id: 1, day_id: 1, mode: 'flight' as const, from_text: 'DPS', to_text: 'SIN',
-        depart_time: '14:05', arrive_time: '16:50', confirmation_ref: null, notes: null,
-        arrive_day_offset: 0,
+        ...LEG_DEFAULTS,
+        id: 1, day_id: 1, from_text: 'DPS', to_text: 'SIN',
+        depart_time: '14:05', arrive_time: '16:50',
         from_lat: -8.7465, from_lng: 115.1674, to_lat: 1.3576, to_lng: 103.9885,
     };
     const ends = legEnds(leg);
@@ -729,23 +776,21 @@ console.log('\nCalendar export');
     const day: Day = {
         id: 4, day_number: 2, title: 'Ubud', base_place_id: null, notes: 'bring cash',
         stops: [
-            { id: 1, day_id: 4, place_id: 9, custom_label: null, start_time: '09:30', notes: null, sort_order: 0 },
-            { id: 2, day_id: 4, place_id: null, custom_label: 'Lunch', start_time: null, notes: null, sort_order: 1 },
+            { ...STOP_DEFAULTS, id: 1, day_id: 4, place_id: 9, start_time: '09:30' },
+            { ...STOP_DEFAULTS, id: 2, day_id: 4, custom_label: 'Lunch', sort_order: 1 },
         ],
         travel: [{
+            ...LEG_DEFAULTS,
             id: 7, day_id: 4, mode: 'car', from_text: 'Canggu', to_text: 'Ubud',
-            depart_time: '08:00', arrive_time: '09:15', confirmation_ref: 'XY12', notes: null,
-            arrive_day_offset: 0,
-            from_lat: null, from_lng: null, to_lat: null, to_lng: null,
+            depart_time: '08:00', arrive_time: '09:15', confirmation_ref: 'XY12',
         }],
     };
     const overnight: Day = {
         id: 9, day_number: 3, title: 'Fly home', base_place_id: null, notes: null, stops: [],
         travel: [{
-            id: 11, day_id: 9, mode: 'flight', from_text: 'DPS', to_text: 'LAX',
-            depart_time: '23:40', arrive_time: '06:20', confirmation_ref: null, notes: null,
-            arrive_day_offset: 1,
-            from_lat: null, from_lng: null, to_lat: null, to_lng: null,
+            ...LEG_DEFAULTS,
+            id: 11, day_id: 9, from_text: 'DPS', to_text: 'LAX',
+            depart_time: '23:40', arrive_time: '06:20', arrive_day_offset: 1,
         }],
     };
     const overnightEvents = tripEvents({ start_date: '2026-09-28', title: 'T' }, [overnight],
@@ -782,15 +827,13 @@ console.log('\nSearch');
     ];
     places[2].description = 'near ubud somewhere';
     const regions: Region[] = [{
-        id: 1, name: 'Ubud', country: 'Indonesia', description: null,
-        center_lat: null, center_lng: null, sort_order: 0,
+        ...REGION_DEFAULTS, id: 1, name: 'Ubud', country: 'Indonesia',
     }];
     const notes: GuideNote[] = [{
-        id: 1, title: 'Money', body: 'ATMs in Ubud', category: 'General', source: null, sort_order: 0,
+        ...NOTE_DEFAULTS, id: 1, title: 'Money', body: 'ATMs in Ubud', category: 'General',
     }];
     const todos: TodoItem[] = [{
-        id: 1, text: 'Book Ubud driver', done: false, result: null,
-        category: 'Transport', due_on: null, sort_order: 0,
+        ...TODO_DEFAULTS, id: 1, text: 'Book Ubud driver', category: 'Transport',
     }];
     const days: Day[] = [{
         id: 1, day_number: 3, title: 'Ubud day', base_place_id: null, notes: null,
@@ -832,19 +875,9 @@ process.exit(failures === 0 ? 0 : 1);
 /* ---- helpers ---- */
 
 function makePlace(id: number, name: string, lat: number | null, lng: number | null): Place {
-    return {
-        id, name, lat, lng,
-        region_id: null, category: 'misc', address: null, description: null,
-        status: 'idea', price_note: null, links: [], photos: [],
-        source: 'manual', needs_review: false, sort_order: 0,
-        rating: null, is_excursion: false, image_url: null, country: '', rank: null,
-    archived: false,
-    };
+    return { ...PLACE_DEFAULTS, id, name, lat, lng };
 }
 
 function makeStop(id: number, placeId: number | null): Stop {
-    return {
-        id, day_id: 1, place_id: placeId, custom_label: null,
-        start_time: null, notes: null, sort_order: id,
-    };
+    return { ...STOP_DEFAULTS, id, day_id: 1, place_id: placeId, sort_order: id };
 }

@@ -11,7 +11,7 @@ import { ensureHoneymoonTables } from '@/lib/honeymoonDb';
  */
 
 type FieldKind = 'text' | 'number' | 'int' | 'nint' | 'bool' | 'date' | 'ref' | 'enum'
-    | 'json' | 'coord' | 'time';
+    | 'json' | 'jsonobj' | 'coord' | 'time' | 'money';
 
 interface Field {
     kind: FieldKind;
@@ -66,6 +66,7 @@ const RESOURCES: Record<string, ResourceDef> = {
             center_lat: { kind: 'coord' },
             center_lng: { kind: 'coord' },
             sort_order: { kind: 'int' },
+            boundary: { kind: 'json' },
         },
         required: ['name'],
     },
@@ -101,6 +102,15 @@ const RESOURCES: Record<string, ResourceDef> = {
             country: { kind: 'text', blankAsEmpty: true },
             needs_review: { kind: 'bool' },
             sort_order: { kind: 'int' },
+            cost: { kind: 'money' },
+            cost_currency: { kind: 'text' },
+            cost_per: { kind: 'enum', values: ['night', 'person', 'total'], fallback: 'total' },
+            opening_hours: { kind: 'text' },
+            best_time: { kind: 'text' },
+            ratings: { kind: 'jsonobj' },
+            star_rating: { kind: 'money' },
+            price_range: { kind: 'text' },
+            amenities: { kind: 'json' },
         },
         required: ['name'],
     },
@@ -123,6 +133,11 @@ const RESOURCES: Record<string, ResourceDef> = {
             start_time: { kind: 'time' },
             notes: { kind: 'text' },
             sort_order: { kind: 'int' },
+            duration_minutes: { kind: 'nint' },
+            outcome: { kind: 'text' },
+            favourite: { kind: 'bool' },
+            journal: { kind: 'text' },
+            photos: { kind: 'json' },
         },
         required: ['day_id'],
     },
@@ -142,6 +157,16 @@ const RESOURCES: Record<string, ResourceDef> = {
             from_lng: { kind: 'coord' },
             to_lat: { kind: 'coord' },
             to_lng: { kind: 'coord' },
+            sort_order: { kind: 'int' },
+            cost: { kind: 'money' },
+            cost_currency: { kind: 'text' },
+            booked_by: { kind: 'text' },
+            depart_tz: { kind: 'text' },
+            arrive_tz: { kind: 'text' },
+            flight_no: { kind: 'text' },
+            from_terminal: { kind: 'text' },
+            to_terminal: { kind: 'text' },
+            aircraft: { kind: 'text' },
         },
         required: ['day_id'],
     },
@@ -154,6 +179,10 @@ const RESOURCES: Record<string, ResourceDef> = {
             category: { kind: 'text' },
             due_on: { kind: 'date' },
             sort_order: { kind: 'int' },
+            kind: { kind: 'enum', values: ['task', 'packing'], fallback: 'task' },
+            person: { kind: 'text' },
+            place_id: { kind: 'ref' },
+            day_id: { kind: 'ref' },
         },
         required: ['text'],
     },
@@ -167,8 +196,97 @@ const RESOURCES: Record<string, ResourceDef> = {
             category: { kind: 'text' },
             source: { kind: 'text' },
             sort_order: { kind: 'int' },
+            region_id: { kind: 'ref' },
+            place_id: { kind: 'ref' },
         },
         required: ['title'],
+    },
+    /*
+     * The paperwork behind a booking.
+     *
+     * `kind` is an enum falling back to 'other' rather than to 'stay': a
+     * mis-typed kind must not put a flight in the accommodation total.
+     */
+    bookings: {
+        table: 'honeymoon_bookings',
+        fields: {
+            place_id: { kind: 'ref' },
+            travel_id: { kind: 'ref' },
+            stop_id: { kind: 'ref' },
+            kind: {
+                kind: 'enum',
+                values: ['stay', 'excursion', 'travel', 'table', 'other'],
+                fallback: 'other',
+            },
+            provider: { kind: 'text' },
+            confirmation: { kind: 'text' },
+            url: { kind: 'text' },
+            contact: { kind: 'text' },
+            check_in: { kind: 'date' },
+            check_out: { kind: 'date' },
+            check_in_time: { kind: 'time' },
+            check_out_time: { kind: 'time' },
+            cost: { kind: 'money' },
+            cost_currency: { kind: 'text' },
+            cost_paid: { kind: 'money' },
+            deposit_due_on: { kind: 'date' },
+            cancel_by: { kind: 'date' },
+            party_size: { kind: 'nint' },
+            dress_code: { kind: 'text' },
+            paid: { kind: 'bool' },
+            documents: { kind: 'json' },
+            notes: { kind: 'text' },
+        },
+        required: [],
+    },
+    documents: {
+        table: 'honeymoon_documents',
+        fields: {
+            name: { kind: 'text' },
+            kind: {
+                kind: 'enum',
+                values: ['passport', 'visa', 'insurance', 'ticket', 'vaccination',
+                    'reservation', 'other'],
+                fallback: 'other',
+            },
+            path: { kind: 'text' },
+            place_id: { kind: 'ref' },
+            travel_id: { kind: 'ref' },
+            person: { kind: 'text' },
+            expires_on: { kind: 'date' },
+            notes: { kind: 'text' },
+        },
+        required: ['name', 'path'],
+    },
+    comments: {
+        table: 'honeymoon_comments',
+        fields: {
+            place_id: { kind: 'ref' },
+            // NOT NULL DEFAULT '' both: an unsigned comment and an empty one are
+            // ordinary, and nulling either fails the constraint.
+            author: { kind: 'text', blankAsEmpty: true },
+            body: { kind: 'text', blankAsEmpty: true },
+        },
+        required: ['place_id'],
+    },
+    views: {
+        table: 'honeymoon_views',
+        fields: {
+            name: { kind: 'text' },
+            tab: { kind: 'text' },
+            filters: { kind: 'jsonobj' },
+            sort_order: { kind: 'int' },
+        },
+        required: ['name'],
+    },
+    rates: {
+        table: 'honeymoon_rates',
+        fields: {
+            pair: { kind: 'text' },
+            rate: { kind: 'number' },
+            manual: { kind: 'bool' },
+        },
+        required: ['pair'],
     },
 };
 
@@ -179,6 +297,12 @@ const TRIP_FIELDS: Record<string, Field> = {
     end_date: { kind: 'date' },
     home_currency: { kind: 'text' },
     notes: { kind: 'text' },
+    budget: { kind: 'money' },
+    partner_names: { kind: 'text', blankAsEmpty: true },
+    info: { kind: 'jsonobj' },
+    time_format: { kind: 'enum', values: ['24h', '12h'], fallback: '24h' },
+    distance_unit: { kind: 'enum', values: ['km', 'mi'], fallback: 'km' },
+    phase: { kind: 'enum', values: ['planning', 'travelling', 'after'], fallback: 'planning' },
 };
 
 function parseNumber(raw: unknown): number | null {
@@ -228,6 +352,20 @@ function coerce(field: Field, raw: unknown): unknown {
         }
         case 'json':
             return JSON.stringify(Array.isArray(raw) ? raw : []);
+        // An object rather than an array: per-person ratings, a view's filters,
+        // the trip's info sections. Anything that isn't a plain object becomes
+        // {} rather than reaching a JSONB column as a string or a list.
+        case 'jsonobj':
+            return JSON.stringify(
+                raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {},
+            );
+        // NUMERIC, nullable: a cleared cost is "I don't know yet", which is not
+        // zero. Sent as a string so pg hands it to NUMERIC without a float
+        // rounding it on the way.
+        case 'money': {
+            const n = parseNumber(raw);
+            return n == null ? null : n.toFixed(2);
+        }
         case 'enum':
             if (field.values?.includes(String(raw))) return String(raw);
             return field.fallback ?? field.values?.[0] ?? null;
@@ -332,10 +470,11 @@ export async function POST(request: Request, { params }: Params) {
             body.day_number = next.rows[0].n;
         }
 
-        // A new stop lands at the bottom of its day unless told otherwise.
-        if (def.table === 'honeymoon_stops' && body.sort_order == null && body.day_id != null) {
+        // A new stop or leg lands at the bottom of its day unless told otherwise.
+        if ((def.table === 'honeymoon_stops' || def.table === 'honeymoon_travel')
+            && body.sort_order == null && body.day_id != null) {
             const next = await pool.query(
-                'SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM honeymoon_stops WHERE day_id = $1',
+                `SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM ${def.table} WHERE day_id = $1`,
                 [Math.trunc(Number(body.day_id))],
             );
             body.sort_order = next.rows[0].n;
@@ -470,6 +609,48 @@ export async function PATCH(request: Request, { params }: Params) {
                 client.release();
             }
             return NextResponse.json({ success: true });
+        }
+
+        /*
+         * `{ rows: [{ id, …fields }, …] }` — many rows, each with its own values,
+         * in one transaction.
+         *
+         * The bulk edit below writes *the same* fields to every id, which is the
+         * wrong shape for half of what the UI does: applying a range of days,
+         * filling in coordinates for twenty stays, setting a different time on
+         * each stop of a day. Those were a POST or PATCH per row — fourteen or
+         * twenty round trips, each followed by a whole-payload refetch. This is
+         * one of each.
+         *
+         * All or nothing: a half-applied range is worse than a failed one.
+         */
+        if (!Array.isArray(body) && Array.isArray((body as { rows?: unknown }).rows)) {
+            const rows = (body as { rows: Record<string, unknown>[] }).rows;
+            const client = await pool.connect();
+            let updated = 0;
+            try {
+                await client.query('BEGIN');
+                for (const row of rows) {
+                    const rowId = Math.trunc(Number(row.id));
+                    if (!Number.isFinite(rowId) || rowId <= 0) continue;
+                    const { columns, values } = collect(def, row);
+                    if (!columns.length) continue;
+                    defaultCategory(def, columns, values);
+                    const sets = columns.map((c, i) => `${c} = $${i + 1}`).join(', ');
+                    const result = await client.query(
+                        `UPDATE ${def.table} SET ${sets} WHERE id = $${columns.length + 1}`,
+                        [...values, rowId],
+                    );
+                    updated += result.rowCount ?? 0;
+                }
+                await client.query('COMMIT');
+            } catch (error) {
+                await client.query('ROLLBACK');
+                throw error;
+            } finally {
+                client.release();
+            }
+            return NextResponse.json({ success: true, updated });
         }
 
         // Bulk edit: { ids: [...], ...fields } — used by the places table's

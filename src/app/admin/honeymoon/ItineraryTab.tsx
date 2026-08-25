@@ -496,7 +496,9 @@ function DayCard({ day, api, onEditPlace, onFocusDay, beyondRange = false, arriv
         const to = ids.indexOf(Number(over.id));
         if (from < 0 || to < 0) return;
         ids.splice(to, 0, ids.splice(from, 1)[0]);
-        api.reorder('stops', ids);
+        // Optimistic: the stop stays where it was dropped instead of snapping
+        // back for the length of a whole-payload refetch.
+        api.reorderStops(day.id, ids);
     };
 
     const addStop = async () => {
@@ -865,7 +867,7 @@ function StopRow({ stop, index, api, dayNumber, hopKm, onEditPlace }: {
                     defaultValue={stop.start_time ?? ''}
                     onBlur={(e) => {
                         if (e.target.value !== (stop.start_time ?? '')) {
-                            api.update('stops', { id: stop.id, start_time: e.target.value });
+                            api.patchStop(stop.id, { start_time: e.target.value });
                         }
                     }}
                     // 6.75rem, not 5.5: "09:30 AM" plus the picker icon does not

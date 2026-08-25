@@ -921,9 +921,12 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                                         return (
                                             <button
                                                 key={r.key}
-                                                onClick={() => api.update('places', {
-                                                    // Clicking the active rating clears it.
-                                                    id: stay.id, rating: on ? '' : r.key,
+                                                // Optimistic: the pill is the
+                                                // fastest thing in the portal and
+                                                // must not wait for a refetch.
+                                                // Clicking the active one clears it.
+                                                onClick={() => api.patchPlace(stay.id, {
+                                                    rating: on ? '' : r.key,
                                                 })}
                                                 className={`rounded-full px-3 py-1 text-xs font-medium border transition
                                                     ${on
@@ -1018,7 +1021,7 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                     url={stayLink(preview)}
                     rating={preview.rating}
                     onClose={() => setPreview(null)}
-                    onRate={(rating) => api.update('places', { id: preview.id, rating })}
+                    onRate={(rating) => api.patchPlace(preview.id, { rating })}
                 />
             )}
 

@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { daysBeyondRange, daysBetween, hasCoords } from '@/lib/honeymoon';
 import { HoneymoonProvider } from './HoneymoonContext';
 import SearchPalette from './SearchPalette';
+import ReauthModal from './ReauthModal';
 import { UndoToast } from './ui';
 import { useHoneymoon } from './useHoneymoon';
 
@@ -37,17 +38,34 @@ export default function HoneymoonShell({ children }: { children: React.ReactNode
     const { data, loading, error, saving } = api;
     const [searching, setSearching] = useState(false);
 
-    // ⌘K / Ctrl-K from anywhere in the portal. Bound on the shell because it
-    // must work on every tab, including the map, which owns its whole viewport.
+    /*
+     * Portal-wide keys, bound on the shell because they must work on every tab
+     * including the map, which owns its whole viewport.
+     *
+     * ⌘K opens search; ⌘Z undoes the last delete. Both are ignored while you are
+     * typing — ⌘Z in a text box is the browser's, and taking it would make
+     * editing a note feel broken to fix a problem it doesn't have.
+     */
     useEffect(() => {
         const onKey = (event: KeyboardEvent) => {
-            if (event.key.toLowerCase() !== 'k' || !(event.metaKey || event.ctrlKey)) return;
+            if (!(event.metaKey || event.ctrlKey)) return;
+            const key = event.key.toLowerCase();
+            if (key === 'k') {
+                event.preventDefault();
+                setSearching((v) => !v);
+                return;
+            }
+            if (key !== 'z' || event.shiftKey) return;
+            const target = event.target as HTMLElement | null;
+            const tag = target?.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return;
+            if (!api.undo) return;
             event.preventDefault();
-            setSearching((v) => !v);
+            void api.undoLast();
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, []);
+    }, [api]);
 
     // The map owns the viewport outright and never scrolls. The dashboard is
     // sized to fit too, but inside a scroller: its own min-height is the floor,
@@ -199,6 +217,16 @@ export default function HoneymoonShell({ children }: { children: React.ReactNode
                     label={api.undo.label}
                     onUndo={api.undo.restore}
                     onDismiss={api.clearUndo}
+                    stacked={api.undos.length}
+                />
+            )}
+
+            {/* A two-hour session against an afternoon of planning: sign back in
+                here and the refused save finishes itself. */}
+            {api.sessionExpired && (
+                <ReauthModal
+                    onAuthenticate={api.reauthenticate}
+                    onDismiss={api.dismissSessionExpiry}
                 />
             )}
         </HoneymoonProvider>

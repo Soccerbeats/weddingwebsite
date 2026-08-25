@@ -487,11 +487,13 @@ export { Modal };
  *
  * Hovering pauses it — reaching for the mouse should not be a race.
  */
-export function UndoToast({ label, onUndo, onDismiss, seconds = 10 }: {
+export function UndoToast({ label, onUndo, onDismiss, seconds = 10, stacked = 1 }: {
     label: string;
     onUndo: () => void;
     onDismiss: () => void;
     seconds?: number;
+    /** How many offers are on the stack, so the toast can say ⌘Z goes further. */
+    stacked?: number;
 }) {
     const [left, setLeft] = useState(seconds);
     const [paused, setPaused] = useState(false);
@@ -515,6 +517,11 @@ export function UndoToast({ label, onUndo, onDismiss, seconds = 10 }: {
             <div className="rounded-2xl bg-gray-900 text-white shadow-xl overflow-hidden">
                 <div className="flex items-center gap-4 px-4 py-2.5">
                     <span className="text-sm">{label}</span>
+                    {stacked > 1 && (
+                        <span className="text-xs text-white/50 tabular-nums">
+                            ⌘Z ×{stacked}
+                        </span>
+                    )}
                     <button
                         onClick={onUndo}
                         className="rounded-full bg-white/15 hover:bg-white/25 px-3 py-1

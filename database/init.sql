@@ -484,3 +484,211 @@ CREATE TABLE IF NOT EXISTS honeymoon_categories (
   icon TEXT NOT NULL DEFAULT '●',
   sort_order INTEGER NOT NULL DEFAULT 0
 );
+
+-- ---------------------------------------------------------------------------
+-- Honeymoon portal, second half
+--
+-- Bookings, documents, sharing and the fetch caches. Mirrored by
+-- ensureHoneymoonTables() in src/lib/honeymoonDb.ts — both must stay in step.
+-- ---------------------------------------------------------------------------
+
+-- What a booking actually holds. `status = booked` on a place recorded *that*
+-- something was booked and nothing else: no confirmation number, no money, no
+-- date after which cancelling costs you. One table rather than four near-copies,
+-- because a stay, an excursion, a flight and a dinner reservation ask the same
+-- four questions — who with, what reference, how much, by when.
+CREATE TABLE IF NOT EXISTS honeymoon_bookings (
+  id SERIAL PRIMARY KEY,
+  place_id INTEGER REFERENCES honeymoon_places(id) ON DELETE CASCADE,
+  travel_id INTEGER REFERENCES honeymoon_travel(id) ON DELETE CASCADE,
+  stop_id INTEGER REFERENCES honeymoon_stops(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL DEFAULT 'stay',
+  provider TEXT,
+  confirmation TEXT,
+  url TEXT,
+  contact TEXT,
+  check_in DATE,
+  check_out DATE,
+  check_in_time TEXT,
+  check_out_time TEXT,
+  cost NUMERIC(12, 2),
+  cost_currency TEXT,
+  cost_paid NUMERIC(12, 2),
+  deposit_due_on DATE,
+  cancel_by DATE,
+  party_size INTEGER,
+  dress_code TEXT,
+  paid BOOLEAN NOT NULL DEFAULT FALSE,
+  documents JSONB NOT NULL DEFAULT '[]'::jsonb,
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Passports, visas, insurance, e-tickets. `path` is a filename in the photos
+-- volume, served through /api/photos like every other upload.
+CREATE TABLE IF NOT EXISTS honeymoon_documents (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'other',
+  path TEXT NOT NULL,
+  place_id INTEGER REFERENCES honeymoon_places(id) ON DELETE SET NULL,
+  travel_id INTEGER REFERENCES honeymoon_travel(id) ON DELETE SET NULL,
+  person TEXT,
+  expires_on DATE,
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Two people planning one trip: a place can be argued about in writing.
+CREATE TABLE IF NOT EXISTS honeymoon_comments (
+  id SERIAL PRIMARY KEY,
+  place_id INTEGER NOT NULL REFERENCES honeymoon_places(id) ON DELETE CASCADE,
+  author TEXT NOT NULL DEFAULT '',
+  body TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- A read-only link for the other half of the couple. The token *is* the
+-- credential, so it is random, revocable and can expire.
+CREATE TABLE IF NOT EXISTS honeymoon_shares (
+  id SERIAL PRIMARY KEY,
+  token TEXT NOT NULL UNIQUE,
+  label TEXT NOT NULL DEFAULT '',
+  scope TEXT NOT NULL DEFAULT 'today',
+  expires_on DATE,
+  revoked BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT NOW(),
+  last_seen_at TIMESTAMP
+);
+
+-- A named set of filters — "Ubud eats", "Unpinned South Bali".
+CREATE TABLE IF NOT EXISTS honeymoon_views (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  tab TEXT NOT NULL DEFAULT 'places',
+  filters JSONB NOT NULL DEFAULT '{}'::jsonb,
+  sort_order INTEGER NOT NULL DEFAULT 0
+);
+
+-- Driving times and road geometry from OSRM, cached per coordinate pair: the
+-- public demo server is free and rate-limited, and a day's hops do not change
+-- between page loads.
+CREATE TABLE IF NOT EXISTS honeymoon_routes (
+  id SERIAL PRIMARY KEY,
+  cache_key TEXT NOT NULL UNIQUE,
+  mode TEXT NOT NULL DEFAULT 'car',
+  seconds INTEGER,
+  meters INTEGER,
+  geometry JSONB,
+  fetched_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Open-Meteo forecasts and climate averages, cached the same way.
+CREATE TABLE IF NOT EXISTS honeymoon_weather (
+  id SERIAL PRIMARY KEY,
+  cache_key TEXT NOT NULL UNIQUE,
+  payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+  fetched_at TIMESTAMP DEFAULT NOW()
+);
+
+-- One rate per currency pair. `manual` marks a rate you typed, so a fetch never
+-- overwrites the number you agreed to use.
+CREATE TABLE IF NOT EXISTS honeymoon_rates (
+  id SERIAL PRIMARY KEY,
+  pair TEXT NOT NULL UNIQUE,
+  rate NUMERIC(18, 8) NOT NULL,
+  manual BOOLEAN NOT NULL DEFAULT FALSE,
+  fetched_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Price history for a stay, so "it went up" is a fact and not a feeling.
+CREATE TABLE IF NOT EXISTS honeymoon_price_checks (
+  id SERIAL PRIMARY KEY,
+  place_id INTEGER NOT NULL REFERENCES honeymoon_places(id) ON DELETE CASCADE,
+  price_note TEXT,
+  amount NUMERIC(12, 2),
+  currency TEXT,
+  checked_at TIMESTAMP DEFAULT NOW()
+);
+
+-- A whole trip, frozen as JSON. honeymoon_trip is a singleton, and threading a
+-- trip_id through eleven tables to plan two trips at once is not the trade this
+-- portal wants. A snapshot answers what the singleton cannot: keep the honeymoon
+-- after you have flown home, and start the next trip from a copy of it.
+CREATE TABLE IF NOT EXISTS honeymoon_archives (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  payload JSONB NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Real money on a place, beside the free-text price note it replaces; cost_per
+-- says what the number is per (night | person | total).
+ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS cost NUMERIC(12, 2);
+ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS cost_currency TEXT;
+ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS cost_per TEXT NOT NULL DEFAULT 'total';
+-- OSM's own opening_hours string, straight from the geocoder's extratags.
+ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS opening_hours TEXT;
+ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS best_time TEXT;
+-- Per-person ratings: { "Austin": "yes", "Heaven": "no" }. `rating` stays the
+-- shared verdict, so nothing that already reads it has to change.
+ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS ratings JSONB NOT NULL DEFAULT '{}'::jsonb;
+-- Scraped from a listing's JSON-LD alongside the name and the image.
+ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS star_rating NUMERIC(3, 1);
+ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS price_range TEXT;
+ALTER TABLE honeymoon_places ADD COLUMN IF NOT EXISTS amenities JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+-- How long you plan to be somewhere, which is what turns a list into a day.
+ALTER TABLE honeymoon_stops ADD COLUMN IF NOT EXISTS duration_minutes INTEGER;
+-- Post-trip: did | skipped, plus what it was actually like.
+ALTER TABLE honeymoon_stops ADD COLUMN IF NOT EXISTS outcome TEXT;
+ALTER TABLE honeymoon_stops ADD COLUMN IF NOT EXISTS favourite BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE honeymoon_stops ADD COLUMN IF NOT EXISTS journal TEXT;
+ALTER TABLE honeymoon_stops ADD COLUMN IF NOT EXISTS photos JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+-- Legs were ORDER BY id, so one added late sorted last however early it departs.
+ALTER TABLE honeymoon_travel ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE honeymoon_travel ADD COLUMN IF NOT EXISTS cost NUMERIC(12, 2);
+ALTER TABLE honeymoon_travel ADD COLUMN IF NOT EXISTS cost_currency TEXT;
+ALTER TABLE honeymoon_travel ADD COLUMN IF NOT EXISTS booked_by TEXT;
+-- IANA zones. The leg home crosses them; Bali to Singapore does not.
+ALTER TABLE honeymoon_travel ADD COLUMN IF NOT EXISTS depart_tz TEXT;
+ALTER TABLE honeymoon_travel ADD COLUMN IF NOT EXISTS arrive_tz TEXT;
+ALTER TABLE honeymoon_travel ADD COLUMN IF NOT EXISTS flight_no TEXT;
+ALTER TABLE honeymoon_travel ADD COLUMN IF NOT EXISTS from_terminal TEXT;
+ALTER TABLE honeymoon_travel ADD COLUMN IF NOT EXISTS to_terminal TEXT;
+ALTER TABLE honeymoon_travel ADD COLUMN IF NOT EXISTS aircraft TEXT;
+
+-- A drawn boundary, so "which region is this place in" has a real answer.
+ALTER TABLE honeymoon_regions ADD COLUMN IF NOT EXISTS boundary JSONB;
+
+ALTER TABLE honeymoon_trip ADD COLUMN IF NOT EXISTS budget NUMERIC(12, 2);
+ALTER TABLE honeymoon_trip ADD COLUMN IF NOT EXISTS partner_names TEXT NOT NULL DEFAULT '';
+-- Emergency numbers, embassy, insurance policy, the driver's WhatsApp.
+ALTER TABLE honeymoon_trip ADD COLUMN IF NOT EXISTS info JSONB NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE honeymoon_trip ADD COLUMN IF NOT EXISTS time_format TEXT NOT NULL DEFAULT '24h';
+ALTER TABLE honeymoon_trip ADD COLUMN IF NOT EXISTS distance_unit TEXT NOT NULL DEFAULT 'km';
+-- planning | travelling | after — switches the portal's own emphasis.
+ALTER TABLE honeymoon_trip ADD COLUMN IF NOT EXISTS phase TEXT NOT NULL DEFAULT 'planning';
+
+-- task | packing, and whose bag it goes in.
+ALTER TABLE honeymoon_todos ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'task';
+ALTER TABLE honeymoon_todos ADD COLUMN IF NOT EXISTS person TEXT;
+-- "Book the Ubud driver" belongs to the Ubud day.
+ALTER TABLE honeymoon_todos ADD COLUMN IF NOT EXISTS place_id INTEGER
+  REFERENCES honeymoon_places(id) ON DELETE SET NULL;
+ALTER TABLE honeymoon_todos ADD COLUMN IF NOT EXISTS day_id INTEGER
+  REFERENCES honeymoon_days(id) ON DELETE SET NULL;
+
+-- Which region or place a guide note is about.
+ALTER TABLE honeymoon_notes ADD COLUMN IF NOT EXISTS region_id INTEGER
+  REFERENCES honeymoon_regions(id) ON DELETE SET NULL;
+ALTER TABLE honeymoon_notes ADD COLUMN IF NOT EXISTS place_id INTEGER
+  REFERENCES honeymoon_places(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS honeymoon_bookings_place_idx ON honeymoon_bookings (place_id);
+CREATE INDEX IF NOT EXISTS honeymoon_bookings_travel_idx ON honeymoon_bookings (travel_id);
+CREATE INDEX IF NOT EXISTS honeymoon_bookings_stop_idx ON honeymoon_bookings (stop_id);
+CREATE INDEX IF NOT EXISTS honeymoon_comments_place_idx ON honeymoon_comments (place_id);
+CREATE INDEX IF NOT EXISTS honeymoon_documents_place_idx ON honeymoon_documents (place_id);
+CREATE INDEX IF NOT EXISTS honeymoon_price_checks_place_idx ON honeymoon_price_checks (place_id);

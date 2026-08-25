@@ -11,6 +11,22 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.44 — [Released] The planner's second half, part one: foundations (`main`, 2026-08-25 16:22)
+
+The first of seven waves working through `docs/honeymoon-improvements-2026-08-25.md`. This one is the plumbing the other six sit on: every schema change the list needs, in one migration, plus the four items that touch every tab.
+
+### Added
+- **The schema for bookings, documents, sharing and money.** `honeymoon_bookings` (confirmation, contact, check-in/out, cost paid vs due, deposit and cancellation dates, party size, dress code, attached files) — one table for a stay, an excursion, a flight and a dinner table, because they ask the same four questions. `honeymoon_documents` (passports, visas, insurance, tickets), `honeymoon_comments`, `honeymoon_shares` (revocable read-only link tokens), `honeymoon_views` (named filter sets), `honeymoon_archives` (a whole trip frozen as JSON), and three fetch caches — `honeymoon_routes` (OSRM driving times and geometry), `honeymoon_weather`, `honeymoon_rates`. Places gain real money (`cost`, `cost_currency`, `cost_per`), `opening_hours`, `best_time`, per-person `ratings`, and the JSON-LD extras (`star_rating`, `price_range`, `amenities`); stops gain `duration_minutes` and the post-trip fields (`outcome`, `favourite`, `journal`, `photos`); travel legs gain `sort_order`, cost, `booked_by`, time zones and flight details; regions gain a drawn `boundary`; the trip gains `budget`, `partner_names`, an `info` blob for emergency details, `time_format`, `distance_unit` and a `phase`; to-dos gain `kind` (task or packing), `person` and links to a place or day. All of it in `database/init.sql` too, per convention #2.
+- **Batch endpoints for the loops the UI runs.** `PATCH /api/admin/honeymoon/<resource>` now accepts `{ rows: [{ id, …fields }, …] }` — many rows, each with its own values, in one transaction. Applying a range of days, filling in twenty stays' coordinates or timing each stop of a day was one request *and* one whole-payload refetch per row; it is now one of each. A new travel leg also lands at the bottom of its day, as a stop already did.
+- **An undo stack, ten deep.** ⌘Z puts back the last delete from any tab; the toast says how many more are behind it. One slot was the right first move, but the moment you trust an undo you reach for it twice.
+
+### Changed
+- **The hot paths are optimistic.** A rating pill, a done tick, a stop's time and a dragged stop apply locally, save behind, and reconcile with a quiet refetch — a failure rolls the payload back and says so. Everything else keeps the honest whole-payload refetch, because a rollback is only cheap when the change was small. Rating a stay used to cost a nine-query round trip and a full re-render before the pill moved.
+- **Travel legs come back in the order you put them in** (`sort_order`, then departure time) instead of `ORDER BY id`, which sorted a leg added late last however early it departs.
+
+### Fixed
+- **An expired session no longer loses the save.** A 401 now opens a sign-in dialog where you are, holding the refused request; signing in finishes it and refreshes. It was a red "Unauthorized" banner over a form still holding your text, with a full-page login as the only way out. (Improvement #12, also B-21 in the bug audit.)
+
 ## v0.9.43 — [Released] The photo check learns about fresh checkouts (`main`, 2026-08-25 15:49)
 
 ### Fixed

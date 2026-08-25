@@ -316,8 +316,8 @@ export default function ExcursionsTab({ api }: { api: HoneymoonApi }) {
                                             return (
                                                 <button
                                                     key={r.key}
-                                                    onClick={() => api.update('places', {
-                                                        id: item.id, rating: on ? '' : r.key,
+                                                    onClick={() => api.patchPlace(item.id, {
+                                                        rating: on ? '' : r.key,
                                                     })}
                                                     className={`rounded-full px-3 py-1 text-xs font-medium border transition
                                                         ${on
@@ -357,7 +357,7 @@ export default function ExcursionsTab({ api }: { api: HoneymoonApi }) {
                     url={linkOf(preview)}
                     rating={preview.rating}
                     onClose={() => setPreview(null)}
-                    onRate={(rating) => api.update('places', { id: preview.id, rating })}
+                    onRate={(rating) => api.patchPlace(preview.id, { rating })}
                 />
             )}
 
