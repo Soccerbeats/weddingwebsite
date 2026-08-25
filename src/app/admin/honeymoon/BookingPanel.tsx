@@ -19,22 +19,34 @@ import { Button, SelectField, TextArea, TextField } from './ui';
  * to write down, so nothing exists until you press the button — which also means
  * a shortlist of forty hotels does not carry forty empty bookings.
  */
-export default function BookingPanel({ api, kind, placeId, travelId, stopId, compact = false }: {
+export default function BookingPanel({
+    api, kind, placeId, travelId, stopId, journeyId, compact = false,
+}: {
     api: HoneymoonApi;
     kind: BookingKind;
     placeId?: number | null;
     travelId?: number | null;
     stopId?: number | null;
+    /**
+     * The journey this booking covers.
+     *
+     * A ticket has one reference, one price and one cancellation date however
+     * many legs it has, so a journey's booking hangs off the journey rather than
+     * off one of its legs.
+     */
+    journeyId?: number | null;
     /** Fewer fields, for the places where this sits inside another form. */
     compact?: boolean;
 }) {
     const bookings = api.data?.bookings ?? [];
     const currency = api.data?.trip.home_currency || 'USD';
-    const booking = bookingFor(bookings, {
-        place: placeId != null ? { id: placeId } as never : null,
-        leg: travelId != null ? { id: travelId } as never : null,
-        stopId: stopId ?? null,
-    });
+    const booking = journeyId != null
+        ? bookings.find((row) => row.journey_id === journeyId) ?? null
+        : bookingFor(bookings, {
+            place: placeId != null ? { id: placeId } as never : null,
+            leg: travelId != null ? { id: travelId } as never : null,
+            stopId: stopId ?? null,
+        });
     const [creating, setCreating] = useState(false);
 
     const create = async () => {
@@ -45,6 +57,7 @@ export default function BookingPanel({ api, kind, placeId, travelId, stopId, com
                 place_id: placeId ?? null,
                 travel_id: travelId ?? null,
                 stop_id: stopId ?? null,
+                journey_id: journeyId ?? null,
             });
         } finally {
             setCreating(false);
@@ -55,11 +68,16 @@ export default function BookingPanel({ api, kind, placeId, travelId, stopId, com
         return (
             <div className="rounded-2xl border border-dashed border-gray-200 p-3">
                 <p className="text-[11px] text-gray-500">
-                    Nothing recorded yet — confirmation number, what it cost, when free
-                    cancellation ends.
+                    {kind === 'travel'
+                        ? 'No reference yet — the booking number, what it cost, when free '
+                            + 'cancellation ends.'
+                        : 'Nothing recorded yet — confirmation number, what it cost, when free '
+                            + 'cancellation ends.'}
                 </p>
                 <Button className="mt-2" onClick={create} disabled={creating}>
-                    {creating ? 'Adding…' : '+ Booking details'}
+                    {creating
+                        ? 'Adding…'
+                        : kind === 'travel' ? '+ Add the booking reference' : '+ Booking details'}
                 </Button>
             </div>
         );

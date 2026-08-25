@@ -74,8 +74,8 @@ export async function PUT(request: Request) {
         for (const table of [
             'honeymoon_comments', 'honeymoon_bookings', 'honeymoon_documents',
             'honeymoon_price_checks', 'honeymoon_stops', 'honeymoon_travel',
-            'honeymoon_days', 'honeymoon_todos', 'honeymoon_notes', 'honeymoon_places',
-            'honeymoon_regions',
+            'honeymoon_journeys', 'honeymoon_days', 'honeymoon_todos', 'honeymoon_notes',
+            'honeymoon_places', 'honeymoon_regions',
         ]) {
             await client.query(`DELETE FROM ${table}`);
         }
@@ -135,6 +135,18 @@ export async function PUT(request: Request) {
             placeIds.set(place.id, row.rows[0].id);
         }
 
+        /* Journeys before legs: a leg points at one. */
+        const journeyIds = new Map<number, number>();
+        for (const journey of data.journeys ?? []) {
+            const row = await client.query(
+                `INSERT INTO honeymoon_journeys (title, kind, notes, sort_order)
+                 VALUES ($1, $2, $3, $4) RETURNING id`,
+                [journey.title ?? '', journey.kind ?? 'flight', journey.notes ?? null,
+                    journey.sort_order ?? 0],
+            );
+            journeyIds.set(journey.id, row.rows[0].id);
+        }
+
         const dayIds = new Map<number, number>();
         const stopIds = new Map<number, number>();
         const travelIds = new Map<number, number>();
@@ -167,15 +179,18 @@ export async function PUT(request: Request) {
                     `INSERT INTO honeymoon_travel (day_id, mode, from_text, to_text, depart_time,
                         arrive_time, confirmation_ref, notes, arrive_day_offset, from_lat, from_lng,
                         to_lat, to_lng, sort_order, cost, cost_currency, booked_by, depart_tz,
-                        arrive_tz, flight_no, from_terminal, to_terminal, aircraft)
+                        arrive_tz, flight_no, from_terminal, to_terminal, aircraft, journey_id,
+                        depart_date, arrive_date)
                      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,
-                             $20,$21,$22,$23) RETURNING id`,
+                             $20,$21,$22,$23,$24,$25,$26) RETURNING id`,
                     [row.rows[0].id, leg.mode ?? 'flight', leg.from_text, leg.to_text,
                         leg.depart_time, leg.arrive_time, leg.confirmation_ref, leg.notes,
                         leg.arrive_day_offset ?? 0, leg.from_lat, leg.from_lng, leg.to_lat,
                         leg.to_lng, leg.sort_order ?? 0, leg.cost, leg.cost_currency,
                         leg.booked_by, leg.depart_tz, leg.arrive_tz, leg.flight_no,
-                        leg.from_terminal, leg.to_terminal, leg.aircraft],
+                        leg.from_terminal, leg.to_terminal, leg.aircraft,
+                        leg.journey_id != null ? journeyIds.get(leg.journey_id) ?? null : null,
+                        leg.depart_date ?? null, leg.arrive_date ?? null],
                 );
                 travelIds.set(leg.id, legRow.rows[0].id);
             }
@@ -206,16 +221,18 @@ export async function PUT(request: Request) {
 
         for (const booking of data.bookings ?? []) {
             await client.query(
-                `INSERT INTO honeymoon_bookings (place_id, travel_id, stop_id, kind, provider,
-                    confirmation, url, contact, check_in, check_out, check_in_time, check_out_time,
-                    cost, cost_currency, cost_paid, deposit_due_on, cancel_by, party_size,
-                    dress_code, paid, documents, notes)
+                `INSERT INTO honeymoon_bookings (place_id, travel_id, stop_id, journey_id, kind,
+                    provider, confirmation, url, contact, check_in, check_out, check_in_time,
+                    check_out_time, cost, cost_currency, cost_paid, deposit_due_on, cancel_by,
+                    party_size, dress_code, paid, documents, notes)
                  VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
-                         $21,$22)`,
+                         $21,$22,$23)`,
                 [
                     booking.place_id != null ? placeIds.get(booking.place_id) ?? null : null,
                     booking.travel_id != null ? travelIds.get(booking.travel_id) ?? null : null,
                     booking.stop_id != null ? stopIds.get(booking.stop_id) ?? null : null,
+                    booking.journey_id != null
+                        ? journeyIds.get(booking.journey_id) ?? null : null,
                     booking.kind ?? 'other', booking.provider, booking.confirmation, booking.url,
                     booking.contact, booking.check_in, booking.check_out, booking.check_in_time,
                     booking.check_out_time, booking.cost, booking.cost_currency, booking.cost_paid,

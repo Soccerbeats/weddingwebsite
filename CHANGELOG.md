@@ -11,6 +11,27 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.54 — [Released] Travel is journeys now, not legs filed onto days (`main`, 2026-08-26 00:30)
+
+The Travel tab asked the wrong question. A ticket is one booking with several legs — SAN → SEA → SIN → DPS is *one* flight to enter — and it made you file each hop onto a trip day by hand, which is arithmetic the confirmation email had already done. And the booking panel contained a *second* "Booking details" button that opened a second panel inside the first: three levels of hierarchy for one reference number.
+
+### Changed
+- **The unit of travel is a journey.** One card per ticket: its route (`SAN → SEA → SIN → DPS`), the dates it spans, **door-to-door time and time actually moving**, its legs in the order you fly them, and one booking reference covering the lot. `honeymoon_journeys` is a real table; a leg with no journey is treated as a journey of one, so **nothing needed migrating** and every leg entered before this still reads correctly.
+- **Days are derived, not chosen.** A leg now carries the dates a ticket states, and the day it belongs to (plus how many days it spans) is worked out from them — written in the same request, so a leg is never briefly filed in the wrong place. `day_id` and `arrive_day_offset` are still what the itinerary, the calendar file and the print sheet read; they are outputs now.
+- **One level, not three.** A leg's own facts (where, when, which flight, which terminal, which zone, which seats) are on one panel; the ticket's facts (reference, price, paid, cancellation date, contact) live once per journey. The nested "Booking details → Booking details" is gone.
+- **The itinerary's leg card is the same editor**, so noticing a wrong time while reading a day no longer means going to another tab — but the ticket is not repeated there, because it belongs to the journey.
+
+### Added
+- **Layovers, computed and judged.** Between every pair of legs: how long you have, where, and whether it is **tight** (under 75 minutes), **impossible** (the connection leaves before you land) or **not a connection at all** (you land at one airport and leave from another). All of it across time zones, so a 23:59 departure landing at 06:30 two dates later is 15 h 31 m rather than a negative number.
+- **Build a journey from pasted flight numbers.** Paste `SQ 27 2026-09-12` / `SQ 938 2026-09-14` and each leg is looked up and filled in — times, terminals, aircraft, both time zones — and placed on the right day. Paced for the lookup's one-request-a-second free plan.
+- **A new connection prefills itself** from where the last leg landed and the day it landed on, which is the tedious half of entering a multi-leg ticket.
+- **"That's 21:00 back home"** next to a landing time when the leg crosses zones — the thing everybody works out by hand on a red-eye.
+- **The two ways out of a date with no day**, offered inline: add days up to it, or file the leg on a day the trip does have. A leg whose date disagrees with the day it sits on is flagged rather than silently corrected.
+- Trip-wide summary: how many journeys, how long in transit, how many things to check.
+
+### Fixed
+- Whole-trip snapshots now carry journeys, and a restore remaps every leg and booking onto the restored journey rows rather than leaving them orphaned.
+
 ## v0.9.53 — [Released] The map search works when OpenStreetMap says no (`main`, 2026-08-25 23:30)
 
 Typing an airport code into a travel leg and pressing Find failed on the deployed instance with *"lookup failed"*. It was not the code: **Nominatim was answering that host with `403 Access denied`** — their usage policy blocks requests whose User-Agent does not identify the application *and offer a way to reach whoever runs it*, and the portal's default said neither. It worked from a laptop and not from the server, which is exactly how this hides.

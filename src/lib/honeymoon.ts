@@ -252,6 +252,41 @@ export interface TravelLeg {
     from_terminal: string | null;
     to_terminal: string | null;
     aircraft: string | null;
+    /**
+     * The journey this leg belongs to — the whole ticket.
+     *
+     * Null means a journey of one, which is what every leg entered before
+     * journeys existed is. Nothing had to be migrated: the UI groups by
+     * `journey_id ?? this leg alone`.
+     */
+    journey_id: number | null;
+    /**
+     * The dates the ticket states.
+     *
+     * `day_id` still decides which day card draws the leg and
+     * `arrive_day_offset` still says how many days it spans — those are what the
+     * itinerary, the calendar file and the print sheet read. These two are the
+     * input those are derived from: type the dates off the confirmation and the
+     * placement follows, instead of choosing a day number by hand.
+     */
+    depart_date: string | null;
+    arrive_date: string | null;
+}
+
+/**
+ * A journey: one ticket, however many legs.
+ *
+ * SAN → SEA → SIN → DPS is one thing you booked, with one reference and one
+ * price, and entering it as three day-filed legs was the wrong shape for both
+ * the data and the person typing it.
+ */
+export interface Journey {
+    id: number;
+    title: string;
+    kind: TravelMode;
+    notes: string | null;
+    sort_order: number;
+    created_at: string | null;
 }
 
 export interface Day {
@@ -369,6 +404,8 @@ export interface Booking {
     place_id: number | null;
     travel_id: number | null;
     stop_id: number | null;
+    /** A ticket covers a whole journey: one reference for every leg on it. */
+    journey_id: number | null;
     kind: BookingKind;
     provider: string | null;
     confirmation: string | null;
@@ -499,6 +536,7 @@ export interface TripArchiveMeta {
 
 export interface HoneymoonPayload {
     trip: Trip;
+    journeys: Journey[];
     todos: TodoItem[];
     categories: CategoryRow[];
     regions: Region[];

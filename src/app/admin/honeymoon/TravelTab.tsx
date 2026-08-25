@@ -2,268 +2,372 @@
 
 import { useMemo, useState } from 'react';
 import {
-    TRAVEL_MODES, formatDayDate, formatTime, legArrivalDay, legEnds, legIsOvernight,
-    travelModeMeta,
-    type Day, type TravelLeg, type TravelMode,
+    TRAVEL_MODES, formatDate, todayIso, travelModeMeta,
+    type TravelMode,
 } from '@/lib/honeymoon';
+import {
+    dayForDate, formatMinutes, journeysOf, placementFor, type JourneyGroup,
+} from '@/lib/honeymoonJourneys';
+import JourneyCard from './JourneyCard';
 import type { HoneymoonApi } from './useHoneymoon';
-import TravelLegCard from './TravelLeg';
-import { Button, Card, EmptyState, SelectField } from './ui';
+import { Button, Card, EmptyState, MiniSelect, TextArea } from './ui';
 
 /**
- * Every way you get from one place to the next, in one place.
+ * Every journey of the trip.
  *
- * The legs live on days and always did — this is a second view of the same rows,
- * not a second store. A leg edited here changes on the itinerary and the other
- * way round, because both render the one editor over the one record.
+ * The old tab was a flat list of *legs*, each asking which trip day it belonged
+ * to. That is backwards twice over: a ticket is one thing with several legs, and
+ * which day a leg falls on is arithmetic the confirmation email has already
+ * done. So this is journeys, ordered by when you travel them, with the day
+ * placement derived from the dates.
  *
- * It earns its own tab because booking travel is its own afternoon: you sit down
- * with six confirmation emails and enter six legs, which through the itinerary
- * means opening six day cards. Here they are a list, in order, with the trip's
- * dates against them.
+ * Three ways to fill one in, in the order they are quick:
+ *   1. Paste the flight numbers and dates — every leg looked up and filled in.
+ *   2. Start a journey and add legs by hand.
+ *   3. Both: paste what you have, correct what is wrong.
  */
 export default function TravelTab({ api }: { api: HoneymoonApi }) {
     const { data } = api;
-    const days = useMemo(() => data?.days ?? [], [data]);
-    const startDate = data?.trip.start_date ?? null;
+    const groups = useMemo(() => (data ? journeysOf(data) : []), [data]);
+    const [busy, setBusy] = useState(false);
+    const [note, setNote] = useState('');
 
-    /** Every leg with the day it leaves on, in trip order. */
-    const legs = useMemo(
-        () => days.flatMap((day) => day.travel.map((leg) => ({ leg, day })))
-            .sort((a, b) => a.day.day_number - b.day.day_number
-                || (a.leg.depart_time ?? '').localeCompare(b.leg.depart_time ?? '')
-                || a.leg.id - b.leg.id),
-        [days],
-    );
+    const trip = data?.trip;
+    const days = data?.days ?? [];
 
-    const counts = useMemo(() => {
-        const seen = new Map<string, number>();
-        for (const { leg } of legs) seen.set(leg.mode, (seen.get(leg.mode) ?? 0) + 1);
-        return TRAVEL_MODES.filter((m) => seen.has(m.key))
-            .map((m) => ({ ...m, count: seen.get(m.key) ?? 0 }));
-    }, [legs]);
-
-    /** What the add row is set to. Defaults to the first day of the trip. */
-    const [addDay, setAddDay] = useState('');
-    const [addMode, setAddMode] = useState<TravelMode>('flight');
-    const dayId = addDay || String(days[0]?.id ?? '');
-
-    const add = async () => {
-        if (!dayId) return;
-        await api.create('travel', { day_id: Number(dayId), mode: addMode });
-    };
-
-    const [transferring, setTransferring] = useState(false);
-    const [transferNote, setTransferNote] = useState('');
+    /* ---- Starting a journey ---- */
+    const [mode, setMode] = useState<TravelMode>('flight');
 
     /**
-     * The leg nobody enjoys entering.
+     * Make a journey and give it its first leg.
      *
-     * Every arrival needs one — airport to hotel, by car, an hour of it — and
-     * every one is typed by hand from two things the portal already knows: where
-     * the flight landed, and where you are sleeping that night. This builds it:
-     * the flight's arrival end becomes the origin (text and pin), the day's base
-     * becomes the destination, and the departure time is set to half an hour
-     * after the flight lands, which is roughly how long a bag takes.
-     *
-     * It is a first draft, not a booking: everything it writes is editable, and
-     * it says what it used.
+     * A journey with no legs is a valid intermediate state — the card handles it
+     * — but "New journey" is nearly always followed by "add the first leg", so
+     * it does both.
      */
-    const addTransfer = async () => {
-        if (!dayId) return;
-        const day = days.find((d) => String(d.id) === dayId);
-        if (!day) return;
-        setTransferring(true);
-        setTransferNote('');
+    const newJourney = async () => {
+        setBusy(true);
+        setNote('');
         try {
-            // The flight that gets you here: one landing on this day (including
-            // a red-eye that left the day before), else one leaving today.
-            const landing = days.flatMap((other) => other.travel
-                .filter((leg) => leg.mode === 'flight'
-                    && legArrivalDay(leg, other.day_number) === day.day_number)
-                .map((leg) => ({ leg, from: other })))
-                .sort((a, b) => (a.leg.arrive_time ?? '').localeCompare(b.leg.arrive_time ?? ''))
-                .pop();
-
-            const base = day.base_place_id != null
-                ? api.placeById.get(day.base_place_id) ?? null
-                : null;
-
-            if (!landing && !base) {
-                setTransferNote('Nothing to build it from: this day has no flight and no stay.');
-                return;
-            }
-
-            const arriveMinutes = landing?.leg.arrive_time
-                ? Number(landing.leg.arrive_time.slice(0, 2)) * 60
-                    + Number(landing.leg.arrive_time.slice(3, 5))
-                : null;
-            const depart = arriveMinutes != null
-                ? `${String(Math.floor(((arriveMinutes + 30) % 1440) / 60)).padStart(2, '0')}:`
-                    + `${String((arriveMinutes + 30) % 60).padStart(2, '0')}`
-                : null;
-
-            const created = await api.create('travel', {
-                day_id: day.id,
-                mode: 'car',
-                from_text: landing?.leg.to_text ?? 'Airport',
-                to_text: base?.name ?? '',
-                from_lat: landing?.leg.to_lat ?? null,
-                from_lng: landing?.leg.to_lng ?? null,
-                to_lat: base?.lat ?? null,
-                to_lng: base?.lng ?? null,
-                depart_time: depart ?? '',
-                notes: 'Airport transfer',
+            const journey = await api.createRow('journeys', {
+                kind: mode,
+                title: '',
+                sort_order: groups.length,
             });
-            if (created) {
-                setTransferNote(landing
-                    ? `Built from ${landing.leg.flight_no || 'the flight'} landing at `
-                        + `${landing.leg.to_text || 'the airport'}${base ? ` → ${base.name}` : ''}.`
-                    : `Built to ${base?.name ?? 'the stay'} — add where it starts from.`);
-            }
+            if (journey?.id == null) return;
+            await addLegTo(journey.id, null);
+            await api.refresh();
         } finally {
-            setTransferring(false);
+            setBusy(false);
         }
     };
+
+    /**
+     * Append a leg to a journey, prefilled from the one before it.
+     *
+     * A connection leaves from where the last one landed, on the day it landed —
+     * which is true often enough to be the right default and is the tedious part
+     * of entering a multi-leg ticket by hand.
+     */
+    const addLegTo = async (journeyId: number, previous: JourneyGroup | null) => {
+        const last = previous?.legs[previous.legs.length - 1] ?? null;
+        const departDate = last?.arrive_date ?? last?.depart_date ?? trip?.start_date ?? null;
+        const placement = trip && departDate
+            ? placementFor({ depart_date: departDate, arrive_date: departDate }, days, trip)
+            : null;
+
+        await api.create('travel', {
+            // A leg still belongs to a day; it is just no longer chosen by hand.
+            day_id: placement?.day_id ?? days[0]?.id ?? null,
+            journey_id: journeyId,
+            mode: last?.mode ?? previous?.mode ?? mode,
+            from_text: last?.to_text ?? '',
+            from_lat: last?.to_lat ?? null,
+            from_lng: last?.to_lng ?? null,
+            depart_tz: last?.arrive_tz ?? '',
+            depart_date: departDate ?? '',
+            arrive_date: departDate ?? '',
+            arrive_day_offset: placement?.arrive_day_offset ?? 0,
+            sort_order: previous ? previous.legs.length : 0,
+        });
+    };
+
+    /**
+     * Turn a leg that belongs to no journey into one.
+     *
+     * Nothing was migrated when journeys arrived — an old leg is a journey of
+     * one — so this is how such a leg gains a second hop.
+     */
+    const promoteToJourney = async (group: JourneyGroup) => {
+        const leg = group.legs[0];
+        if (!leg) return;
+        setBusy(true);
+        try {
+            const journey = await api.createRow('journeys', {
+                kind: leg.mode,
+                title: '',
+                sort_order: groups.length,
+            });
+            if (journey?.id == null) return;
+            await api.update('travel', { id: leg.id, journey_id: journey.id });
+            await addLegTo(journey.id, { ...group, legs: [leg] });
+            await api.refresh();
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const onAddLeg = async (group: JourneyGroup) => {
+        if (!group.journey) { await promoteToJourney(group); return; }
+        setBusy(true);
+        try {
+            await addLegTo(group.journey.id, group);
+            await api.refresh();
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    /* ---- Building a journey from pasted flight numbers ---- */
+    const [paste, setPaste] = useState('');
+    const [pasting, setPasting] = useState(false);
+    const [pasteNote, setPasteNote] = useState('');
+
+    /**
+     * "SQ 27 2026-09-12, SQ 938 2026-09-14" → a journey with two legs, filled in.
+     *
+     * This is the feature the flight lookup was always for: the fastest correct
+     * way to enter a ticket is to type what is printed on it and let the schedule
+     * supply the rest. One line or one comma per leg; a date can be omitted and
+     * the previous leg's is used.
+     *
+     * Paced deliberately: the lookup's free plan allows one request a second, and
+     * the route itself may make two, so legs are done one at a time with a wait
+     * between. Slower than firing them all at once, and it works.
+     */
+    const buildFromPaste = async () => {
+        const entries = paste
+            .split(/[\n,;]+/)
+            .map((line) => line.trim())
+            .filter(Boolean)
+            .map((line) => {
+                const date = /(\d{4}-\d{2}-\d{2})/.exec(line)?.[1] ?? null;
+                const number = line.replace(/(\d{4}-\d{2}-\d{2})/, '').trim()
+                    .replace(/\s+/g, '');
+                return { number, date };
+            })
+            .filter((entry) => /^[A-Za-z0-9]{2,3}\d{1,4}$/.test(entry.number));
+
+        if (!entries.length) {
+            setPasteNote('No flight numbers found. Try "SQ938 2026-09-14, SQ27 2026-09-12".');
+            return;
+        }
+
+        setPasting(true);
+        setPasteNote(`Looking up ${entries.length} flight${entries.length === 1 ? '' : 's'}…`);
+        try {
+            const journey = await api.createRow('journeys', {
+                kind: 'flight',
+                title: '',
+                sort_order: groups.length,
+            });
+            if (journey?.id == null) { setPasteNote('Could not start the journey.'); return; }
+
+            let previousDate = trip?.start_date ?? todayIso();
+            const built: string[] = [];
+            const failed: string[] = [];
+
+            for (const [index, entry] of entries.entries()) {
+                const date = entry.date ?? previousDate;
+                let flight: Record<string, unknown> | null = null;
+                try {
+                    const res = await fetch(
+                        `/api/admin/honeymoon/flight?no=${encodeURIComponent(entry.number)}`
+                        + `&date=${date}`,
+                    );
+                    const body = await res.json();
+                    flight = body?.flight ?? null;
+                    if (!body?.configured) {
+                        setPasteNote(
+                            'Flight lookup needs FLIGHT_API_KEY on the stack. The legs were '
+                            + 'created — fill in the times by hand, or add the key and use '
+                            + '"Fill in from schedule".',
+                        );
+                    }
+                } catch { /* handled below */ }
+
+                const departDate = (flight?.from_date as string | undefined) ?? date;
+                const arriveDate = flight?.arrive_day_offset != null
+                    ? new Date(Date.parse(`${departDate}T00:00:00Z`)
+                        + Number(flight.arrive_day_offset) * 86_400_000)
+                        .toISOString().slice(0, 10)
+                    : departDate;
+                const placement = trip
+                    ? placementFor({ depart_date: departDate, arrive_date: arriveDate }, days, trip)
+                    : null;
+
+                await api.create('travel', {
+                    day_id: placement?.day_id ?? days[0]?.id ?? null,
+                    journey_id: journey.id,
+                    mode: 'flight',
+                    flight_no: (flight?.flight_no as string | undefined) ?? entry.number,
+                    from_text: (flight?.from_text as string | undefined) ?? '',
+                    to_text: (flight?.to_text as string | undefined) ?? '',
+                    depart_time: (flight?.depart_time as string | undefined) ?? '',
+                    arrive_time: (flight?.arrive_time as string | undefined) ?? '',
+                    depart_tz: (flight?.depart_tz as string | undefined) ?? '',
+                    arrive_tz: (flight?.arrive_tz as string | undefined) ?? '',
+                    from_terminal: (flight?.from_terminal as string | undefined) ?? '',
+                    to_terminal: (flight?.to_terminal as string | undefined) ?? '',
+                    aircraft: (flight?.aircraft as string | undefined) ?? '',
+                    depart_date: departDate,
+                    arrive_date: arriveDate,
+                    arrive_day_offset: placement?.arrive_day_offset ?? 0,
+                    sort_order: index,
+                });
+
+                if (flight) built.push(entry.number); else failed.push(entry.number);
+                previousDate = arriveDate;
+
+                // The plan's rate limit, plus the route's own retry headroom.
+                if (index < entries.length - 1) {
+                    await new Promise((resolve) => setTimeout(resolve, 1400));
+                }
+            }
+
+            await api.refresh();
+            setPaste('');
+            setPasteNote([
+                built.length ? `Filled in ${built.join(', ')}.` : '',
+                failed.length
+                    ? `No schedule found for ${failed.join(', ')} — those legs are there but empty.`
+                    : '',
+            ].filter(Boolean).join(' ') || 'Created the legs.');
+        } finally {
+            setPasting(false);
+        }
+    };
+
+    /* ---- Trip-wide summary ---- */
+    const summary = useMemo(() => {
+        const moving = groups.reduce(
+            (total, group) => total + (group.movingMinutes ?? 0), 0,
+        );
+        const problems = groups.reduce((total, group) => total + group.problems.length, 0);
+        return { journeys: groups.length, moving, problems };
+    }, [groups]);
 
     if (!days.length) {
         return (
             <Card>
                 <EmptyState
                     title="No days to travel between yet"
-                    hint="A leg leaves on a day, so the trip needs at least one. Add a day on the Itinerary tab — or set the dates in Settings and they are built for you — then come back."
+                    hint="A journey lands on a day, so the trip needs at least one. Set the dates in Settings and the days are built for you."
                 />
             </Card>
         );
     }
 
     return (
-        <div className="space-y-3 max-w-4xl">
-            {/* ---- Add ---- */}
-            <Card className="p-3">
+        <div className="max-w-4xl space-y-3">
+            {/* ---- Start one ---- */}
+            <Card className="space-y-3 p-3">
                 <div className="flex flex-wrap items-end gap-2">
-                    <div className="min-w-[8rem]">
-                        <label className="block text-xs font-semibold text-gray-500 mb-1">
-                            Leaves on
+                    <div className="min-w-[9rem]">
+                        <label className="mb-1 block text-xs font-semibold text-gray-500">
+                            A new journey
                         </label>
-                        <SelectField value={dayId} onChange={(e) => setAddDay(e.target.value)}>
-                            {days.map((day) => (
-                                <option key={day.id} value={day.id}>
-                                    Day {day.day_number}
-                                    {formatDayDate(startDate, day.day_number)
-                                        ? ` · ${formatDayDate(startDate, day.day_number)}`
-                                        : ''}
-                                    {day.title ? ` — ${day.title}` : ''}
+                        <MiniSelect
+                            value={mode}
+                            onChange={(e) => setMode(e.target.value as TravelMode)}
+                        >
+                            {TRAVEL_MODES.map((entry) => (
+                                <option key={entry.key} value={entry.key}>
+                                    {entry.icon} {entry.label}
                                 </option>
                             ))}
-                        </SelectField>
+                        </MiniSelect>
                     </div>
-                    <div className="min-w-[8rem]">
-                        <label className="block text-xs font-semibold text-gray-500 mb-1">How</label>
-                        <SelectField
-                            value={addMode}
-                            onChange={(e) => setAddMode(e.target.value as TravelMode)}
-                        >
-                            {TRAVEL_MODES.map((m) => (
-                                <option key={m.key} value={m.key}>{m.icon} {m.label}</option>
-                            ))}
-                        </SelectField>
-                    </div>
-                    <Button tone="primary" onClick={add}>+ Add leg</Button>
-                    <Button onClick={addTransfer} disabled={!dayId || transferring}>
-                        {transferring ? 'Adding…' : '+ Airport transfer'}
+                    <Button tone="primary" onClick={newJourney} disabled={busy}>
+                        {busy ? 'Working…' : '+ Start it'}
                     </Button>
                     <div className="flex-1" />
-                    <p className="text-[11px] text-gray-400 pb-2">
-                        A leg belongs to the day it leaves on. Landing on a later day is what the
-                        Lands control is for.
-                    </p>
+                    {summary.journeys > 0 && (
+                        <p className="pb-2 text-[11px] text-gray-400">
+                            {summary.journeys} journey{summary.journeys === 1 ? '' : 's'}
+                            {summary.moving > 0 && ` · ${formatMinutes(summary.moving)} in transit`}
+                            {summary.problems > 0 && (
+                                <span className="text-amber-700">
+                                    {' '}· {summary.problems} thing
+                                    {summary.problems === 1 ? '' : 's'} to check
+                                </span>
+                            )}
+                        </p>
+                    )}
                 </div>
-                {transferNote && (
-                    <p className="mt-2 rounded-xl bg-sky-50 px-2.5 py-1.5 text-[11px] text-sky-800">
-                        {transferNote}
-                    </p>
-                )}
+
+                <div className="rounded-2xl bg-gray-50 p-3">
+                    <label className="mb-1 block text-xs font-semibold text-gray-500">
+                        Or paste the flight numbers off your confirmation
+                    </label>
+                    <TextArea
+                        rows={2}
+                        value={paste}
+                        placeholder={'SQ 27 2026-09-12\nSQ 938 2026-09-14'}
+                        onChange={(e) => setPaste(e.target.value)}
+                        className="font-mono text-[11px]"
+                    />
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <Button onClick={buildFromPaste} disabled={!paste.trim() || pasting}>
+                            {pasting ? 'Building…' : 'Build the journey'}
+                        </Button>
+                        <span className="text-[11px] text-gray-400">
+                            One per line. Each is looked up and filled in — times, terminals,
+                            aircraft, time zones — and placed on the right day.
+                        </span>
+                    </div>
+                    {pasteNote && (
+                        <p className="mt-1.5 text-[11px] text-sky-800">{pasteNote}</p>
+                    )}
+                </div>
+                {note && <p className="text-[11px] text-gray-600">{note}</p>}
             </Card>
 
-            {/* ---- Counts ---- */}
-            {legs.length > 0 && (
-                <div className="flex flex-wrap items-center gap-1.5 px-1">
-                    <span className="text-xs text-gray-500">
-                        {legs.length} leg{legs.length === 1 ? '' : 's'}
-                    </span>
-                    {counts.map((m) => (
-                        <span
-                            key={m.key}
-                            className="rounded-full bg-white border border-gray-200 px-2.5 py-1
-                                text-[11px] text-gray-600"
-                        >
-                            {m.icon} {m.label} {m.count}
-                        </span>
-                    ))}
-                </div>
-            )}
-
-            {/* ---- The legs ---- */}
-            {legs.length === 0 ? (
+            {/* ---- The journeys ---- */}
+            {groups.length === 0 ? (
                 <Card>
                     <EmptyState
                         title="No travel entered yet"
-                        hint="Add the flight that gets you there, then the boat, the transfer, the train home. Each one shows up on its day in the itinerary."
+                        hint="Start with the flight that gets you there. Enter the whole ticket — every leg, both times, the layovers — and each leg lands on the right day by itself."
                     />
                 </Card>
             ) : (
                 <div className="space-y-3">
-                    {legs.map(({ leg, day }) => (
-                        <Card key={leg.id} className="p-3">
-                            <LegHeading leg={leg} day={day} startDate={startDate} />
-                            <TravelLegCard leg={leg} day={day} api={api} />
-                        </Card>
+                    {groups.map((group) => (
+                        <div key={group.key}>
+                            {/* Where this journey sits in the trip, said once
+                                above the card rather than per leg. */}
+                            {group.departDate && trip?.start_date && (
+                                <p className="mb-1 px-1 text-[11px] text-gray-400">
+                                    {formatDate(group.departDate)}
+                                    {(() => {
+                                        const placed = dayForDate(
+                                            days, trip.start_date, group.departDate,
+                                        );
+                                        return placed.dayNumber != null
+                                            ? ` · day ${placed.dayNumber}${placed.beyond ? ' (not planned yet)' : ''}`
+                                            : '';
+                                    })()}
+                                    {group.legs.length > 1
+                                        && ` · ${group.legs.length} legs`}
+                                    {` · ${travelModeMeta(group.mode).label.toLowerCase()}`}
+                                </p>
+                            )}
+                            <JourneyCard api={api} group={group} onAddLeg={onAddLeg} />
+                        </div>
                     ))}
                 </div>
             )}
-        </div>
-    );
-}
-
-/**
- * Which day this leg belongs to, above the editor.
- *
- * On the itinerary that context is the card it sits in; in a flat list it has to
- * be said, or six flights in a row are indistinguishable.
- */
-function LegHeading({ leg, day, startDate }: {
-    leg: TravelLeg;
-    day: Day;
-    startDate: string | null;
-}) {
-    const meta = travelModeMeta(leg.mode);
-    const date = formatDayDate(startDate, day.day_number);
-    const landsDay = legArrivalDay(leg, day.day_number);
-    const landsDate = formatDayDate(startDate, landsDay);
-
-    return (
-        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 mb-2 px-1">
-            <span className="text-sm font-semibold text-gray-900">
-                {meta.icon} Day {day.day_number}
-            </span>
-            {date && <span className="text-xs text-gray-400">{date}</span>}
-            {day.title && <span className="text-xs text-gray-400">· {day.title}</span>}
-            <div className="flex-1" />
-            <span className="text-[11px] text-gray-500 tabular-nums">
-                {leg.depart_time ? formatTime(leg.depart_time) : '—'}
-                {' → '}
-                {leg.arrive_time ? formatTime(leg.arrive_time) : '—'}
-                {legIsOvernight(leg) && (
-                    <span className="text-slate-700 font-semibold">
-                        {' '}day {landsDay}{landsDate ? ` (${landsDate})` : ''}
-                    </span>
-                )}
-            </span>
-            {/* Whether the map can draw it, said once per leg rather than per end. */}
-            <span className={`text-[11px] ${legEnds(leg) ? 'text-emerald-700' : 'text-gray-400'}`}>
-                {legEnds(leg) ? '📍 on the map' : 'not on the map'}
-            </span>
         </div>
     );
 }

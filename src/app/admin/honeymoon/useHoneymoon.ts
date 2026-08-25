@@ -13,7 +13,7 @@ export interface UndoOffer {
 
 export type Resource =
     'categories' | 'regions' | 'places' | 'days' | 'stops' | 'travel' | 'notes' | 'todos' | 'trip'
-    | 'bookings' | 'documents' | 'comments' | 'views' | 'rates';
+    | 'bookings' | 'documents' | 'comments' | 'views' | 'rates' | 'journeys';
 
 /** How many undos are kept. Ten is about as far back as anyone remembers. */
 const UNDO_DEPTH = 10;

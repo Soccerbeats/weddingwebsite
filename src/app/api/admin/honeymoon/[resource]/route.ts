@@ -167,8 +167,28 @@ const RESOURCES: Record<string, ResourceDef> = {
             from_terminal: { kind: 'text' },
             to_terminal: { kind: 'text' },
             aircraft: { kind: 'text' },
+            journey_id: { kind: 'ref' },
+            depart_date: { kind: 'date' },
+            arrive_date: { kind: 'date' },
         },
         required: ['day_id'],
+    },
+    /** The ticket a set of legs belongs to. */
+    journeys: {
+        table: 'honeymoon_journeys',
+        fields: {
+            // NOT NULL DEFAULT '': an untitled journey is an ordinary thing, and
+            // the UI shows its route instead.
+            title: { kind: 'text', blankAsEmpty: true },
+            kind: {
+                kind: 'enum',
+                values: ['flight', 'boat', 'car', 'train', 'walk'],
+                fallback: 'flight',
+            },
+            notes: { kind: 'text' },
+            sort_order: { kind: 'int' },
+        },
+        required: [],
     },
     todos: {
         table: 'honeymoon_todos',
@@ -213,6 +233,7 @@ const RESOURCES: Record<string, ResourceDef> = {
             place_id: { kind: 'ref' },
             travel_id: { kind: 'ref' },
             stop_id: { kind: 'ref' },
+            journey_id: { kind: 'ref' },
             kind: {
                 kind: 'enum',
                 values: ['stay', 'excursion', 'travel', 'table', 'other'],

@@ -18,7 +18,7 @@ import {
     monthMatrix, planRange, daysBeyondRange, tripLength, daysBetween, addDays, isoOf, buildIcs,
     tripEvents, searchHoneymoon,
     type Day, type GuideNote, type Region, type TodoItem,
-    type Place, type Stop,
+    type Place, type Stop, type TravelLeg,
 } from '../src/lib/honeymoon';
 import {
     baseRun, dayNumberFor, emergencyFor, minutesOf, navUrl, neighbourDays, nextStop,
@@ -31,6 +31,10 @@ import {
     dayOfWeek, describeHours, openAt, parseHours, stopIsOutsideHours,
 } from '../src/lib/honeymoonHours';
 import { parseFlight } from '../src/lib/honeymoonFetch';
+import {
+    dayForDate, formatMinutes, journeyDays, journeyTitle, journeysOf, legArriveDate,
+    legDepartDate, placementFor, sameInstantIn,
+} from '../src/lib/honeymoonJourneys';
 import {
     addDaysIso, buildTimeline, estimateHop, formatDuration, instantOf, isWalkable,
     legRealMinutes, zoneOffsetMinutes,
@@ -86,6 +90,7 @@ const LEG_DEFAULTS = {
     sort_order: 0, cost: null, cost_currency: null, booked_by: null,
     depart_tz: null, arrive_tz: null, flight_no: null,
     from_terminal: null, to_terminal: null, aircraft: null,
+    journey_id: null, depart_date: null, arrive_date: null,
 };
 
 const REGION_DEFAULTS = {
@@ -940,10 +945,12 @@ console.log('\nTrip mode — today');
     const warung = makePlace(300, 'Warung Ibu Oka', -8.5069, 115.2625);
     const payload = {
         trip,
+        journeys: [],
         categories: [], regions: [], notes: [], todos: [], documents: [], comments: [],
         views: [], rates: [], shares: [], price_checks: [], archives: [],
         bookings: [{
-            id: 1, place_id: 200, travel_id: null, stop_id: null, kind: 'stay' as const,
+            id: 1, place_id: 200, travel_id: null, stop_id: null, journey_id: null,
+        kind: 'stay' as const,
             provider: 'Direct', confirmation: 'AMK-9931', url: null, contact: null,
             check_in: '2026-09-15', check_out: '2026-09-18', check_in_time: '14:00',
             check_out_time: '12:00', cost: 2400, cost_currency: 'USD', cost_paid: 600,
@@ -1310,7 +1317,8 @@ console.log('\nBudget');
     const booked = buildBudget({
         ...payload,
         bookings: [{
-            id: 1, place_id: 1, travel_id: null, stop_id: null, kind: 'stay' as const,
+            id: 1, place_id: 1, travel_id: null, stop_id: null, journey_id: null,
+            kind: 'stay' as const,
             provider: null, confirmation: 'AMK-1', url: null, contact: null,
             check_in: null, check_out: null, check_in_time: null, check_out_time: null,
             cost: 1180, cost_currency: 'USD', cost_paid: 400, deposit_due_on: null,
@@ -1333,7 +1341,8 @@ console.log('\nWhat still needs doing');
     const stay = { ...makePlace(1, 'Amankila', -8.4, 115.5), status: 'booked' as const };
     const maybe = { ...makePlace(2, 'Maybe villa', -8.4, 115.5), status: 'shortlisted' as const };
     const bookings = [{
-        id: 1, place_id: 1, travel_id: null, stop_id: null, kind: 'stay' as const,
+        id: 1, place_id: 1, travel_id: null, stop_id: null, journey_id: null,
+        kind: 'stay' as const,
         provider: 'Direct', confirmation: 'A1', url: null, contact: null,
         check_in: null, check_out: null, check_in_time: null, check_out_time: null,
         cost: 1200, cost_currency: 'USD', cost_paid: null,
@@ -1660,7 +1669,8 @@ console.log('\nWhat is wrong with the plan');
     ];
 
     const bookings = [{
-        id: 1, place_id: 1, travel_id: null, stop_id: null, kind: 'stay' as const,
+        id: 1, place_id: 1, travel_id: null, stop_id: null, journey_id: null,
+        kind: 'stay' as const,
         provider: null, confirmation: 'A1', url: null, contact: null,
         check_in: '2026-09-12', check_out: '2026-09-15', check_in_time: null,
         check_out_time: null, cost: null, cost_currency: null, cost_paid: null,
@@ -1737,7 +1747,8 @@ console.log('\nStays as stretches');
         base_place_id: n <= 3 ? 1 : 2, stops: [], travel: [],
     }));
     const bookings = [{
-        id: 1, place_id: 1, travel_id: null, stop_id: null, kind: 'stay' as const,
+        id: 1, place_id: 1, travel_id: null, stop_id: null, journey_id: null,
+        kind: 'stay' as const,
         provider: null, confirmation: null, url: null, contact: null,
         check_in: '2026-09-12', check_out: '2026-09-15', check_in_time: null, check_out_time: null,
         cost: null, cost_currency: null, cost_paid: null, deposit_due_on: null, cancel_by: null,
@@ -1892,6 +1903,195 @@ console.log('\nFlight lookup');
                 scheduledTime: { local: '2026-08-26 22:40+01:00' },
             },
         }], 'BA112', '2026-08-26')?.arrive_day_offset === 0);
+}
+
+console.log('\nJourneys');
+{
+    const trip = {
+        id: 1, title: 'Honeymoon', start_date: '2026-09-12', end_date: '2026-09-21',
+        home_currency: 'USD', notes: null, focus_country: '', budget: null,
+        partner_names: '', info: {}, time_format: '24h' as const,
+        distance_unit: 'km' as const, phase: 'planning' as const,
+    };
+    const days: Day[] = [1, 2, 3, 4].map((n) => ({
+        id: n * 10, day_number: n, title: null, notes: null, base_place_id: null,
+        stops: [], travel: [],
+    }));
+
+    check('a date maps to the day that holds it',
+        dayForDate(days, trip.start_date, '2026-09-13').dayNumber === 2);
+    check('and to that day row', dayForDate(days, trip.start_date, '2026-09-13').day?.id === 20);
+    check('a date past the planned days says so',
+        dayForDate(days, trip.start_date, '2026-09-20').beyond === true
+        && dayForDate(days, trip.start_date, '2026-09-20').dayNumber === 9);
+    check('a date before the trip is beyond it too',
+        dayForDate(days, trip.start_date, '2026-09-01').beyond === true);
+
+    // A leg with no date of its own falls back to the day it is filed on.
+    check('a dated leg uses its own date',
+        legDepartDate({ ...LEG_DEFAULTS, id: 1, day_id: 10, depart_date: '2026-09-14' }, 1,
+            trip.start_date) === '2026-09-14');
+    check('an undated leg uses its day, so old legs still work',
+        legDepartDate({ ...LEG_DEFAULTS, id: 1, day_id: 10 }, 2, trip.start_date) === '2026-09-13');
+    check('the arrival date comes from the offset when it is not stored',
+        legArriveDate({ ...LEG_DEFAULTS, id: 1, day_id: 10, arrive_day_offset: 1 },
+            '2026-09-13') === '2026-09-14');
+
+    check('placement turns dates into a day and a span',
+        JSON.stringify(placementFor(
+            { depart_date: '2026-09-13', arrive_date: '2026-09-14' }, days, trip,
+        )) === JSON.stringify({ day_id: 20, arrive_day_offset: 1 }));
+    check('a same-day leg spans nothing',
+        placementFor({ depart_date: '2026-09-12', arrive_date: '2026-09-12' }, days, trip)
+            ?.arrive_day_offset === 0);
+    check('a date with no day cannot be placed, rather than being guessed at',
+        placementFor({ depart_date: '2026-09-30', arrive_date: '2026-09-30' }, days, trip) === null);
+
+    /*
+     * One ticket, three legs, across the date line: SAN 19:00 → SEA, SEA 23:59 →
+     * SIN (landing two days later), SIN → DPS. This is the shape the old
+     * leg-per-day model made you file onto three separate days by hand.
+     */
+    const journey = { id: 7, title: 'Fly out', kind: 'flight' as const, notes: null,
+        sort_order: 0, created_at: null };
+    const legs: TravelLeg[] = [
+        { ...LEG_DEFAULTS, id: 101, day_id: 10, journey_id: 7, from_text: 'SAN', to_text: 'SEA',
+          depart_date: '2026-09-12', arrive_date: '2026-09-12',
+          depart_time: '19:00', arrive_time: '21:45',
+          depart_tz: 'America/Los_Angeles', arrive_tz: 'America/Los_Angeles', flight_no: 'AS 512' },
+        { ...LEG_DEFAULTS, id: 102, day_id: 10, journey_id: 7, from_text: 'SEA', to_text: 'SIN',
+          depart_date: '2026-09-12', arrive_date: '2026-09-14',
+          depart_time: '23:59', arrive_time: '06:30',
+          depart_tz: 'America/Los_Angeles', arrive_tz: 'Asia/Singapore', flight_no: 'SQ 27',
+          sort_order: 1 },
+        { ...LEG_DEFAULTS, id: 103, day_id: 30, journey_id: 7, from_text: 'SIN', to_text: 'DPS',
+          depart_date: '2026-09-14', arrive_date: '2026-09-14',
+          depart_time: '09:15', arrive_time: '12:00',
+          depart_tz: 'Asia/Singapore', arrive_tz: 'Asia/Makassar', flight_no: 'SQ 938',
+          sort_order: 2 },
+    ];
+    const withLegs: Day[] = days.map((day) => ({
+        ...day, travel: legs.filter((leg) => leg.day_id === day.id),
+    }));
+
+    const groups = journeysOf({ trip, days: withLegs, journeys: [journey] });
+    check('the three legs come back as one journey', groups.length === 1);
+    const group = groups[0];
+    check('in the order they are flown',
+        group.legs.map((leg) => leg.flight_no).join(',') === 'AS 512,SQ 27,SQ 938');
+    check('the route reads end to end', group.route.join(' → ') === 'SAN → SEA → SIN → DPS');
+    check('it starts where the first leg starts and ends where the last one ends',
+        group.from === 'SAN' && group.to === 'DPS');
+    check('the dates span the whole ticket',
+        group.departDate === '2026-09-12' && group.arriveDate === '2026-09-14');
+    check('it spans three days', journeyDays(group) === 3);
+    check('the title falls back to the given one', journeyTitle(group) === 'Fly out');
+    check('and to the route when there is none',
+        journeyTitle({ ...group, journey: { ...journey, title: '' } })
+            === 'SAN → SEA → SIN → DPS');
+
+    // SAN 19:00 PDT = 02:00Z the 13th; DPS 12:00 WITA = 04:00Z the 14th → 26 h.
+    check('door to door is worked out across the zones',
+        group.totalMinutes === 26 * 60, String(group.totalMinutes));
+    /*
+     * 2h45 + 15h31 + 2h45. The middle leg is the one worth checking by hand:
+     * SEA 23:59 PDT is 06:59Z the next day, SIN 06:30 SGT is 22:30Z the same
+     * day — 931 minutes, and a clock-only subtraction would say 391.
+     */
+    check('and time in motion excludes the layovers',
+        group.movingMinutes === 165 + 931 + 165, String(group.movingMinutes));
+
+    check('there are two layovers', group.layovers.length === 2);
+    check('the first is the wait at Seattle',
+        group.layovers[0].at === 'SEA' && group.layovers[0].minutes === 134,
+        String(group.layovers[0].minutes));
+    check('the second is the wait at Singapore',
+        group.layovers[1].at === 'SIN' && group.layovers[1].minutes === 165,
+        String(group.layovers[1].minutes));
+    check('neither is tight or impossible',
+        group.layovers.every((entry) => !entry.tight && !entry.impossible));
+    check('nor an airport change',
+        group.layovers.every((entry) => !entry.changesAirport));
+
+    /* The three failures the old model could not see. */
+    const tight = journeysOf({
+        trip,
+        days: days.map((day) => ({
+            ...day,
+            travel: [legs[0], { ...legs[1], depart_time: '22:00' }]
+                .filter((leg) => leg.day_id === day.id),
+        })),
+        journeys: [journey],
+    })[0];
+    check('a fifteen-minute connection is flagged as tight',
+        tight.layovers[0].tight
+        && tight.problems.some((p) => p.kind === 'tight-layover'), String(tight.layovers[0].minutes));
+
+    const impossible = journeysOf({
+        trip,
+        days: days.map((day) => ({
+            ...day,
+            travel: [legs[0], { ...legs[1], depart_time: '20:00' }]
+                .filter((leg) => leg.day_id === day.id),
+        })),
+        journeys: [journey],
+    })[0];
+    check('a connection that leaves before you land is impossible',
+        impossible.layovers[0].impossible
+        && impossible.problems.some((p) => p.kind === 'impossible-layover'));
+
+    const changes = journeysOf({
+        trip,
+        days: days.map((day) => ({
+            ...day,
+            travel: [legs[0], { ...legs[1], from_text: 'PDX' }]
+                .filter((leg) => leg.day_id === day.id),
+        })),
+        journeys: [journey],
+    })[0];
+    check('landing at one airport and leaving from another is a transfer, and says so',
+        changes.layovers[0].changesAirport
+        && changes.problems.some((p) => p.kind === 'airport-change'));
+
+    const misfiled = journeysOf({
+        trip,
+        days: withLegs.map((day) => ({
+            ...day,
+            // The same leg, filed on the wrong day for its date.
+            travel: day.day_number === 4 ? [{ ...legs[2], day_id: 40 }] : [],
+        })),
+        journeys: [journey],
+    })[0];
+    check('a leg whose date disagrees with the day it is filed on is flagged',
+        misfiled.problems.some((p) => p.kind === 'no-day'), 
+        misfiled.problems.map((p) => p.kind).join(','));
+
+    const undated = journeysOf({
+        trip,
+        days: days.map((day) => ({
+            ...day,
+            travel: day.day_number === 1
+                ? [{ ...LEG_DEFAULTS, id: 200, day_id: 10, from_text: 'A', to_text: 'B' }]
+                : [],
+        })),
+        journeys: [],
+    })[0];
+    check('a leg with no journey is a journey of one', undated.journey === null
+        && undated.key === 'leg-200');
+    check('and a missing time is named as missing',
+        undated.problems.some((p) => p.kind === 'no-times'));
+
+    const empty = journeysOf({ trip, days, journeys: [journey] })[0];
+    check('a journey with no legs yet still appears, so you can add to it',
+        empty.legs.length === 0 && empty.journey?.id === 7);
+
+    check('durations read as hours and minutes',
+        formatMinutes(165) === '2 h 45 m' && formatMinutes(120) === '2 h'
+        && formatMinutes(45) === '45 m' && formatMinutes(null) === null);
+
+    check('a landing time can be read in another zone',
+        sameInstantIn('2026-09-14', '12:00', 'Asia/Makassar', 'America/Los_Angeles') === '21:00',
+        String(sameInstantIn('2026-09-14', '12:00', 'Asia/Makassar', 'America/Los_Angeles')));
 }
 
 console.log(`\n${failures === 0 ? 'PASS' : 'FAIL'} — ${checks - failures}/${checks} checks passed.\n`);

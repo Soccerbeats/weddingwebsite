@@ -205,6 +205,15 @@ export default function TripMap({
     const mapRef = useRef<LeafletNS.Map | null>(null);
     /** The base map, swapped in place rather than by rebuilding the map. */
     const baseRef = useRef<LeafletNS.TileLayer | null>(null);
+    /**
+     * The layer to start with, read through a ref.
+     *
+     * The map-creation effect must not depend on the layer — changing it would
+     * rebuild the map and lose the view — and the swap effect below is what
+     * reacts to a change. A ref says that to the compiler as well as to a reader.
+     */
+    const initialLayerRef = useRef(layerKey);
+    initialLayerRef.current = layerKey;
     /** Measuring and drawing overlays, cleared on mode change. */
     const toolLayerRef = useRef<LeafletNS.LayerGroup | null>(null);
     const measurePointsRef = useRef<LatLng[]>([]);
@@ -303,7 +312,8 @@ export default function TripMap({
                 worldCopyJump: true,
             });
 
-            const base = MAP_LAYERS.find((entry) => entry.key === layerKey) ?? MAP_LAYERS[0];
+            const base = MAP_LAYERS.find((entry) => entry.key === initialLayerRef.current)
+                ?? MAP_LAYERS[0];
             baseRef.current = L.tileLayer(base.url, {
                 maxZoom: base.maxZoom,
                 attribution: base.attribution,

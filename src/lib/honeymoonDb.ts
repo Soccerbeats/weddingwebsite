@@ -9,7 +9,8 @@ import pool from './db';
 import { CATEGORIES } from './honeymoon';
 import type {
     Booking, BookingKind, CategoryRow, CostPer, CurrencyRate, Day, DocumentKind, GuideNote,
-    HoneymoonPayload, LatLng, Place, PlaceComment, Region, SavedView, ShareLink, ShareScope, Stop,
+    HoneymoonPayload, Journey, LatLng, Place, PlaceComment, Region, SavedView, ShareLink,
+    ShareScope, Stop,
     PriceCheck, StopOutcome, TodoItem, TodoKind, TravelLeg, Trip, TripArchiveMeta, TripDocument,
     TripInfo,
 } from './honeymoon';
@@ -349,6 +350,27 @@ async function createTables() {
         )
     `);
 
+    /*
+     * A journey: the whole ticket, not one hop of it.
+     *
+     * Travel was modelled as a leg per day, which is backwards. A ticket is one
+     * booking with one reference covering several legs — SAN → SEA → SIN → DPS
+     * is *one* flight to enter, not three things to file onto three days — and
+     * which day each leg belongs to follows from its departure date rather than
+     * being chosen. The legs still hang off days (everything that draws the trip
+     * reads them that way); the journey is what you edit.
+     */
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS honeymoon_journeys (
+            id SERIAL PRIMARY KEY,
+            title TEXT NOT NULL DEFAULT '',
+            kind TEXT NOT NULL DEFAULT 'flight',
+            notes TEXT,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    `);
+
     /* Columns on the existing tables. */
     const columns: [string, string][] = [
         // Real money on a place, next to the free-text price note it replaces.
@@ -387,6 +409,25 @@ async function createTables() {
         ['honeymoon_travel', 'from_terminal TEXT'],
         ['honeymoon_travel', 'to_terminal TEXT'],
         ['honeymoon_travel', 'aircraft TEXT'],
+        // Which journey this leg is part of. Null is its own journey of one, so
+        // nothing had to be migrated and a single hop stays a single hop.
+        ['honeymoon_travel',
+            'journey_id INTEGER REFERENCES honeymoon_journeys(id) ON DELETE SET NULL'],
+        /*
+         * The real dates, which are what a ticket says.
+         *
+         * `day_id` still decides where a leg is drawn and `arrive_day_offset`
+         * still says how many days it spans — everything that renders the trip
+         * reads those. These two are the *input*: type the dates off the
+         * confirmation and the day and the offset are worked out from them,
+         * rather than being picked from a dropdown of day numbers.
+         */
+        ['honeymoon_travel', 'depart_date DATE'],
+        ['honeymoon_travel', 'arrive_date DATE'],
+        // A booking covers a whole journey: one reference, one price, one
+        // cancellation date for every leg on the ticket.
+        ['honeymoon_bookings',
+            'journey_id INTEGER REFERENCES honeymoon_journeys(id) ON DELETE CASCADE'],
         // A drawn boundary, so "which region is this place in" is a real answer.
         ['honeymoon_regions', 'boundary JSONB'],
         ['honeymoon_trip', 'budget NUMERIC(12, 2)'],
@@ -418,6 +459,8 @@ async function createTables() {
         ['honeymoon_comments_place_idx', 'honeymoon_comments (place_id)'],
         ['honeymoon_documents_place_idx', 'honeymoon_documents (place_id)'],
         ['honeymoon_price_checks_place_idx', 'honeymoon_price_checks (place_id)'],
+        ['honeymoon_travel_journey_idx', 'honeymoon_travel (journey_id)'],
+        ['honeymoon_bookings_journey_idx', 'honeymoon_bookings (journey_id)'],
     ] as [string, string][]) {
         await pool.query(`CREATE INDEX IF NOT EXISTS ${name} ON ${definition}`);
     }
@@ -536,7 +579,8 @@ export async function getHoneymoonPayload(): Promise<HoneymoonPayload> {
 
     const [
         tripRes, categoryRes, regionRes, placeRes, dayRes, stopRes, travelRes, noteRes, todoRes,
-        bookingRes, documentRes, commentRes, viewRes, rateRes, shareRes, priceRes, archiveRes,
+        bookingRes, journeyRes, documentRes, commentRes, viewRes, rateRes, shareRes, priceRes,
+        archiveRes,
     ] = await Promise.all([
         pool.query('SELECT * FROM honeymoon_trip WHERE id = 1'),
         pool.query('SELECT * FROM honeymoon_categories ORDER BY sort_order, label'),
@@ -552,6 +596,7 @@ export async function getHoneymoonPayload(): Promise<HoneymoonPayload> {
         pool.query('SELECT * FROM honeymoon_notes ORDER BY sort_order, id'),
         pool.query('SELECT * FROM honeymoon_todos ORDER BY sort_order, id'),
         pool.query('SELECT * FROM honeymoon_bookings ORDER BY id'),
+        pool.query('SELECT * FROM honeymoon_journeys ORDER BY sort_order, id'),
         pool.query('SELECT * FROM honeymoon_documents ORDER BY kind, name'),
         pool.query('SELECT * FROM honeymoon_comments ORDER BY created_at, id'),
         pool.query('SELECT * FROM honeymoon_views ORDER BY sort_order, name'),
@@ -689,6 +734,9 @@ export async function getHoneymoonPayload(): Promise<HoneymoonPayload> {
             from_lng: num(r.from_lng),
             to_lat: num(r.to_lat),
             to_lng: num(r.to_lng),
+            journey_id: r.journey_id ?? null,
+            depart_date: isoDate(r.depart_date),
+            arrive_date: isoDate(r.arrive_date),
             sort_order: r.sort_order ?? 0,
             cost: money(r.cost),
             cost_currency: r.cost_currency ?? null,
@@ -744,6 +792,7 @@ export async function getHoneymoonPayload(): Promise<HoneymoonPayload> {
         place_id: r.place_id ?? null,
         travel_id: r.travel_id ?? null,
         stop_id: r.stop_id ?? null,
+        journey_id: r.journey_id ?? null,
         kind: (['stay', 'excursion', 'travel', 'table', 'other'].includes(r.kind)
             ? r.kind : 'other') as BookingKind,
         provider: r.provider ?? null,
@@ -833,8 +882,18 @@ export async function getHoneymoonPayload(): Promise<HoneymoonPayload> {
         checked_at: isoStamp(r.checked_at),
     }));
 
+    const journeys: Journey[] = journeyRes.rows.map((r) => ({
+        id: r.id,
+        title: r.title ?? '',
+        kind: (['flight', 'boat', 'car', 'train', 'walk'].includes(r.kind)
+            ? r.kind : 'flight') as Journey['kind'],
+        notes: r.notes ?? null,
+        sort_order: r.sort_order ?? 0,
+        created_at: isoStamp(r.created_at),
+    }));
+
     return {
-        trip, categories, regions, places, days, notes, todos,
+        trip, journeys, categories, regions, places, days, notes, todos,
         bookings, documents, comments, views, rates, shares, price_checks, archives,
     };
 }

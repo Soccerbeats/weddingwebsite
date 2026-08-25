@@ -692,3 +692,37 @@ CREATE INDEX IF NOT EXISTS honeymoon_bookings_stop_idx ON honeymoon_bookings (st
 CREATE INDEX IF NOT EXISTS honeymoon_comments_place_idx ON honeymoon_comments (place_id);
 CREATE INDEX IF NOT EXISTS honeymoon_documents_place_idx ON honeymoon_documents (place_id);
 CREATE INDEX IF NOT EXISTS honeymoon_price_checks_place_idx ON honeymoon_price_checks (place_id);
+
+-- ---------------------------------------------------------------------------
+-- Journeys (v0.9.54)
+--
+-- Travel was modelled as a leg per day, which is backwards: a ticket is one
+-- booking with one reference covering several legs — SAN → SEA → SIN → DPS is
+-- *one* flight to enter, not three things to file onto three days. The legs
+-- still hang off days, because everything that draws the trip reads them that
+-- way; the journey is the thing you edit, and each leg's day follows from its
+-- departure date instead of being picked.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS honeymoon_journeys (
+  id SERIAL PRIMARY KEY,
+  title TEXT NOT NULL DEFAULT '',
+  kind TEXT NOT NULL DEFAULT 'flight',
+  notes TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Null journey_id is a journey of one, so nothing needed migrating.
+ALTER TABLE honeymoon_travel ADD COLUMN IF NOT EXISTS journey_id INTEGER
+  REFERENCES honeymoon_journeys(id) ON DELETE SET NULL;
+-- The dates a ticket actually states. day_id and arrive_day_offset are still
+-- what the itinerary, the calendar and the print sheet read; these are the input
+-- they are derived from.
+ALTER TABLE honeymoon_travel ADD COLUMN IF NOT EXISTS depart_date DATE;
+ALTER TABLE honeymoon_travel ADD COLUMN IF NOT EXISTS arrive_date DATE;
+-- One booking covers the whole ticket.
+ALTER TABLE honeymoon_bookings ADD COLUMN IF NOT EXISTS journey_id INTEGER
+  REFERENCES honeymoon_journeys(id) ON DELETE CASCADE;
+
+CREATE INDEX IF NOT EXISTS honeymoon_travel_journey_idx ON honeymoon_travel (journey_id);
+CREATE INDEX IF NOT EXISTS honeymoon_bookings_journey_idx ON honeymoon_bookings (journey_id);
