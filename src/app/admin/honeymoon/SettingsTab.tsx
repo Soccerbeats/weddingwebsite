@@ -5,9 +5,11 @@ import Link from 'next/link';
 import {
     addDays, daysBeyondRange, daysBetween, formatDate, formatDayDate, planRange,
 } from '@/lib/honeymoon';
+import { INFO_SECTIONS } from '@/lib/honeymoonToday';
 import type { HoneymoonApi } from './useHoneymoon';
 import DateRangePicker from './DateRangePicker';
-import { Button, Card, SelectField, TextField } from './ui';
+import ShareLinks from './ShareLinks';
+import { Button, Card, SelectField, TextArea, TextField } from './ui';
 
 /** The handful anyone planning from the US actually prices in. */
 const CURRENCIES = [
@@ -185,6 +187,52 @@ export default function SettingsTab({ api }: { api: HoneymoonApi }) {
                     </p>
                 </div>
 
+                <div className="grid grid-cols-2 gap-3">
+                    <div>
+                        <label className="block text-xs font-semibold text-gray-500 mb-1">
+                            Clock
+                        </label>
+                        <SelectField
+                            value={trip.time_format}
+                            onChange={(e) => api.update('trip', { time_format: e.target.value })}
+                        >
+                            <option value="24h">24-hour (14:05)</option>
+                            <option value="12h">12-hour (2:05 PM)</option>
+                        </SelectField>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-semibold text-gray-500 mb-1">
+                            Distances
+                        </label>
+                        <SelectField
+                            value={trip.distance_unit}
+                            onChange={(e) => api.update('trip', { distance_unit: e.target.value })}
+                        >
+                            <option value="km">Kilometres</option>
+                            <option value="mi">Miles</option>
+                        </SelectField>
+                    </div>
+                </div>
+
+                <div>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">
+                        The two of you
+                    </label>
+                    <TextField
+                        key={trip.partner_names}
+                        defaultValue={trip.partner_names}
+                        placeholder="Austin, Heaven"
+                        onBlur={(e) => {
+                            if (e.target.value !== trip.partner_names) {
+                                api.update('trip', { partner_names: e.target.value });
+                            }
+                        }}
+                    />
+                    <p className="text-xs text-gray-400 mt-1.5">
+                        Used for per-person ratings, packing lists and who a shared link is for.
+                    </p>
+                </div>
+
                 <div>
                     <label className="block text-xs font-semibold text-gray-500 mb-1">Notes</label>
                     <TextField
@@ -217,6 +265,59 @@ export default function SettingsTab({ api }: { api: HoneymoonApi }) {
                     needs the dates above to be set. The backup is the whole portal in one file; keep
                     one before any big change, because nothing here is versioned.
                 </p>
+            </Card>
+
+            {/* ---- The things you need at 2am ---- */}
+            <Card className="p-4 space-y-3 xl:col-span-2">
+                <div>
+                    <h3 className="text-sm font-semibold text-gray-900">
+                        Emergency &amp; practical details
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                        These show up on the Today view behind one tap, and they are what you will
+                        want when the phone is at 4% in a taxi. `trip.notes` above is for planning
+                        thoughts; this is for facts.
+                    </p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {INFO_SECTIONS.map((section) => (
+                        <div key={section.key}>
+                            <label className="block text-xs font-semibold text-gray-500 mb-1">
+                                {section.label}
+                            </label>
+                            <TextArea
+                                key={`${section.key}-${trip.info?.[section.key] ?? ''}`}
+                                defaultValue={trip.info?.[section.key] ?? ''}
+                                placeholder={section.hint}
+                                rows={3}
+                                onBlur={(e) => {
+                                    const value = e.target.value;
+                                    if (value === (trip.info?.[section.key] ?? '')) return;
+                                    // The whole blob goes back, so a second tab
+                                    // editing another section cannot be lost by
+                                    // this one — the payload is refetched between
+                                    // saves and this reads the fresh copy.
+                                    api.update('trip', {
+                                        info: { ...(trip.info ?? {}), [section.key]: value },
+                                    });
+                                }}
+                            />
+                        </div>
+                    ))}
+                </div>
+            </Card>
+
+            {/* ---- Sharing ---- */}
+            <Card className="p-4 space-y-3 xl:col-span-2">
+                <div>
+                    <h3 className="text-sm font-semibold text-gray-900">Share it with someone</h3>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                        A link that opens the trip read-only — no login, nothing editable, no access
+                        to the shortlists or the budget. The link itself is the password, so treat it
+                        like one: revoke it rather than hoping.
+                    </p>
+                </div>
+                <ShareLinks api={api} />
             </Card>
 
             <Card className="p-4">

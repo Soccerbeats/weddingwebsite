@@ -14,6 +14,9 @@ const BASE = '/admin/honeymoon';
 
 const TABS = [
     { href: BASE, label: 'Dashboard' },
+    // Second, not last: on the trip itself this is the only tab that matters,
+    // and it should be reachable without scrolling the strip.
+    { href: `${BASE}/today`, label: 'Today' },
     { href: `${BASE}/map`, label: 'Map' },
     { href: `${BASE}/itinerary`, label: 'Itinerary' },
     { href: `${BASE}/travel`, label: 'Travel' },

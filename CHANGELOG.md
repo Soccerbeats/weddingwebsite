@@ -11,6 +11,18 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.45 — [Released] The planner's second half, part two: trip mode (`main`, 2026-08-25 17:05)
+
+Wave 2 of seven. The portal was built for planning; this is the half that works on the trip itself — one screen, one thumb, no signal required, and a copy your partner can open.
+
+### Added
+- **A Today view** (`/admin/honeymoon/today`, second tab). What today is: the flight that lands, where you are sleeping and which night of it this is, the day's stops in order with their windows, the next one flagged as you pass it, a **Navigate** button per stop that opens the native maps app, and the booking reference, hotel phone and dress code where they belong. Arrows step to any other day; "Back to today" returns. Everything on it was already in the payload — this only joins it up.
+- **An offline snapshot.** A service worker registered by the Today view (and by a shared link) caches the portal's own pages, its data payload and Next's static chunks — network-first, so it is never stale while you have signal, and the last good copy when you do not. Deliberately narrow: the guest site never registers it, and writes are never cached or replayed. The print sheet's own comment asked for "hotel desk with no signal"; this is that without the paper.
+- **A read-only link for the other half of the couple** (`/honeymoon/<token>`). No login, no admin API, no writes. Three scopes: today only, the whole itinerary, or the itinerary plus the guide notes; the shortlists, budget, checklist and place library are never included, and the place list is trimmed to what the visible days reference. Links are named, revocable (a leaked link stays dead), can expire, and record when they were last opened. The token is 192 bits from `crypto.randomBytes` and is never accepted from a caller — unknown, revoked and expired all answer with the same 404.
+- **An emergency card**, one tap down on the Today view: the local emergency numbers for the country of today's base as tap-to-call buttons (a static table — the one time you need it is the one time there is no signal to look it up, and 112 is the fallback with a note that it is a guess), followed by whatever you have filled in for insurance, embassy, medical, contacts and money.
+- **Practical trip details as a real form** (Settings). Six sections — emergency contacts, insurance, embassy, medical, on-the-ground contacts, money — replacing a single trip-wide text input, and they are what the emergency card shows. Alongside them: the couple's names, a 12/24-hour clock setting and kilometres/miles, all of which the views now honour.
+- **A night mode for the Today view**, remembered per browser and scoped so it cannot leak into the rest of the site — you read this screen at 05:30 on the morning of a flight. Every target on it is at least 44px.
+
 ## v0.9.44 — [Released] The planner's second half, part one: foundations (`main`, 2026-08-25 16:22)
 
 The first of seven waves working through `docs/honeymoon-improvements-2026-08-25.md`. This one is the plumbing the other six sit on: every schema change the list needs, in one migration, plus the four items that touch every tab.

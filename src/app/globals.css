@@ -24,6 +24,17 @@
   --font-script: var(--font-script), cursive;
 }
 
+/*
+ * Night mode, deliberately scoped rather than global.
+ *
+ * The site itself is black-and-white photography on white and stays that way
+ * (see below). The one screen that wants the opposite is the honeymoon portal's
+ * Today view, which gets read in bed at 05:30 on the morning of a flight — so
+ * `night:` styles apply only inside an element that opted in with `.night`,
+ * and nothing else on the site can pick them up by accident.
+ */
+@custom-variant night (&:where(.night, .night *));
+
 /* Dark mode disabled for wedding theme consistency */
 /* @media (prefers-color-scheme: dark) {
   :root {

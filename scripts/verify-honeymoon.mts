@@ -21,6 +21,10 @@ import {
     type Place, type Stop,
 } from '../src/lib/honeymoon';
 import {
+    baseRun, dayNumberFor, emergencyFor, minutesOf, navUrl, neighbourDays, nextStop,
+    planForDay, planForToday, standingOf, stopWindow, timeOf,
+} from '../src/lib/honeymoonToday';
+import {
     coordsFromMapsUrl, coordsFromPair, nameFromMapsUrl,
 } from '../src/app/api/admin/honeymoon/geocode/route';
 import { SEED_PLACES, SEED_REGIONS, SEED_NOTES } from '../src/lib/honeymoonSeed';
@@ -867,6 +871,156 @@ console.log('\nSearch');
         spread.some((h) => h.kind === 'todo'), spread.map((h) => h.label).join(' | '));
     check('the best match is still first',
         spread[0].kind === 'region' && spread[0].label === 'Ubud', spread[0].label);
+}
+
+console.log('\nTrip mode — today');
+{
+    const trip = {
+        id: 1, title: 'Honeymoon', start_date: '2026-09-12', end_date: '2026-09-21',
+        home_currency: 'USD', notes: null, focus_country: '', budget: null,
+        partner_names: 'Austin, Heaven', info: {}, time_format: '24h' as const,
+        distance_unit: 'km' as const, phase: 'planning' as const,
+    };
+
+    check('minutes parse off a stored time', minutesOf('09:30') === 570);
+    check('a malformed time is not a time',
+        minutesOf('9:5') === null && minutesOf('25:00') === null && minutesOf(null) === null);
+    check('and come back as one', timeOf(570) === '09:30' && timeOf(0) === '00:00');
+    check('past midnight wraps rather than lying', timeOf(1500) === '01:00');
+
+    check('day one is the start date', dayNumberFor(trip, '2026-09-12', 10) === 1);
+    check('and day ten is nine days later', dayNumberFor(trip, '2026-09-21', 10) === 10);
+    check('a date before the trip is no day', dayNumberFor(trip, '2026-09-11', 10) === null);
+    check('a date past the plan is no day', dayNumberFor(trip, '2026-09-22', 10) === null);
+
+    check('before the trip', standingOf(trip, 10, '2026-09-01') === 'before');
+    check('during it', standingOf(trip, 10, '2026-09-15') === 'during');
+    check('on the last day it is still during', standingOf(trip, 10, '2026-09-21') === 'during');
+    check('after it', standingOf(trip, 10, '2026-09-30') === 'after');
+    check('an undated trip stands nowhere',
+        standingOf({ start_date: null, end_date: null }, 10, '2026-09-15') === 'undated');
+    check('dates longer than the plan still count as during',
+        standingOf({ start_date: '2026-09-12', end_date: '2026-09-25' }, 3, '2026-09-20') === 'during');
+
+    const dayRows: Day[] = [1, 2, 3, 4, 5].map((n) => ({
+        id: n, day_number: n, title: null, notes: null,
+        base_place_id: n <= 2 ? 100 : 200,
+        stops: [], travel: [],
+    }));
+    check('a base run counts the nights at one place',
+        baseRun(dayRows, 4)?.nights === 3 && baseRun(dayRows, 4)?.night === 2);
+    check('and the first night of a run is night one', baseRun(dayRows, 1)?.night === 1);
+    check('a day with no base has no run',
+        baseRun([{ ...dayRows[0], base_place_id: null }], 1) === null);
+
+    const amankila = makePlace(200, 'Amankila', -8.4788, 115.5628);
+    const warung = makePlace(300, 'Warung Ibu Oka', -8.5069, 115.2625);
+    const payload = {
+        trip,
+        categories: [], regions: [], notes: [], todos: [], documents: [], comments: [],
+        views: [], rates: [], shares: [], archives: [],
+        bookings: [{
+            id: 1, place_id: 200, travel_id: null, stop_id: null, kind: 'stay' as const,
+            provider: 'Direct', confirmation: 'AMK-9931', url: null, contact: null,
+            check_in: '2026-09-15', check_out: '2026-09-18', check_in_time: '14:00',
+            check_out_time: '12:00', cost: 2400, cost_currency: 'USD', cost_paid: 600,
+            deposit_due_on: null, cancel_by: '2026-09-08', party_size: 2, dress_code: null,
+            paid: false, documents: [], notes: null, created_at: null,
+        }],
+        places: [amankila, warung],
+        days: [
+            { ...dayRows[0], base_place_id: 200, travel: [{
+                ...LEG_DEFAULTS, id: 9, day_id: 1, from_text: 'DPS', to_text: 'Ubud',
+                mode: 'car' as const, depart_time: '15:00',
+            }] },
+            { ...dayRows[1], base_place_id: 200, stops: [
+                { ...STOP_DEFAULTS, id: 21, day_id: 2, place_id: 300, start_time: '11:00',
+                  duration_minutes: 90, sort_order: 0 },
+                { ...STOP_DEFAULTS, id: 22, day_id: 2, custom_label: 'Sunset walk',
+                  start_time: '18:00', sort_order: 1 },
+                { ...STOP_DEFAULTS, id: 23, day_id: 2, custom_label: 'Somewhere, sometime',
+                  sort_order: 2 },
+            ] },
+            { ...dayRows[2], base_place_id: 200 },
+        ],
+    };
+
+    const dayTwo = planForDay(payload, 2);
+    check('the day resolves its stops in order',
+        dayTwo.stops.map((s) => s.label).join(' | ')
+        === 'Warung Ibu Oka | Sunset walk | Somewhere, sometime');
+    check('a stop on a pinned place carries its coordinates',
+        dayTwo.stops[0].lat === -8.5069 && dayTwo.stops[0].lng === 115.2625);
+    check('a duration closes the window', dayTwo.stops[0].until === '12:30');
+    check('no duration means no window', dayTwo.stops[1].until === null);
+    check('the base comes back as the place, with the night counted',
+        dayTwo.base?.name === 'Amankila' && dayTwo.baseNight === 2 && dayTwo.baseNights === 3);
+    check("the base's booking is attached to its stops or place",
+        planForDay(payload, 2).stops.every((s) => s.booking === null || s.booking.confirmation === 'AMK-9931'));
+    check('a window reads as a range',
+        stopWindow(dayTwo.stops[0], '24h') === '11:00 – 12:30');
+    check('and in 12-hour form when that is the setting',
+        stopWindow(dayTwo.stops[0], '12h') === '11:00 AM – 12:30 PM',
+        stopWindow(dayTwo.stops[0], '12h') ?? '');
+    check('an untimed stop has no window', stopWindow(dayTwo.stops[2], '24h') === null);
+
+    const dayOne = planForDay(payload, 1);
+    check('a leg leaving today is a departure',
+        dayOne.departures.length === 1 && dayOne.departures[0].to_text === 'Ubud');
+    check('and is not counted on the day it does not land on',
+        dayTwo.departures.length === 0 && dayTwo.arrivals.length === 0);
+
+    const overnight = {
+        ...payload,
+        days: payload.days.map((d, i) => (i !== 0 ? d : {
+            ...d,
+            travel: [{ ...LEG_DEFAULTS, id: 31, day_id: 1, from_text: 'SIN', to_text: 'DPS',
+                depart_time: '23:30', arrive_time: '05:40', arrive_day_offset: 1 }],
+        })),
+    };
+    check('a red-eye lands on the next day',
+        planForDay(overnight, 2).arrivals.length === 1
+        && planForDay(overnight, 2).arrivals[0].fromDayNumber === 1);
+
+    check('mid-trip, today is the day the date says',
+        planForToday(payload, '2026-09-13').dayNumber === 2);
+    check('before the trip it leads with day one, and counts down',
+        planForToday(payload, '2026-09-01').dayNumber === 1
+        && planForToday(payload, '2026-09-01').daysUntil === 11);
+    check('after the trip it shows the last planned day',
+        planForToday(payload, '2026-10-01').dayNumber === 3);
+    check('a date inside the dates but past the rows shows the last row',
+        planForToday({ ...payload, trip: { ...trip, end_date: '2026-09-30' } }, '2026-09-25')
+            .dayNumber === 3);
+    check('a trip with no days at all has no day',
+        planForToday({ ...payload, days: [] }, '2026-09-13').day === null);
+
+    check('the next thing is the next timed stop',
+        nextStop(dayTwo.stops, 600)?.label === 'Warung Ibu Oka');
+    check('and after it, the one after', nextStop(dayTwo.stops, 720)?.label === 'Sunset walk');
+    check('nothing left today is nothing', nextStop(dayTwo.stops, 1300) === null);
+    check('an untimed stop is never "next"',
+        nextStop([dayTwo.stops[2]], 0) === null);
+
+    check('the arrows know their neighbours',
+        neighbourDays(payload.days, 2).previous === 1 && neighbourDays(payload.days, 2).next === 3);
+    check('and the first day has nothing before it',
+        neighbourDays(payload.days, 1).previous === null);
+
+    check('a pinned stop navigates by coordinate',
+        navUrl(warung) === 'https://www.google.com/maps/dir/?api=1&destination=-8.5069,115.2625');
+    check('an unpinned one navigates by name and address',
+        navUrl({ name: 'Ibu Oka', address: 'Ubud' })
+        === 'https://www.google.com/maps/dir/?api=1&destination=Ibu%20Oka%2C%20Ubud');
+
+    check('Indonesia has its own numbers',
+        emergencyFor('Indonesia').numbers[0].number === '112'
+        && emergencyFor('Indonesia').numbers.some((n) => n.label === 'Ambulance'));
+    check("Singapore's police and ambulance differ",
+        emergencyFor('Singapore').numbers.map((n) => n.number).join(',') === '999,995,995');
+    check('an unknown country falls back to 112, and says it is a guess',
+        emergencyFor('Ruritania').guessed && emergencyFor('Ruritania').numbers[0].number === '112');
+    check('so does no country at all', emergencyFor(null).guessed);
 }
 
 console.log(`\n${failures === 0 ? 'PASS' : 'FAIL'} — ${checks - failures}/${checks} checks passed.\n`);

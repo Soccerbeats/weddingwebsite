@@ -44,9 +44,8 @@ export default function ReauthModal({ onAuthenticate, onDismiss }: {
                 </p>
                 <div className="mt-4">
                     <TextField
-                        // eslint-disable-next-line jsx-a11y/no-autofocus -- the
-                        // modal exists to take a password; anywhere else to put
-                        // the cursor would be wrong.
+                        // The modal exists to take a password; anywhere else to
+                        // put the cursor would be wrong.
                         autoFocus
                         type="password"
                         value={password}
