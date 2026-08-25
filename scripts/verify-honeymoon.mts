@@ -25,6 +25,16 @@ import {
     planForDay, planForToday, standingOf, stopWindow, timeOf,
 } from '../src/lib/honeymoonToday';
 import {
+    isAfterDark, localTimeIn, nominalZone, sunTimes, sunTimesLocal,
+} from '../src/lib/honeymoonSun';
+import {
+    dayOfWeek, describeHours, openAt, parseHours, stopIsOutsideHours,
+} from '../src/lib/honeymoonHours';
+import {
+    addDaysIso, buildTimeline, estimateHop, formatDuration, instantOf, isWalkable,
+    legRealMinutes, zoneOffsetMinutes,
+} from '../src/lib/honeymoonTimeline';
+import {
     coordsFromMapsUrl, coordsFromPair, nameFromMapsUrl,
 } from '../src/app/api/admin/honeymoon/geocode/route';
 import { SEED_PLACES, SEED_REGIONS, SEED_NOTES } from '../src/lib/honeymoonSeed';
@@ -1021,6 +1031,199 @@ console.log('\nTrip mode — today');
     check('an unknown country falls back to 112, and says it is a guess',
         emergencyFor('Ruritania').guessed && emergencyFor('Ruritania').numbers[0].number === '112');
     check('so does no country at all', emergencyFor(null).guessed);
+}
+
+console.log('\nSun');
+{
+    // Bali, mid-September: sunrise a little after six, sunset a little after
+    // six, because it is eight degrees off the equator.
+    const bali = sunTimesLocal(-8.65, 115.2167, '2026-09-15', 'Asia/Makassar');
+    check('Bali sunrise is around 06:1x', /^06:[0-2]\d$/.test(bali.sunrise ?? ''), bali.sunrise ?? 'null');
+    check('and sunset around 18:2x', /^18:[0-3]\d$/.test(bali.sunset ?? ''), bali.sunset ?? 'null');
+    check('neither is a polar case', bali.polar === null);
+
+    // London in June: a long day, and the zone is BST not GMT.
+    const london = sunTimesLocal(51.5072, -0.1276, '2026-06-21', 'Europe/London');
+    check('midsummer in London starts before five', (london.sunrise ?? '') < '05:00', london.sunrise ?? '');
+    check('and ends after nine', (london.sunset ?? '') > '21:00', london.sunset ?? '');
+
+    const tromso = sunTimes(69.6492, 18.9553, '2026-06-21');
+    check('the midnight sun has no sunset', tromso.polar === 'day' && tromso.sunset === null);
+    const polarNight = sunTimes(69.6492, 18.9553, '2026-12-21');
+    check('and the polar night has no sunrise', polarNight.polar === 'night');
+
+    check('a UTC instant reads in its zone',
+        localTimeIn(new Date('2026-09-15T10:00:00Z'), 'Asia/Makassar') === '18:00');
+    check('an unknown zone falls back to UTC rather than throwing',
+        localTimeIn(new Date('2026-09-15T10:00:00Z'), 'Mars/Olympus') === '10:00');
+    check('a longitude has a nominal zone', nominalZone(115.2) === 'Etc/GMT-8');
+    check('and Greenwich is UTC', nominalZone(0) === 'UTC');
+
+    check('dinner after sunset is after dark', isAfterDark('19:30', '18:20'));
+    check('and lunch is not', !isAfterDark('12:30', '18:20'));
+    check('no sunset means no verdict', !isAfterDark('19:30', null));
+}
+
+console.log('\nOpening hours');
+{
+    check('24/7 is always open', openAt('24/7', 3, 3 * 60) === 'open');
+    const office = 'Mo-Fr 09:00-17:00; Sa 10:00-14:00; Su off';
+    check('a weekday morning is open', openAt(office, 3, 10 * 60) === 'open');
+    check('a weekday evening is closed', openAt(office, 3, 19 * 60) === 'closed');
+    check('Saturday afternoon is closed', openAt(office, 6, 15 * 60) === 'closed');
+    check('Saturday lunchtime is open', openAt(office, 6, 12 * 60) === 'open');
+    check('Sunday is closed', openAt(office, 0, 12 * 60) === 'closed');
+    check('a day range that wraps includes both ends',
+        openAt('Sa-Mo 08:00-12:00', 0, 9 * 60) === 'open'
+        && openAt('Sa-Mo 08:00-12:00', 2, 9 * 60) === 'closed');
+    check('a split day handles both windows',
+        openAt('Mo-Su 08:00-12:00,17:00-21:00', 1, 18 * 60) === 'open'
+        && openAt('Mo-Su 08:00-12:00,17:00-21:00', 1, 14 * 60) === 'closed');
+    check('a window past midnight opens the small hours of the next day',
+        openAt('Fr 20:00-02:00', 6, 1 * 60) === 'open');
+    check('and not the small hours of the same day',
+        openAt('Fr 20:00-02:00', 5, 1 * 60) === 'closed');
+
+    check('a spec with public holidays is not guessed at',
+        openAt('Mo-Fr 09:00-17:00; PH off', 3, 10 * 60) === 'unknown');
+    check('nor is one with month ranges',
+        openAt('Apr-Oct Mo-Su 09:00-18:00', 3, 10 * 60) === 'unknown');
+    check('nor a sunset rule', openAt('Mo-Su 09:00-sunset', 3, 10 * 60) === 'unknown');
+    check('nor nonsense', openAt('open when we feel like it', 3, 600) === 'unknown');
+    check('nor nothing at all', openAt(null, 3, 600) === 'unknown' && parseHours('') === null);
+
+    check('a date knows its weekday', dayOfWeek('2026-09-15') === 2);
+    check('24/7 describes itself', describeHours('24/7') === 'Open all hours');
+    check('and a spec is tidied for reading',
+        describeHours('Mo-Fr 09:00-17:00; Sa 10:00-14:00')
+        === 'Mo-Fr 09:00-17:00 · Sa 10:00-14:00');
+
+    check('a stop outside the hours is flagged',
+        stopIsOutsideHours(office, '2026-09-15', '19:00'));
+    check('a stop inside them is not',
+        !stopIsOutsideHours(office, '2026-09-15', '10:00'));
+    check('an unparseable spec never flags anything',
+        !stopIsOutsideHours('Apr-Oct 09:00-18:00', '2026-09-15', '23:00'));
+}
+
+console.log('\nDay timeline');
+{
+    const hotel = makePlace(1, 'Hotel', -8.5069, 115.2625);
+    const nearby = makePlace(2, 'Cafe next door', -8.5074, 115.2631);
+    const far = makePlace(3, 'Waterfall', -8.3405, 115.3220);
+    const places = new Map([[1, hotel], [2, nearby], [3, far]]);
+
+    check('a hop between two pins is estimated', (estimateHop(hotel, far)?.seconds ?? 0) > 0);
+    check('and is labelled an estimate', estimateHop(hotel, far)?.source === 'estimate');
+    check('an unpinned end has no hop',
+        estimateHop(hotel, makePlace(9, 'Nowhere', null, null)) === null);
+    check('a stroll is walkable', isWalkable(hotel, nearby));
+    check('a waterfall is not', !isWalkable(hotel, far));
+
+    const stops: Stop[] = [
+        { ...STOP_DEFAULTS, id: 1, day_id: 1, place_id: 2, start_time: '09:00',
+          duration_minutes: 60, sort_order: 0 },
+        { ...STOP_DEFAULTS, id: 2, day_id: 1, place_id: 3, start_time: '10:15',
+          duration_minutes: 120, sort_order: 1 },
+        { ...STOP_DEFAULTS, id: 3, day_id: 1, place_id: 1, sort_order: 2 },
+    ];
+
+    // A fixed 45-minute road time, so the arithmetic is checkable.
+    const road = () => ({ seconds: 45 * 60, meters: 30_000, source: 'road' as const });
+    const timeline = buildTimeline(stops, places, hotel, road);
+    check('the first stop starts when it says', timeline.rows[0].arrive === '09:00');
+    check('and leaves after its duration', timeline.rows[0].leave === '10:00');
+    check('the second cannot be reached by 10:15',
+        timeline.rows[1].late && timeline.rows[1].lateBy === 30, String(timeline.rows[1].lateBy));
+    check('so its arrival is the honest one', timeline.rows[1].arrive === '10:45');
+    check('and its departure follows from that', timeline.rows[1].leave === '12:45');
+    check('an untimed stop takes the time the day reached',
+        timeline.rows[2].arrive === '13:30', timeline.rows[2].arrive ?? 'null');
+    check('the day totals its driving', timeline.driveMinutes === 90);
+    check('road times are not estimates', !timeline.estimated);
+    check('the walkable stop is flagged, the far one is not',
+        timeline.rows[0].walkable && !timeline.rows[1].walkable);
+    check('lateness is counted for the day card', timeline.lateCount === 1);
+
+    const relaxed = buildTimeline([
+        { ...STOP_DEFAULTS, id: 1, day_id: 1, place_id: 2, start_time: '09:00',
+          duration_minutes: 30, sort_order: 0 },
+        { ...STOP_DEFAULTS, id: 2, day_id: 1, place_id: 3, start_time: '14:00', sort_order: 1 },
+    ], places, hotel, road);
+    check('a day with time to spare flags nothing',
+        relaxed.lateCount === 0 && relaxed.overlapCount === 0);
+    check('and the later stop keeps the time it was given', relaxed.rows[1].arrive === '14:00');
+
+    const overlapping = buildTimeline([
+        { ...STOP_DEFAULTS, id: 1, day_id: 1, place_id: 2, start_time: '09:00',
+          duration_minutes: 180, sort_order: 0 },
+        { ...STOP_DEFAULTS, id: 2, day_id: 1, place_id: 2, start_time: '10:00', sort_order: 1 },
+    ], places, hotel, road);
+    check('two stops that overlap are flagged', overlapping.overlapCount === 1);
+
+    check('with no road times, the estimate stands in and says so',
+        buildTimeline(stops, places, hotel).estimated);
+    check('a long day of driving is flagged',
+        buildTimeline([
+            { ...STOP_DEFAULTS, id: 1, day_id: 1, place_id: 1, start_time: '08:00', sort_order: 0 },
+            { ...STOP_DEFAULTS, id: 2, day_id: 1, place_id: 3, sort_order: 1 },
+            { ...STOP_DEFAULTS, id: 3, day_id: 1, place_id: 1, sort_order: 2 },
+        ], places, hotel, () => ({ seconds: 100 * 60, meters: 90_000, source: 'road' as const }))
+            .longDrive);
+
+    check('a drive reads as hours and minutes', formatDuration(6000) === '1 h 40 m');
+    check('a round hour drops the minutes', formatDuration(7200) === '2 h');
+    check('and a short one is minutes', formatDuration(900) === '15 min');
+}
+
+console.log('\nTime zones on a leg');
+{
+    check('Bali is eight hours ahead in September',
+        zoneOffsetMinutes('Asia/Makassar', new Date('2026-09-15T00:00:00Z')) === 480);
+    check('London is on summer time in June',
+        zoneOffsetMinutes('Europe/London', new Date('2026-06-21T12:00:00Z')) === 60);
+    check('and on GMT in January',
+        zoneOffsetMinutes('Europe/London', new Date('2026-01-21T12:00:00Z')) === 0);
+
+    const instant = instantOf('2026-09-15', '14:05', 'Asia/Makassar');
+    check('a local wall time resolves to the right instant',
+        instant?.toISOString() === '2026-09-15T06:05:00.000Z', instant?.toISOString() ?? 'null');
+
+    // DPS 14:05 → SIN 16:50 is a 2h45 flight: same clock offset, both UTC+8.
+    check('a same-zone leg is its clock difference',
+        legRealMinutes({
+            depart_time: '14:05', arrive_time: '16:50', arrive_day_offset: 0,
+            depart_tz: 'Asia/Makassar', arrive_tz: 'Asia/Singapore',
+        }, '2026-09-15') === 165);
+
+    /*
+     * SIN 09:20 → LAX 09:00 the same calendar day: fifteen hours in the air and
+     * the clock says minus twenty minutes. This is the case the zones exist for,
+     * and the one the Travel tab used to render as a negative flight.
+     */
+    check('a westbound leg that arrives "before" it left is still fifteen hours',
+        legRealMinutes({
+            depart_time: '09:20', arrive_time: '09:00', arrive_day_offset: 0,
+            depart_tz: 'Asia/Singapore', arrive_tz: 'America/Los_Angeles',
+        }, '2026-09-16') === 880,
+        String(legRealMinutes({
+            depart_time: '09:20', arrive_time: '09:00', arrive_day_offset: 0,
+            depart_tz: 'Asia/Singapore', arrive_tz: 'America/Los_Angeles',
+        }, '2026-09-16')));
+
+    check('a red-eye takes its arrival offset into account',
+        legRealMinutes({
+            depart_time: '23:40', arrive_time: '06:20', arrive_day_offset: 1,
+            depart_tz: 'Asia/Makassar', arrive_tz: 'Asia/Makassar',
+        }, '2026-09-15') === 400);
+    check('no zones means no answer, rather than a wrong one',
+        legRealMinutes({
+            depart_time: '23:40', arrive_time: '06:20', arrive_day_offset: 1,
+            depart_tz: null, arrive_tz: null,
+        }, '2026-09-15') === null);
+
+    check('a date walks forward in UTC', addDaysIso('2026-09-30', 1) === '2026-10-01');
+    check('and across a year', addDaysIso('2026-12-31', 1) === '2027-01-01');
 }
 
 console.log(`\n${failures === 0 ? 'PASS' : 'FAIL'} — ${checks - failures}/${checks} checks passed.\n`);

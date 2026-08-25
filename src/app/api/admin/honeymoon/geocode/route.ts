@@ -34,6 +34,20 @@ export interface GeocodeHit {
     url?: string;
     /** Nominatim's own classification, e.g. "aeroway/aerodrome". */
     kind?: string;
+    /**
+     * OSM's `opening_hours` for the hit, when it has one.
+     *
+     * Comes free with `extratags=1` on a search that was happening anyway, and
+     * is the difference between "we'll go at nine" and standing outside a
+     * temple that opens at eleven. Kept as OSM's own string — the parser in
+     * `honeymoonHours.ts` reads it, and says *unknown* for the syntax it does
+     * not cover rather than guessing.
+     */
+    opening_hours?: string;
+    /** A phone number, when OSM has one: worth having on a restaurant. */
+    phone?: string;
+    /** The listing's own website, offered as a link on the place. */
+    website?: string;
 }
 
 /**
@@ -229,6 +243,9 @@ export async function GET(request: Request) {
             url.searchParams.set('format', 'jsonv2');
             url.searchParams.set('limit', '6');
             url.searchParams.set('addressdetails', '1');
+            // Opening hours, phone and website ride along on a request that was
+            // already being made.
+            url.searchParams.set('extratags', '1');
             return fetch(url, {
                 headers: { 'User-Agent': USER_AGENT, 'Accept-Language': 'en' },
                 signal: AbortSignal.timeout(10000),
@@ -252,12 +269,16 @@ export async function GET(request: Request) {
             .map((row: {
                 display_name?: string; lat?: string; lon?: string;
                 category?: string; type?: string;
+                extratags?: Record<string, string> | null;
             }) => ({
                 label: row.display_name ?? '',
                 lat: Number(row.lat),
                 lng: Number(row.lon),
                 precision: 'geocoded' as const,
                 kind: [row.category, row.type].filter(Boolean).join('/'),
+                opening_hours: row.extratags?.opening_hours || undefined,
+                phone: row.extratags?.phone || row.extratags?.['contact:phone'] || undefined,
+                website: row.extratags?.website || row.extratags?.['contact:website'] || undefined,
             }))
             .filter((hit: GeocodeHit) => valid(hit.lat, hit.lng));
 

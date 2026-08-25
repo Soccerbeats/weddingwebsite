@@ -8,7 +8,7 @@ import {
 } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
 import {
-    Button, CategorySelect, CustomisableSelect, ManageListModal, Modal, StatusSelect,
+    Button, CategorySelect, CustomisableSelect, ManageListModal, Modal, SelectField, StatusSelect,
     TextArea, TextField,
 } from './ui';
 
@@ -24,10 +24,12 @@ function fingerprint(form: {
     name: string; category: string; regionId: string; status: string; description: string;
     address: string; priceNote: string; lat: number | null; lng: number | null;
     needsReview: boolean; links: PlaceLink[]; source: string; country: string;
+    cost: string; costPer: string; openingHours: string; bestTime: string;
 }): string {
     return JSON.stringify([
         form.name, form.category, form.regionId, form.status, form.description, form.address,
         form.priceNote, form.lat, form.lng, form.needsReview, form.links, form.source, form.country,
+        form.cost, form.costPer, form.openingHours, form.bestTime,
     ]);
 }
 
@@ -43,6 +45,10 @@ interface GeocodeHit {
     name?: string;
     address?: string;
     url?: string;
+    /** From OSM's extratags, on a search that was happening anyway. */
+    opening_hours?: string;
+    phone?: string;
+    website?: string;
 }
 
 /**
@@ -74,6 +80,10 @@ export default function PlaceEditor({ api, place, open, onClose }: {
     const [links, setLinks] = useState<PlaceLink[]>([]);
     const [source, setSource] = useState(SOURCE_MANUAL);
     const [country, setCountry] = useState('');
+    const [cost, setCost] = useState('');
+    const [costPer, setCostPer] = useState<'night' | 'person' | 'total'>('total');
+    const [openingHours, setOpeningHours] = useState('');
+    const [bestTime, setBestTime] = useState('');
     const [managing, setManaging] = useState<'categories' | 'regions' | null>(null);
     /** Fingerprint of the form as it was opened — see confirmDiscard. */
     const pristine = useRef('');
@@ -109,6 +119,10 @@ export default function PlaceEditor({ api, place, open, onClose }: {
             links: place?.links ?? [],
             source: place ? sourceLabel(place.source) : SOURCE_MANUAL,
             country: place?.country ?? '',
+            cost: place?.cost != null ? String(place.cost) : '',
+            costPer: place?.cost_per ?? 'total',
+            openingHours: place?.opening_hours ?? '',
+            bestTime: place?.best_time ?? '',
         };
         setName(initial.name);
         setCategory(initial.category);
@@ -123,6 +137,10 @@ export default function PlaceEditor({ api, place, open, onClose }: {
         setLinks(initial.links);
         setSource(initial.source);
         setCountry(initial.country);
+        setCost(initial.cost);
+        setCostPer(initial.costPer as 'night' | 'person' | 'total');
+        setOpeningHours(initial.openingHours);
+        setBestTime(initial.bestTime);
         setQuery('');
         setHits([]);
         setLookupError('');
@@ -181,6 +199,17 @@ export default function PlaceEditor({ api, place, open, onClose }: {
                 ? prev
                 : [...prev, { label: 'Google Maps', url: hit.url! }]));
         }
+        // OSM's extras, taken only where the field is still empty: a hit should
+        // fill in blanks, never overwrite something you typed.
+        if (hit.opening_hours && !openingHours.trim()) setOpeningHours(hit.opening_hours);
+        if (hit.website) {
+            setLinks((prev) => (prev.some((l) => l.url === hit.website)
+                ? prev
+                : [...prev, { label: 'Website', url: hit.website! }]));
+        }
+        if (hit.phone && !description.includes(hit.phone)) {
+            setDescription((prev) => (prev.trim() ? prev : `Phone: ${hit.phone}`));
+        }
 
         setHits([]);
         setQuery('');
@@ -205,12 +234,12 @@ export default function PlaceEditor({ api, place, open, onClose }: {
     const confirmDiscard = useCallback(() => {
         const now = fingerprint({
             name, category, regionId, status, description, address, priceNote,
-            lat, lng, needsReview, links, source, country,
+            lat, lng, needsReview, links, source, country, cost, costPer, openingHours, bestTime,
         });
         if (now === pristine.current) return true;
         return confirm('Discard your changes to this place?');
     }, [name, category, regionId, status, description, address, priceNote,
-        lat, lng, needsReview, links, source, country]);
+        lat, lng, needsReview, links, source, country, cost, costPer, openingHours, bestTime]);
 
     const save = async () => {
         if (!name.trim()) return;
@@ -227,6 +256,12 @@ export default function PlaceEditor({ api, place, open, onClose }: {
             links: links.filter((l) => l.url.trim()),
             source: source.trim() || SOURCE_MANUAL,
             country: country.trim(),
+            // A blank cost is "not priced yet", which is not zero — the coercion
+            // in the route turns '' into NULL and keeps that distinction.
+            cost: cost.trim(),
+            cost_per: costPer,
+            opening_hours: openingHours.trim(),
+            best_time: bestTime.trim(),
         };
         const ok = editing
             ? await api.update('places', { id: place.id, ...payload })
@@ -489,6 +524,70 @@ export default function PlaceEditor({ api, place, open, onClose }: {
                                     value={priceNote}
                                     onChange={(e) => setPriceNote(e.target.value)}
                                     placeholder="~500k IDR entry"
+                                />
+                            </div>
+                        </div>
+
+                        {/* ---- The numbers the budget can add up ---- */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-500 mb-1">
+                                    Cost ({api.data?.trip.home_currency || 'USD'})
+                                </label>
+                                <TextField
+                                    type="number"
+                                    inputMode="decimal"
+                                    min="0"
+                                    step="0.01"
+                                    value={cost}
+                                    onChange={(e) => setCost(e.target.value)}
+                                    placeholder="420"
+                                />
+                                <p className="text-[11px] text-gray-400 mt-1">
+                                    A number the trip total can use. The note above stays for the
+                                    detail — &ldquo;breakfast included&rdquo; is not arithmetic.
+                                </p>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-500 mb-1">
+                                    Per
+                                </label>
+                                <SelectField
+                                    value={costPer}
+                                    onChange={(e) => setCostPer(
+                                        e.target.value as 'night' | 'person' | 'total',
+                                    )}
+                                >
+                                    <option value="total">Total</option>
+                                    <option value="night">Per night</option>
+                                    <option value="person">Per person</option>
+                                </SelectField>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-500 mb-1">
+                                    Opening hours
+                                </label>
+                                <TextField
+                                    value={openingHours}
+                                    onChange={(e) => setOpeningHours(e.target.value)}
+                                    placeholder="Mo-Su 09:00-18:00"
+                                />
+                                <p className="text-[11px] text-gray-400 mt-1">
+                                    OSM syntax, filled in from the map search when it knows. The
+                                    itinerary warns when a stop falls outside it.
+                                </p>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-500 mb-1">
+                                    Best time to go
+                                </label>
+                                <TextField
+                                    value={bestTime}
+                                    onChange={(e) => setBestTime(e.target.value)}
+                                    placeholder="Sunrise · avoid weekends"
                                 />
                             </div>
                         </div>

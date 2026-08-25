@@ -22,7 +22,7 @@ import type { DayStop, TodayPlan } from '@/lib/honeymoonToday';
  * used standing up, holding a coffee, in the sun.
  */
 export default function TodaySheet({
-    plan, trip, now, onSelectDay, night, onNightChange, footer,
+    plan, trip, now, onSelectDay, night, onNightChange, footer, weather, sun,
 }: {
     plan: TodayPlan;
     trip: Pick<Trip, 'title' | 'start_date' | 'time_format' | 'info' | 'partner_names'>;
@@ -32,6 +32,18 @@ export default function TodaySheet({
     night: boolean;
     onNightChange?: (night: boolean) => void;
     footer?: React.ReactNode;
+    /**
+     * Weather for the day, when whoever rendered this could fetch it.
+     *
+     * A prop rather than a fetch, because this component has two homes and only
+     * one of them is signed in: the shared link has no admin API and gets the
+     * sun times (which are arithmetic) but no forecast.
+     */
+    weather?: {
+        kind: 'forecast' | 'climate'; high: number | null; low: number | null;
+        rain_chance: number | null; label: string | null;
+    } | null;
+    sun?: { sunrise: string | null; sunset: string | null } | null;
 }) {
     const format = trip.time_format === '12h' ? '12h' : '24h';
     const [showEmergency, setShowEmergency] = useState(false);
@@ -56,6 +68,27 @@ export default function TodaySheet({
                         onNightChange={onNightChange}
                         onSelectDay={onSelectDay}
                     />
+
+                    {(weather || sun?.sunrise) && (
+                        <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1
+                            text-sm text-gray-600 night:text-gray-300">
+                            {weather && (
+                                <span>
+                                    {weather.kind === 'climate' && '≈ '}
+                                    {weather.high != null && `${Math.round(weather.high)}°`}
+                                    {weather.low != null && ` / ${Math.round(weather.low)}°`}
+                                    {weather.label && ` · ${weather.label}`}
+                                    {weather.rain_chance != null
+                                        && ` · ${Math.round(weather.rain_chance)}% rain`}
+                                </span>
+                            )}
+                            {sun?.sunrise && sun.sunset && (
+                                <span className="tabular-nums">
+                                    ☀ {sun.sunrise} – {sun.sunset}
+                                </span>
+                            )}
+                        </div>
+                    )}
 
                     {plan.standing === 'before' && plan.daysUntil != null && (
                         <Banner>

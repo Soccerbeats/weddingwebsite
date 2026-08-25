@@ -53,6 +53,79 @@ export default function TravelTab({ api }: { api: HoneymoonApi }) {
         await api.create('travel', { day_id: Number(dayId), mode: addMode });
     };
 
+    const [transferring, setTransferring] = useState(false);
+    const [transferNote, setTransferNote] = useState('');
+
+    /**
+     * The leg nobody enjoys entering.
+     *
+     * Every arrival needs one — airport to hotel, by car, an hour of it — and
+     * every one is typed by hand from two things the portal already knows: where
+     * the flight landed, and where you are sleeping that night. This builds it:
+     * the flight's arrival end becomes the origin (text and pin), the day's base
+     * becomes the destination, and the departure time is set to half an hour
+     * after the flight lands, which is roughly how long a bag takes.
+     *
+     * It is a first draft, not a booking: everything it writes is editable, and
+     * it says what it used.
+     */
+    const addTransfer = async () => {
+        if (!dayId) return;
+        const day = days.find((d) => String(d.id) === dayId);
+        if (!day) return;
+        setTransferring(true);
+        setTransferNote('');
+        try {
+            // The flight that gets you here: one landing on this day (including
+            // a red-eye that left the day before), else one leaving today.
+            const landing = days.flatMap((other) => other.travel
+                .filter((leg) => leg.mode === 'flight'
+                    && legArrivalDay(leg, other.day_number) === day.day_number)
+                .map((leg) => ({ leg, from: other })))
+                .sort((a, b) => (a.leg.arrive_time ?? '').localeCompare(b.leg.arrive_time ?? ''))
+                .pop();
+
+            const base = day.base_place_id != null
+                ? api.placeById.get(day.base_place_id) ?? null
+                : null;
+
+            if (!landing && !base) {
+                setTransferNote('Nothing to build it from: this day has no flight and no stay.');
+                return;
+            }
+
+            const arriveMinutes = landing?.leg.arrive_time
+                ? Number(landing.leg.arrive_time.slice(0, 2)) * 60
+                    + Number(landing.leg.arrive_time.slice(3, 5))
+                : null;
+            const depart = arriveMinutes != null
+                ? `${String(Math.floor(((arriveMinutes + 30) % 1440) / 60)).padStart(2, '0')}:`
+                    + `${String((arriveMinutes + 30) % 60).padStart(2, '0')}`
+                : null;
+
+            const created = await api.create('travel', {
+                day_id: day.id,
+                mode: 'car',
+                from_text: landing?.leg.to_text ?? 'Airport',
+                to_text: base?.name ?? '',
+                from_lat: landing?.leg.to_lat ?? null,
+                from_lng: landing?.leg.to_lng ?? null,
+                to_lat: base?.lat ?? null,
+                to_lng: base?.lng ?? null,
+                depart_time: depart ?? '',
+                notes: 'Airport transfer',
+            });
+            if (created) {
+                setTransferNote(landing
+                    ? `Built from ${landing.leg.flight_no || 'the flight'} landing at `
+                        + `${landing.leg.to_text || 'the airport'}${base ? ` → ${base.name}` : ''}.`
+                    : `Built to ${base?.name ?? 'the stay'} — add where it starts from.`);
+            }
+        } finally {
+            setTransferring(false);
+        }
+    };
+
     if (!days.length) {
         return (
             <Card>
@@ -97,12 +170,20 @@ export default function TravelTab({ api }: { api: HoneymoonApi }) {
                         </SelectField>
                     </div>
                     <Button tone="primary" onClick={add}>+ Add leg</Button>
+                    <Button onClick={addTransfer} disabled={!dayId || transferring}>
+                        {transferring ? 'Adding…' : '+ Airport transfer'}
+                    </Button>
                     <div className="flex-1" />
                     <p className="text-[11px] text-gray-400 pb-2">
                         A leg belongs to the day it leaves on. Landing on a later day is what the
                         Lands control is for.
                     </p>
                 </div>
+                {transferNote && (
+                    <p className="mt-2 rounded-xl bg-sky-50 px-2.5 py-1.5 text-[11px] text-sky-800">
+                        {transferNote}
+                    </p>
+                )}
             </Card>
 
             {/* ---- Counts ---- */}

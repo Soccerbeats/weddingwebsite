@@ -8,6 +8,7 @@ import {
     hasCoords, legEnds, sourceLabel, sourcesOf, travelModeMeta,
     type Day, type Place, type PlaceStatus,
 } from '@/lib/honeymoon';
+import { useTripIntel } from './useTripIntel';
 import type { HoneymoonApi } from './useHoneymoon';
 import ItineraryTab from './ItineraryTab';
 import PlacesTab from './PlacesTab';
@@ -48,6 +49,13 @@ const WIDE_QUERY = '(min-width: 1024px)';
  */
 export default function MapTab({ api }: { api: HoneymoonApi }) {
     const { data } = api;
+    /*
+     * Road geometry for the ground legs.
+     *
+     * Shares the itinerary's cache — the same coordinate pair asked for twice is
+     * one request and, after the first time, no request at all.
+     */
+    const intel = useTripIntel(data);
     const [regionFilter, setRegionFilter] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
@@ -335,6 +343,9 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                 dash: meta.dash,
                 curve: meta.curve,
                 icon: meta.icon,
+                // Drawn along the road when a router has answered, which turns
+                // a bowed line into "you go round the coast, not over the pass".
+                road: intel.roadFor(leg.id),
                 label: [
                     meta.label,
                     route,
@@ -349,7 +360,7 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
         if (selectedDay) return forDay(selectedDay);
         if (!showItinerary) return [];
         return days.flatMap(forDay);
-    }, [selectedDay, showItinerary, days]);
+    }, [selectedDay, showItinerary, days, intel]);
 
     const pinnedCount = visible.filter(hasCoords).length;
     const unpinnedCount = visible.length - pinnedCount;

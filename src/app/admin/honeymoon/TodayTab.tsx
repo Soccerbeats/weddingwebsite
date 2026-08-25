@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import TodaySheet, { useNightMode, useNowMinutes } from '@/components/honeymoon/TodaySheet';
 import { planForDay, planForToday } from '@/lib/honeymoonToday';
+import { useTripIntel } from './useTripIntel';
 import type { HoneymoonApi } from './useHoneymoon';
 
 const NIGHT_KEY = 'honeymoon-today-night';
@@ -17,6 +18,7 @@ const NIGHT_KEY = 'honeymoon-today-night';
 export default function TodayTab({ api }: { api: HoneymoonApi }) {
     const { data } = api;
     const now = useNowMinutes();
+    const intel = useTripIntel(data);
     const [dayNumber, setDayNumber] = useState<number | null>(null);
     const [night, setNight] = useNightMode(NIGHT_KEY);
     const [offline, setOffline] = useState<'off' | 'ready' | 'failed'>('off');
@@ -40,6 +42,7 @@ export default function TodayTab({ api }: { api: HoneymoonApi }) {
     if (!data) return null;
 
     const plan = dayNumber == null ? planForToday(data) : planForDay(data, dayNumber);
+    const dayIntel = plan.dayNumber != null ? intel.intelFor(plan.dayNumber) : null;
 
     const chooseDay = (next: number) => {
         const exists = data.days.some((day) => day.day_number === next);
@@ -52,6 +55,8 @@ export default function TodayTab({ api }: { api: HoneymoonApi }) {
                 plan={plan}
                 trip={data.trip}
                 now={now}
+                weather={dayIntel?.weather ?? null}
+                sun={dayIntel ? { sunrise: dayIntel.sunrise, sunset: dayIntel.sunset } : null}
                 night={night}
                 onNightChange={setNight}
                 onSelectDay={chooseDay}

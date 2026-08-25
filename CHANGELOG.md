@@ -11,6 +11,25 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.46 — [Released] The planner's second half, part three: the trip knows things (`main`, 2026-08-25 18:05)
+
+Wave 3 of seven. The portal could say how far apart two places are; it could not say how long the drive takes, whether the place is open when you get there, or whether it will be raining. Now it can — from four services, three of which need no key, all cached in Postgres and none of which is ever allowed to matter: every value starts null and every view renders exactly as it did before while it is missing.
+
+### Added
+- **Real driving times** (OSRM). The itinerary's hops now read "31 min drive · 24.6 km by road" instead of a straight line that lies about Bali — 24 km through the hills is half an hour, and the same 24 km across Singapore is ten minutes. Cached per coordinate pair for a month, batched per trip rather than per hop, and a failed lookup silently falls back to the labelled straight-line estimate (32 km/h, which is the figure that lands nearest OSRM across the seed's own places).
+- **A day as a timeline, not a list.** Stops take an optional **duration**, and the day card works out when you actually arrive everywhere from the start time, the durations and the driving. It flags the two failures worth knowing before you are standing in the road: a stop you *cannot reach* at the time set (with the honest arrival and how many minutes late), and two stops that overlap. A day with more than three hours of driving says so.
+- **Weather per day.** Inside sixteen days, Open-Meteo's forecast; beyond that — which is most of planning — the month's normals averaged from a decade of archive, labelled as such (`≈ 27° / 23° · 52% of days wet`). Shown on the itinerary day cards and on the Today view.
+- **Sunrise and sunset on every day**, computed rather than fetched (NOAA's solar position algorithm, no key, no network, right to about a minute). A stop planned after sunset gets a 🌙 badge — the sunset dinner that turns out to be a sunset-adjacent dinner.
+- **Opening hours.** The map search now brings back OSM's `opening_hours`, phone and website along with the pin, and a stop scheduled when its place is shut is flagged. The parser deliberately answers *unknown* for the syntax it does not cover (public holidays, month ranges, sunset offsets) rather than guessing — a confident wrong "closed" sends you somewhere else on a day the place was open.
+- **Time zones on travel legs**, with the real duration. Times are stored as the local clock at each end, which is what the ticket says; without zones a westbound flight reads as taking minus twenty minutes. A leg's collapsed **Booking details** panel now holds the flight number, both zones (with the pin's own guess one click away), terminals, aircraft, who booked it and what it cost — and says "15 h in the air".
+- **Flight lookup** — paste a flight number, press *Fill in from schedule*, and the times, terminals, aircraft, both zones and the day offset are filled in from the airline's schedule. Only blanks are filled, so a leg you corrected by hand is never overwritten. Needs `FLIGHT_API_KEY` (AeroDataBox via RapidAPI, free tier); without one the button explains that instead of failing.
+- **Airport transfers, built for you.** One button on the Travel tab makes the leg nobody enjoys entering: the flight that lands that day becomes the origin (text and pin), the day's stay becomes the destination, and it departs half an hour after the flight lands. A first draft, and it says what it built itself from.
+- **Roads on the map.** Ground legs are drawn along the actual road geometry instead of a bowed arc — for a car the interesting fact is *which way* the road goes, round the coast or over the pass. Flights keep their arcs, because a flight has no road.
+- **A 🚶 walkable badge** on stops within 800 m of the day's base, and real money on a place (`cost`, per night / per person / total) alongside the free-text price note the budget cannot add up.
+
+### Changed
+- Live lookups can be turned off per browser — on by default because the answers are the point, off available because a metered connection is a real thing.
+
 ## v0.9.45 — [Released] The planner's second half, part two: trip mode (`main`, 2026-08-25 17:05)
 
 Wave 2 of seven. The portal was built for planning; this is the half that works on the trip itself — one screen, one thumb, no signal required, and a copy your partner can open.

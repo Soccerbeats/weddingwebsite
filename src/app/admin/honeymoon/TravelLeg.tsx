@@ -6,8 +6,24 @@ import {
     travelModeMeta,
     type Day, type TravelLeg, type TravelMode,
 } from '@/lib/honeymoon';
+import { formatDuration, legRealMinutes } from '@/lib/honeymoonTimeline';
+import { nominalZone } from '@/lib/honeymoonSun';
+import { dateIso } from '@/lib/honeymoonToday';
 import type { HoneymoonApi } from './useHoneymoon';
 import { Button, OverflowMenu, SelectField, TextField } from './ui';
+
+/**
+ * Zones worth offering without typing.
+ *
+ * A datalist, not a dropdown: the list of IANA zones is six hundred long and the
+ * ones a honeymoon uses are a dozen. Anything can still be typed.
+ */
+const COMMON_ZONES = [
+    'Asia/Makassar', 'Asia/Jakarta', 'Asia/Singapore', 'Asia/Kuala_Lumpur', 'Asia/Bangkok',
+    'Asia/Tokyo', 'Asia/Dubai', 'Australia/Sydney', 'Pacific/Auckland', 'Pacific/Fiji',
+    'Europe/London', 'Europe/Paris', 'Europe/Rome', 'America/New_York', 'America/Chicago',
+    'America/Denver', 'America/Los_Angeles', 'Indian/Maldives', 'UTC',
+];
 
 /**
  * One travel leg, editable.
@@ -127,6 +143,8 @@ export default function TravelLegCard({ leg, day, api }: {
                         }
                     }}
                 />
+
+                <LegDetails leg={leg} day={day} api={api} />
                 {/* Both ends found: say so once, on the leg, rather than
                     twice on the fields. */}
                 {legEnds(leg) && (
@@ -286,6 +304,278 @@ function LegEnd({ leg, end, api }: {
                         </li>
                     ))}
                 </ul>
+            )}
+        </div>
+    );
+}
+
+/**
+ * The half of a leg you only fill in once it is booked.
+ *
+ * Collapsed by default: a leg is useful as "DPS → SIN, 14:05" for weeks before
+ * anyone knows the terminal, and eight more fields on every card would bury the
+ * three that matter. Open, it holds the flight number (and the lookup that fills
+ * the rest in from it), terminals, aircraft, the two time zones — which are what
+ * make a westbound leg stop reading as negative — and what it cost.
+ */
+function LegDetails({ leg, day, api }: { leg: TravelLeg; day: Day; api: HoneymoonApi }) {
+    const [open, setOpen] = useState(false);
+    const [lookupState, setLookupState] = useState<'idle' | 'busy' | 'unconfigured'>('idle');
+    const [lookupError, setLookupError] = useState('');
+
+    const startDate = api.data?.trip.start_date ?? null;
+    const departDate = dateIso(startDate, day.day_number);
+    const realMinutes = legRealMinutes(leg, departDate);
+
+    const filled = [
+        leg.flight_no, leg.from_terminal, leg.to_terminal, leg.aircraft,
+        leg.depart_tz, leg.arrive_tz, leg.cost, leg.booked_by,
+    ].filter((value) => value != null && value !== '').length;
+
+    /**
+     * Fill the leg in from its flight number.
+     *
+     * Needs `FLIGHT_API_KEY`; without it the button says so instead of failing.
+     * Times, terminals, aircraft and both zones come back together, which is the
+     * whole point — those six fields are exactly the error-prone typing.
+     */
+    const lookupFlight = async () => {
+        if (!leg.flight_no || !departDate) return;
+        setLookupState('busy');
+        setLookupError('');
+        try {
+            const res = await fetch(
+                `/api/admin/honeymoon/flight?no=${encodeURIComponent(leg.flight_no)}`
+                + `&date=${departDate}`,
+            );
+            const body = await res.json();
+            if (!res.ok) {
+                setLookupError(body?.error ?? 'The lookup failed');
+                setLookupState('idle');
+                return;
+            }
+            if (!body.configured) {
+                setLookupState('unconfigured');
+                return;
+            }
+            if (!body.flight) {
+                setLookupError(body.error ?? 'No flight found that day');
+                setLookupState('idle');
+                return;
+            }
+            const flight = body.flight;
+            // Only blanks are filled: a leg you have already corrected by hand
+            // must not be overwritten by a schedule.
+            const patch: Record<string, unknown> = { id: leg.id };
+            const fill = (key: string, current: unknown, value: unknown) => {
+                if (value != null && value !== '' && (current == null || current === '')) {
+                    patch[key] = value;
+                }
+            };
+            fill('from_text', leg.from_text, flight.from_text);
+            fill('to_text', leg.to_text, flight.to_text);
+            fill('depart_time', leg.depart_time, flight.depart_time);
+            fill('arrive_time', leg.arrive_time, flight.arrive_time);
+            fill('depart_tz', leg.depart_tz, flight.depart_tz);
+            fill('arrive_tz', leg.arrive_tz, flight.arrive_tz);
+            fill('from_terminal', leg.from_terminal, flight.from_terminal);
+            fill('to_terminal', leg.to_terminal, flight.to_terminal);
+            fill('aircraft', leg.aircraft, flight.aircraft);
+            if (flight.arrive_day_offset && !leg.arrive_day_offset) {
+                patch.arrive_day_offset = flight.arrive_day_offset;
+            }
+            await api.update('travel', patch);
+            setLookupState('idle');
+        } catch {
+            setLookupError('Could not reach the lookup service');
+            setLookupState('idle');
+        }
+    };
+
+    return (
+        <div className="rounded-xl bg-white/70 border border-slate-200">
+            <button
+                type="button"
+                onClick={() => setOpen((v) => !v)}
+                className="flex w-full items-center justify-between px-2.5 py-1.5 text-[11px]
+                    font-medium text-slate-600"
+            >
+                <span>
+                    Booking details
+                    {filled > 0 && <span className="ml-1 text-slate-400">({filled} filled in)</span>}
+                    {realMinutes != null && (
+                        <span className="ml-2 text-sky-700">
+                            {formatDuration(realMinutes * 60)} in the air
+                        </span>
+                    )}
+                </span>
+                <span className="text-slate-400">{open ? '▲' : '▼'}</span>
+            </button>
+
+            {open && (
+                <div className="space-y-2 border-t border-slate-100 p-2.5">
+                    {leg.mode === 'flight' && (
+                        <div className="flex items-end gap-2">
+                            <div className="flex-1">
+                                <label className="mb-1 block text-[10px] font-semibold uppercase
+                                    tracking-wide text-gray-400">
+                                    Flight number
+                                </label>
+                                <TextField
+                                    key={`f${leg.flight_no ?? ''}`}
+                                    defaultValue={leg.flight_no ?? ''}
+                                    placeholder="SQ 938"
+                                    onBlur={(e) => {
+                                        if (e.target.value !== (leg.flight_no ?? '')) {
+                                            api.update('travel', {
+                                                id: leg.id, flight_no: e.target.value,
+                                            });
+                                        }
+                                    }}
+                                />
+                            </div>
+                            <Button
+                                onClick={lookupFlight}
+                                disabled={!leg.flight_no || !departDate || lookupState === 'busy'}
+                            >
+                                {lookupState === 'busy' ? 'Looking…' : 'Fill in from schedule'}
+                            </Button>
+                        </div>
+                    )}
+                    {lookupState === 'unconfigured' && (
+                        <p className="rounded-xl bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-800">
+                            Flight lookup needs an API key. Set <code>FLIGHT_API_KEY</code> in the
+                            stack (AeroDataBox via RapidAPI has a free tier) and this button fills in
+                            the times, terminals, aircraft and both time zones.
+                        </p>
+                    )}
+                    {lookupError && (
+                        <p className="text-[11px] text-rose-700">{lookupError}</p>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-2">
+                        <TextField
+                            key={`ft${leg.from_terminal ?? ''}`}
+                            defaultValue={leg.from_terminal ?? ''}
+                            placeholder="From terminal"
+                            onBlur={(e) => {
+                                if (e.target.value !== (leg.from_terminal ?? '')) {
+                                    api.update('travel', {
+                                        id: leg.id, from_terminal: e.target.value,
+                                    });
+                                }
+                            }}
+                        />
+                        <TextField
+                            key={`tt${leg.to_terminal ?? ''}`}
+                            defaultValue={leg.to_terminal ?? ''}
+                            placeholder="To terminal"
+                            onBlur={(e) => {
+                                if (e.target.value !== (leg.to_terminal ?? '')) {
+                                    api.update('travel', { id: leg.id, to_terminal: e.target.value });
+                                }
+                            }}
+                        />
+                    </div>
+
+                    {/* The two zones. Times are stored as the local clock at each
+                        end — what the ticket says — so without these a flight
+                        home reads as taking minus four hours. */}
+                    <div className="grid grid-cols-2 gap-2">
+                        <ZoneField
+                            label="Departs in"
+                            value={leg.depart_tz}
+                            guess={leg.from_lng != null ? nominalZone(leg.from_lng) : null}
+                            onChange={(depart_tz) => api.update('travel', { id: leg.id, depart_tz })}
+                        />
+                        <ZoneField
+                            label="Arrives in"
+                            value={leg.arrive_tz}
+                            guess={leg.to_lng != null ? nominalZone(leg.to_lng) : null}
+                            onChange={(arrive_tz) => api.update('travel', { id: leg.id, arrive_tz })}
+                        />
+                    </div>
+                    <datalist id="honeymoon-zones">
+                        {COMMON_ZONES.map((zone) => <option key={zone} value={zone} />)}
+                    </datalist>
+
+                    <div className="grid grid-cols-2 gap-2">
+                        <TextField
+                            key={`ac${leg.aircraft ?? ''}`}
+                            defaultValue={leg.aircraft ?? ''}
+                            placeholder="Aircraft"
+                            onBlur={(e) => {
+                                if (e.target.value !== (leg.aircraft ?? '')) {
+                                    api.update('travel', { id: leg.id, aircraft: e.target.value });
+                                }
+                            }}
+                        />
+                        <TextField
+                            key={`bb${leg.booked_by ?? ''}`}
+                            defaultValue={leg.booked_by ?? ''}
+                            placeholder="Booked by"
+                            onBlur={(e) => {
+                                if (e.target.value !== (leg.booked_by ?? '')) {
+                                    api.update('travel', { id: leg.id, booked_by: e.target.value });
+                                }
+                            }}
+                        />
+                    </div>
+
+                    <div>
+                        <label className="mb-1 block text-[10px] font-semibold uppercase
+                            tracking-wide text-gray-400">
+                            Cost ({api.data?.trip.home_currency || 'USD'})
+                        </label>
+                        <TextField
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            key={`co${leg.cost ?? ''}`}
+                            defaultValue={leg.cost != null ? String(leg.cost) : ''}
+                            placeholder="0.00"
+                            onBlur={(e) => {
+                                if (e.target.value !== (leg.cost != null ? String(leg.cost) : '')) {
+                                    api.update('travel', { id: leg.id, cost: e.target.value });
+                                }
+                            }}
+                        />
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+/** A time zone, with the longitude's own guess one click away. */
+function ZoneField({ label, value, guess, onChange }: {
+    label: string;
+    value: string | null;
+    /** What the pin's longitude suggests — right in the tropics, close elsewhere. */
+    guess: string | null;
+    onChange: (zone: string) => void;
+}) {
+    return (
+        <div>
+            <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide
+                text-gray-400">
+                {label}
+            </label>
+            <TextField
+                list="honeymoon-zones"
+                key={`z${value ?? ''}`}
+                defaultValue={value ?? ''}
+                placeholder="Asia/Makassar"
+                onBlur={(e) => { if (e.target.value !== (value ?? '')) onChange(e.target.value); }}
+            />
+            {!value && guess && (
+                <button
+                    type="button"
+                    onClick={() => onChange(guess)}
+                    className="mt-1 text-[10px] text-sky-700 underline decoration-dotted"
+                >
+                    use {guess} (from the pin)
+                </button>
             )}
         </div>
     );

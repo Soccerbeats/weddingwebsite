@@ -48,6 +48,15 @@ export interface TravelArc {
     icon: string;
     /** Popup text: "Flight · DPS → SIN · Day 3". */
     label: string;
+    /**
+     * The actual road, when a router has been asked.
+     *
+     * Only ground legs get one: a flight has no road, and the arc is the honest
+     * drawing of it. With geometry the leg is drawn along the road instead of
+     * bowed over it, because for a car the interesting fact is which way the
+     * road goes — the coast or over the pass.
+     */
+    road?: [number, number][] | null;
 }
 
 export interface TripMapProps {
@@ -384,13 +393,18 @@ export default function TripMap({
          * direction of travel, so an outbound and a return separate themselves.
          */
         for (const leg of legs) {
-            const points = arcPoints(leg.from, leg.to, leg.curve)
-                .map((p) => [p.lat, p.lng] as [number, number]);
+            // A road, when we have one; otherwise the arc. A drawn road is solid
+            // and slightly heavier — it is a fact rather than a gesture.
+            const onRoad = leg.road && leg.road.length > 1;
+            const points = onRoad
+                ? leg.road as [number, number][]
+                : arcPoints(leg.from, leg.to, leg.curve)
+                    .map((p) => [p.lat, p.lng] as [number, number]);
             const line = L.polyline(points, {
                 color: leg.color,
-                weight: 2.5,
-                opacity: 0.9,
-                dashArray: leg.dash,
+                weight: onRoad ? 3.5 : 2.5,
+                opacity: onRoad ? 0.85 : 0.9,
+                dashArray: onRoad ? undefined : leg.dash,
                 // Round caps make a sparse dash read as dots rather than ticks.
                 lineCap: 'round',
             }).addTo(layer);

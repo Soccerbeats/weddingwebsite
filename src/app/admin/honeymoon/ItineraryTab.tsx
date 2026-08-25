@@ -11,10 +11,17 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import {
     SPREAD_WARNING_KM, arrivalsOn, calendarMonths, dayHops, daysBeyondRange,
+    dateForDay, isoOf,
     formatDate, formatDayDate, formatDistance, formatTime, hasCoords, legIsOvernight,
     travelModeMeta,
     type CalendarCell, type Day, type Place, type Stop, type TravelLeg,
 } from '@/lib/honeymoon';
+import { describeHours, stopIsOutsideHours } from '@/lib/honeymoonHours';
+import { isAfterDark } from '@/lib/honeymoonSun';
+import { buildTimeline, formatDuration } from '@/lib/honeymoonTimeline';
+import type { TimelineRow } from '@/lib/honeymoonTimeline';
+import { useTripIntel } from './useTripIntel';
+import type { TripIntel } from './useTripIntel';
 import type { HoneymoonApi } from './useHoneymoon';
 import PlaceEditor from './PlaceEditor';
 import PrintSheet from './PrintSheet';
@@ -47,6 +54,14 @@ export default function ItineraryTab({ api, panel = false, onFocusDay }: {
     // Stable identity: a fresh `?? []` per render would make the memo below
     // recompute on every keystroke anywhere on the page.
     const days = useMemo(() => data?.days ?? [], [data]);
+    /*
+     * Road times and weather.
+     *
+     * Owned here rather than per day card so the whole trip's hops are one
+     * request instead of one per card, and so a day that appears twice (the list
+     * and the modal) does not ask twice.
+     */
+    const intel = useTripIntel(data);
 
     // Remembered like the other view preferences, but locally: which way you
     // like to read the trip is about you and this browser, not about the trip.
@@ -182,6 +197,7 @@ export default function ItineraryTab({ api, panel = false, onFocusDay }: {
                     onEditPlace={setEditingPlace}
                     onFocusDay={onFocusDay}
                     beyond={beyond}
+                    intel={intel}
                 />
             ) : (
                 <DndContext sensors={daySensors} collisionDetection={closestCenter} onDragEnd={onDayDragEnd}>
@@ -194,6 +210,7 @@ export default function ItineraryTab({ api, panel = false, onFocusDay }: {
                                     key={day.id}
                                     day={day}
                                     api={api}
+                                    intel={intel}
                                     onEditPlace={setEditingPlace}
                                     onFocusDay={onFocusDay}
                                     beyondRange={beyond.has(day.day_number)}
@@ -262,13 +279,14 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
  * the list view uses, so there is one place a day is edited and no second
  * implementation to keep in step.
  */
-function CalendarView({ api, days, onEditPlace, onFocusDay, beyond }: {
+function CalendarView({ api, days, onEditPlace, onFocusDay, beyond, intel }: {
     api: HoneymoonApi;
     days: Day[];
     onEditPlace: (place: Place) => void;
     onFocusDay?: (day: Day) => void;
     /** Day numbers past the end of the trip's dates. */
     beyond: Set<number>;
+    intel: TripIntel;
 }) {
     const startDate = api.data?.trip.start_date ?? null;
     const [openDayId, setOpenDayId] = useState<number | null>(null);
@@ -352,6 +370,7 @@ function CalendarView({ api, days, onEditPlace, onFocusDay, beyond }: {
                             <DayCard
                                 day={openDay}
                                 api={api}
+                                intel={intel}
                                 onEditPlace={onEditPlace}
                                 onFocusDay={onFocusDay}
                                 beyondRange={beyond.has(openDay.day_number)}
@@ -446,9 +465,12 @@ function CalendarCellBox({ cell, day, api, beyondRange, arrivals, onOpen }: {
     );
 }
 
-function DayCard({ day, api, onEditPlace, onFocusDay, beyondRange = false, arrivals = [] }: {
+function DayCard({
+    day, api, intel, onEditPlace, onFocusDay, beyondRange = false, arrivals = [],
+}: {
     day: Day;
     api: HoneymoonApi;
+    intel: TripIntel;
     onEditPlace: (place: Place) => void;
     onFocusDay?: (day: Day) => void;
     /** This day is numbered past the end of the trip's dates. */
@@ -481,6 +503,24 @@ function DayCard({ day, api, onEditPlace, onFocusDay, beyondRange = false, arriv
     });
     const hops = dayHops(day.stops, api.placeById);
     const longest = hops.reduce((max, hop) => Math.max(max, hop.km), 0);
+
+    /*
+     * The day as a sequence.
+     *
+     * Straight-line kilometres said how far apart the stops are; this says
+     * whether the day works — when you actually arrive everywhere, given the
+     * durations and the driving, and which stops you cannot make. Road times
+     * when they have been looked up, a labelled estimate when they have not.
+     */
+    const timeline = buildTimeline(day.stops, api.placeById, base, intel.hopFor);
+    const rowFor = (stopId: number) => timeline.rows.find((row) => row.stop.id === stopId) ?? null;
+    const dayIntel = intel.intelFor(day.day_number);
+    const dayDate = startDate
+        ? (() => {
+            const date = dateForDay(startDate, day.day_number);
+            return date ? isoOf(date) : null;
+        })()
+        : null;
 
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -754,6 +794,9 @@ function DayCard({ day, api, onEditPlace, onFocusDay, beyondRange = false, arriv
                                         api={api}
                                         dayNumber={day.day_number}
                                         hopKm={hops.find((h) => h.fromIndex === index)?.km ?? null}
+                                        row={rowFor(stop.id)}
+                                        dayDate={dayDate}
+                                        sunset={dayIntel.sunset}
                                         onEditPlace={onEditPlace}
                                     />
                                 ))}
@@ -763,7 +806,63 @@ function DayCard({ day, api, onEditPlace, onFocusDay, beyondRange = false, arriv
                 )}
             </div>
 
-            {longest >= SPREAD_WARNING_KM && (
+            {/* Weather, daylight and the day's driving: three lines that answer
+                "is this a good day for this" without leaving the card. */}
+            {(dayIntel.weather || dayIntel.sunrise || timeline.driveMinutes > 0) && (
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]
+                    text-gray-500">
+                    {dayIntel.weather && (
+                        <span title={dayIntel.weather.kind === 'forecast'
+                            ? 'Forecast from Open-Meteo'
+                            : 'The month’s average over the last decade — too far out to forecast'}>
+                            {dayIntel.weather.kind === 'climate' && '≈ '}
+                            {dayIntel.weather.high != null && `${Math.round(dayIntel.weather.high)}°`}
+                            {dayIntel.weather.low != null && ` / ${Math.round(dayIntel.weather.low)}°`}
+                            {dayIntel.weather.label && ` · ${dayIntel.weather.label}`}
+                            {dayIntel.weather.rain_chance != null
+                                && ` · ${Math.round(dayIntel.weather.rain_chance)}%${
+                                    dayIntel.weather.kind === 'climate' ? ' of days wet' : ' rain'}`}
+                        </span>
+                    )}
+                    {dayIntel.sunrise && dayIntel.sunset && (
+                        <span className="tabular-nums" title="Sunrise and sunset at the day’s base">
+                            ☀ {dayIntel.sunrise} – {dayIntel.sunset}
+                        </span>
+                    )}
+                    {timeline.driveMinutes > 0 && (
+                        <span
+                            className={timeline.longDrive ? 'text-amber-700 font-medium' : ''}
+                            title={timeline.estimated
+                                ? 'Partly estimated from straight-line distance'
+                                : 'Driving time from OSRM'}
+                        >
+                            🚗 {formatDuration(timeline.driveMinutes * 60)}
+                            {timeline.estimated && ' (est.)'}
+                        </span>
+                    )}
+                </div>
+            )}
+
+            {timeline.lateCount > 0 && (
+                <p className="text-[11px] text-rose-700 bg-rose-50 rounded-xl px-2.5 py-1.5 mt-2">
+                    ⚠ {timeline.lateCount === 1 ? 'One stop' : `${timeline.lateCount} stops`} cannot be
+                    reached at the time set — the drive from the stop before puts you there later.
+                    The arrival times below are the honest ones.
+                </p>
+            )}
+            {timeline.overlapCount > 0 && (
+                <p className="text-[11px] text-amber-700 bg-amber-50 rounded-xl px-2.5 py-1.5 mt-2">
+                    ⚠ Two stops overlap: one is still going when the next is due to start.
+                </p>
+            )}
+            {timeline.longDrive && (
+                <p className="text-[11px] text-amber-700 bg-amber-50 rounded-xl px-2.5 py-1.5 mt-2">
+                    ⚠ {formatDuration(timeline.driveMinutes * 60)} of driving on this day. That is
+                    most of it spent in a car.
+                </p>
+            )}
+
+            {longest >= SPREAD_WARNING_KM && !timeline.longDrive && (
                 <p className="text-[11px] text-amber-700 bg-amber-50 rounded-xl px-2.5 py-1.5 mt-2">
                     ⚠ This day covers {formatDistance(longest)} in one hop. On Bali&apos;s roads that is a
                     long way — consider splitting it or moving the far stop to another day.
@@ -809,17 +908,35 @@ function DayCard({ day, api, onEditPlace, onFocusDay, beyondRange = false, arriv
     );
 }
 
-function StopRow({ stop, index, api, dayNumber, hopKm, onEditPlace }: {
+function StopRow({
+    stop, index, api, dayNumber, hopKm, row, dayDate, sunset, onEditPlace,
+}: {
     stop: Stop;
     index: number;
     api: HoneymoonApi;
     dayNumber: number;
     hopKm: number | null;
     onEditPlace: (place: Place) => void;
+    /** This stop's line in the day's timeline: real arrival, lateness, walkability. */
+    row: TimelineRow | null;
+    /** The day's date, for the opening-hours check. */
+    dayDate: string | null;
+    /** Sunset at the day's base, to flag a stop planned after dark. */
+    sunset: string | null;
 }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
         useSortable({ id: stop.id });
     const place = stop.place_id == null ? undefined : api.placeById.get(stop.place_id);
+    /*
+     * Two checks the day card could not make before.
+     *
+     * `stopIsOutsideHours` is deliberately quiet about specs it cannot parse —
+     * a wrong "closed" badge sends you somewhere else on a day the place was
+     * open, which is worse than no badge at all.
+     */
+    const outsideHours = stopIsOutsideHours(place?.opening_hours, dayDate, stop.start_time);
+    const hoursLabel = describeHours(place?.opening_hours);
+    const afterDark = isAfterDark(stop.start_time, sunset);
     const [showNotes, setShowNotes] = useState(false);
     const label = stop.custom_label || place?.name || 'this stop';
 
@@ -877,6 +994,27 @@ function StopRow({ stop, index, api, dayNumber, hopKm, onEditPlace }: {
                         rounded-lg px-1 py-1 hover:bg-gray-50 focus:bg-white focus:outline-none
                         focus:ring-2 focus:ring-accent/30"
                     aria-label="Start time"
+                />
+                {/* How long you mean to be here. Optional, and the timeline says
+                    so: without it a stop is a point in the day; with it the day
+                    becomes a sequence that can be checked against the clock. */}
+                <input
+                    type="number"
+                    min="0"
+                    step="15"
+                    key={`d-${stop.duration_minutes ?? ''}`}
+                    defaultValue={stop.duration_minutes ?? ''}
+                    placeholder="min"
+                    onBlur={(e) => {
+                        const next = e.target.value.trim();
+                        if (next !== String(stop.duration_minutes ?? '')) {
+                            api.patchStop(stop.id, { duration_minutes: next });
+                        }
+                    }}
+                    className="text-xs text-gray-400 bg-transparent w-12 shrink-0 rounded-lg px-1
+                        py-1 hover:bg-gray-50 focus:bg-white focus:outline-none focus:ring-2
+                        focus:ring-accent/30 tabular-nums"
+                    aria-label="Minutes here"
                 />
                 <div className="min-w-0 flex-1">
                     {place ? (
@@ -941,9 +1079,56 @@ function StopRow({ stop, index, api, dayNumber, hopKm, onEditPlace }: {
                     />
                 </div>
             )}
+            {/* What the timeline works out about this stop: when you really
+                arrive, whether you can, whether it is even open. */}
+            {row && (row.late || row.arrive !== row.planned || row.leave || row.walkable
+                || outsideHours || afterDark) && (
+                <div className="pl-10 pr-2 pb-0.5 flex flex-wrap items-center gap-x-2 gap-y-1
+                    text-[11px]">
+                    {row.late ? (
+                        <span className="text-rose-700 font-medium tabular-nums">
+                            arrive {row.arrive} · {row.lateBy} min late
+                        </span>
+                    ) : row.arrive && row.leave ? (
+                        <span className="text-gray-400 tabular-nums">
+                            {row.arrive}–{row.leave}
+                        </span>
+                    ) : row.arrive && !row.planned ? (
+                        <span className="text-gray-400 tabular-nums">≈ {row.arrive}</span>
+                    ) : null}
+                    {row.overlaps && (
+                        <span className="text-amber-700">overlaps the stop before</span>
+                    )}
+                    {row.walkable && (
+                        <span className="text-emerald-700" title="Within 800 m of the day’s base">
+                            🚶 walkable
+                        </span>
+                    )}
+                    {outsideHours && (
+                        <span className="text-rose-700" title={hoursLabel ?? undefined}>
+                            ⚠ closed at this time
+                        </span>
+                    )}
+                    {afterDark && (
+                        <span className="text-indigo-700" title={`Sunset is ${sunset}`}>
+                            🌙 after dark
+                        </span>
+                    )}
+                </div>
+            )}
             {hopKm != null && (
                 <div className="pl-10 py-0.5 text-[11px] text-gray-400">
-                    ↓ {formatDistance(hopKm)} straight line
+                    {row?.hopIn && row.hopIn.source === 'road' ? (
+                        <span title="Driving time from OSRM">
+                            ↓ {formatDuration(row.hopIn.seconds)} drive
+                            {' · '}{formatDistance(row.hopIn.meters / 1000)} by road
+                        </span>
+                    ) : (
+                        <span title="No road time yet — this is a straight line at 32 km/h">
+                            ↓ {formatDistance(hopKm)} straight line
+                            {row?.hopIn && ` · ~${formatDuration(row.hopIn.seconds)} (est.)`}
+                        </span>
+                    )}
                 </div>
             )}
         </li>

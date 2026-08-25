@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import TodaySheet, { useNightMode, useNowMinutes } from './TodaySheet';
 import { planForDay, planForToday } from '@/lib/honeymoonToday';
+import { nominalZone, sunTimesLocal } from '@/lib/honeymoonSun';
+import { hasCoords } from '@/lib/honeymoon';
 import type { HoneymoonPayload, ShareScope } from '@/lib/honeymoon';
 
 const NIGHT_KEY = 'honeymoon-shared-night';
@@ -35,11 +37,24 @@ export default function SharedTodayView({ payload, scope, label }: {
         ? planForToday(payload)
         : planForDay(payload, dayNumber);
 
+    /*
+     * Daylight, but no forecast.
+     *
+     * Sun times are arithmetic and can be worked out here; the weather needs the
+     * admin API, which a share link deliberately cannot reach. Rather than
+     * proxying it out to an unauthenticated route, the shared view shows the
+     * half it can honestly show.
+     */
+    const sun = plan.base && hasCoords(plan.base) && plan.date
+        ? sunTimesLocal(plan.base.lat, plan.base.lng, plan.date, nominalZone(plan.base.lng))
+        : null;
+
     return (
         <TodaySheet
             plan={plan}
             trip={payload.trip}
             now={now}
+            sun={sun ? { sunrise: sun.sunrise, sunset: sun.sunset } : null}
             night={night}
             onNightChange={setNight}
             onSelectDay={canBrowse ? (next) => {
