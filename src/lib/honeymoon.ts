@@ -1356,6 +1356,21 @@ export interface IcsEvent {
     /** `HH:MM`. Both present makes it a timed event; absent makes it all-day. */
     start?: string;
     end?: string;
+    /**
+     * IANA zone for the times, when it is known.
+     *
+     * Without one, a phone reads the time as its *own* local time, so a flight at
+     * 14:05 Bali time shows at 14:05 wherever the phone happens to be — which is
+     * wrong by eight hours for most of the planning and by the wrong direction on
+     * the way home. `TZID` is how a calendar is told.
+     */
+    tzid?: string;
+    /** A link on the event: the booking page, the listing. */
+    url?: string;
+    /** `geo:` coordinates, which phones turn into a "directions" button. */
+    geo?: { lat: number; lng: number };
+    /** Minutes before the start to alarm. Only for timed events. */
+    alarmMinutes?: number;
 }
 
 /** Escape per RFC 5545: backslash, semicolon, comma and newline are syntax. */
@@ -1406,6 +1421,9 @@ export function buildIcs(events: IcsEvent[], stamp: string, calendarName = 'Hone
         lines.push('BEGIN:VEVENT');
         lines.push(`UID:${event.uid}`);
         lines.push(`DTSTAMP:${stamp}`);
+        // A zone turns "14:05" from "whatever the phone thinks" into a real
+        // instant. Written as TZID on both ends, which is what phones read.
+        const tz = event.tzid ? `;TZID=${event.tzid}` : '';
         if (event.start) {
             // A different end date makes any end time valid, including one
             // earlier in the clock than the start — that is what an overnight
@@ -1418,8 +1436,8 @@ export function buildIcs(events: IcsEvent[], stamp: string, calendarName = 'Hone
                 // event, which some calendars refuse to draw at all.
                 : addHour(event.start);
             const endCompact = (endsLater ? event.endDate! : event.date).replace(/-/g, '');
-            lines.push(`DTSTART:${compact}T${event.start.replace(':', '')}00`);
-            lines.push(`DTEND:${endCompact}T${end.replace(':', '')}00`);
+            lines.push(`DTSTART${tz}:${compact}T${event.start.replace(':', '')}00`);
+            lines.push(`DTEND${tz}:${endCompact}T${end.replace(':', '')}00`);
         } else {
             // All-day events are exclusive at the end, hence the +1 day.
             lines.push(`DTSTART;VALUE=DATE:${compact}`);
@@ -1428,12 +1446,41 @@ export function buildIcs(events: IcsEvent[], stamp: string, calendarName = 'Hone
         lines.push(`SUMMARY:${icsText(event.summary)}`);
         if (event.description) lines.push(`DESCRIPTION:${icsText(event.description)}`);
         if (event.location) lines.push(`LOCATION:${icsText(event.location)}`);
+        if (event.url) lines.push(`URL:${icsText(event.url)}`);
+        // X-APPLE-STRUCTURED-LOCATION is what turns a coordinate into a
+        // "directions" button on an iPhone; GEO is the standard field everything
+        // else reads. Both, because the pair costs two lines.
+        if (event.geo) {
+            lines.push(`GEO:${event.geo.lat};${event.geo.lng}`);
+            lines.push(
+                'X-APPLE-STRUCTURED-LOCATION;VALUE=URI;X-ADDRESS='
+                + `${icsText(event.location ?? '')};X-APPLE-RADIUS=100;X-TITLE=`
+                + `${icsText(event.summary)}:geo:${event.geo.lat},${event.geo.lng}`,
+            );
+        }
+        // An alarm on a timed event only: "30 minutes before" a whole day is not
+        // a useful thing to be told.
+        if (event.start && event.alarmMinutes) {
+            lines.push('BEGIN:VALARM');
+            lines.push('ACTION:DISPLAY');
+            lines.push(`DESCRIPTION:${icsText(event.summary)}`);
+            lines.push(`TRIGGER:-PT${Math.round(event.alarmMinutes)}M`);
+            lines.push('END:VALARM');
+        }
         lines.push('END:VEVENT');
     }
 
     lines.push('END:VCALENDAR');
     // CRLF throughout: the spec requires it, and Outlook enforces it.
     return `${lines.map(icsFold).join('\r\n')}\r\n`;
+}
+
+/** `HH:MM` a number of minutes later, wrapping past midnight. */
+export function addMinutes(time: string, minutes: number): string {
+    const match = /^(\d{1,2}):(\d{2})$/.exec(time);
+    if (!match) return time;
+    const total = ((Number(match[1]) * 60 + Number(match[2]) + minutes) % 1440 + 1440) % 1440;
+    return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
 }
 
 function addHour(time: string): string {
@@ -1467,6 +1514,18 @@ export function tripEvents(
     days: Day[],
     placeName: (id: number) => string | undefined,
     placeAddress: (id: number) => string | undefined = () => undefined,
+    /**
+     * Optional extras, so an older caller keeps working unchanged.
+     *
+     * `place` gives the coordinates and first link for a stop; `alarmMinutes`
+     * turns on reminders; `tzFor` supplies a zone per day, which is what makes a
+     * timed event mean the same thing on a phone in another country.
+     */
+    extras: {
+        place?: (id: number) => { lat: number | null; lng: number | null; url?: string } | undefined;
+        alarmMinutes?: number;
+        tzFor?: (dayNumber: number) => string | undefined;
+    } = {},
 ): IcsEvent[] {
     if (!trip.start_date) return [];
     const events: IcsEvent[] = [];
@@ -1502,17 +1561,37 @@ export function tripEvents(
                 uid: `honeymoon-travel-${leg.id}@wedding`,
                 summary: `${mode}${route ? `: ${route}` : ''}`
                     + (nights > 0 ? ` (+${nights} day${nights === 1 ? '' : 's'})` : ''),
-                description: leg.confirmation_ref ? `Ref ${leg.confirmation_ref}` : undefined,
+                description: [
+                    leg.confirmation_ref ? `Ref ${leg.confirmation_ref}` : '',
+                    leg.flight_no ?? '',
+                    leg.from_terminal ? `From terminal ${leg.from_terminal}` : '',
+                    leg.to_terminal ? `To terminal ${leg.to_terminal}` : '',
+                ].filter(Boolean).join('\n') || undefined,
                 date: iso,
                 ...(arrivalDate ? { endDate: isoOf(arrivalDate) } : {}),
                 start: leg.depart_time ?? undefined,
                 end: leg.arrive_time ?? undefined,
+                // The leg's own departure zone beats the day's: that is the
+                // clock on the ticket.
+                tzid: leg.depart_tz ?? extras.tzFor?.(day.day_number),
+                // An hour before a flight is not enough warning; the alarm is
+                // deliberately longer for travel than for a dinner.
+                alarmMinutes: extras.alarmMinutes ? extras.alarmMinutes * 4 : undefined,
             });
         }
 
         for (const stop of day.stops) {
             if (!stop.start_time) continue;
             const address = stop.place_id != null ? placeAddress(stop.place_id) : undefined;
+            const detail = stop.place_id != null ? extras.place?.(stop.place_id) : undefined;
+            const geo = detail?.lat != null && detail.lng != null
+                ? { lat: detail.lat, lng: detail.lng }
+                : undefined;
+            // A duration makes the event the right length instead of the
+            // one-hour guess the builder falls back to.
+            const end = stop.duration_minutes
+                ? addMinutes(stop.start_time, stop.duration_minutes)
+                : undefined;
             events.push({
                 uid: `honeymoon-stop-${stop.id}@wedding`,
                 summary: label(stop),
@@ -1520,6 +1599,11 @@ export function tripEvents(
                 location: address || undefined,
                 date: iso,
                 start: stop.start_time,
+                end,
+                geo,
+                url: detail?.url,
+                tzid: extras.tzFor?.(day.day_number),
+                alarmMinutes: extras.alarmMinutes,
             });
         }
     }

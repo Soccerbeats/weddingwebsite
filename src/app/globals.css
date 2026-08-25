@@ -234,6 +234,26 @@ html {
   .print-day {
     break-inside: avoid;
   }
+
+  /*
+   * A5, for the version that folds into a passport.
+   *
+   * `@page` is the only way to change the paper size, and it cannot be scoped to
+   * an element — so it is scoped to the *document* instead: the rule applies only
+   * when an A5 sheet is actually on the page. Two columns at A5 would be four
+   * words wide, so the booklet stays one column and simply gets smaller paper.
+   */
+  body:has(.print-a5) {
+    zoom: 1;
+  }
+
+  .print-a5 dl {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@page {
+  margin: 12mm;
 }
 
 /*

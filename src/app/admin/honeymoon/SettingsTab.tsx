@@ -10,6 +10,8 @@ import type { HoneymoonApi } from './useHoneymoon';
 import DateRangePicker from './DateRangePicker';
 import MoneySettings from './MoneySettings';
 import ShareLinks from './ShareLinks';
+import TripArchives from './TripArchives';
+import TripFiles from './TripFiles';
 import { Button, Card, SelectField, TextArea, TextField } from './ui';
 
 /** The handful anyone planning from the US actually prices in. */
@@ -28,6 +30,17 @@ export default function SettingsTab({ api }: { api: HoneymoonApi }) {
     const days = api.data?.days ?? [];
     const [working, setWorking] = useState(false);
     if (!trip) return null;
+
+    /**
+     * The subscribe URL, built from the first live share token.
+     *
+     * A calendar client cannot log in, so the feed needs a token — and inventing
+     * a second kind of token for it would mean a second thing to revoke.
+     */
+    const feedToken = (api.data?.shares ?? []).find((share) => !share.revoked)?.token;
+    const subscribeUrl = feedToken && typeof window !== 'undefined'
+        ? `${window.location.origin}/api/honeymoon/feed?token=${feedToken}`
+        : '';
 
     const lastDay = days.length ? Math.max(...days.map((d) => d.day_number)) : 0;
 
@@ -188,6 +201,25 @@ export default function SettingsTab({ api }: { api: HoneymoonApi }) {
                     </p>
                 </div>
 
+                <div>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">
+                        Where the trip is up to
+                    </label>
+                    <SelectField
+                        value={trip.phase}
+                        onChange={(e) => api.update('trip', { phase: e.target.value })}
+                    >
+                        <option value="planning">Planning — shortlists and the map</option>
+                        <option value="travelling">Travelling — Today comes first</option>
+                        <option value="after">After — the itinerary becomes a journal</option>
+                    </SelectField>
+                    <p className="text-xs text-gray-400 mt-1.5">
+                        Yours to set rather than worked out from the dates: a trip is not over
+                        because a date passed. <strong>After</strong> turns each stop into something
+                        you can mark as done or skipped, star, and write about.
+                    </p>
+                </div>
+
                 <div className="grid grid-cols-2 gap-3">
                     <div>
                         <label className="block text-xs font-semibold text-gray-500 mb-1">
@@ -274,10 +306,46 @@ export default function SettingsTab({ api }: { api: HoneymoonApi }) {
                     <Button onClick={download}>Download a backup (JSON)</Button>
                 </div>
                 <p className="text-xs text-gray-500 leading-relaxed">
-                    The calendar file puts every day, travel leg and timed stop into your phone — it
-                    needs the dates above to be set. The backup is the whole portal in one file; keep
-                    one before any big change, because nothing here is versioned.
+                    The calendar file puts every day, travel leg and timed stop into your phone,
+                    with the right time zone, a map pin on each stop, a link to the booking and a
+                    reminder before anything timed. It needs the dates above to be set. The backup
+                    is the whole portal in one file.
                 </p>
+
+                {/* A download goes stale the day after you export it. A
+                    subscription is the same calendar at a URL, which phones poll
+                    — so moving a stop here moves it there. */}
+                {subscribeUrl ? (
+                    <div className="rounded-2xl bg-gray-50 p-3">
+                        <p className="text-xs font-semibold text-gray-700">
+                            Subscribe instead, and it stays up to date
+                        </p>
+                        <code className="mt-1 block truncate rounded-xl bg-white px-2 py-1.5
+                            text-[11px] text-gray-600">
+                            {subscribeUrl}
+                        </code>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                            <Button onClick={() => navigator.clipboard?.writeText(subscribeUrl)}>
+                                Copy the feed URL
+                            </Button>
+                            <a
+                                href={subscribeUrl.replace(/^https?:/, 'webcal:')}
+                                className="rounded-full border border-gray-200 bg-white px-4 py-1.5
+                                    text-sm font-medium text-gray-700 hover:bg-gray-50"
+                            >
+                                Add to this device
+                            </a>
+                        </div>
+                        <p className="mt-1.5 text-[11px] text-gray-400">
+                            It uses your first share link&apos;s token — revoking that link turns the
+                            feed off too.
+                        </p>
+                    </div>
+                ) : (
+                    <p className="text-[11px] text-gray-400">
+                        Create a share link below and a subscribe-able calendar feed appears here.
+                    </p>
+                )}
             </Card>
 
             {/* ---- The things you need at 2am ---- */}
@@ -331,6 +399,31 @@ export default function SettingsTab({ api }: { api: HoneymoonApi }) {
                     </p>
                 </div>
                 <ShareLinks api={api} />
+            </Card>
+
+            {/* ---- Documents ---- */}
+            <Card className="p-4 space-y-3">
+                <div>
+                    <h3 className="text-sm font-semibold text-gray-900">Documents</h3>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                        Passports, visas, insurance, e-tickets — cached by the offline snapshot, so
+                        they open with no signal. They are served from the photos volume like every
+                        other upload, so treat the URLs as unlisted rather than secret.
+                    </p>
+                </div>
+                <TripFiles api={api} />
+            </Card>
+
+            {/* ---- Snapshots ---- */}
+            <Card className="p-4 space-y-3">
+                <div>
+                    <h3 className="text-sm font-semibold text-gray-900">Snapshots</h3>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                        The whole trip, frozen. Keep the honeymoon after you fly home, or start the
+                        next trip from a copy of this one.
+                    </p>
+                </div>
+                <TripArchives api={api} />
             </Card>
 
             <Card className="p-4">

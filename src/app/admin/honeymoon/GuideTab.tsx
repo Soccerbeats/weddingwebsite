@@ -9,6 +9,104 @@ import {
 } from './ui';
 
 /**
+ * The notes worth having, as blanks to fill in.
+ *
+ * Every trip needs the same handful and nobody enjoys typing the headings; the
+ * language card in particular is the one that gets skipped and then wanted on
+ * day one. Markdown, because the Guide renders it now.
+ */
+const NOTE_TEMPLATES: { title: string; category: string; body: string }[] = [
+    {
+        title: 'Language card',
+        category: 'Practical',
+        body: [
+            '## Twenty phrases',
+            '',
+            '| English | Local |',
+            '| --- | --- |',
+            '| Hello | |',
+            '| Thank you | |',
+            '| Please | |',
+            '| Yes / No | |',
+            '| How much? | |',
+            '| Too expensive | |',
+            '| Where is…? | |',
+            '| The bill, please | |',
+            '| No ice | |',
+            '| Not spicy | |',
+            '| I am vegetarian | |',
+            '| Help | |',
+            '| Hospital | |',
+            '| Police | |',
+            '| I don\'t understand | |',
+            '| Do you speak English? | |',
+            '| Good morning | |',
+            '| Goodbye | |',
+            '| Sorry | |',
+            '| Delicious | |',
+            '',
+            '## Tipping',
+            '',
+            '- Restaurants:',
+            '- Drivers:',
+            '- Hotel staff:',
+            '',
+            '## Getting around',
+            '',
+            '- Taxi apps that work here:',
+            '- Rough fares:',
+            '- What to avoid:',
+            '',
+            '## SIM and data',
+            '',
+            '- Which provider:',
+            '- Where to buy:',
+            '- Roughly what it costs:',
+        ].join('\n'),
+    },
+    {
+        title: 'Money',
+        category: 'Practical',
+        body: [
+            '- Cards that work here:',
+            '- Cash to carry:',
+            '- ATM notes (fees, which banks):',
+            '- What is card-only, what is cash-only:',
+        ].join('\n'),
+    },
+    {
+        title: 'Health and water',
+        category: 'Practical',
+        body: [
+            '- Tap water:',
+            '- Ice:',
+            '- Pharmacy near each base:',
+            '- Nearest hospital / clinic:',
+            '- Jabs and tablets taken:',
+        ].join('\n'),
+    },
+    {
+        title: 'Getting around',
+        category: 'Practical',
+        body: [
+            '- Driver / transfer contacts:',
+            '- Scooter: yes or no, and why:',
+            '- Journey times we have learned the hard way:',
+        ].join('\n'),
+    },
+    {
+        title: 'Etiquette',
+        category: 'Practical',
+        body: [
+            '- Dress at temples and religious sites:',
+            '- Shoes off where:',
+            '- Photography — where not to:',
+            '- Local customs worth knowing:',
+        ].join('\n'),
+    },
+];
+
+/**
  * Know Before You Go, plus the per-region write-ups.
  *
  * This is the half of the travel guide that has no coordinates — the water
@@ -38,6 +136,23 @@ export default function GuideTab({ api }: { api: HoneymoonApi }) {
             return a.localeCompare(b);
         });
     }, [notes]);
+
+    /** Fill a template in, unless a note by that name already exists. */
+    const addTemplate = async (template: { title: string; category: string; body: string }) => {
+        const exists = notes.some(
+            (note) => note.title.trim().toLowerCase() === template.title.toLowerCase(),
+        );
+        if (exists) {
+            alert(`You already have a note called “${template.title}”.`);
+            return;
+        }
+        await api.create('notes', {
+            title: template.title,
+            category: template.category,
+            body: template.body,
+            source: 'Template',
+        });
+    };
 
     const addNote = async () => {
         const title = newTitle.trim();
@@ -147,6 +262,21 @@ export default function GuideTab({ api }: { api: HoneymoonApi }) {
                             placeholder="Add a note — visa on arrival, SIM cards…"
                         />
                         <Button tone="primary" onClick={addNote} disabled={!newTitle.trim()}>Add</Button>
+                    </div>
+                    {/* Templates, because the useful notes are the same five
+                        every trip and nobody wants to type the headings. */}
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                        <span className="text-[11px] text-gray-400">Start from a template:</span>
+                        {NOTE_TEMPLATES.map((template) => (
+                            <button
+                                key={template.title}
+                                onClick={() => addTemplate(template)}
+                                className="rounded-full border border-gray-200 px-2.5 py-1
+                                    text-[11px] text-gray-600 hover:bg-gray-50"
+                            >
+                                {template.title}
+                            </button>
+                        ))}
                     </div>
                 </Card>
 

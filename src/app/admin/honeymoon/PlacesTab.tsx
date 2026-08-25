@@ -96,6 +96,8 @@ export default function PlacesTab({ api, panel = false }: {
     const [viewing, setViewing] = useState<Place | null>(null);
     const [importing, setImporting] = useState(false);
     const [filing, setFiling] = useState('');
+    const [seeding, setSeeding] = useState(false);
+    const [seedNote, setSeedNote] = useState('');
     const [selected, setSelected] = useState<Set<number>>(new Set());
 
     // Stable identity — see MapTab: a fresh `?? []` per render would defeat
@@ -258,6 +260,31 @@ export default function PlacesTab({ api, panel = false }: {
             ],
         },
     ], [data?.categories, data?.regions, places, sources]);
+
+    /**
+     * Load the bundled guide, from a button.
+     *
+     * The empty state used to say "run npm run seed:honeymoon", which is not
+     * something you can do from the admin panel, let alone from a phone. The
+     * seed is idempotent — matched on name — so pressing it twice is harmless.
+     */
+    const loadGuide = async () => {
+        setSeeding(true);
+        setSeedNote('');
+        try {
+            const res = await fetch('/api/admin/honeymoon/seed', { method: 'POST' });
+            const body = await res.json().catch(() => ({}));
+            if (!res.ok) { setSeedNote(body.error ?? 'Could not load the guide.'); return; }
+            await api.refresh();
+            setSeedNote(
+                `Added ${body.added.places} places, ${body.added.regions} regions and `
+                + `${body.added.notes} guide notes. The pins are geocoded guesses — they show with `
+                + 'a dashed ring until you confirm them.',
+            );
+        } finally {
+            setSeeding(false);
+        }
+    };
 
     /* `n` from anywhere in the portal opens the new-place editor here. */
     useEffect(() => {
@@ -511,12 +538,26 @@ export default function PlacesTab({ api, panel = false }: {
             {/* ---- List ---- */}
             <Card>
                 {sorted.length === 0 ? (
-                    <EmptyState
-                        title={places.length ? 'No places match those filters' : 'No places yet'}
-                        hint={places.length
-                            ? 'Try clearing the filters.'
-                            : 'Add one by hand, or run npm run seed:honeymoon to load the Bali guide.'}
-                    />
+                    <div className="p-6 text-center">
+                        <EmptyState
+                            title={places.length ? 'No places match those filters' : 'No places yet'}
+                            hint={places.length
+                                ? 'Try clearing the filters.'
+                                : 'Add one by hand, import a list, or load the bundled Bali and '
+                                    + 'Singapore guide — 231 places, 126 of them already pinned.'}
+                        />
+                        {places.length === 0 && (
+                            <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+                                <Button tone="primary" onClick={loadGuide} disabled={seeding}>
+                                    {seeding ? 'Loading…' : 'Load the Bali guide'}
+                                </Button>
+                                <Button onClick={() => setImporting(true)}>Import a list…</Button>
+                            </div>
+                        )}
+                        {seedNote && (
+                            <p className="mt-2 text-xs text-gray-600">{seedNote}</p>
+                        )}
+                    </div>
                 ) : (
                     <ul className="divide-y divide-gray-100">
                         {sorted.map((place) => {

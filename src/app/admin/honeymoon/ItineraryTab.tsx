@@ -23,12 +23,13 @@ import { scheduledPlaceIds, suggestDay } from '@/lib/honeymoonPlaces';
 import { conflictsOf, stayStretches } from '@/lib/honeymoonChecks';
 import { DROP_TYPES, PLACE_DRAG, STOP_DRAG } from './dragTypes';
 import type { TimelineRow } from '@/lib/honeymoonTimeline';
+import BookingPanel from './BookingPanel';
 import Markdown from './Markdown';
 import { useTripIntel } from './useTripIntel';
 import type { TripIntel } from './useTripIntel';
 import type { HoneymoonApi } from './useHoneymoon';
 import PlaceEditor from './PlaceEditor';
-import PrintSheet from './PrintSheet';
+import PrintSheet, { DEFAULT_PRINT_OPTIONS, type PrintOptions } from './PrintSheet';
 import TravelLegCard from './TravelLeg';
 import {
     Button, Card, CategoryChip, EmptyState, InlineText, Modal, OverflowMenu, SelectField, TextField,
@@ -67,6 +68,8 @@ export default function ItineraryTab({ api, panel = false, onFocusDay }: {
      */
     const intel = useTripIntel(data);
     const [showAllConflicts, setShowAllConflicts] = useState(false);
+    const [printing, setPrinting] = useState(false);
+    const [printOptions, setPrintOptions] = useState<PrintOptions>(DEFAULT_PRINT_OPTIONS);
     const conflicts = useMemo(() => (data ? conflictsOf(data) : []), [data]);
     const stretches = useMemo(() => (data ? stayStretches(data) : []), [data]);
 
@@ -160,7 +163,10 @@ export default function ItineraryTab({ api, panel = false, onFocusDay }: {
                         : 'Click any day to open it.'}
                 </p>
                 <div className="flex items-center gap-2 shrink-0">
-                    <Button onClick={() => window.print()} title="Print the whole trip as a sheet">
+                    <Button
+                        onClick={() => setPrinting(true)}
+                        title="Choose what goes on the paper, then print"
+                    >
                         🖨 Print
                     </Button>
                     {/* A real navigation to a download endpoint: next/link would
@@ -282,7 +288,87 @@ export default function ItineraryTab({ api, panel = false, onFocusDay }: {
 
             {/* Invisible on screen; the only thing on the page in print. Never in
                 a panel: two copies on one page would print the trip twice. */}
-            {!panel && <PrintSheet api={api} />}
+            {!panel && <PrintSheet api={api} options={printOptions} />}
+
+            {/* Print used to be all-or-nothing: every day, every note, one
+                column of A4. These are the four choices that actually change what
+                you carry. */}
+            {printing && (
+                <Modal open onClose={() => setPrinting(false)} title="Print the trip">
+                    <div className="space-y-3">
+                        <div>
+                            <p className="text-xs font-semibold text-gray-500">Days</p>
+                            <div className="mt-1 flex flex-wrap gap-1">
+                                <button
+                                    onClick={() => setPrintOptions({ ...printOptions, days: [] })}
+                                    className={`rounded-full border px-2.5 py-1 text-xs ${
+                                        printOptions.days.length === 0
+                                            ? 'border-transparent bg-accent text-white'
+                                            : 'border-gray-200 text-gray-600'}`}
+                                >
+                                    All
+                                </button>
+                                {days.map((day) => {
+                                    const on = printOptions.days.includes(day.day_number);
+                                    return (
+                                        <button
+                                            key={day.id}
+                                            onClick={() => setPrintOptions({
+                                                ...printOptions,
+                                                days: on
+                                                    ? printOptions.days.filter(
+                                                        (n) => n !== day.day_number,
+                                                    )
+                                                    : [...printOptions.days, day.day_number],
+                                            })}
+                                            className={`rounded-full border px-2.5 py-1 text-xs
+                                                tabular-nums ${on
+                                                ? 'border-transparent bg-accent text-white'
+                                                : 'border-gray-200 text-gray-600'}`}
+                                        >
+                                            {day.day_number}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {([
+                            ['bookings', 'Confirmation numbers and contacts'],
+                            ['info', 'Emergency and practical details'],
+                            ['notes', 'The guide notes'],
+                            ['a5', 'A5 booklet (smaller type, folds into a passport)'],
+                        ] as const).map(([key, label]) => (
+                            <label key={key} className="flex items-center gap-2 text-sm text-gray-700">
+                                <input
+                                    type="checkbox"
+                                    checked={printOptions[key] as boolean}
+                                    onChange={(e) => setPrintOptions({
+                                        ...printOptions, [key]: e.target.checked,
+                                    })}
+                                    className="size-4 rounded accent-accent"
+                                />
+                                {label}
+                            </label>
+                        ))}
+
+                        <div className="flex justify-end gap-2 border-t border-gray-100 pt-3">
+                            <Button onClick={() => setPrinting(false)}>Cancel</Button>
+                            <Button
+                                tone="primary"
+                                onClick={() => {
+                                    setPrinting(false);
+                                    // A beat, so the dialog is gone before the
+                                    // print dialog snapshots the page.
+                                    setTimeout(() => window.print(), 50);
+                                }}
+                            >
+                                Print
+                            </Button>
+                        </div>
+                    </div>
+                </Modal>
+            )}
 
             {shownView === 'calendar' ? (
                 <CalendarView
@@ -1058,6 +1144,7 @@ function DayCard({
                                         row={rowFor(stop.id)}
                                         dayDate={dayDate}
                                         sunset={dayIntel.sunset}
+                                        phase={api.data?.trip.phase ?? 'planning'}
                                         previousEnd={index > 0
                                             ? timeline.rows[index - 1]?.leave
                                                 ?? timeline.rows[index - 1]?.arrive ?? null
@@ -1237,7 +1324,7 @@ function DayCard({
 }
 
 function StopRow({
-    stop, index, api, dayNumber, hopKm, row, dayDate, sunset, previousEnd, onEditPlace,
+    stop, index, api, dayNumber, hopKm, row, dayDate, sunset, phase, previousEnd, onEditPlace,
     onInsertBefore,
 }: {
     stop: Stop;
@@ -1252,6 +1339,8 @@ function StopRow({
     dayDate: string | null;
     /** Sunset at the day's base, to flag a stop planned after dark. */
     sunset: string | null;
+    /** planning | travelling | after — see the post-trip block. */
+    phase: 'planning' | 'travelling' | 'after';
     /**
      * When the stop before this one is done, for the "+ start here" chip.
      * Null when the day has not established a clock yet.
@@ -1274,6 +1363,8 @@ function StopRow({
     const hoursLabel = describeHours(place?.opening_hours);
     const afterDark = isAfterDark(stop.start_time, sunset);
     const [showNotes, setShowNotes] = useState(false);
+    const [showBooking, setShowBooking] = useState(false);
+    const reservation = (api.data?.bookings ?? []).find((booking) => booking.stop_id === stop.id);
     const label = stop.custom_label || place?.name || 'this stop';
 
     /**
@@ -1473,12 +1564,24 @@ function StopRow({
                             }),
                         })),
                     {
+                        // A dinner reservation is a booking on a stop: time,
+                        // party size, confirmation, dress code, and the date
+                        // after which cancelling costs you.
+                        label: reservation ? 'Edit the reservation' : 'Add a reservation',
+                        onClick: () => setShowBooking((v) => !v),
+                    },
+                    {
                         label: 'Remove stop',
                         danger: true,
                         onClick: () => api.removeRow('stops', stop, `Removed ${label}`),
                     },
                 ]} />
             </div>
+            {(showBooking || reservation) && (
+                <div className="pl-10 pr-2 pb-1">
+                    <BookingPanel api={api} kind="table" stopId={stop.id} compact />
+                </div>
+            )}
             {(showNotes || stop.notes) && (
                 <div className="pl-10 pr-2">
                     <InlineText
@@ -1490,6 +1593,49 @@ function StopRow({
                     />
                 </div>
             )}
+            {/* ---- After the trip ----
+                The same rows, asked a different question. Only in the `after`
+                phase: a "did you go?" tick on a day three months away is noise,
+                and the switch is on the Settings tab because a trip is not over
+                because a date passed. */}
+            {phase === 'after' && (
+                <div className="flex flex-wrap items-center gap-1.5 pl-10 pr-2 pb-1">
+                    {([['did', '✓ Did it'], ['skipped', '– Skipped']] as const).map(([key, label]) => (
+                        <button
+                            key={key}
+                            type="button"
+                            onClick={() => api.patchStop(stop.id, {
+                                outcome: stop.outcome === key ? '' : key,
+                            })}
+                            className={`rounded-full border px-2 py-0.5 text-[11px] transition
+                                ${stop.outcome === key
+                                ? 'border-transparent bg-gray-900 text-white'
+                                : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                        >
+                            {label}
+                        </button>
+                    ))}
+                    <button
+                        type="button"
+                        onClick={() => api.patchStop(stop.id, { favourite: !stop.favourite })}
+                        className={`rounded-full border px-2 py-0.5 text-[11px] transition
+                            ${stop.favourite
+                            ? 'border-transparent bg-amber-400 text-white'
+                            : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                        title="One of the good ones"
+                    >
+                        ★
+                    </button>
+                    <InlineText
+                        multiline
+                        value={stop.journal ?? ''}
+                        placeholder="What was it actually like?"
+                        className="text-[11px] text-gray-600 flex-1 min-w-[8rem]"
+                        onCommit={(journal) => api.update('stops', { id: stop.id, journal })}
+                    />
+                </div>
+            )}
+
             {/* What the timeline works out about this stop: when you really
                 arrive, whether you can, whether it is even open. */}
             {row && (row.late || row.arrive !== row.planned || row.leave || row.walkable

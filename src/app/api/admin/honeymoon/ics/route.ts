@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getHoneymoonPayload } from '@/lib/honeymoonDb';
-import { buildIcs, tripEvents } from '@/lib/honeymoon';
+import { buildTripCalendar, calendarSlug } from '@/lib/honeymoonCalendar';
 
 /**
  * The itinerary as a calendar file.
@@ -11,9 +11,10 @@ import { buildIcs, tripEvents } from '@/lib/honeymoon';
  * is the one export that works offline on a phone with no account, no app and
  * no signal.
  */
-export async function GET() {
+export async function GET(request: Request) {
     try {
         const data = await getHoneymoonPayload();
+        const params = new URL(request.url).searchParams;
 
         if (!data.trip.start_date) {
             return NextResponse.json(
@@ -22,15 +23,18 @@ export async function GET() {
             );
         }
 
-        const names = new Map(data.places.map((p) => [p.id, p.name]));
-        const addresses = new Map(data.places.map((p) => [p.id, p.address ?? undefined]));
-        const events = tripEvents(data.trip, data.days, (id) => names.get(id), (id) => addresses.get(id));
-        // Second precision, UTC, no punctuation — the DTSTAMP format.
-        const stamp = `${new Date().toISOString().replace(/[-:]/g, '').slice(0, 15)}Z`;
-        const body = buildIcs(events, stamp, data.trip.title);
+        // `?alarm=30` turns on reminders; `?days=3,4,5` exports a subset.
+        const alarmMinutes = Math.max(0, Math.min(240, Number(params.get('alarm')) || 0));
+        const days = (params.get('days') ?? '')
+            .split(',')
+            .map((value) => Math.trunc(Number(value.trim())))
+            .filter((value) => Number.isFinite(value) && value > 0);
 
-        const slug = data.trip.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-            || 'honeymoon';
+        const body = buildTripCalendar(data, { alarmMinutes, days });
+        if (!body) {
+            return NextResponse.json({ error: 'Nothing to export yet.' }, { status: 400 });
+        }
+        const slug = calendarSlug(data.trip.title);
 
         return new NextResponse(body, {
             headers: {

@@ -11,6 +11,25 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.50 — [Released] The planner's second half, part seven: taking it with you (`main`, 2026-08-25 21:30)
+
+Wave 7 of seven, and the last: the exports, the settings, and the parts of the trip that come after it. Every item on `docs/honeymoon-improvements-2026-08-25.md` that you marked *want* is now built.
+
+### Added
+- **A calendar you can subscribe to** (`/api/honeymoon/feed?token=…`). A downloaded `.ics` goes stale the day after you export it, which for a document you are still editing is most of its life; a subscription is the same calendar at a URL, so moving a stop moves it on the phone. It uses the same share token as the read-only link — one thing to revoke, not two — and lives outside `/api/admin` because a calendar client cannot log in. The Settings tab offers the URL and a one-tap `webcal:` link.
+- **A much better `.ics`.** Every timed event now carries `TZID`, so a 14:05 flight means 14:05 *there* rather than 14:05 wherever the phone is; stops carry `GEO` and Apple's structured location (which is what turns an entry into a directions button), a `URL` to the booking, the real duration instead of a one-hour guess, and an alarm — thirty minutes before a stop, two hours before travel. Flight number and terminals ride along in the description. `?days=3,4,5` exports a subset; `?alarm=0` turns the reminders off.
+- **Print options.** Pick the days, include or drop the confirmation numbers, the emergency details and the guide notes, and choose an A5 booklet that folds into a passport. Printing was all-or-nothing: every day, every note, one column of A4.
+- **"Load the Bali guide" as a button.** The empty state used to say *run `npm run seed:honeymoon`*, which is not something you can do from the admin panel, let alone from a phone. 231 places, 6 regions and 14 guide notes in about a second, with no network — the coordinates were harvested once and committed — and idempotent, so pressing it twice is harmless. Every pin it adds is flagged as unconfirmed, because every one is a geocoder's guess.
+- **Snapshots of the whole trip.** `honeymoon_trip` is a singleton, and threading a trip id through eleven tables to plan two trips at once is not the trade this portal wants; a snapshot answers what the singleton cannot — keep the honeymoon after you have flown home, and start the next trip from a copy. Restoring replaces what is live in one transaction, and snapshots the current state first under its own name, so even that is undoable.
+- **A documents folder** — passports, visas, insurance, e-tickets, images or PDFs — cached by the offline snapshot so they open at a border with no signal. Said plainly rather than implied: they are served from the photos volume like every other upload, so treat the URLs as unlisted rather than secret.
+- **Post-trip mode.** Set the trip's phase to *After* and every stop gains *did it* / *skipped*, a star, and a line about what it was actually like. The phase is yours to set rather than worked out from the dates — a trip is not over because a date passed.
+- **Reservations on a stop** — time, party size, confirmation, dress code and the cancellation date, through the same booking panel a stay or a flight uses.
+- **Guide note templates**, including a **language card** per country: twenty phrases to fill in, tipping norms, taxi apps and SIM advice. Plus money, health and water, getting around, and etiquette. The useful notes are the same five every trip and nobody wants to type the headings.
+
+### Notes
+- #62 (dates on the Travel tab) was already there — the leg headings have carried the real date since the tab shipped.
+- #16 (flight lookup) is built and needs `FLIGHT_API_KEY` in the stack to switch on; everything else in the seven waves works with no key and no configuration.
+
 ## v0.9.49 — [Released] The planner's second half, part six: the itinerary (`main`, 2026-08-25 20:40)
 
 Wave 6 of seven. The signals were all in the payload already and collected nowhere; the gestures were all one menu away from being direct.
