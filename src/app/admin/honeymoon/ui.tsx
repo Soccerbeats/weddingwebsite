@@ -230,7 +230,7 @@ const MANAGE = '__manage__';
  * silently reverts to the first item when the editor reopens.
  */
 export function CustomisableSelect({
-    value, options, onChange, onCreate, onManage, placeholder, label,
+    value, options, onChange, onCreate, onManage, placeholder, label, compact = false,
 }: {
     value: string;
     options: { key: string; label: string }[];
@@ -241,6 +241,12 @@ export function CustomisableSelect({
     onManage?: () => void;
     placeholder: string;
     label: string;
+    /**
+     * Pill-shaped and sized to its content, for sitting on a card rather than in
+     * a form. Only the chrome changes — creating and managing behave the same,
+     * which is the whole reason this is a prop and not a second component.
+     */
+    compact?: boolean;
 }) {
     const [typing, setTyping] = useState(false);
     const [draft, setDraft] = useState('');
@@ -268,6 +274,7 @@ export function CustomisableSelect({
                     value={draft}
                     placeholder={placeholder}
                     aria-label={label}
+                    className={compact ? '!py-1 !text-sm' : ''}
                     onChange={(e) => setDraft(e.target.value)}
                     onKeyDown={(e) => {
                         if (e.key === 'Enter') { e.preventDefault(); commit(); }
@@ -281,10 +288,12 @@ export function CustomisableSelect({
         );
     }
 
+    const Field = compact ? MiniSelect : SelectField;
     return (
-        <SelectField
+        <Field
             value={value}
             aria-label={label}
+            className={compact ? 'py-1 pl-3 pr-8 text-xs' : ''}
             onChange={(e) => {
                 if (e.target.value === CUSTOM) { setTyping(true); return; }
                 if (e.target.value === MANAGE) { onManage?.(); return; }
@@ -294,7 +303,7 @@ export function CustomisableSelect({
             {options.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
             <option value={CUSTOM}>＋ Custom…</option>
             {onManage && <option value={MANAGE}>✎ Edit / remove…</option>}
-        </SelectField>
+        </Field>
     );
 }
 

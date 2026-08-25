@@ -56,7 +56,12 @@ const RESOURCES: Record<string, ResourceDef> = {
         table: 'honeymoon_regions',
         fields: {
             name: { kind: 'text' },
-            country: { kind: 'text' },
+            // NOT NULL DEFAULT '' in the schema, so a blank has to arrive as an
+            // empty string: without this the column takes a null and the insert
+            // fails its constraint. A region whose country you do not know yet is
+            // an ordinary thing to create — it is what "＋ Custom…" does whenever
+            // the trip has no focus country — and it was returning a 500.
+            country: { kind: 'text', blankAsEmpty: true },
             description: { kind: 'text' },
             center_lat: { kind: 'coord' },
             center_lng: { kind: 'coord' },
@@ -155,7 +160,9 @@ const RESOURCES: Record<string, ResourceDef> = {
         table: 'honeymoon_notes',
         fields: {
             title: { kind: 'text' },
-            body: { kind: 'text' },
+            // Also NOT NULL DEFAULT '': emptying a guide note's text is a normal
+            // edit on the Guide tab, and it was failing the same way.
+            body: { kind: 'text', blankAsEmpty: true },
             category: { kind: 'text' },
             source: { kind: 'text' },
             sort_order: { kind: 'int' },

@@ -11,7 +11,20 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
-## v0.9.37 — [Unreleased] A license: free for your wedding, ask about anything else (`main`, 2026-08-24 15:58)
+## v0.9.38 — [Unreleased] Stays say which area they are in (`main`, 2026-08-25 05:07)
+
+### Added
+- **An area dropdown on every stay card** — Ubud, Seminyak, Canggu, whatever you have. It sits with the address and the map pin because it answers the same question, and a shortlist is something you sort by area in your head long before you care what it costs.
+- **It is the same set of regions the rest of the portal uses**, not a new field: an area picked here shows up in the map's region filter, and one created here gets its own write-up on the Guide tab. **＋ Custom…** makes a new area without leaving the card and reuses an existing one on a name match rather than creating a near-duplicate; **✎ Edit / remove…** renames or deletes, saying how many places each area holds first. Renaming keeps everything filed where it is; deleting keeps the places and clears their area.
+- Editing it inline rather than through the place editor is the point of it: tagging six hotels should not be six trips through a modal.
+- The picker is the one the place editor already uses, given a `compact` prop that swaps the form-sized field for a pill. Only the chrome differs — creating and managing behave identically, which is why it is a prop and not a second component.
+
+### Fixed
+- **Creating an area with no country returned a 500.** `honeymoon_regions.country` is `NOT NULL DEFAULT ''`, but a blank was being coerced to `null` on the way in, so the insert failed its own constraint. That is exactly what **＋ Custom…** does whenever the trip has no focus country set — so the feature above did not work at all until this was fixed, and neither did the same button in the place editor.
+- **Emptying a guide note's text returned a 500**, for the same reason on `honeymoon_notes.body` — and clearing a note you no longer want is an ordinary edit on the Guide tab. Found by checking whether the first bug had siblings rather than assuming it was alone.
+- Both are one flag, `blankAsEmpty`, which the field layer already had and which `places.country` and `trip.focus_country` were already using. Two columns had simply been missed.
+
+## v0.9.37 — [Released] A license: free for your wedding, ask about anything else (`main`, 2026-08-24 15:58)
 
 ### Added
 - **`LICENSE.md` — the PolyForm Noncommercial License 1.0.0**, verbatim from the SPDX license list rather than retyped, because a licence reproduced from memory is a licence with subtle holes in it. Anyone may run this for their own wedding, or a friend's: read it, change it, self-host it, share the changes, no permission needed. Charities, schools, public research bodies and government institutions count as noncommercial too, whatever their funding. Selling it, hosting it as a paid service or building client sites with it needs a separate license, which is an invitation rather than a refusal.

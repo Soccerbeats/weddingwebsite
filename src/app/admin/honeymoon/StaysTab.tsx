@@ -17,8 +17,8 @@ import type { HoneymoonApi } from './useHoneymoon';
 import PlaceEditor from './PlaceEditor';
 import LinkPreview from './LinkPreview';
 import {
-    Button, Card, ColumnDivider, EmptyState, InlineText, MiniSelect, OverflowMenu, StatusChip,
-    TextArea,
+    Button, Card, ColumnDivider, CustomisableSelect, EmptyState, InlineText, ManageListModal,
+    MiniSelect, OverflowMenu, StatusChip, TextArea,
 } from './ui';
 
 // Leaflet reaches for `window` on import, so the map is never in the server
@@ -160,6 +160,8 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
     });
     const [editing, setEditing] = useState<Place | null>(null);
     const [editorOpen, setEditorOpen] = useState(false);
+    // The ✎ Edit / remove… option on the area picker opens this.
+    const [managingRegions, setManagingRegions] = useState(false);
 
     const places = useMemo(() => data?.places ?? [], [data]);
     const stays = useMemo(
@@ -726,6 +728,55 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                                                 )}
                                             </div>
                                         )}
+
+                                        {/*
+                                          Which area it is in — Ubud, Seminyak, Canggu.
+                                          It sits with the address and the pin because it
+                                          answers the same question, and a stay's area is
+                                          the thing you sort a shortlist by in your head
+                                          long before you care what it costs.
+
+                                          The same regions the rest of the portal uses, so
+                                          one added here shows up on the map's filter and
+                                          gets its own write-up on the Guide tab. Editing
+                                          it inline rather than through the place editor is
+                                          the point: tagging six hotels should not be six
+                                          trips through a modal.
+                                        */}
+                                        <div className="mt-1.5 px-2">
+                                            <CustomisableSelect
+                                                compact
+                                                label={`Area for ${stay.name}`}
+                                                value={stay.region_id != null ? String(stay.region_id) : ''}
+                                                placeholder="Ubud, Seminyak, Canggu…"
+                                                options={[
+                                                    { key: '', label: '— area not set —' },
+                                                    ...(data?.regions ?? []).map((r) => ({
+                                                        key: String(r.id),
+                                                        label: r.name,
+                                                    })),
+                                                ]}
+                                                onChange={(next) => api.update('places', {
+                                                    id: stay.id,
+                                                    region_id: next === '' ? null : Number(next),
+                                                })}
+                                                onCreate={async (typed) => {
+                                                    // A region is a real row, so it must
+                                                    // exist before it can be selected.
+                                                    // Match an existing name rather than
+                                                    // creating a near-duplicate.
+                                                    const existing = (data?.regions ?? []).find(
+                                                        (r) => r.name.toLowerCase() === typed.toLowerCase(),
+                                                    );
+                                                    if (existing) return String(existing.id);
+                                                    const created = await api.createRegion(
+                                                        typed, data?.trip.focus_country || '',
+                                                    );
+                                                    return created == null ? null : String(created);
+                                                }}
+                                                onManage={() => setManagingRegions(true)}
+                                            />
+                                        </div>
                                     </div>
                                     <OverflowMenu
                                         items={[
@@ -871,6 +922,30 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                 place={editing}
                 open={editorOpen}
                 onClose={() => { setEditorOpen(false); setEditing(null); }}
+            />
+
+            {/* Renaming an area keeps every place filed under it; deleting one
+                leaves the places and clears their area. The counts include
+                everything in the region, not just stays, because that is what
+                the delete actually affects. */}
+            <ManageListModal
+                open={managingRegions}
+                onClose={() => setManagingRegions(false)}
+                title="Edit areas"
+                hint="Renaming keeps every place in it. Deleting leaves the places but clears their area."
+                items={(data?.regions ?? []).map((r) => {
+                    const used = (data?.places ?? []).filter((p) => p.region_id === r.id).length;
+                    return {
+                        id: r.id,
+                        label: r.name,
+                        detail: used ? `${used} place${used === 1 ? '' : 's'}` : 'unused',
+                        warn: used
+                            ? `Delete "${r.name}"? ${used} place(s) stay but lose their area.`
+                            : `Delete "${r.name}"?`,
+                    };
+                })}
+                onRename={(id, name) => api.update('regions', { id, name })}
+                onDelete={(id) => api.remove('regions', id)}
             />
         </>
     );
