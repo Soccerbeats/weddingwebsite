@@ -418,6 +418,14 @@ function LegDetails({ leg, day, api }: { leg: TravelLeg; day: Day; api: Honeymoo
                 return;
             }
             const flight = body.flight;
+            if (flight.other_date && flight.from_date) {
+                // Filled in, but say where it came from: this number did not fly
+                // on the leg's own date, so the times are last week's schedule.
+                setLookupError(
+                    `${flight.flight_no} does not operate on that date — filled in from its `
+                    + `${flight.from_date} schedule. Worth checking closer to the trip.`,
+                );
+            }
             // Only blanks are filled: a leg you have already corrected by hand
             // must not be overwritten by a schedule.
             const patch: Record<string, unknown> = { id: leg.id };
@@ -504,7 +512,11 @@ function LegDetails({ leg, day, api }: { leg: TravelLeg; day: Day; api: Honeymoo
                         </p>
                     )}
                     {lookupError && (
-                        <p className="text-[11px] text-rose-700">{lookupError}</p>
+                        <p className={`text-[11px] ${lookupError.includes('filled in from')
+                            ? 'text-sky-800 bg-sky-50 rounded-xl px-2.5 py-1.5'
+                            : 'text-rose-700'}`}>
+                            {lookupError}
+                        </p>
                     )}
 
                     <div className="grid grid-cols-2 gap-2">

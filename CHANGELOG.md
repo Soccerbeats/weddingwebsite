@@ -11,6 +11,22 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.52 — [Released] Flight lookup, against the real API (`main`, 2026-08-25 22:45)
+
+Tested against a live AeroDataBox key for the first time. The URL shape and the parser were right; three things around them were not.
+
+### Fixed
+- **A flight that does not operate on that date now says so.** The API answers "no" with `204 No Content`, which has an empty body — so parsing it as JSON threw and the UI reported *"could not reach the lookup service"* for what is a perfectly good answer. 204 is now read as "not that day".
+- **A number with nothing on the requested date falls back to its own schedule.** Rather than giving up, the lookup asks what that number does at all and fills the leg in from its most recent operation — same times, terminals, aircraft and time zones, which for a flight two months out is exactly what you want — and says which date the schedule came from (*"AS2223 does not operate on that date — filled in from its 2026-08-18 schedule"*) so it never implies more confidence than it has.
+- **The rate limit is waited out, not reported.** The free plan allows one request a second, which is low enough that the two-step lookup above tripped it on itself. A 429 now pauses and retries once: one button press, one answer.
+- **The right row is picked when a number returns several.** The API answers by *arrival* date, so an overnight flight comes back under the day it lands and the list can hold both yesterday's and today's departure. The row that actually departs on the date asked for wins.
+
+### Added
+- `npm run check:honeymoon` covers the parser against a real response, transcribed from a live one: JFK→LHR overnight (both zones, both terminals, `arrive_day_offset` of 1), a two-row answer, a wrapped list, an empty list and nonsense. 505 → 519 assertions.
+
+### Notes
+- Verified end to end with a key in place: `SQ938` on 2026-09-15 fills in Singapore (SIN) T2 → Denpasar-Bali Island (DPS), 09:15 → 12:00, `Asia/Singapore` → `Asia/Makassar`, Boeing 787.
+
 ## v0.9.51 — [Released] The optional environment variables actually reach the container (`main`, 2026-08-25 22:10)
 
 ### Fixed

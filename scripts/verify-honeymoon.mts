@@ -30,6 +30,7 @@ import {
 import {
     dayOfWeek, describeHours, openAt, parseHours, stopIsOutsideHours,
 } from '../src/lib/honeymoonHours';
+import { parseFlight } from '../src/lib/honeymoonFetch';
 import {
     addDaysIso, buildTimeline, estimateHop, formatDuration, instantOf, isWalkable,
     legRealMinutes, zoneOffsetMinutes,
@@ -1810,6 +1811,87 @@ console.log('\nPacking');
     check('every suggestion says why', suggestions.every((entry) => entry.why.length > 0));
     check('a trip with nothing planned still suggests the universals',
         packingSuggestions({ places: [], days: [] }).length >= 2);
+}
+
+console.log('\nFlight lookup');
+{
+    /*
+     * The real shape, trimmed — transcribed from a live AeroDataBox response
+     * rather than from the docs, because a data-shape parser is exactly the kind
+     * of code that breaks silently when a field is renamed.
+     *
+     * BA112 is JFK → LHR overnight: the API answers by *arrival* date, so a
+     * query for the 27th returns a flight departing on the 26th.
+     */
+    const overnight = [{
+        number: 'BA 112',
+        airline: { name: 'British Airways', iata: 'BA' },
+        aircraft: { model: 'Boeing 777' },
+        departure: {
+            airport: {
+                iata: 'JFK', name: 'New York John F Kennedy', municipalityName: 'New York',
+                timeZone: 'America/New_York',
+            },
+            scheduledTime: { local: '2026-08-26 18:30-04:00', utc: '2026-08-26 22:30Z' },
+            terminal: '8',
+        },
+        arrival: {
+            airport: {
+                iata: 'LHR', name: 'London Heathrow', municipalityName: 'London',
+                timeZone: 'Europe/London',
+            },
+            scheduledTime: { local: '2026-08-27 06:40+01:00', utc: '2026-08-27 05:40Z' },
+            terminal: '5',
+        },
+    }];
+
+    const flight = parseFlight(overnight, 'BA112', '2026-08-27');
+    check('the flight number loses its space', flight?.flight_no === 'BA112');
+    check('local clock times are read, not the UTC ones',
+        flight?.depart_time === '18:30' && flight?.arrive_time === '06:40');
+    check('both time zones come through',
+        flight?.depart_tz === 'America/New_York' && flight?.arrive_tz === 'Europe/London');
+    check('the ends read as city and code',
+        flight?.from_text === 'New York (JFK)' && flight?.to_text === 'London (LHR)');
+    check('terminals come through',
+        flight?.from_terminal === '8' && flight?.to_terminal === '5');
+    check('the aircraft comes through', flight?.aircraft === 'Boeing 777');
+    check('an overnight flight lands a day later', flight?.arrive_day_offset === 1);
+    check('and the schedule knows which date it departed on',
+        flight?.from_date === '2026-08-26');
+    check('which is not the date asked for, and it says so', flight?.other_date === true);
+
+    // Two rows for one number: prefer the one departing on the date asked for.
+    const twoRows = [
+        overnight[0],
+        {
+            ...overnight[0],
+            departure: {
+                ...overnight[0].departure,
+                scheduledTime: { local: '2026-08-27 18:30-04:00', utc: '2026-08-27 22:30Z' },
+            },
+            arrival: {
+                ...overnight[0].arrival,
+                scheduledTime: { local: '2026-08-28 06:40+01:00', utc: '2026-08-28 05:40Z' },
+            },
+        },
+    ];
+    const picked = parseFlight(twoRows, 'BA112', '2026-08-27');
+    check('the row departing on the requested date wins',
+        picked?.from_date === '2026-08-27' && picked?.other_date === false);
+
+    check('an empty list is no flight', parseFlight([], 'BA112', '2026-08-27') === null);
+    check('a wrapped list is read too',
+        parseFlight({ flights: overnight }, 'BA112', '2026-08-27')?.flight_no === 'BA112');
+    check('nonsense is no flight', parseFlight({ nope: 1 }, 'BA112', '2026-08-27') === null);
+    check('a same-day flight has no offset',
+        parseFlight([{
+            ...overnight[0],
+            arrival: {
+                ...overnight[0].arrival,
+                scheduledTime: { local: '2026-08-26 22:40+01:00' },
+            },
+        }], 'BA112', '2026-08-26')?.arrive_day_offset === 0);
 }
 
 console.log(`\n${failures === 0 ? 'PASS' : 'FAIL'} — ${checks - failures}/${checks} checks passed.\n`);

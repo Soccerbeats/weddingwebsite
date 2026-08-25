@@ -409,7 +409,28 @@ export interface FlightInfo {
     aircraft: string | null;
     /** Days between departure and arrival, for a red-eye. */
     arrive_day_offset: number;
+    /**
+     * The local departure date this schedule is for.
+     *
+     * Usually the date that was asked for. When the flight does not operate that
+     * day, the lookup falls back to the number's most recent known operation and
+     * this says which day that was — so the UI can fill the fields in *and* be
+     * honest that the times come from another date.
+     */
+    from_date: string | null;
+    /** True when `from_date` is not the date that was asked for. */
+    other_date: boolean;
 }
+
+/**
+ * The free plan's rate limit, plus a little.
+ *
+ * AeroDataBox's BASIC plan is one request a second, and this module's own
+ * two-step lookup would otherwise rate-limit itself.
+ */
+const RATE_LIMIT_MS = 1200;
+
+const pause = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /**
  * Look up a flight number.
@@ -431,19 +452,78 @@ export async function flightLookup(flightNumber: string, dateIso: string): Promi
     }
 
     const host = process.env.FLIGHT_API_HOST || 'aerodatabox.p.rapidapi.com';
-    const url = `https://${host}/flights/number/${clean}/${dateIso}`
-        + '?withAircraftImage=false&withLocation=false';
-    try {
-        const res = await safeFetch(url, {
-            timeoutMs: 9000,
-            headers: { 'x-rapidapi-key': apiKey, 'x-rapidapi-host': host },
+    const headers = { 'x-rapidapi-key': apiKey, 'x-rapidapi-host': host };
+    const query = '?withAircraftImage=false&withLocation=false';
+
+    /**
+     * One call, with the answers that are not JSON handled.
+     *
+     * `204 No Content` is what this API returns when the number does not operate
+     * on that date — a real answer, not a failure, and reading it as one made
+     * every out-of-season lookup say "could not reach the lookup service".
+     *
+     * `429` is the free plan's rate limit, which is **one request a second**.
+     * That is low enough that this function's own two-step (try the date, then
+     * try the number) trips it on its own, so a 429 is waited out once rather
+     * than reported: the caller pressed one button and should get one answer.
+     */
+    const call = async (path: string, attempt = 0): Promise<
+        { rows: unknown; error?: string } | null
+    > => {
+        const res = await safeFetch(`https://${host}${path}${query}`, {
+            timeoutMs: 9000, headers,
         });
-        if (!res.ok) {
-            return { configured: true, flight: null, error: `The lookup service said ${res.status}` };
+        if (res.status === 204) return null;
+        if (res.status === 429) {
+            if (attempt === 0) {
+                await pause(RATE_LIMIT_MS);
+                return call(path, 1);
+            }
+            return {
+                rows: null,
+                error: 'The lookup service is rate-limiting us — try again in a moment.',
+            };
         }
-        const body = await res.json();
-        const flight = parseFlight(body, clean, dateIso);
-        return { configured: true, flight, error: flight ? undefined : 'No flight found that day' };
+        if (!res.ok) return { rows: null, error: `The lookup service said ${res.status}` };
+        const text = await res.text();
+        if (!text.trim()) return null;
+        try {
+            return { rows: JSON.parse(text) };
+        } catch {
+            return { rows: null, error: 'The lookup service sent something unreadable' };
+        }
+    };
+
+    try {
+        const onDate = await call(`/flights/number/${clean}/${dateIso}`);
+        if (onDate?.error) return { configured: true, flight: null, error: onDate.error };
+        if (onDate) {
+            const flight = parseFlight(onDate.rows, clean, dateIso);
+            if (flight) return { configured: true, flight };
+        }
+
+        /*
+         * Nothing on that date, so ask what this number does at all.
+         *
+         * The dateless endpoint returns the most recent known operation, which
+         * for planning is usually exactly what you want: a flight in September
+         * has the same schedule, terminals, aircraft and time zones as the one
+         * that ran last week. The result is marked as coming from another date
+         * so the UI can say so rather than implying it was confirmed.
+         */
+        // The plan allows one request a second and the call above has just used
+        // this second's, so the fallback waits before asking.
+        await pause(RATE_LIMIT_MS);
+        const anyDate = await call(`/flights/number/${clean}`);
+        if (anyDate?.error) return { configured: true, flight: null, error: anyDate.error };
+        const fallback = anyDate ? parseFlight(anyDate.rows, clean, dateIso) : null;
+        if (fallback) return { configured: true, flight: fallback };
+
+        return {
+            configured: true,
+            flight: null,
+            error: `No schedule found for ${clean}. Check the number, or enter the times by hand.`,
+        };
     } catch {
         return { configured: true, flight: null, error: 'Could not reach the lookup service' };
     }
@@ -467,8 +547,7 @@ export function parseFlight(body: unknown, flightNumber: string, dateIso: string
     const list: RawFlight[] = Array.isArray(body)
         ? body as RawFlight[]
         : (body as { flights?: RawFlight[] })?.flights ?? [];
-    const flight = list[0];
-    if (!flight?.departure && !flight?.arrival) return null;
+    if (!list.length) return null;
 
     // "2026-09-15 14:05+08:00" — a local time with its offset.
     const clockOf = (raw: string | undefined): string | null => {
@@ -479,6 +558,19 @@ export function parseFlight(body: unknown, flightNumber: string, dateIso: string
         const match = /(\d{4}-\d{2}-\d{2})/.exec(raw ?? '');
         return match ? match[1] : null;
     };
+
+    /*
+     * A number can return more than one row for a date.
+     *
+     * The API answers by *arrival* date, so an overnight flight comes back under
+     * the day it lands and the list can hold both yesterday's and today's
+     * departure. Prefer the row that actually departs on the date asked for;
+     * otherwise take the first, which is the most recent.
+     */
+    const flight = list.find(
+        (row) => dateOf(row.departure?.scheduledTime?.local) === dateIso,
+    ) ?? list[0];
+    if (!flight?.departure && !flight?.arrival) return null;
 
     const departLocal = flight.departure?.scheduledTime?.local;
     const arriveLocal = flight.arrival?.scheduledTime?.local;
@@ -511,5 +603,7 @@ export function parseFlight(body: unknown, flightNumber: string, dateIso: string
         to_terminal: flight.arrival?.terminal ?? null,
         aircraft: flight.aircraft?.model ?? null,
         arrive_day_offset: Number.isFinite(offset) ? offset : 0,
+        from_date: departDate,
+        other_date: departDate !== dateIso,
     };
 }
