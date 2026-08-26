@@ -11,6 +11,20 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.55 — [Released] Document everything (`main`, 2026-08-26 01:15)
+
+No behaviour change. The docs had drifted behind six releases, and one of the stale pages was the direct cause of a real failure.
+
+### Fixed
+- **The Installation wiki page told you to deploy a compose file that passes three environment variables.** That is exactly why a correctly-set `FLIGHT_API_KEY` never reached the container. It now carries the full `environment:` block, a table of every optional variable and what it turns on, the note that *a variable not listed there never arrives however carefully it is set on the stack*, and the one-line check (`docker exec wedding-web-prod printenv FLIGHT_API_KEY`).
+
+### Changed
+- **`README.md`** — travel described as whole tickets that place themselves; a table of the optional environment variables under Quick start, since "everything works with two variables and the rest announce themselves" is the useful thing to know.
+- **`AGENTS.md`** — a new convention (#3: *a travel leg's day is derived, never chosen* — with why `day_id` and `arrive_day_offset` must stay), the full optional env list plus the compose-passthrough rule, a map of the portal's thirteen pure-logic modules and what each owns, the `honeymoon_*` tables grouped by what they are for, the routes beyond the generic CRUD, and the two deliberately non-`/admin` endpoints and what authenticates them.
+- **The GitHub wiki** — *Features* and *Architecture* describe travel as journeys and document that the dates are the input; *Honeymoon Portal* gains which geocoder answers and when it will not, plus a table of the flight lookup's three replies; *Troubleshooting* already carried the 403 and fuzzy-match entries from v0.9.53.
+- **`docs/parkinglot.md` reconciled rather than appended to** — B-44 (two removal semantics) struck as shipped in v0.9.48; B-80 (Nominatim hygiene) rewritten to say the fallback landed but the cache and the 1 r/s token bucket, which are what stop us being refused in the first place, have not; OPS-1 annotated with the fact that setting `JWT_SECRET` did nothing before v0.9.51. Two new entries: **OPS-2** (set `GEOCODER_USER_AGENT`) and **HM-1** (the honeymoon total is not a line in the wedding budget — three options written out, and why it is a decision rather than a task).
+- **The vault** (`wiki/entities/wedding-website.md`) — the journeys rework, an inventory of all fifteen portal endpoints with what authenticates each, the config keys, and a dated entry whose lesson is the one worth keeping: *an integration is not integrated until it has run against the real service from the real host* — types, 553 unit assertions and a laptop all passed while three separate things were broken in production.
+
 ## v0.9.54 — [Released] Travel is journeys now, not legs filed onto days (`main`, 2026-08-26 00:30)
 
 The Travel tab asked the wrong question. A ticket is one booking with several legs — SAN → SEA → SIN → DPS is *one* flight to enter — and it made you file each hop onto a trip day by hand, which is arithmetic the confirmation email had already done. And the booking panel contained a *second* "Booking details" button that opened a second panel inside the first: three levels of hierarchy for one reference number.

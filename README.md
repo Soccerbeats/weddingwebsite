@@ -58,9 +58,11 @@ a honeymoon fund, and an RSVP form that recognises them by name.
 - **Honeymoon** — a private planner *and* a trip companion: a map of everywhere
   you are considering, a day-by-day itinerary with real driving times and honest
   arrival times, an accommodation shortlist you can rank, compare and rule out
-  without deleting, booking details with cancellation deadlines, a trip budget
-  that adds up, weather and daylight per day, a phone-first **Today** view that
-  works offline, and a read-only link for the other half of the couple
+  without deleting, **travel entered as whole tickets** (every leg, both times,
+  the layovers judged) that place themselves on the right days, booking details
+  with cancellation deadlines, a trip budget that adds up, weather and daylight
+  per day, a phone-first **Today** view that works offline, and a read-only link
+  for the other half of the couple
 
 Full list: **[Features](https://github.com/Soccerbeats/weddingwebsite/wiki/Features)**.
 
@@ -76,6 +78,17 @@ docker compose -f docker/docker-compose.prod.yml up -d
 Then open `http://localhost:3000`, and `/admin` with the password you set.
 (`docker/docker-compose.dev.yml` is the development stack — it builds from source
 instead of pulling the image.)
+
+Everything works with those two variables. The rest of `docker/.env.example` is
+optional and each feature says so in the UI when its variable is missing:
+
+| Variable | Turns on |
+|---|---|
+| `JWT_SECRET` | A session cookie signed independently of the admin password |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `NOTIFICATION_EMAIL` | Email when an RSVP arrives |
+| `FLIGHT_API_KEY` | *Fill in from schedule* on a travel leg — a RapidAPI key subscribed to AeroDataBox |
+| `GEOCODER_USER_AGENT` | Identifies you to OpenStreetMap's geocoder, which refuses anonymous-looking callers. Worth setting |
+| `NOMINATIM_URL` / `OSRM_URL` | Your own geocoder / routing server instead of the public ones |
 
 - **[Installation](https://github.com/Soccerbeats/weddingwebsite/wiki/Installation)** — Portainer, plain Compose, or local
 - **[Deployment](https://github.com/Soccerbeats/weddingwebsite/wiki/Deployment)** — what a merge publishes, and how it reaches a running server on its own
@@ -136,13 +149,20 @@ comments, because two people rate one shortlist; photos, opening hours and
 number, what it cost, what is paid and the date after which cancelling costs
 you.
 
+**Getting there.** Travel is entered as a **journey** — one ticket, however many
+legs. Paste the flight numbers off the confirmation and each leg is looked up and
+filled in (times, terminals, aircraft, both time zones) and placed on the right
+trip day by itself: the dates decide, not a dropdown. Layovers are computed
+across zones and judged — tight, impossible, or a different airport, which is a
+transfer rather than a connection — and a landing time carries "that's 21:00 back
+home" whenever the leg crosses zones.
+
 **Making it work.** Driving times from a router instead of straight lines, a
 day laid out as a timeline that says when you actually arrive and which stops you
 cannot make, weather (a forecast inside sixteen days, a decade of normals beyond
-it), sunrise and sunset, time zones on flights so a westbound leg stops reading
-as negative, and a conflicts panel that collects everything wrong with the plan —
-a night with nowhere to sleep, two stays booked over the same nights, a booking
-whose dates disagree with the days it covers.
+it), sunrise and sunset, and a conflicts panel that collects everything wrong
+with the plan — a night with nowhere to sleep, two stays booked over the same
+nights, a booking whose dates disagree with the days it covers.
 
 **Taking it with you.** A Today view built for one thumb, cached by a service
 worker so it opens with no signal; an emergency card with the local numbers as

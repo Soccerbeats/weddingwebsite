@@ -58,7 +58,7 @@ CI runs `check:types`, `lint`, `check:photos`, `check:finance` and
 | `npm run check:finance:db` | The same against a live database |
 | `npm run check:finance:ui` | The finance UI's contracts (needs a browser; fetches Playwright on demand) |
 | `npm run audit:finance` | A deeper sweep over the finance logic |
-| `npm run check:honeymoon` | Distances, date maths, URL parsing, the calendar grid, `.ics` output, search ranking, seed integrity |
+| `npm run check:honeymoon` | 550+ assertions with no database or network: distances, date maths, URL parsing, the calendar grid, `.ics` output, search ranking, seed integrity, the trip-mode day resolution, sunrise/sunset, OSM opening hours, the day timeline, time zones on legs, the budget, conflicts, imports/exports, markdown, the flight parser, and journeys (layovers, day placement, door-to-door time) |
 
 Seeds: `npm run seed:honeymoon` (bundles the Bali/Singapore travel guide,
 idempotent — matches on place name, never reverts an edit) and
@@ -81,16 +81,24 @@ idempotent — matches on place name, never reverts an edit) and
    `init.sql` too, or a fresh install comes up without it.** (As of v0.9.42
    `init.sql` really does hold every table, plus the `guest_list_name_unique`
    index the guest upserts need.)
-3. **Photos are served through `/api/photos/[filename]`, never `/photos/…`** —
+3. **A travel leg's day is derived, never chosen.** `honeymoon_travel.depart_date`
+   / `arrive_date` are the input; `day_id` and `arrive_day_offset` are computed
+   from them by `placementFor()` in `src/lib/honeymoonJourneys.ts` and written in
+   the *same* request, so a leg is never briefly filed on the wrong day.
+   Everything that draws the trip — the itinerary, the calendar file, the print
+   sheet, the map — still reads `day_id`/`arrive_day_offset`, so do not remove
+   them; they are outputs. A leg with `journey_id IS NULL` is a journey of one,
+   which is why journeys needed no migration.
+4. **Photos are served through `/api/photos/[filename]`, never `/photos/…`** —
    with `output: "standalone"`, files written into a volume at runtime are not
    served statically.
-4. **The image name is sacred**: always
+5. **The image name is sacred**: always
    `ghcr.io/soccerbeats/weddingwebsite:latest`, never any other name — the
    production Portainer stack is configured against it. (The demo's one-shot
    seeder is a separate image under its own name,
    `ghcr.io/soccerbeats/weddingwebsite-seeder:latest` — a different image,
    never a tag of the sacred name.)
-5. **After every code change: deploy automatically — and deploying is just
+6. **After every code change: deploy automatically — and deploying is just
    pushing.** Austin's standing instruction, overriding the older "only deploy
    when asked" gate in `deploy.md`. Push to `main`; CI builds and publishes the
    image. **Do not build and push it by hand** — two builds of the same commit
@@ -162,7 +170,25 @@ SMTP_PORT=587
 SMTP_USER=you@example.com
 SMTP_PASS=app-password
 NOTIFICATION_EMAIL=couple@example.com
+# optional — honeymoon flight lookup ("Fill in from schedule" on a travel leg).
+# A RapidAPI key subscribed to AeroDataBox; its free plan is 1 request/second.
+FLIGHT_API_KEY=
+FLIGHT_API_HOST=aerodatabox.p.rapidapi.com
+# optional but recommended — OpenStreetMap's geocoder refuses callers whose
+# User-Agent does not identify a contactable operator (it 403s, which surfaces as
+# map search failing on the server while working locally).
+GEOCODER_USER_AGENT=WeddingWebsite/1.0 (you@example.com)
+# optional — your own geocoder / routing server instead of the public ones
+NOMINATIM_URL=
+OSRM_URL=
 ```
+
+**Every one of the optional variables must also be listed in the compose file's
+`environment:` block to reach the container.** Until v0.9.51 only `DATABASE_URL`,
+`ADMIN_PASSWORD` and `NODE_ENV` were, so a key set on the Portainer stack silently
+never arrived — which is how the documented SMTP settings could never have
+worked. They are written `${VAR:-}` so an unset one is an empty string rather
+than a compose warning, and each feature reports itself unconfigured in the UI.
 
 ### Pre-deploy checklist
 
@@ -203,10 +229,30 @@ order, before the commit:
   wedding-party, nav-cards, home, about, seating, finances, registry,
   honeymoon, changelog, settings, color, wip-control, login)
 - `src/app/api/` — public routes (rsvp, photos/[filename], guest-verification,
-  nav-cards, auth/*) and admin CRUD per feature
+  nav-cards, auth/*, **honeymoon/feed** — the token-authenticated calendar) and
+  admin CRUD per feature. The honeymoon portal's own routes beyond the generic
+  `[resource]` CRUD: `geocode`, `routes`, `weather`, `flight`, `rate`, `ics`,
+  `seed`, `archives`, `shares`, `price-checks`, `upload`
 - `src/lib/` — `db.ts` (pg pool), `financeDb.ts` and `honeymoonDb.ts` (the
   runtime schema owners), `changelog.ts` (parses CHANGELOG.md for the in-app
-  viewer), `demoSeed.ts` (the fictional-wedding generator)
+  viewer), `demoSeed.ts` (the fictional-wedding generator), and the honeymoon
+  portal's pure logic, all covered by `check:honeymoon`:
+
+  | Module | Owns |
+  |---|---|
+  | `honeymoon.ts` | Types, categories, distances, dates, search, `.ics` building |
+  | `honeymoonJourneys.ts` | Journeys: grouping legs, layovers, **day placement from dates** |
+  | `honeymoonToday.ts` | Trip mode: which day is today, the day's plan, emergency numbers |
+  | `honeymoonTimeline.ts` | A day as a sequence; hops; time-zone arithmetic |
+  | `honeymoonBudget.ts` | The trip total, currency conversion, deadlines, completeness |
+  | `honeymoonChecks.ts` | Conflicts, stay stretches, due-date buckets, packing |
+  | `honeymoonPlaces.ts` | Import/export, region filing, nearby, day suggestions |
+  | `honeymoonHours.ts` | OSM `opening_hours`, which answers *unknown* rather than guessing |
+  | `honeymoonSun.ts` | Sunrise/sunset (NOAA), zone helpers |
+  | `honeymoonMarkdown.ts` | The small Markdown notes use, parsed to a tree not HTML |
+  | `honeymoonFetch.ts` | The outbound services and their caches (server only) |
+  | `honeymoonCalendar.ts` | The `.ics` both calendar routes serve |
+  | `honeymoonShare.ts` | Share tokens (server only) |
 - `public/config/*.json` — file-based content config, written by the admin at
   runtime (`site.json` settings/colors/dates, `photos.json`, `timeline.json`);
   a Docker volume, not in git
@@ -220,10 +266,16 @@ order, before the commit:
   portable: site settings, colours, dates, photo metadata, timeline.
 - **PostgreSQL** — relational data and forms: `rsvps`, `guest_list`,
   `wip_toggles`, `donations`, the `finance_*` suite (settings, categories,
-  items, subitems, payers, purchases, contributors, receipts), the
-  `honeymoon_*` suite (trip, regions, places, days, stops, travel, todos,
-  notes, categories), and seating (`floor_plans`, `floor_plan_room`,
-  `floor_plan_walls`, `seating_tables`, `seat_assignments`).
+  items, subitems, payers, purchases, contributors, receipts), seating
+  (`floor_plans`, `floor_plan_room`, `floor_plan_walls`, `seating_tables`,
+  `seat_assignments`), and the `honeymoon_*` suite:
+  - the plan — `trip`, `regions`, `places`, `days`, `stops`, `travel`,
+    `journeys`, `todos`, `notes`, `categories`
+  - the paperwork — `bookings` (polymorphic over place / leg / stop / journey),
+    `documents`, `comments`, `price_checks`
+  - the sharing — `shares` (tokens for the read-only link *and* the calendar
+    feed), `views` (named filter sets), `archives` (a whole trip as JSON)
+  - the caches — `routes` (OSRM), `weather` (Open-Meteo), `rates` (FX)
 
 ### Key mechanisms
 
@@ -295,10 +347,24 @@ order, before the commit:
   canvas: draw the room, drop tables, drag guests from `guest_list` into
   seats. A "party" is a guest with `plus_one_name` set — dragging one
   auto-fills the adjacent seat — and split parties are flagged in the UI.
-- **Honeymoon portal** (`/admin/honeymoon`) — a private planner (map via
-  Leaflet, day-by-day itinerary, travel legs, places/stays/excursions, guide
-  notes).
-  Admin-only by design: no public route, no WIP toggle.
+- **Honeymoon portal** (`/admin/honeymoon`) — a private planner *and* a trip
+  companion: map (Leaflet, four base layers), day-by-day itinerary with a
+  timeline, **journeys** (a whole ticket with its legs, layovers and one booking),
+  places/stays/excursions with a booking vault and a budget, guide notes, a
+  phone-first offline **Today** view, and per-country emergency details.
+  Admin-only, with two deliberate exceptions that are *not* under `/admin`:
+  `/honeymoon/<token>` (a read-only share link) and
+  `/api/honeymoon/feed?token=…` (a subscribe-able calendar). Both authenticate
+  on a `honeymoon_shares` token — a calendar client cannot log in — and both
+  answer 404 for unknown, revoked and expired tokens alike.
+- **Outbound services in the portal** — OSRM (driving times and road geometry),
+  Open-Meteo (forecast and climate normals), open.er-api.com (exchange rates) and
+  AeroDataBox (flight schedules, the only one needing a key). All cached in
+  Postgres (`honeymoon_routes`, `honeymoon_weather`, `honeymoon_rates`), all
+  routed through `src/lib/safeFetch.ts`, and **none of them load-bearing**: every
+  value starts null and every view renders as it did before while it is missing.
+  Geocoding is Nominatim with Photon behind it, because Nominatim will 403 a
+  caller it cannot identify.
 
 ## Code style
 
