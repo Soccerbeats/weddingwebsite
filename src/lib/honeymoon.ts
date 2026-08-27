@@ -819,6 +819,41 @@ export function arcPoints(
     return points;
 }
 
+/**
+ * Which way a confirmed/unconfirmed toggle should go for a selection.
+ *
+ * `needs_review` is the "I have not checked this pin" flag: a bulk-geocoded
+ * guess reads exactly like a real location, so the map hides unconfirmed pins
+ * until someone has looked. Confirming a lassoed area was already one click;
+ * putting one *back* meant going through the ⋯ field menu, which is the wrong
+ * amount of work for "actually, those are wrong".
+ *
+ * One button, and the selection decides the direction: if every place in it is
+ * already confirmed the only move left is to un-confirm them; with even one
+ * unconfirmed in there, confirming the lot is what you meant. Mixed selections
+ * therefore confirm — the direction you are nearly always heading — and the
+ * count is there so the label can say what will happen rather than implying it.
+ */
+export function reviewToggleFor(places: { needs_review: boolean }[]): {
+    /** What to write to `needs_review` on all of them. */
+    needsReview: boolean;
+    unconfirmed: number;
+    confirmed: number;
+    label: string;
+} {
+    const unconfirmed = places.filter((place) => place.needs_review).length;
+    const confirmed = places.length - unconfirmed;
+    // An empty selection cannot be acted on anyway; "Mark reviewed" is the
+    // resting label because it is the common direction.
+    const needsReview = places.length > 0 && unconfirmed === 0;
+    return {
+        needsReview,
+        unconfirmed,
+        confirmed,
+        label: needsReview ? 'Mark unconfirmed' : 'Mark reviewed',
+    };
+}
+
 /* ------------------------------------------------------------------ */
 /* Geo                                                                 */
 /* ------------------------------------------------------------------ */

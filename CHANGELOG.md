@@ -11,6 +11,19 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.60 — [Released] Un-confirming a lassoed area (`main`, 2026-08-27 17:57)
+
+Confirming a lassoed area was one click. Putting one *back* to unconfirmed meant going through the ⋯ field menu — the wrong amount of work for "actually, those are wrong".
+
+### Added
+- **The lasso's review button now goes both ways.** Lasso an area whose pins are all confirmed and it reads **Mark unconfirmed**; lasso anything with an unconfirmed pin in it and it reads **Mark reviewed**, as before. One button, and the selection decides the direction — so it always describes what it is about to do rather than implying it, with the count in its tooltip.
+- Mixed selections **confirm**, because that is the direction you are nearly always heading; one unconfirmed pin among forty confirmed ones still means "confirm the lot".
+- **Un-confirming turns ⚠ Unconfirmed on for you.** The map only draws unconfirmed pins when asked, so without this the pins you just marked would vanish the instant you clicked. Watching forty pins disappear is not feedback.
+
+### Changed
+- The Places tab's selection bar gets the same toggle from the same helper — which verbs you get should not depend on whether you happened to select on a map or in a list.
+- The direction rule is `reviewToggleFor()` in `src/lib/honeymoon.ts`, with 9 new assertions in `npm run check:honeymoon` (591 total).
+
 ## v0.9.59 — [Released] The map can have the whole window (`main`, 2026-08-27 16:15)
 
 ### Added

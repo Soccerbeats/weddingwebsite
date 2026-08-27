@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import {
-    STATUSES, categoriesOf, countriesInUse, distanceKm, formatDistance, hasCoords, sourceLabel,
-    sourcesOf,
+    STATUSES, categoriesOf, countriesInUse, distanceKm, formatDistance, hasCoords, reviewToggleFor,
+    sourceLabel, sourcesOf,
     type Place, type PlaceStatus,
 } from '@/lib/honeymoon';
 import {
@@ -195,6 +195,20 @@ export default function PlacesTab({ api, panel = false }: {
         await api.update('places', { ids: [...selected], ...fields });
         setSelected(new Set());
     };
+
+    /**
+     * The same confirmed/unconfirmed toggle the map's lasso carries.
+     *
+     * The two selection bars are meant to offer the same verbs — which ones you
+     * get should not depend on whether you happened to select on a map or in a
+     * list — so this is the shared helper, not a second rule.
+     */
+    const review = useMemo(
+        () => reviewToggleFor(
+            [...selected].map((id) => api.placeById.get(id)).filter((p) => p != null),
+        ),
+        [selected, api.placeById],
+    );
 
     /**
      * The same fields the map's lasso can set, offered here too.
@@ -516,7 +530,15 @@ export default function PlacesTab({ api, panel = false }: {
                         onApply={(key, value) => bulk({ [key]: value })}
                         label="Change a field on all selected"
                     />
-                    <Button onClick={() => bulk({ needs_review: false })}>Mark reviewed</Button>
+                    <Button
+                        onClick={() => bulk({ needs_review: review.needsReview })}
+                        title={review.needsReview
+                            ? `Put all ${review.confirmed} back to unconfirmed`
+                            : `Confirm ${review.unconfirmed} unconfirmed place`
+                                + `${review.unconfirmed === 1 ? '' : 's'}`}
+                    >
+                        {review.label}
+                    </Button>
                     <Button
                         tone="danger"
                         onClick={async () => {

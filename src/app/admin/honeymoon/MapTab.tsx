@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import {
     STATUSES, categoriesOf, categoryMeta, countriesInUse, dayColor, effectiveCountry, formatDayDate,
-    hasCoords, legEnds, sourceLabel, sourcesOf, travelModeMeta,
+    hasCoords, legEnds, reviewToggleFor, sourceLabel, sourcesOf, travelModeMeta,
     type Day, type Place, type PlaceStatus,
 } from '@/lib/honeymoon';
 import { useTripIntel } from './useTripIntel';
@@ -556,6 +556,31 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
     };
 
     /**
+     * Which way the confirmed/unconfirmed button points for this selection.
+     *
+     * Derived rather than a mode you set, so the button always describes what it
+     * is about to do to the pins actually in the loop.
+     */
+    const review = useMemo(
+        () => reviewToggleFor(
+            [...lassoed].map((id) => api.placeById.get(id)).filter((p) => p != null),
+        ),
+        [lassoed, api.placeById],
+    );
+
+    /**
+     * Confirm the selection, or put it back to unconfirmed.
+     *
+     * Marking pins unconfirmed while they are hidden would make them vanish the
+     * instant you clicked — the map only draws unconfirmed pins when asked — so
+     * asking is done for you. Watching forty pins disappear is not feedback.
+     */
+    const toggleReview = async () => {
+        if (review.needsReview) setShowUnconfirmed(true);
+        await bulk({ needs_review: review.needsReview });
+    };
+
+    /**
      * Put every lassoed place onto a day as stops.
      *
      * Drawing a loop around an area and sending it to a day is the whole point
@@ -967,9 +992,13 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                                     />
                                     <Button
                                         className="!px-3"
-                                        onClick={() => bulk({ needs_review: false })}
+                                        onClick={toggleReview}
+                                        title={review.needsReview
+                                            ? `Put all ${review.confirmed} back to unconfirmed`
+                                            : `Confirm ${review.unconfirmed} unconfirmed pin`
+                                                + `${review.unconfirmed === 1 ? '' : 's'}`}
                                     >
-                                        Mark reviewed
+                                        {review.label}
                                     </Button>
                                     <Button className="!px-3" tone="danger" onClick={bulkDelete}>
                                         Delete

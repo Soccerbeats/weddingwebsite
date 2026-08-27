@@ -16,7 +16,7 @@ import {
     pointInPolygon, placesInPolygon, nameFromStayUrl, stayUrlsFromText, isStayUrl, cleanListingTitle, formatPerNight,
     formatPrice, nameFromAnyUrl, priceValue, effectiveCountry, countriesInUse, calendarMonths,
     monthMatrix, planRange, daysBeyondRange, tripLength, daysBetween, addDays, isoOf, buildIcs,
-    tripEvents, searchHoneymoon,
+    tripEvents, searchHoneymoon, reviewToggleFor,
     type Day, type GuideNote, type Region, type TodoItem,
     type Place, type Stop, type TravelLeg,
 } from '../src/lib/honeymoon';
@@ -1903,6 +1903,35 @@ console.log('\nFlight lookup');
                 scheduledTime: { local: '2026-08-26 22:40+01:00' },
             },
         }], 'BA112', '2026-08-26')?.arrive_day_offset === 0);
+}
+
+console.log('\nConfirming a selection, and un-confirming it');
+{
+    const of = (...flags: boolean[]) => reviewToggleFor(flags.map((needs_review) => ({ needs_review })));
+
+    const allConfirmed = of(false, false, false);
+    check('a selection that is all confirmed offers to un-confirm it',
+        allConfirmed.needsReview === true && allConfirmed.label === 'Mark unconfirmed');
+    check('and counts them', allConfirmed.confirmed === 3 && allConfirmed.unconfirmed === 0);
+
+    const allUnconfirmed = of(true, true);
+    check('a selection that is all unconfirmed offers to confirm it',
+        allUnconfirmed.needsReview === false && allUnconfirmed.label === 'Mark reviewed');
+    check('and counts them', allUnconfirmed.unconfirmed === 2 && allUnconfirmed.confirmed === 0);
+
+    // Mixed goes the way you are nearly always heading: confirm the lot.
+    const mixed = of(true, false, false, true);
+    check('a mixed selection confirms rather than un-confirming',
+        mixed.needsReview === false && mixed.label === 'Mark reviewed');
+    check('and says how many are unconfirmed', mixed.unconfirmed === 2 && mixed.confirmed === 2);
+
+    check('one unconfirmed in a big confirmed selection still confirms',
+        of(false, false, false, false, true).needsReview === false);
+
+    const none = reviewToggleFor([]);
+    check('an empty selection rests on confirm rather than flipping',
+        none.needsReview === false && none.label === 'Mark reviewed');
+    check('and counts nothing', none.confirmed === 0 && none.unconfirmed === 0);
 }
 
 console.log('\nReading a pasted ticket');
