@@ -107,7 +107,10 @@ export default function AdminShell({
             <div className="flex-1 min-h-0 bg-gray-100 flex flex-col overflow-hidden">
 
                 {/* Mobile top bar — hidden on desktop */}
-                <div className="md:hidden h-14 shrink-0 bg-white border-b border-gray-200 flex items-center justify-between px-4">
+                <div
+                    data-admin-topbar
+                    className="md:hidden h-14 shrink-0 bg-white border-b border-gray-200 flex items-center justify-between px-4"
+                >
                     <span className="flex items-center gap-2">
                         <span className="text-base font-serif font-bold text-gray-800">Admin Panel</span>
                         {/* Also here: on a phone the sidebar's own header sits
@@ -141,7 +144,7 @@ export default function AdminShell({
                     )}
 
                     {/* Sidebar — drawer on mobile, static on desktop */}
-                    <aside className={`
+                    <aside data-admin-sidebar className={`
                         fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 flex flex-col overflow-y-auto
                         transition-transform duration-300 ease-in-out
                         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}

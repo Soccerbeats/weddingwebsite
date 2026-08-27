@@ -499,3 +499,36 @@ html {
   .cl-body { grid-template-columns: 1fr; }
   .cl-toc { display: none; }
 }
+
+/* ---------------------------------------------------------------------------
+   Full-screen mode (the honeymoon portal's ⤢ button)
+
+   The map wants every pixel, and on a laptop the site nav (80px) and the admin
+   sidebar (256px) are a quarter of the screen spent on links you are not about
+   to follow. This hands both back.
+
+   Driven by a class on <html> rather than React state because the things being
+   hidden live in *ancestor* trees — AppShell and AdminShell — while the button
+   lives in the honeymoon shell far below them. AppShell already toggles a root
+   class this way for the scrollbar gutter.
+
+   These rules sit outside every `@layer`, so they win over the Tailwind
+   utilities they override without needing `!important`. HoneymoonShell removes
+   the class on unmount and when you leave the map, so it can never strand you
+   on a page with no way out.
+   --------------------------------------------------------------------------- */
+html.hm-fullscreen [data-site-nav],
+html.hm-fullscreen [data-admin-sidebar],
+html.hm-fullscreen [data-admin-topbar] {
+  display: none;
+}
+
+/* The admin frame is positioned from the top of the window, below the nav that
+   is now gone — and below the demo banner, which is also hidden with the nav. */
+html.hm-fullscreen [data-admin-frame] {
+  top: 0;
+}
+
+html.hm-fullscreen [data-demo-banner] {
+  display: none;
+}

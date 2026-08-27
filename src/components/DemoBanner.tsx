@@ -31,6 +31,7 @@ export default function DemoBanner() {
     return (
         <div
             role="status"
+            data-demo-banner
             className="sticky top-0 z-[100] h-[var(--demo-banner-h)] flex items-center
                 justify-center gap-1.5 bg-slate-900 text-white text-center text-[11px]
                 sm:text-xs px-3 leading-none"

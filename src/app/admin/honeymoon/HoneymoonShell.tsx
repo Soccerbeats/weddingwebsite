@@ -44,6 +44,15 @@ export default function HoneymoonShell({ children }: { children: React.ReactNode
     const [showKeys, setShowKeys] = useState(false);
     /** True while waiting for the second key of a `g`-prefixed jump. */
     const [goto, setGoto] = useState(false);
+    /**
+     * Full screen: the site nav and the admin sidebar get out of the map's way.
+     *
+     * Deliberately not remembered between visits — it is a thing you are doing
+     * now, like arming a tool, and arriving at a page with no navigation because
+     * of a click last week would read as broken. The class it sets lives on
+     * <html>, because what it hides is in ancestor trees; see globals.css.
+     */
+    const [fullScreen, setFullScreen] = useState(false);
 
     /*
      * Portal-wide keys, bound on the shell because they must work on every tab
@@ -103,6 +112,39 @@ export default function HoneymoonShell({ children }: { children: React.ReactNode
         return () => window.removeEventListener('keydown', onKey);
     }, [api]);
 
+    /*
+     * Full screen, applied and — importantly — always taken back off.
+     *
+     * On unmount as well as on exit: leaving the portal with the class still set
+     * would leave the whole admin panel without a sidebar and nothing on screen
+     * to explain why.
+     */
+    useEffect(() => {
+        const root = document.documentElement;
+        root.classList.toggle('hm-fullscreen', fullScreen);
+        return () => root.classList.remove('hm-fullscreen');
+    }, [fullScreen]);
+
+    /* The button is on the map tab, so leaving the map turns it off rather than
+       hiding the only way out. */
+    const onMap = pathname === `${BASE}/map`;
+    useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        if (!onMap) setFullScreen(false);
+    }, [onMap]);
+
+    /* Escape leaves it, the way it leaves anything else that took the screen. */
+    useEffect(() => {
+        if (!fullScreen) return;
+        const onKey = (event: KeyboardEvent) => {
+            // Not while a dialog is up: Escape belongs to whatever is on top.
+            if (event.key !== 'Escape' || document.querySelector('[role="dialog"]')) return;
+            setFullScreen(false);
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [fullScreen]);
+
     /* `g` then a letter: the two-key jump every keyboard-driven app has. */
     useEffect(() => {
         if (!goto) return;
@@ -126,7 +168,7 @@ export default function HoneymoonShell({ children }: { children: React.ReactNode
     // sized to fit too, but inside a scroller: its own min-height is the floor,
     // so a scrollbar appears only when the window is genuinely too small for it.
     // Everything else is a normal scrolling page.
-    const isMap = pathname === `${BASE}/map`;
+    const isMap = onMap;
     const isDashboard = pathname === BASE || pathname === `${BASE}/`;
 
     if (loading) {
@@ -228,24 +270,49 @@ export default function HoneymoonShell({ children }: { children: React.ReactNode
                         looking like the tabs simply end at Stays. Wrapping to
                         three rows instead would cost 100px of height on the one
                         screen size that can least afford it. */}
-                    <div className="tab-scroller flex gap-1.5 overflow-x-auto py-3 md:py-4 -mx-1 px-1">
-                        {TABS.map((t) => {
-                            const active = t.href === BASE
-                                ? pathname === BASE || pathname === `${BASE}/`
-                                : pathname?.startsWith(t.href);
-                            return (
-                                <Link
-                                    key={t.href}
-                                    href={t.href}
-                                    className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition
-                                        ${active
-                                        ? 'bg-accent text-white'
-                                        : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                                >
-                                    {t.label}
-                                </Link>
-                            );
-                        })}
+                    <div className="flex items-center gap-2 py-3 md:py-4">
+                        <div className="tab-scroller flex flex-1 min-w-0 gap-1.5 overflow-x-auto
+                            -mx-1 px-1">
+                            {TABS.map((t) => {
+                                const active = t.href === BASE
+                                    ? pathname === BASE || pathname === `${BASE}/`
+                                    : pathname?.startsWith(t.href);
+                                return (
+                                    <Link
+                                        key={t.href}
+                                        href={t.href}
+                                        className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition
+                                            ${active
+                                            ? 'bg-accent text-white'
+                                            : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                                    >
+                                        {t.label}
+                                    </Link>
+                                );
+                            })}
+                        </div>
+                        {/* Outside the scroller, so it stays put on a phone where
+                            eleven tabs scroll past it. Only on the map: it is the
+                            one view that wants the whole window, and a button that
+                            hides the navigation has to stay on screen beside the
+                            thing it hid. */}
+                        {isMap && (
+                            <button
+                                onClick={() => setFullScreen((v) => !v)}
+                                title={fullScreen
+                                    ? 'Bring the navigation back (Esc)'
+                                    : 'Give the map the whole window — the site nav and the sidebar step aside'}
+                                className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-medium
+                                    border transition ${fullScreen
+                                    ? 'bg-slate-900 border-slate-900 text-white'
+                                    : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                            >
+                                {/* ⤢ rather than ⛶: the same arrow the map's Fit
+                                    button uses, and it renders in fonts where
+                                    the full-screen glyph is a tofu box. */}
+                                ⤢ {fullScreen ? 'Exit full screen' : 'Full screen'}
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -292,6 +359,7 @@ export default function HoneymoonShell({ children }: { children: React.ReactNode
                                 ['g then d/t/m/i/v/p/s/e/c/u/g', 'Jump to a tab'],
                                 ['n', 'New place'],
                                 ['[ ]', 'Previous / next day on Today'],
+                                ['Esc', 'Leave full screen'],
                                 ['?', 'This list'],
                             ].map(([keys, what]) => (
                                 <div key={keys} className="flex items-baseline justify-between gap-3">

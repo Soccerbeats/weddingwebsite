@@ -11,6 +11,16 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.59 — [Released] The map can have the whole window (`main`, 2026-08-27 16:15)
+
+### Added
+- **A ⤢ Full screen button at the right-hand end of the honeymoon tab row, on the Map tab.** It hands the map the site nav (80px) and the admin sidebar (256px) — on a 1440×900 laptop the map goes from 1136×522 to 1392×642, half again the area. The button becomes **⤢ Exit full screen** in place, and **Esc** leaves too (unless a dialog is up, which owns Escape).
+- It sits *outside* the scrolling tab strip, so on a phone the eleven tabs scroll behind it and the way out never scrolls off screen.
+
+### Changed
+- Full screen is **not remembered between visits** — it is a thing you are doing now, and arriving at a page with no navigation because of a click last week reads as broken. It also switches itself off when you leave the Map tab or the portal, so it can never strand you on a page whose only way out is hidden.
+- Mechanically it is a `hm-fullscreen` class on `<html>` plus four rules in `globals.css`, because what it hides lives in *ancestor* trees (`AppShell`'s nav, `AdminShell`'s sidebar) while the button is far below them. `AppShell` already toggles a root class this way for the scrollbar gutter. The elements carry `data-site-nav` / `data-admin-sidebar` / `data-admin-topbar` / `data-admin-frame` / `data-demo-banner` hooks, and the rules sit outside every `@layer` so they beat the Tailwind utilities they override without `!important`.
+
 ## v0.9.58 — [Released] A stop row that fits the column it is in (`main`, 2026-08-27 05:05)
 
 In the map's split view the itinerary is a 400px column, and a stop row put six controls on one line in it. The place name — the thing the row is *about* — was whatever was left over, which was nothing: a name truncated to a word and its type chip pushed onto a line of its own.

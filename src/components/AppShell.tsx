@@ -46,15 +46,20 @@ export default function AppShell({
   if (isAdminRoute) {
     return (
       <>
-        {/* Public nav stays at top for admin too */}
-        <Navigation
-          brideName={brideName}
-          groomName={groomName}
-          logoMode={logoMode}
-          weddingLogo={weddingLogo}
-          isAdmin={isAdmin}
-          isDemo={isDemo}
-        />
+        {/* Public nav stays at top for admin too.
+            The wrapper is the handle the honeymoon portal's full-screen mode
+            hides by — see `.hm-fullscreen` in globals.css. Everything Navigation
+            draws is `position: fixed`, so a plain wrapper costs no layout. */}
+        <div data-site-nav>
+          <Navigation
+            brideName={brideName}
+            groomName={groomName}
+            logoMode={logoMode}
+            weddingLogo={weddingLogo}
+            isAdmin={isAdmin}
+            isDemo={isDemo}
+          />
+        </div>
         {/*
           Fixed container that starts exactly where the nav ends (80px) and fills
           to all other edges. This gives the admin layout a container with truly
@@ -66,6 +71,7 @@ export default function AppShell({
           banner and lost its first 28 pixels.
         */}
         <div
+          data-admin-frame
           className="fixed left-0 right-0 bottom-0 overflow-hidden flex flex-col
             top-[calc(5rem+var(--demo-banner-h,0px))]"
         >
