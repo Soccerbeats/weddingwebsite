@@ -11,6 +11,15 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.58 — [Released] A stop row that fits the column it is in (`main`, 2026-08-27 05:05)
+
+In the map's split view the itinerary is a 400px column, and a stop row put six controls on one line in it. The place name — the thing the row is *about* — was whatever was left over, which was nothing: a name truncated to a word and its type chip pushed onto a line of its own.
+
+### Changed
+- **A stop in the split column is now two lines.** The name and its type on top, with room to actually read them; the clock and the length underneath. Set tight enough that the pair is **shorter than the single line was** — 50px against 71px, measured in the browser, because the old one wrapped anyway.
+- **The preset times only appear while the time box has focus.** Click it and 09:00 / 12:30 / 19:00 (and *straight after the last stop*) are there to pick from or type over; click away and they get out of the way. They used to sit on the row whenever a stop had no time, taking the width the name needed. Picking one puts it in the box and closes them; the chips hold the focus themselves, so pressing one can never blur the box out from under the press.
+- The full-width Itinerary tab is untouched — one line reads better when there is a page to put it on.
+
 ## v0.9.57 — [Released] The map's tools live on the map (`main`, 2026-08-27 04:35)
 
 Fit, split, add, measure and lasso were buttons in the filter row above the map, mixed in with the controls that decide *which pins are shown*. They act on the map, so they now float on it — top-right, the way the legend floats bottom-left.

@@ -391,6 +391,7 @@ export default function ItineraryTab({ api, panel = false, onFocusDay }: {
                                     day={day}
                                     api={api}
                                     intel={intel}
+                                    compact={panel}
                                     onEditPlace={setEditingPlace}
                                     onFocusDay={onFocusDay}
                                     beyondRange={beyond.has(day.day_number)}
@@ -647,11 +648,14 @@ function CalendarCellBox({ cell, day, api, beyondRange, arrivals, onOpen }: {
 
 function DayCard({
     day, api, intel, onEditPlace, onFocusDay, beyondRange = false, arrivals = [],
+    compact = false,
 }: {
     day: Day;
     api: HoneymoonApi;
     intel: TripIntel;
     onEditPlace: (place: Place) => void;
+    /** Rendered in the map's split view, in a column rather than a page. */
+    compact?: boolean;
     onFocusDay?: (day: Day) => void;
     /** This day is numbered past the end of the trip's dates. */
     beyondRange?: boolean;
@@ -1139,6 +1143,7 @@ function DayCard({
                                         stop={stop}
                                         index={index}
                                         api={api}
+                                        compact={compact}
                                         dayNumber={day.day_number}
                                         hopKm={hops.find((h) => h.fromIndex === index)?.km ?? null}
                                         row={rowFor(stop.id)}
@@ -1325,11 +1330,13 @@ function DayCard({
 
 function StopRow({
     stop, index, api, dayNumber, hopKm, row, dayDate, sunset, phase, previousEnd, onEditPlace,
-    onInsertBefore,
+    onInsertBefore, compact = false,
 }: {
     stop: Stop;
     index: number;
     api: HoneymoonApi;
+    /** Rendered in the map's split view — see the row itself for what changes. */
+    compact?: boolean;
     dayNumber: number;
     hopKm: number | null;
     onEditPlace: (place: Place) => void;
@@ -1364,6 +1371,13 @@ function StopRow({
     const afterDark = isAfterDark(stop.start_time, sunset);
     const [showNotes, setShowNotes] = useState(false);
     const [showBooking, setShowBooking] = useState(false);
+    /**
+     * Whether the time box has focus.
+     *
+     * In the narrow column the preset chips are only offered while it does —
+     * see the row below. Wide, they behave as they always have.
+     */
+    const [timeFocused, setTimeFocused] = useState(false);
     const reservation = (api.data?.bookings ?? []).find((booking) => booking.stop_id === stop.id);
     const label = stop.custom_label || place?.name || 'this stop';
 
@@ -1382,6 +1396,210 @@ function StopRow({
         // has never been part of.
         sort_order: 9999,
     });
+
+
+    /*
+     * The row's parts, built once and arranged two ways below.
+     */
+    const handle = (
+        <button
+            {...attributes}
+            {...listeners}
+            className={`cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500
+                touch-none ${compact ? 'px-0.5 text-sm leading-5' : 'px-1'}`}
+            aria-label="Drag to reorder"
+        >
+            ⠿
+        </button>
+    );
+
+    const number = (
+        <span className={`text-xs font-semibold text-gray-400 tabular-nums w-4 shrink-0
+            ${compact ? 'leading-5' : ''}`}>
+            {index + 1}
+        </span>
+    );
+
+    /*
+     * The clock, and the three times a day is actually made of.
+     *
+     * Typing 09:00 into a time input on a phone is four taps and a scroll wheel;
+     * a chip is one. Wide, the chips show whenever no time is set. In the narrow
+     * column they show only while the box has focus — otherwise they eat the
+     * width the place name needs, which is the thing the row is about. The
+     * chips block mousedown so pressing one never blurs the box out from under
+     * the press, and the wrapper only closes when focus leaves it entirely.
+     */
+    const showPresets = compact ? timeFocused : !stop.start_time;
+    const timeField = (
+        <div
+            className="flex flex-wrap items-center gap-0.5 min-w-0"
+            onFocus={() => setTimeFocused(true)}
+            onBlur={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                    setTimeFocused(false);
+                }
+            }}
+        >
+            <input
+                type="time"
+                // Keyed on the stored value so a change made elsewhere shows
+                // here; saved only when it actually changed, so tabbing through
+                // a day is not one PATCH and refetch per field.
+                key={stop.start_time ?? ''}
+                defaultValue={stop.start_time ?? ''}
+                onBlur={(e) => {
+                    if (e.target.value !== (stop.start_time ?? '')) {
+                        api.patchStop(stop.id, { start_time: e.target.value });
+                    }
+                }}
+                // 6.75rem, not 5.5: "09:30 AM" plus the picker icon does not
+                // fit in 5.5 and Chromium silently clipped the M, so every
+                // afternoon stop read "03:30 PI".
+                className={`text-gray-500 bg-transparent w-[6.75rem] shrink-0 rounded-lg px-1
+                    hover:bg-gray-50 focus:bg-white focus:outline-none focus:ring-2
+                    focus:ring-accent/30 ${compact ? 'text-[11px] py-0' : 'text-xs py-1'}`}
+                aria-label="Start time"
+            />
+            {showPresets && (
+                <span className="flex shrink-0 gap-0.5">
+                    {['09:00', '12:30', '19:00'].map((time) => (
+                        <button
+                            key={time}
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                                api.patchStop(stop.id, { start_time: time });
+                                // The box is keyed on the value, so setting one
+                                // remounts it and no focusout ever reaches the
+                                // wrapper — without this the chips stay up.
+                                setTimeFocused(false);
+                            }}
+                            className="rounded-md px-1 py-0.5 text-[10px] text-gray-400
+                                hover:bg-gray-100 hover:text-gray-700 tabular-nums"
+                            title={`Start at ${time}`}
+                        >
+                            {time}
+                        </button>
+                    ))}
+                    {previousEnd && (
+                        <button
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                                api.patchStop(stop.id, { start_time: previousEnd });
+                                setTimeFocused(false);
+                            }}
+                            className="rounded-md px-1 py-0.5 text-[10px] text-accent
+                                hover:bg-accent/10 tabular-nums"
+                            title={`Straight after the stop before (${previousEnd})`}
+                        >
+                            +{previousEnd}
+                        </button>
+                    )}
+                </span>
+            )}
+        </div>
+    );
+
+    /* How long you mean to be here. Optional, and the timeline says so: without
+       it a stop is a point in the day; with it the day becomes a sequence that
+       can be checked against the clock. */
+    const durationField = (
+        <input
+            type="number"
+            min="0"
+            step="15"
+            key={`d-${stop.duration_minutes ?? ''}`}
+            defaultValue={stop.duration_minutes ?? ''}
+            placeholder="min"
+            onBlur={(e) => {
+                const next = e.target.value.trim();
+                if (next !== String(stop.duration_minutes ?? '')) {
+                    api.patchStop(stop.id, { duration_minutes: next });
+                }
+            }}
+            className={`text-gray-400 bg-transparent w-12 shrink-0 rounded-lg px-1
+                hover:bg-gray-50 focus:bg-white focus:outline-none focus:ring-2
+                focus:ring-accent/30 tabular-nums
+                ${compact ? 'text-[11px] py-0' : 'text-xs py-1'}`}
+            aria-label="Minutes here"
+        />
+    );
+
+    const nameField = place ? (
+        // The name is the way in: a stop is the place, so clicking it opens the
+        // same editor the Places tab opens. Before this, a wrong address or a
+        // missing pin noticed while reading the day meant leaving the day to go
+        // and fix it.
+        <button
+            onClick={() => onEditPlace(place)}
+            title={`Edit ${place.name}`}
+            className={`flex items-center gap-2 text-left group/place w-full min-w-0
+                ${compact ? '' : 'flex-wrap'}`}
+        >
+            <span className={`text-sm text-gray-900 truncate group-hover/place:text-accent
+                group-hover/place:underline decoration-dotted underline-offset-2
+                ${compact ? 'leading-5' : ''}`}>
+                {stop.custom_label || place.name}
+            </span>
+            <span className="shrink-0"><CategoryChip category={place.category} /></span>
+        </button>
+    ) : (
+        <InlineText
+            value={stop.custom_label ?? ''}
+            placeholder="Untitled stop"
+            className="text-sm -ml-2"
+            onCommit={(custom_label) => api.update('stops', { id: stop.id, custom_label })}
+        />
+    );
+
+    const menu = (
+        <OverflowMenu items={[
+            ...(place ? [{
+                label: `Edit ${place.name}`,
+                onClick: () => onEditPlace(place),
+            }] : []),
+            {
+                label: showNotes || stop.notes ? 'Hide note' : 'Add a note',
+                onClick: () => setShowNotes((v) => !v),
+            },
+            ...(api.data?.days ?? [])
+                .filter((d) => d.day_number !== dayNumber)
+                .map((d) => ({
+                    label: `Move to day ${d.day_number}${d.title ? ` — ${d.title}` : ''}`,
+                    onClick: () => moveTo(d.id),
+                })),
+            // Copy rather than move: the same beach twice in a week is a
+            // plan, not a mistake, and rebuilding the stop by hand to
+            // say so is busywork.
+            ...(api.data?.days ?? [])
+                .filter((d) => d.day_number !== dayNumber)
+                .map((d) => ({
+                    label: `Copy to day ${d.day_number}${d.title ? ` — ${d.title}` : ''}`,
+                    onClick: () => api.create('stops', {
+                        day_id: d.id,
+                        place_id: stop.place_id,
+                        custom_label: stop.custom_label,
+                        start_time: stop.start_time,
+                        duration_minutes: stop.duration_minutes,
+                        notes: stop.notes,
+                    }),
+                })),
+            {
+                // A dinner reservation is a booking on a stop: time,
+                // party size, confirmation, dress code, and the date
+                // after which cancelling costs you.
+                label: reservation ? 'Edit the reservation' : 'Add a reservation',
+                onClick: () => setShowBooking((v) => !v),
+            },
+            {
+                label: 'Remove stop',
+                danger: true,
+                onClick: () => api.removeRow('stops', stop, `Removed ${label}`),
+            },
+        ]} />
+    );
 
     return (
         <li
@@ -1418,172 +1636,44 @@ function StopRow({
                     </button>
                 </div>
             )}
-            <div className="flex items-center gap-2 rounded-2xl border border-gray-100 bg-white px-2.5 py-2">
-                <button
-                    {...attributes}
-                    {...listeners}
-                    className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 touch-none px-1"
-                    aria-label="Drag to reorder"
-                >
-                    ⠿
-                </button>
-                <span className="text-xs font-semibold text-gray-400 tabular-nums w-4 shrink-0">
-                    {index + 1}
-                </span>
-                <input
-                    type="time"
-                    // Keyed on the stored value so a change made elsewhere shows
-                    // here; saved only when it actually changed, so tabbing through
-                    // a day is not one PATCH and refetch per field.
-                    key={stop.start_time ?? ''}
-                    defaultValue={stop.start_time ?? ''}
-                    onBlur={(e) => {
-                        if (e.target.value !== (stop.start_time ?? '')) {
-                            api.patchStop(stop.id, { start_time: e.target.value });
-                        }
-                    }}
-                    // 6.75rem, not 5.5: "09:30 AM" plus the picker icon does not
-                    // fit in 5.5 and Chromium silently clipped the M, so every
-                    // afternoon stop read "03:30 PI".
-                    className="text-xs text-gray-500 bg-transparent w-[6.75rem] shrink-0
-                        rounded-lg px-1 py-1 hover:bg-gray-50 focus:bg-white focus:outline-none
-                        focus:ring-2 focus:ring-accent/30"
-                    aria-label="Start time"
-                />
-                {/* Three chips and a nudge, for the times a day is actually made
-                    of. Typing 09:00 into a time input on a phone is four taps
-                    and a scroll wheel; this is one. */}
-                {!stop.start_time && (
-                    <span className="flex shrink-0 gap-0.5">
-                        {['09:00', '12:30', '19:00'].map((time) => (
-                            <button
-                                key={time}
-                                type="button"
-                                onClick={() => api.patchStop(stop.id, { start_time: time })}
-                                className="rounded-md px-1 py-0.5 text-[10px] text-gray-400
-                                    hover:bg-gray-100 hover:text-gray-700 tabular-nums"
-                                title={`Start at ${time}`}
-                            >
-                                {time}
-                            </button>
-                        ))}
-                        {previousEnd && (
-                            <button
-                                type="button"
-                                onClick={() => api.patchStop(stop.id, { start_time: previousEnd })}
-                                className="rounded-md px-1 py-0.5 text-[10px] text-accent
-                                    hover:bg-accent/10 tabular-nums"
-                                title={`Straight after the stop before (${previousEnd})`}
-                            >
-                                +{previousEnd}
-                            </button>
-                        )}
-                    </span>
+            {/* ---- The row itself, two shapes ----
+                Wide, everything sits on one line, which reads best when there is
+                a page's width to put it on. In the map's split view there is a
+                400px column instead, and six controls on one line squeezed the
+                place name — the thing the row is *about* — down to nothing. So
+                there: the name and its type on the top line, the clock and the
+                length underneath, and the preset times only while the time box
+                has focus. Both lines are set tight enough that the pair is no
+                taller than the one line was. */}
+            <div className={`rounded-2xl border border-gray-100 bg-white ${compact
+                ? 'flex items-start gap-1.5 px-2 py-1'
+                : 'flex items-center gap-2 px-2.5 py-2'}`}>
+                {handle}
+                {number}
+                {compact ? (
+                    <div className="min-w-0 flex-1">
+                        <div className="flex items-center min-w-0">{nameField}</div>
+                        <div className="flex flex-wrap items-center gap-1 -mt-0.5">
+                            {timeField}
+                            {durationField}
+                        </div>
+                    </div>
+                ) : (
+                    <>
+                        {timeField}
+                        {durationField}
+                        <div className="min-w-0 flex-1">{nameField}</div>
+                    </>
                 )}
-
-                {/* How long you mean to be here. Optional, and the timeline says
-                    so: without it a stop is a point in the day; with it the day
-                    becomes a sequence that can be checked against the clock. */}
-                <input
-                    type="number"
-                    min="0"
-                    step="15"
-                    key={`d-${stop.duration_minutes ?? ''}`}
-                    defaultValue={stop.duration_minutes ?? ''}
-                    placeholder="min"
-                    onBlur={(e) => {
-                        const next = e.target.value.trim();
-                        if (next !== String(stop.duration_minutes ?? '')) {
-                            api.patchStop(stop.id, { duration_minutes: next });
-                        }
-                    }}
-                    className="text-xs text-gray-400 bg-transparent w-12 shrink-0 rounded-lg px-1
-                        py-1 hover:bg-gray-50 focus:bg-white focus:outline-none focus:ring-2
-                        focus:ring-accent/30 tabular-nums"
-                    aria-label="Minutes here"
-                />
-                <div className="min-w-0 flex-1">
-                    {place ? (
-                        // The name is the way in: a stop is the place, so clicking
-                        // it opens the same editor the Places tab opens. Before
-                        // this, a wrong address or a missing pin noticed while
-                        // reading the day meant leaving the day to go and fix it.
-                        <button
-                            onClick={() => onEditPlace(place)}
-                            title={`Edit ${place.name}`}
-                            className="flex items-center gap-2 flex-wrap text-left group/place w-full min-w-0"
-                        >
-                            <span className="text-sm text-gray-900 truncate
-                                group-hover/place:text-accent group-hover/place:underline
-                                decoration-dotted underline-offset-2">
-                                {stop.custom_label || place.name}
-                            </span>
-                            <CategoryChip category={place.category} />
-                        </button>
-                    ) : (
-                        <InlineText
-                            value={stop.custom_label ?? ''}
-                            placeholder="Untitled stop"
-                            className="text-sm -ml-2"
-                            onCommit={(custom_label) => api.update('stops', { id: stop.id, custom_label })}
-                        />
-                    )}
-                    {stop.start_time && (
-                        <span className="sr-only">{formatTime(stop.start_time)}</span>
-                    )}
-                </div>
-                <OverflowMenu items={[
-                    ...(place ? [{
-                        label: `Edit ${place.name}`,
-                        onClick: () => onEditPlace(place),
-                    }] : []),
-                    {
-                        label: showNotes || stop.notes ? 'Hide note' : 'Add a note',
-                        onClick: () => setShowNotes((v) => !v),
-                    },
-                    ...(api.data?.days ?? [])
-                        .filter((d) => d.day_number !== dayNumber)
-                        .map((d) => ({
-                            label: `Move to day ${d.day_number}${d.title ? ` — ${d.title}` : ''}`,
-                            onClick: () => moveTo(d.id),
-                        })),
-                    // Copy rather than move: the same beach twice in a week is a
-                    // plan, not a mistake, and rebuilding the stop by hand to
-                    // say so is busywork.
-                    ...(api.data?.days ?? [])
-                        .filter((d) => d.day_number !== dayNumber)
-                        .map((d) => ({
-                            label: `Copy to day ${d.day_number}${d.title ? ` — ${d.title}` : ''}`,
-                            onClick: () => api.create('stops', {
-                                day_id: d.id,
-                                place_id: stop.place_id,
-                                custom_label: stop.custom_label,
-                                start_time: stop.start_time,
-                                duration_minutes: stop.duration_minutes,
-                                notes: stop.notes,
-                            }),
-                        })),
-                    {
-                        // A dinner reservation is a booking on a stop: time,
-                        // party size, confirmation, dress code, and the date
-                        // after which cancelling costs you.
-                        label: reservation ? 'Edit the reservation' : 'Add a reservation',
-                        onClick: () => setShowBooking((v) => !v),
-                    },
-                    {
-                        label: 'Remove stop',
-                        danger: true,
-                        onClick: () => api.removeRow('stops', stop, `Removed ${label}`),
-                    },
-                ]} />
+                {menu}
             </div>
             {(showBooking || reservation) && (
-                <div className="pl-10 pr-2 pb-1">
+                <div className={`pr-2 pb-1 ${compact ? 'pl-7' : 'pl-10'}`}>
                     <BookingPanel api={api} kind="table" stopId={stop.id} compact />
                 </div>
             )}
             {(showNotes || stop.notes) && (
-                <div className="pl-10 pr-2">
+                <div className={`pr-2 ${compact ? 'pl-7' : 'pl-10'}`}>
                     <InlineText
                         multiline
                         value={stop.notes ?? ''}
@@ -1599,7 +1689,8 @@ function StopRow({
                 and the switch is on the Settings tab because a trip is not over
                 because a date passed. */}
             {phase === 'after' && (
-                <div className="flex flex-wrap items-center gap-1.5 pl-10 pr-2 pb-1">
+                <div className={`flex flex-wrap items-center gap-1.5 pr-2 pb-1
+                    ${compact ? 'pl-7' : 'pl-10'}`}>
                     {([['did', '✓ Did it'], ['skipped', '– Skipped']] as const).map(([key, label]) => (
                         <button
                             key={key}
@@ -1640,8 +1731,8 @@ function StopRow({
                 arrive, whether you can, whether it is even open. */}
             {row && (row.late || row.arrive !== row.planned || row.leave || row.walkable
                 || outsideHours || afterDark) && (
-                <div className="pl-10 pr-2 pb-0.5 flex flex-wrap items-center gap-x-2 gap-y-1
-                    text-[11px]">
+                <div className={`pr-2 pb-0.5 flex flex-wrap items-center gap-x-2 gap-y-1
+                    text-[11px] ${compact ? 'pl-7' : 'pl-10'}`}>
                     {row.late ? (
                         <span className="text-rose-700 font-medium tabular-nums">
                             arrive {row.arrive} · {row.lateBy} min late
@@ -1674,7 +1765,7 @@ function StopRow({
                 </div>
             )}
             {hopKm != null && (
-                <div className="pl-10 py-0.5 text-[11px] text-gray-400">
+                <div className={`py-0.5 text-[11px] text-gray-400 ${compact ? 'pl-7' : 'pl-10'}`}>
                     {row?.hopIn && row.hopIn.source === 'road' ? (
                         <span title="Driving time from OSRM">
                             ↓ {formatDuration(row.hopIn.seconds)} drive
