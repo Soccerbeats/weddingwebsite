@@ -11,6 +11,18 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.57 — [Released] The map's tools live on the map (`main`, 2026-08-27 04:35)
+
+Fit, split, add, measure and lasso were buttons in the filter row above the map, mixed in with the controls that decide *which pins are shown*. They act on the map, so they now float on it — top-right, the way the legend floats bottom-left.
+
+### Changed
+- **The five tools moved into an overlay on the top-right of the map.** One column: the buttons, then whatever the armed tool needs — the measure hint, the lasso's menu, the selected place's card — stacked underneath them, so nothing up there can cover anything else. The selected-place card used to claim the same corner on its own.
+- **The lasso's menu hangs under the Lasso button** instead of floating in the middle of the top edge, on top of the pins it was describing. The loop you drew stays drawn until you start another, and the bulk verbs only appear when the loop actually caught something.
+- **Measure and lasso now disarm each other.** They both want the map's pointer, and having two armed at once was a way to get clicks that did nothing.
+
+### Removed
+- **The "✏️ Draw an area" tool.** It was a second way to draw the same shape, click by click, and worse at it. The lasso now hands back the loop it drew and *Save as area…* inside the lasso's own menu writes it as a region's boundary — thinned to at most 120 points, which is far past the resolution anything reads it at.
+
 ## v0.9.56 — [Released] The paste box reads what a confirmation actually looks like (`main`, 2026-08-27 04:05)
 
 Pasting flight numbers into the Travel tab dead-ended on anything but a bare `SQ938 2026-09-14`: the reader wanted the whole line to *be* the number and an ISO date, so a real confirmation line — words around it, the date written out — read as nothing at all and nothing was created.

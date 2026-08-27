@@ -40,8 +40,14 @@ const WIDE_QUERY = '(min-width: 1024px)';
  * Full-height map view.
  *
  * The map fills every pixel the shell gives it and nothing on this tab scrolls;
- * the filter row is fixed above it and everything else — legend, selected place,
- * lasso actions — floats over the map rather than stealing height from it.
+ * the filter row is fixed above it and everything else floats over the map
+ * rather than stealing height from it: the legend bottom-left, the itinerary
+ * top-left, and the tools top-right — fit, split, add, measure and lasso, with
+ * whatever the armed tool needs stacked underneath them in the same column.
+ *
+ * There is no separate boundary tool. Drawing a region's outline and lassoing
+ * the pins inside it are the same gesture, so the lasso hands its loop back and
+ * saving it as an area is one control in the lasso's own menu.
  *
  * Split view (the ⊞ button) puts the itinerary down the left and the place
  * library down the right, each a single column, with the map still holding the
@@ -75,24 +81,32 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
     const [editorOpen, setEditorOpen] = useState(false);
 
     /*
-     * Base map, pin colouring and the two drawing tools.
+     * Base map, pin colouring and the tools.
      *
      * The layer and the colouring are remembered per browser — they are how you
-     * like to read a map, not facts about the trip. The tools are not: a measure
-     * or a boundary draw is a thing you are doing right now, and coming back to
-     * a map that eats your clicks would be baffling.
+     * like to read a map, not facts about the trip. The tools are not: measuring
+     * or lassoing is a thing you are doing right now, and coming back to a map
+     * that eats your clicks would be baffling.
      */
     const [layer, setLayer] = useLocalPref<MapLayerKey>('hm-map-layer', 'streets');
     const [colourBy, setColourBy] = useLocalPref<'category' | 'region'>(
         'hm-map-colour', 'category',
     );
-    const [tool, setTool] = useState<'none' | 'measure' | 'draw'>('none');
-    const [drawTarget, setDrawTarget] = useState('');
-    const [drawn, setDrawn] = useState<{ lat: number; lng: number }[] | null>(null);
+    const [tool, setTool] = useState<'none' | 'measure'>('none');
 
     // Lasso
     const [selectMode, setSelectMode] = useState(false);
     const [lassoed, setLassoed] = useState<Set<number>>(new Set());
+    /**
+     * The last loop drawn, kept so it can be saved as a region's boundary.
+     *
+     * There used to be a separate "draw an area" tool that collected vertices
+     * click by click. It was a second way to draw the same shape, worse at it —
+     * so the lasso now hands back its loop and saving it is one control inside
+     * the lasso's own menu.
+     */
+    const [lassoLoop, setLassoLoop] = useState<{ lat: number; lng: number }[] | null>(null);
+    const [boundaryNote, setBoundaryNote] = useState('');
     const [showItinerary, setShowItinerary] = useState(false);
     /**
      * Whether the itinerary overlay is expanded.
@@ -406,16 +420,29 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
         return map;
     }, [colourBy, data?.regions, visible]);
 
-    /** Save a drawn loop as a region's boundary. */
-    const saveBoundary = async () => {
-        const regionId = Number(drawTarget);
-        if (!drawn || drawn.length < 3 || !Number.isFinite(regionId)) return;
-        const ok = await api.update('regions', { id: regionId, boundary: drawn });
-        if (ok) {
-            setTool('none');
-            setDrawn(null);
-            setDrawTarget('');
-        }
+    /**
+     * Save the lassoed loop as a region's boundary.
+     *
+     * A freehand loop is far denser than a boundary needs to be — a slow drag
+     * across Bali is a few hundred points — so it is thinned to at most 120
+     * before it is stored. That is well past the resolution anything reads it
+     * at: the boundary decides which side of a line a pin falls on, and no pin
+     * is placed to the metre.
+     */
+    const saveBoundary = async (regionId: number) => {
+        const loop = lassoLoop;
+        if (!loop || loop.length < 3 || !Number.isFinite(regionId)) return;
+        const step = Math.ceil(loop.length / 120);
+        const thinned = step > 1 ? loop.filter((_, i) => i % step === 0) : loop;
+        if (thinned.length < 3) return;
+        const ok = await api.update('regions', { id: regionId, boundary: thinned });
+        if (!ok) { setBoundaryNote('Could not save that boundary.'); return; }
+        setBoundaryNote(
+            `Saved as the boundary of ${api.regionById.get(regionId) ?? 'that area'}. `
+            + '“Assign regions by location” on the Places tab now files pins into it '
+            + 'exactly, instead of guessing by nearest centre.',
+        );
+        setLassoLoop(null);
     };
 
     const pinnedCount = visible.filter(hasCoords).length;
@@ -650,35 +677,6 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                     >
                         {showItinerary ? '🗓 On' : '🗓 Itinerary'}
                     </button>
-                    <button
-                        onClick={() => { setFitPoints(null); setFitSignal((n) => n + 1); }}
-                        title="Frame everything currently shown"
-                        className="shrink-0 rounded-2xl px-2.5 py-1.5 text-sm font-medium border
-                            border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100 transition"
-                    >
-                        ⤢ Fit
-                    </button>
-                    {/* Desktop only: three columns in 900px would leave nothing
-                        worth calling a map. */}
-                    {wide && (
-                        <button
-                            onClick={toggleSplit}
-                            title="Itinerary on the left, places on the right, map in the middle — drag the dividers to resize"
-                            className={`shrink-0 rounded-2xl px-2.5 py-1.5 text-sm font-medium border transition
-                                ${split
-                                ? 'bg-slate-900 border-slate-900 text-white'
-                                : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}
-                        >
-                            {split ? '⊞ Split on' : '⊞ Split'}
-                        </button>
-                    )}
-                    <button
-                        onClick={() => { setEditing(null); setEditorOpen(true); }}
-                        className="shrink-0 rounded-2xl px-2.5 py-1.5 text-sm font-medium border
-                            border-transparent bg-accent text-white hover:opacity-90 transition"
-                    >
-                        + Add
-                    </button>
                     <MiniSelect
                         value={layer}
                         onChange={(e) => setLayer(e.target.value as MapLayerKey)}
@@ -698,43 +696,6 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                         <option value="category">Colour: type</option>
                         <option value="region">Colour: area</option>
                     </MiniSelect>
-                    <button
-                        onClick={() => setTool(tool === 'measure' ? 'none' : 'measure')}
-                        title="Click two points for the distance and bearing between them"
-                        className={`shrink-0 rounded-2xl px-2.5 py-1.5 text-sm font-medium border
-                            transition ${tool === 'measure'
-                            ? 'bg-slate-900 border-slate-900 text-white'
-                            : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}
-                    >
-                        📏 Measure
-                    </button>
-                    {(data?.regions ?? []).length > 0 && (
-                        <button
-                            onClick={() => {
-                                setTool(tool === 'draw' ? 'none' : 'draw');
-                                setDrawn(null);
-                            }}
-                            title="Draw a boundary around an area, so places file themselves into it"
-                            className={`shrink-0 rounded-2xl px-2.5 py-1.5 text-sm font-medium border
-                                transition ${tool === 'draw'
-                                ? 'bg-violet-700 border-violet-700 text-white'
-                                : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}
-                        >
-                            ✏️ Draw an area
-                        </button>
-                    )}
-                    <button
-                        onClick={() => {
-                            if (selectMode) setLassoed(new Set());
-                            setSelectMode((v) => !v);
-                        }}
-                        className={`shrink-0 rounded-2xl px-2.5 py-1.5 text-sm font-medium border transition
-                            ${selectMode
-                            ? 'bg-slate-900 border-slate-900 text-white'
-                            : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}
-                    >
-                        {selectMode ? '◯ Drawing' : '◯ Lasso'}
-                    </button>
                 </div>
 
                 <div className="flex flex-wrap items-center justify-between gap-2 mt-1.5 px-1">
@@ -775,58 +736,12 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                                 {' '}· {legs.length} travel leg{legs.length === 1 ? '' : 's'}
                             </span>
                         )}
-                        {selectMode && (
-                            <span className="text-slate-700">
-                                {' '}· draw a loop around the pins you want (hold Shift to add)
-                            </span>
-                        )}
                     </p>
                     <button onClick={resetFilters} className="text-xs text-gray-400 hover:text-gray-700">
                         Reset
                     </button>
                 </div>
 
-                {tool === 'measure' && (
-                    <p className="mt-1.5 rounded-xl bg-slate-100 px-2.5 py-1.5 text-[11px]
-                        text-slate-800">
-                        Click two points on the map for the distance and bearing. A third click
-                        starts again.
-                    </p>
-                )}
-
-                {tool === 'draw' && (
-                    <div className="mt-1.5 flex flex-wrap items-center gap-2 rounded-xl
-                        bg-violet-50 px-2.5 py-1.5">
-                        <span className="text-[11px] text-violet-900">
-                            Click round the edge of an area
-                            {drawn ? ` — ${drawn.length} points` : ''}. Then save it to:
-                        </span>
-                        <MiniSelect
-                            value={drawTarget}
-                            onChange={(e) => setDrawTarget(e.target.value)}
-                            aria-label="Which region this boundary belongs to"
-                        >
-                            <option value="">a region…</option>
-                            {(data?.regions ?? []).map((region) => (
-                                <option key={region.id} value={region.id}>
-                                    {region.name}{region.boundary ? ' (has one)' : ''}
-                                </option>
-                            ))}
-                        </MiniSelect>
-                        <button
-                            onClick={saveBoundary}
-                            disabled={!drawn || drawn.length < 3 || !drawTarget}
-                            className="rounded-full bg-violet-700 px-3 py-1 text-[11px]
-                                font-semibold text-white disabled:opacity-40"
-                        >
-                            Save boundary
-                        </button>
-                        <span className="text-[11px] text-violet-700">
-                            Once saved, &ldquo;assign regions by location&rdquo; on the Places tab files
-                            pins into it exactly, instead of guessing by nearest centre.
-                        </span>
-                    </div>
-                )}
             </div>
 
             {/* ---- Map, with a column either side of it in split view ---- */}
@@ -877,74 +792,295 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                         layer={layer}
                         pinColors={pinColors}
                         measureMode={tool === 'measure'}
-                        drawMode={tool === 'draw'}
-                        onDrawn={setDrawn}
                         selectMode={selectMode}
                         selectedIds={lassoed}
-                        onLassoSelect={(ids, additive) => setLassoed((prev) => {
-                            const next = additive ? new Set(prev) : new Set<number>();
-                            for (const id of ids) next.add(id);
-                            return next;
-                        })}
+                        onLassoSelect={(ids, additive, loop) => {
+                            setLassoLoop(loop);
+                            setBoundaryNote('');
+                            setLassoed((prev) => {
+                                const next = additive ? new Set(prev) : new Set<number>();
+                                for (const id of ids) next.add(id);
+                                return next;
+                            });
+                        }}
                         className="h-full w-full border border-gray-100 shadow-sm"
                     />
                 )}
 
-                {/* ---- Lasso selection actions, floating over the map ---- */}
-                {/* w-max: the bar is exactly as wide as its contents. It used to be a
-                    fixed-width flex row that scrolled sideways, which is a worse
-                    answer than simply being the right size. On a narrow screen it
-                    wraps rather than scrolling. */}
-                {lassoed.size > 0 && (
-                    <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[500]
-                        w-max max-w-[calc(100%-1.5rem)]
-                        bg-white/95 backdrop-blur rounded-2xl shadow-lg border border-gray-200
-                        px-3 py-2 flex flex-wrap items-center justify-center gap-2">
-                        <span className="text-sm font-medium text-gray-700 pl-1">
-                            {lassoed.size} selected
-                        </span>
-                        <MiniSelect
-                            value=""
-                            onChange={(e) => {
-                                if (e.target.value) bulk({ status: e.target.value as PlaceStatus });
-                            }}
+                {/* ---- The tools, floating top-right ---- */}
+                {/* Every tool lives here, over the map, the way the legend lives
+                    bottom-left: they act on the map, so they belong on it rather
+                    than in a filter row that is about which pins are shown.
+
+                    One column, so nothing up here ever overlaps: the buttons, then
+                    whichever tool is armed, then the selected place. */}
+                <div className="absolute top-3 right-3 z-[500] flex flex-col items-end gap-2
+                    max-w-[calc(100%-1.5rem)] max-h-[calc(100%-1.5rem)]">
+                    <div className="bg-white/95 backdrop-blur rounded-2xl shadow-lg
+                        border border-gray-200 px-2 py-1.5
+                        flex flex-wrap items-center justify-end gap-1.5">
+                        <button
+                            onClick={() => { setFitPoints(null); setFitSignal((n) => n + 1); }}
+                            title="Frame everything currently shown"
+                            className="shrink-0 rounded-full px-2.5 py-1 text-xs font-medium
+                                border border-gray-200 bg-gray-50 text-gray-600
+                                hover:bg-gray-100 transition"
                         >
-                            {/* A native select is sized by its widest option, so these
-                                are abbreviated — the full words live in the Places tab. */}
-                            <option value="">Status</option>
-                            <option value="idea">Idea</option>
-                            <option value="shortlisted">Short</option>
-                            <option value="booked">Booked</option>
-                        </MiniSelect>
-                        {days.length > 0 && (
-                            <MiniSelect
-                                value=""
-                                onChange={(e) => {
-                                    if (e.target.value) addToDay(Number(e.target.value));
-                                }}
+                            ⤢ Fit
+                        </button>
+                        {/* Desktop only: three columns in 900px would leave nothing
+                            worth calling a map. */}
+                        {wide && (
+                            <button
+                                onClick={toggleSplit}
+                                title="Itinerary on the left, places on the right, map in the middle — drag the dividers to resize"
+                                className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium
+                                    border transition ${split
+                                    ? 'bg-slate-900 border-slate-900 text-white'
+                                    : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}
                             >
-                                <option value="">Add to day…</option>
-                                {days.map((d) => (
-                                    <option key={d.id} value={d.id}>
-                                        Day {d.day_number}{d.title ? ` — ${d.title}` : ''}
-                                    </option>
-                                ))}
-                            </MiniSelect>
+                                {split ? '⊞ Split on' : '⊞ Split'}
+                            </button>
                         )}
-                        <BulkFieldMenu
-                            fields={bulkFields}
-                            onApply={(key, value) => bulk({ [key]: value })}
-                            label="Change a field on all selected"
-                        />
-                        <Button className="!px-3" onClick={() => bulk({ needs_review: false })}>
-                            Mark reviewed
-                        </Button>
-                        <Button className="!px-3" tone="danger" onClick={bulkDelete}>Delete</Button>
-                        <Button className="!px-3" tone="ghost" onClick={() => setLassoed(new Set())}>
-                            Clear
-                        </Button>
+                        <button
+                            onClick={() => { setEditing(null); setEditorOpen(true); }}
+                            title="Add a place"
+                            className="shrink-0 rounded-full px-2.5 py-1 text-xs font-medium
+                                border border-transparent bg-accent text-white
+                                hover:opacity-90 transition"
+                        >
+                            + Add
+                        </button>
+                        {/* Measuring and lassoing both own the map's pointer, so
+                            arming either disarms the other rather than leaving two
+                            tools fighting over the same click. */}
+                        <button
+                            onClick={() => {
+                                setTool(tool === 'measure' ? 'none' : 'measure');
+                                setSelectMode(false);
+                            }}
+                            title="Click two points for the distance and bearing between them"
+                            className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium
+                                border transition ${tool === 'measure'
+                                ? 'bg-slate-900 border-slate-900 text-white'
+                                : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}
+                        >
+                            📏 Measure
+                        </button>
+                        <button
+                            onClick={() => {
+                                if (selectMode) { setLassoed(new Set()); setLassoLoop(null); }
+                                setSelectMode((v) => !v);
+                                setTool('none');
+                                setBoundaryNote('');
+                            }}
+                            title="Drag a loop round the pins you want — then act on them, or save the loop as an area"
+                            className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium
+                                border transition ${selectMode
+                                ? 'bg-slate-900 border-slate-900 text-white'
+                                : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}
+                        >
+                            {selectMode ? '◯ Lasso on' : '◯ Lasso'}
+                        </button>
                     </div>
-                )}
+
+                    {/* Saving a boundary closes the menu it was saved from — the loop
+                        is gone once it belongs to an area — so the confirmation is a
+                        row of the column rather than a line inside that menu. */}
+                    {boundaryNote && (
+                        <p className="w-[min(18rem,100%)] rounded-2xl bg-violet-700/95 backdrop-blur
+                            px-3 py-2 text-[11px] text-white shadow-lg">
+                            {boundaryNote}
+                        </p>
+                    )}
+
+                    {tool === 'measure' && (
+                        <p className="w-[min(16rem,100%)] rounded-2xl bg-slate-900/95 backdrop-blur
+                            px-3 py-2 text-[11px] text-white shadow-lg">
+                            Click two points on the map for the distance and bearing. A third
+                            click starts again.
+                        </p>
+                    )}
+
+                    {selectMode && !lassoed.size && !lassoLoop && (
+                        <p className="w-[min(16rem,100%)] rounded-2xl bg-slate-900/95 backdrop-blur
+                            px-3 py-2 text-[11px] text-white shadow-lg">
+                            Drag a loop round the pins you want — hold Shift to add to what is
+                            already picked. The loop can also be saved as an area.
+                        </p>
+                    )}
+
+                    {/* ---- The lasso's own menu, hanging under its button ---- */}
+                    {/* It used to float in the middle of the top edge, which put it
+                        nowhere near the tool that opened it and on top of whatever
+                        you had just lassoed. Under the button is where a menu goes. */}
+                    {selectMode && (lassoed.size > 0 || lassoLoop) && (
+                        <div className="w-[min(20rem,100%)] bg-white/95 backdrop-blur rounded-2xl
+                            shadow-lg border border-gray-200 px-3 py-2
+                            flex flex-wrap items-center gap-2">
+                            <span className="text-sm font-medium text-gray-700 pl-1">
+                                {lassoed.size
+                                    ? `${lassoed.size} selected`
+                                    : 'Loop drawn — no pins inside it'}
+                            </span>
+
+                            {/* A loop round empty water is still a boundary worth
+                                saving, but "Mark reviewed" on nothing is not an offer
+                                worth making. */}
+                            {lassoed.size > 0 && (
+                                <>
+                                    <MiniSelect
+                                        value=""
+                                        onChange={(e) => {
+                                            if (e.target.value) {
+                                                bulk({ status: e.target.value as PlaceStatus });
+                                            }
+                                        }}
+                                    >
+                                        {/* A native select is sized by its widest option, so
+                                            these are abbreviated — the full words live in
+                                            the Places tab. */}
+                                        <option value="">Status</option>
+                                        <option value="idea">Idea</option>
+                                        <option value="shortlisted">Short</option>
+                                        <option value="booked">Booked</option>
+                                    </MiniSelect>
+                                    {days.length > 0 && (
+                                        <MiniSelect
+                                            value=""
+                                            onChange={(e) => {
+                                                if (e.target.value) addToDay(Number(e.target.value));
+                                            }}
+                                        >
+                                            <option value="">Add to day…</option>
+                                            {days.map((d) => (
+                                                <option key={d.id} value={d.id}>
+                                                    Day {d.day_number}{d.title ? ` — ${d.title}` : ''}
+                                                </option>
+                                            ))}
+                                        </MiniSelect>
+                                    )}
+                                    <BulkFieldMenu
+                                        fields={bulkFields}
+                                        onApply={(key, value) => bulk({ [key]: value })}
+                                        label="Change a field on all selected"
+                                    />
+                                    <Button
+                                        className="!px-3"
+                                        onClick={() => bulk({ needs_review: false })}
+                                    >
+                                        Mark reviewed
+                                    </Button>
+                                    <Button className="!px-3" tone="danger" onClick={bulkDelete}>
+                                        Delete
+                                    </Button>
+                                </>
+                            )}
+
+                            <Button
+                                className="!px-3"
+                                tone="ghost"
+                                onClick={() => { setLassoed(new Set()); setLassoLoop(null); }}
+                            >
+                                Clear
+                            </Button>
+
+                            {/* ---- The loop itself, as an area ---- */}
+                            {/* This is the whole of what "draw an area" used to be. It
+                                was a separate tool with its own click-by-click way of
+                                drawing the same shape; now the loop you already drew is
+                                the boundary, and this is where you say whose. */}
+                            {lassoLoop && regions.length > 0 && (
+                                <div className="w-full border-t border-gray-100 pt-2
+                                    flex flex-wrap items-center gap-2">
+                                    <span className="text-[11px] text-gray-500">
+                                        Or make this loop an area:
+                                    </span>
+                                    <MiniSelect
+                                        value=""
+                                        onChange={(e) => {
+                                            if (e.target.value) saveBoundary(Number(e.target.value));
+                                        }}
+                                        aria-label="Save this loop as an area's boundary"
+                                    >
+                                        <option value="">Save as area…</option>
+                                        {regions.map((region) => (
+                                            <option key={region.id} value={region.id}>
+                                                {region.name}{region.boundary ? ' (replace)' : ''}
+                                            </option>
+                                        ))}
+                                    </MiniSelect>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* ---- The selected place, under the tools ---- */}
+                    {/* A row of the same column rather than its own corner: the tools
+                        are up here now, and two things claiming the top-right would
+                        cover each other. Scrolls inside the column's height cap. */}
+                    {selected && (
+                        <div className="w-[min(22rem,100%)] min-h-0 overflow-auto
+                            bg-white rounded-2xl shadow-lg border border-gray-200 p-4">
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                    <h3 className="font-semibold text-gray-900">{selected.name}</h3>
+                                    <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                                        <CategoryChip category={selected.category} />
+                                        <StatusChip status={selected.status} />
+                                        {selected.region_id != null && (
+                                            <span className="text-[11px] text-gray-400">
+                                                {api.regionById.get(selected.region_id)}
+                                            </span>
+                                        )}
+                                    </div>
+                                    {selected.description && (
+                                        <p className="text-sm text-gray-600 mt-2 line-clamp-3">
+                                            {selected.description}
+                                        </p>
+                                    )}
+                                    {selected.links.length > 0 && (
+                                        <div className="flex flex-wrap gap-2 mt-2">
+                                            {selected.links.map((link, i) => (
+                                                <a
+                                                    key={i}
+                                                    href={link.url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-xs text-accent hover:underline"
+                                                >
+                                                    {link.label || 'Link'} ↗
+                                                </a>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                    <Button onClick={() => { setEditing(selected); setEditorOpen(true); }}>
+                                        Edit
+                                    </Button>
+                                    <button
+                                        onClick={() => setSelectedId(null)}
+                                        className="text-gray-400 hover:text-gray-700 text-xl leading-none"
+                                        aria-label="Close"
+                                    >
+                                        &times;
+                                    </button>
+                                </div>
+                            </div>
+                            {hasCoords(selected) && (
+                                <a
+                                    href={`https://www.google.com/maps/search/?api=1&query=${selected.lat},${selected.lng}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-block text-xs text-gray-400 hover:text-gray-700 mt-3"
+                                >
+                                    Open in Google Maps ↗
+                                </a>
+                            )}
+                        </div>
+                    )}
+                </div>
 
                 {/* ---- What happens each day, while the overlay is on ---- */}
                 {/* Collapsed: a pill in the top-left corner, carrying the day
@@ -1042,73 +1178,6 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                     </div>
                 )}
 
-                {/* ---- Selected place, floating bottom-right ---- */}
-                {/* Top-right: clear of the legend bottom-left and the itinerary panel
-                    top-left, and it never covers the pin you just clicked in the
-                    middle of the map. Height-capped so a long description scrolls
-                    inside it rather than running off screen. */}
-                {selected && (
-                    <div className="absolute top-3 right-3 z-[500] w-[min(22rem,90%)]
-                        max-h-[calc(100%-1.5rem)] overflow-auto
-                        bg-white rounded-2xl shadow-lg border border-gray-200 p-4">
-                        <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                                <h3 className="font-semibold text-gray-900">{selected.name}</h3>
-                                <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                                    <CategoryChip category={selected.category} />
-                                    <StatusChip status={selected.status} />
-                                    {selected.region_id != null && (
-                                        <span className="text-[11px] text-gray-400">
-                                            {api.regionById.get(selected.region_id)}
-                                        </span>
-                                    )}
-                                </div>
-                                {selected.description && (
-                                    <p className="text-sm text-gray-600 mt-2 line-clamp-3">
-                                        {selected.description}
-                                    </p>
-                                )}
-                                {selected.links.length > 0 && (
-                                    <div className="flex flex-wrap gap-2 mt-2">
-                                        {selected.links.map((link, i) => (
-                                            <a
-                                                key={i}
-                                                href={link.url}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="text-xs text-accent hover:underline"
-                                            >
-                                                {link.label || 'Link'} ↗
-                                            </a>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                                <Button onClick={() => { setEditing(selected); setEditorOpen(true); }}>
-                                    Edit
-                                </Button>
-                                <button
-                                    onClick={() => setSelectedId(null)}
-                                    className="text-gray-400 hover:text-gray-700 text-xl leading-none"
-                                    aria-label="Close"
-                                >
-                                    &times;
-                                </button>
-                            </div>
-                        </div>
-                        {hasCoords(selected) && (
-                            <a
-                                href={`https://www.google.com/maps/search/?api=1&query=${selected.lat},${selected.lng}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-block text-xs text-gray-400 hover:text-gray-700 mt-3"
-                            >
-                                Open in Google Maps ↗
-                            </a>
-                        )}
-                    </div>
-                )}
                 </div>
 
                 {showPanels && (

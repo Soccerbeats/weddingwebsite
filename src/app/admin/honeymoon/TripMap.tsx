@@ -184,14 +184,14 @@ export interface TripMapProps {
      * Two clicks give a distance; a third starts again.
      */
     measureMode?: boolean;
-    /** While true, clicking adds a vertex to a polygon; used to draw a region. */
-    drawMode?: boolean;
-    /** Fired with the drawn polygon when `drawMode` is on and it is closed. */
-    onDrawn?: (points: LatLng[]) => void;
     /** Ids currently lasso-selected, drawn with a highlight ring. */
     selectedIds?: Set<number>;
-    /** Fired on release with everything inside the drawn loop. */
-    onLassoSelect?: (ids: number[], additive: boolean) => void;
+    /**
+     * Fired on release with everything inside the drawn loop — and with the loop
+     * itself, which is the same shape a region's boundary is. The lasso is the
+     * only way to draw one; there is no separate boundary tool.
+     */
+    onLassoSelect?: (ids: number[], additive: boolean, loop: LatLng[]) => void;
     className?: string;
 }
 
@@ -199,7 +199,7 @@ export default function TripMap({
     places, routes = [], legs = [], selectedId = null, onSelect, fitSignal = 0, fitPoints = null,
     cluster = true, panToSelected = false, pinLabels, layer: layerKey = 'streets', pinColors,
     selectMode = false, selectedIds, onLassoSelect,
-    measureMode = false, drawMode = false, onDrawn, className = '',
+    measureMode = false, className = '',
 }: TripMapProps) {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const mapRef = useRef<LeafletNS.Map | null>(null);
@@ -214,16 +214,11 @@ export default function TripMap({
      */
     const initialLayerRef = useRef(layerKey);
     initialLayerRef.current = layerKey;
-    /** Measuring and drawing overlays, cleared on mode change. */
+    /** The measuring overlay — and the loop the lasso leaves drawn behind it. */
     const toolLayerRef = useRef<LeafletNS.LayerGroup | null>(null);
     const measurePointsRef = useRef<LatLng[]>([]);
-    const drawPointsRef = useRef<LatLng[]>([]);
     const measureModeRef = useRef(measureMode);
     measureModeRef.current = measureMode;
-    const drawModeRef = useRef(drawMode);
-    drawModeRef.current = drawMode;
-    const onDrawnRef = useRef(onDrawn);
-    onDrawnRef.current = onDrawn;
     const layerRef = useRef<LeafletNS.LayerGroup | LeafletNS.MarkerClusterGroup | null>(null);
     const routeLayerRef = useRef<LeafletNS.LayerGroup | null>(null);
     const leafletRef = useRef<typeof LeafletNS | null>(null);
@@ -264,12 +259,6 @@ export default function TripMap({
         measurePointsRef.current = [];
         toolLayerRef.current?.clearLayers();
     }, [measureMode]);
-
-    useEffect(() => {
-        if (drawMode) return;
-        drawPointsRef.current = [];
-        toolLayerRef.current?.clearLayers();
-    }, [drawMode]);
 
     // The lasso handlers are bound once and read everything current through
     // refs, so toggling a filter never rebinds them mid-draw.
@@ -323,9 +312,9 @@ export default function TripMap({
             toolLayerRef.current = L.layerGroup().addTo(map);
 
             /*
-             * Measuring and drawing share the map's click, and both are off by
-             * default. Bound once, reading the current mode through refs, so
-             * toggling a tool never rebuilds the map.
+             * Measuring owns the map's click while it is armed, and is off by
+             * default. Bound once, reading the mode through a ref, so arming the
+             * tool never rebuilds the map.
              */
             map.on('click', (event: LeafletNS.LeafletMouseEvent) => {
                 const point = { lat: event.latlng.lat, lng: event.latlng.lng };
@@ -364,25 +353,6 @@ export default function TripMap({
                             }),
                         }).addTo(tools);
                     }
-                    return;
-                }
-
-                if (drawModeRef.current) {
-                    drawPointsRef.current = [...drawPointsRef.current, point];
-                    const all = drawPointsRef.current;
-                    tools.clearLayers();
-                    for (const vertex of all) {
-                        L.circleMarker([vertex.lat, vertex.lng], {
-                            radius: 4, color: '#7c3aed', fillColor: '#fff', fillOpacity: 1,
-                            weight: 2,
-                        }).addTo(tools);
-                    }
-                    if (all.length >= 2) {
-                        L.polygon(all.map((p) => [p.lat, p.lng] as [number, number]), {
-                            color: '#7c3aed', weight: 2, fillOpacity: 0.08,
-                        }).addTo(tools);
-                    }
-                    if (all.length >= 3) onDrawnRef.current?.(all);
                 }
             });
             mapRef.current = map;
@@ -679,6 +649,10 @@ export default function TripMap({
 
         const onDown = (event: PointerEvent) => {
             if (event.button != null && event.button !== 0) return;
+            // The last loop stays drawn after release — it is what "save this as
+            // an area" acts on, and a shape you cannot see is not one you would
+            // trust. Starting a new one clears it.
+            toolLayerRef.current?.clearLayers();
             drawing = true;
             // Hold shift/ctrl to add to the current selection rather than replace it.
             additive = event.shiftKey || event.ctrlKey || event.metaKey;
@@ -709,7 +683,15 @@ export default function TripMap({
             clear();
             // A tap is not a lasso; ignore anything too small to be deliberate.
             if (loop.length < 3) return;
-            onLassoRef.current?.(placesInPolygon(placesRef.current, loop), additive);
+            const tools = toolLayerRef.current;
+            if (tools) {
+                tools.clearLayers();
+                L.polygon(loop.map((p) => [p.lat, p.lng] as [number, number]), {
+                    color: '#0f172a', weight: 2, dashArray: '5 4', fillOpacity: 0.06,
+                    interactive: false,
+                }).addTo(tools);
+            }
+            onLassoRef.current?.(placesInPolygon(placesRef.current, loop), additive, loop);
         };
 
         container.addEventListener('pointerdown', onDown);
@@ -723,6 +705,7 @@ export default function TripMap({
             container.removeEventListener('pointerup', onUp);
             container.removeEventListener('pointercancel', onUp);
             clear();
+            toolLayerRef.current?.clearLayers();
             map.dragging.enable();
         };
     }, [selectMode, ready]);
