@@ -33,7 +33,7 @@ import {
 import { parseFlight } from '../src/lib/honeymoonFetch';
 import {
     dayForDate, formatMinutes, journeyDays, journeyTitle, journeysOf, legArriveDate,
-    legDepartDate, placementFor, sameInstantIn,
+    legDepartDate, parseFlightPaste, placementFor, sameInstantIn,
 } from '../src/lib/honeymoonJourneys';
 import {
     addDaysIso, buildTimeline, estimateHop, formatDuration, instantOf, isWalkable,
@@ -1903,6 +1903,64 @@ console.log('\nFlight lookup');
                 scheduledTime: { local: '2026-08-26 22:40+01:00' },
             },
         }], 'BA112', '2026-08-26')?.arrive_day_offset === 0);
+}
+
+console.log('\nReading a pasted ticket');
+{
+    const paste = (text: string) => parseFlightPaste(text, '2026-09-12');
+
+    const plain = paste('SQ938 2026-09-14, SQ27 2026-09-12');
+    check('the documented example still reads', plain.length === 2);
+    check('and keeps the numbers', plain.map((e) => e.number).join(' ') === 'SQ938 SQ27');
+    check('and the dates', plain.map((e) => e.date).join(' ') === '2026-09-14 2026-09-12');
+
+    check('a space in the number is fine', paste('SQ 938')[0]?.number === 'SQ938');
+    check('so is a hyphen', paste('SQ-938')[0]?.number === 'SQ938');
+    check('lower case is raised', paste('sq938')[0]?.number === 'SQ938');
+
+    // The line that used to read as nothing at all.
+    const email = paste('SQ 938 Singapore to Denpasar 14 Sep 2026');
+    check('a line with words around it still reads', email[0]?.number === 'SQ938');
+    check('and its written-out date', email[0]?.date === '2026-09-14');
+
+    check('month first reads too',
+        paste('Sep 14, 2026 SQ938')[0]?.date === '2026-09-14');
+    check('a comma inside a date is not a line break',
+        paste('Sep 14, 2026 SQ938').length === 1);
+    check('a missing year comes from the trip',
+        paste('SQ938 14 Sep')[0]?.date === '2026-09-14');
+    check('a two-digit year is this century',
+        paste('SQ938 14-SEP-26')[0]?.date === '2026-09-14');
+    check('day-first slashes are read as such',
+        paste('SQ938 14/09/2026')[0]?.date === '2026-09-14');
+    check('and month-first slashes as such',
+        paste('SQ938 09/14/2026')[0]?.date === '2026-09-14');
+    check('an impossible date is no date',
+        paste('SQ938 2026-02-31')[0]?.date === null);
+
+    const row = paste('Sat, 12 Sep 2026 · SQ 27 · SFO 10:20 → SIN 19:15');
+    check('an itinerary row yields one leg', row.length === 1);
+    check('the airport codes are not mistaken for a flight', row[0]?.number === 'SQ27');
+    check('and the date is read', row[0]?.date === '2026-09-12');
+
+    check('a terminal is not a flight number', paste('Terminal 3').length === 0);
+    check('nor is an aircraft on its own line', paste('Boeing 777').length === 0);
+    check('a digit in the airline code is allowed', paste('3K 685')[0]?.number === '3K685');
+    check('but loses to a real number on the same line',
+        paste('SQ938 on an A380')[0]?.number === 'SQ938');
+
+    // The fallback Austin asked for: a date with no number is still a leg.
+    const dateOnly = paste('14 Sep 2026');
+    check('a date with no flight number is still a leg', dateOnly.length === 1);
+    check('with the number left blank', dateOnly[0]?.number === null);
+    check('and the line kept', dateOnly[0]?.raw === '14 Sep 2026');
+
+    const numberOnly = paste('SQ938');
+    check('a number with no date is still a leg', numberOnly.length === 1);
+    check('with the date left blank', numberOnly[0]?.date === null);
+
+    check('a line with neither is dropped', paste('Confirmation: booked').length === 0);
+    check('empty text is no legs', paste('   ').length === 0);
 }
 
 console.log('\nJourneys');

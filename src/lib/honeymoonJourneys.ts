@@ -407,3 +407,116 @@ export function sameInstantIn(
     const shifted = new Date(instant.getTime() + offset * 60_000);
     return shifted.toISOString().slice(11, 16);
 }
+
+/* ------------------------------------------------------------------ *
+ * Reading a pasted ticket
+ * ------------------------------------------------------------------ */
+
+/** One line of a pasted ticket, as much of it as could be read. */
+export interface PastedLeg {
+    /** The flight number, normalised to "SQ938", or null when the line had none. */
+    number: string | null;
+    /** The date as ISO, or null when the line had none we could read. */
+    date: string | null;
+    /** The line as typed — kept so a leg we could not read still says why. */
+    raw: string;
+}
+
+const MONTH_NAMES = [
+    'jan', 'feb', 'mar', 'apr', 'may', 'jun',
+    'jul', 'aug', 'sep', 'oct', 'nov', 'dec',
+];
+
+/** A date only if it is a real one: no 31 February, no month 13. */
+function isoDate(year: number, month: number, day: number): string | null {
+    if (!Number.isFinite(year) || month < 1 || month > 12 || day < 1 || day > 31) return null;
+    const full = year < 100 ? 2000 + year : year;
+    const iso = `${String(full).padStart(4, '0')}-${String(month).padStart(2, '0')}`
+        + `-${String(day).padStart(2, '0')}`;
+    const parsed = new Date(`${iso}T00:00:00Z`);
+    return Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== iso
+        ? null : iso;
+}
+
+function monthNumber(name: string): number {
+    return MONTH_NAMES.indexOf(name.slice(0, 3).toLowerCase()) + 1;
+}
+
+/**
+ * The date on a line, in whichever way the airline wrote it.
+ *
+ * Returns the ISO date *and* the text it came from, because the caller cuts it
+ * out before looking for a flight number — "14 SEP" and "A380" both look like
+ * an airline code and a number if you read them in the wrong order.
+ *
+ * A year is optional: a ticket often says "14 Sep" and the trip supplies the
+ * rest. `fallbackYear` is that year; without one the current year is used.
+ */
+function dateOn(line: string, fallbackYear: number): { iso: string, text: string } | null {
+    const attempts: Array<[RegExp, (m: RegExpExecArray) => string | null]> = [
+        // 2026-09-14, and 2026/09/14
+        [/\b(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})\b/,
+            (m) => isoDate(+m[1], +m[2], +m[3])],
+        // 14 Sep 2026, 14-SEP-26, 14Sep
+        [/\b(\d{1,2})\s*[-. ]?\s*([A-Za-z]{3,9})\.?\s*[-,. ]?\s*(\d{4}|\d{2})?\b/,
+            (m) => (monthNumber(m[2])
+                ? isoDate(m[3] ? +m[3] : fallbackYear, monthNumber(m[2]), +m[1]) : null)],
+        // Sep 14, 2026 — and "September 14th"
+        [/\b([A-Za-z]{3,9})\.?\s*[-. ]?\s*(\d{1,2})(?:st|nd|rd|th)?\s*,?\s*(\d{4}|\d{2})?\b/,
+            (m) => (monthNumber(m[1])
+                ? isoDate(m[3] ? +m[3] : fallbackYear, monthNumber(m[1]), +m[2]) : null)],
+        // 14/09/2026 and 09/14/2026 — read as day-first only when it cannot be a month
+        [/\b(\d{1,2})[/.](\d{1,2})[/.](\d{2,4})\b/,
+            (m) => (+m[1] > 12
+                ? isoDate(+m[3], +m[2], +m[1])
+                : isoDate(+m[3], +m[1], +m[2]))],
+    ];
+    for (const [pattern, build] of attempts) {
+        const match = pattern.exec(line);
+        if (!match) continue;
+        const iso = build(match);
+        if (iso) return { iso, text: match[0] };
+    }
+    return null;
+}
+
+/**
+ * The flight number on a line, once the date is out of the way.
+ *
+ * Two passes, because airline codes are not all letters. "SQ938" is
+ * unambiguous; "3K685" is a real flight and "A380" is an aeroplane, and they
+ * are the same shape — so a code containing a digit is only taken when the line
+ * offers nothing better.
+ */
+function flightNumberOn(line: string): string | null {
+    const strong = /\b([A-Za-z]{2})[\s-]?(\d{1,4})(?![\dA-Za-z])/.exec(line);
+    if (strong) return `${strong[1]}${strong[2]}`.toUpperCase();
+    const weak = /\b([A-Za-z]\d|\d[A-Za-z])[\s-]?(\d{1,4})(?![\dA-Za-z])/.exec(line);
+    return weak ? `${weak[1]}${weak[2]}`.toUpperCase() : null;
+}
+
+/**
+ * A pasted ticket, one entry per leg.
+ *
+ * Deliberately forgiving. The old reader wanted the whole line to *be* a flight
+ * number and a date, so "SQ 938 Singapore → Denpasar, 14 Sep" — which is what
+ * a confirmation email actually looks like — read as nothing at all and the
+ * paste box dead-ended. Now anything carrying a flight number or a date becomes
+ * a leg; whatever could not be read is left blank to fill in by hand, and a
+ * line with neither is ignored rather than turned into an empty leg.
+ */
+export function parseFlightPaste(text: string, tripStart?: string | null): PastedLeg[] {
+    const fallbackYear = Number(tripStart?.slice(0, 4)) || new Date().getUTCFullYear();
+    return text
+        // "Sep 14, 2026" is one date, not a line break followed by a stray year.
+        .replace(/(\d)\s*,\s*(\d{4})\b/g, '$1 $2')
+        .split(/[\n,;]+/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((raw) => {
+            const date = dateOn(raw, fallbackYear);
+            const rest = date ? raw.replace(date.text, ' ') : raw;
+            return { number: flightNumberOn(rest), date: date?.iso ?? null, raw };
+        })
+        .filter((entry) => entry.number || entry.date);
+}

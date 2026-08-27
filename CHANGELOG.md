@@ -11,6 +11,17 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.56 — [Released] The paste box reads what a confirmation actually looks like (`main`, 2026-08-27 04:05)
+
+Pasting flight numbers into the Travel tab dead-ended on anything but a bare `SQ938 2026-09-14`: the reader wanted the whole line to *be* the number and an ISO date, so a real confirmation line — words around it, the date written out — read as nothing at all and nothing was created.
+
+### Fixed
+- **A pasted line can now carry the rest of its text.** `SQ 938 Singapore to Denpasar 14 Sep 2026` reads as one leg. Dates in any of the usual forms — `2026-09-14`, `14 Sep 2026`, `Sep 14, 2026`, `14-SEP-26`, `14/09/2026`, `09/14/2026` — and a date with no year takes the trip's. Airport codes, terminals and aircraft are not mistaken for flight numbers, and an airline code with a digit in it (`3K 685`) is read but never wins over a plain one on the same line.
+- **Nothing dead-ends any more.** A line with a date but no number becomes a leg on that date with the line kept in its notes; a number the schedule cannot find becomes a leg with the number filled in — both there to complete by hand, which is what the lookup failing should always have meant.
+
+### Changed
+- The reader moved out of the component into `parseFlightPaste()` in `src/lib/honeymoonJourneys.ts`, with 29 new assertions in `npm run check:honeymoon` (582 total).
+
 ## v0.9.55 — [Released] Document everything (`main`, 2026-08-26 01:15)
 
 No behaviour change. The docs had drifted behind six releases, and one of the stale pages was the direct cause of a real failure.

@@ -6,7 +6,8 @@ import {
     type TravelMode,
 } from '@/lib/honeymoon';
 import {
-    dayForDate, formatMinutes, journeysOf, placementFor, type JourneyGroup,
+    dayForDate, formatMinutes, journeysOf, parseFlightPaste, placementFor,
+    type JourneyGroup,
 } from '@/lib/honeymoonJourneys';
 import JourneyCard from './JourneyCard';
 import type { HoneymoonApi } from './useHoneymoon';
@@ -146,20 +147,13 @@ export default function TravelTab({ api }: { api: HoneymoonApi }) {
      * between. Slower than firing them all at once, and it works.
      */
     const buildFromPaste = async () => {
-        const entries = paste
-            .split(/[\n,;]+/)
-            .map((line) => line.trim())
-            .filter(Boolean)
-            .map((line) => {
-                const date = /(\d{4}-\d{2}-\d{2})/.exec(line)?.[1] ?? null;
-                const number = line.replace(/(\d{4}-\d{2}-\d{2})/, '').trim()
-                    .replace(/\s+/g, '');
-                return { number, date };
-            })
-            .filter((entry) => /^[A-Za-z0-9]{2,3}\d{1,4}$/.test(entry.number));
+        const entries = parseFlightPaste(paste, trip?.start_date);
 
         if (!entries.length) {
-            setPasteNote('No flight numbers found. Try "SQ938 2026-09-14, SQ27 2026-09-12".');
+            setPasteNote(
+                'Nothing there looked like a flight number or a date. Try '
+                + '"SQ938 2026-09-14, SQ27 2026-09-12".',
+            );
             return;
         }
 
@@ -176,25 +170,30 @@ export default function TravelTab({ api }: { api: HoneymoonApi }) {
             let previousDate = trip?.start_date ?? todayIso();
             const built: string[] = [];
             const failed: string[] = [];
+            const blank: string[] = [];
 
             for (const [index, entry] of entries.entries()) {
                 const date = entry.date ?? previousDate;
                 let flight: Record<string, unknown> | null = null;
-                try {
-                    const res = await fetch(
-                        `/api/admin/honeymoon/flight?no=${encodeURIComponent(entry.number)}`
-                        + `&date=${date}`,
-                    );
-                    const body = await res.json();
-                    flight = body?.flight ?? null;
-                    if (!body?.configured) {
-                        setPasteNote(
-                            'Flight lookup needs FLIGHT_API_KEY on the stack. The legs were '
-                            + 'created — fill in the times by hand, or add the key and use '
-                            + '"Fill in from schedule".',
+                // Nothing to look up without a number — the leg is still made,
+                // on the date the line gave, for the times to be typed in.
+                if (entry.number) {
+                    try {
+                        const res = await fetch(
+                            `/api/admin/honeymoon/flight?no=${encodeURIComponent(entry.number)}`
+                            + `&date=${date}`,
                         );
-                    }
-                } catch { /* handled below */ }
+                        const body = await res.json();
+                        flight = body?.flight ?? null;
+                        if (!body?.configured) {
+                            setPasteNote(
+                                'Flight lookup needs FLIGHT_API_KEY on the stack. The legs were '
+                                + 'created — fill in the times by hand, or add the key and use '
+                                + '"Fill in from schedule".',
+                            );
+                        }
+                    } catch { /* handled below */ }
+                }
 
                 const departDate = (flight?.from_date as string | undefined) ?? date;
                 const arriveDate = flight?.arrive_day_offset != null
@@ -210,7 +209,7 @@ export default function TravelTab({ api }: { api: HoneymoonApi }) {
                     day_id: placement?.day_id ?? days[0]?.id ?? null,
                     journey_id: journey.id,
                     mode: 'flight',
-                    flight_no: (flight?.flight_no as string | undefined) ?? entry.number,
+                    flight_no: (flight?.flight_no as string | undefined) ?? entry.number ?? '',
                     from_text: (flight?.from_text as string | undefined) ?? '',
                     to_text: (flight?.to_text as string | undefined) ?? '',
                     depart_time: (flight?.depart_time as string | undefined) ?? '',
@@ -220,17 +219,22 @@ export default function TravelTab({ api }: { api: HoneymoonApi }) {
                     from_terminal: (flight?.from_terminal as string | undefined) ?? '',
                     to_terminal: (flight?.to_terminal as string | undefined) ?? '',
                     aircraft: (flight?.aircraft as string | undefined) ?? '',
+                    // A line we could not read a number out of keeps its text,
+                    // so the empty leg still says which one it came from.
+                    notes: entry.number ? '' : entry.raw,
                     depart_date: departDate,
                     arrive_date: arriveDate,
                     arrive_day_offset: placement?.arrive_day_offset ?? 0,
                     sort_order: index,
                 });
 
-                if (flight) built.push(entry.number); else failed.push(entry.number);
+                if (!entry.number) blank.push(entry.raw);
+                else if (flight) built.push(entry.number);
+                else failed.push(entry.number);
                 previousDate = arriveDate;
 
                 // The plan's rate limit, plus the route's own retry headroom.
-                if (index < entries.length - 1) {
+                if (entry.number && index < entries.length - 1) {
                     await new Promise((resolve) => setTimeout(resolve, 1400));
                 }
             }
@@ -241,6 +245,10 @@ export default function TravelTab({ api }: { api: HoneymoonApi }) {
                 built.length ? `Filled in ${built.join(', ')}.` : '',
                 failed.length
                     ? `No schedule found for ${failed.join(', ')} — those legs are there but empty.`
+                    : '',
+                blank.length
+                    ? `${blank.length} line${blank.length === 1 ? '' : 's'} had no flight number `
+                        + '— those legs are on their date, waiting for the rest.'
                     : '',
             ].filter(Boolean).join(' ') || 'Created the legs.');
         } finally {
@@ -322,8 +330,10 @@ export default function TravelTab({ api }: { api: HoneymoonApi }) {
                             {pasting ? 'Building…' : 'Build the journey'}
                         </Button>
                         <span className="text-[11px] text-gray-400">
-                            One per line. Each is looked up and filled in — times, terminals,
-                            aircraft, time zones — and placed on the right day.
+                            One per line — the rest of the line can stay, dates in any form.
+                            Each is looked up and filled in — times, terminals, aircraft, time
+                            zones — and placed on the right day. Anything that cannot be looked
+                            up still becomes a leg to fill in by hand.
                         </span>
                     </div>
                     {pasteNote && (
