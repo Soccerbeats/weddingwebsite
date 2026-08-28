@@ -11,6 +11,14 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.62 — [Released] The seating chart's RSVP view tells coming from declined (`main`, 2026-08-28 23:31)
+
+RSVP view coloured a seat green for *any* answer at all, so a guest who had declined sat in the same green as one who had accepted. The one thing the view exists to show — who is actually coming — was the one thing it did not distinguish.
+
+### Changed
+- **Seats are now green for coming, red for declined, white for no answer yet.** Likely-not-coming keeps its orange, which still wins over everything else. The colour now matches the answer instead of merely reporting that an answer arrived.
+- **The RSVP legend lists all four states**, orange included — it had only ever named two, which is part of how the green could go unquestioned.
+
 ## v0.9.61 — [Released] Expected guests counts who is still expected (`main`, 2026-08-28 23:28)
 
 The guest list's **Expected Guests** tile subtracted the guests marked *likely not coming* but still counted everyone who had actually declined — so a headcount meant to answer "how many people are we planning for" kept counting the people who had told us no.

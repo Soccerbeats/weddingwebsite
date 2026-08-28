@@ -449,11 +449,19 @@ function SeatingCanvas({
                 <>
                   <span className="flex items-center gap-1">
                     <span className="w-3 h-3 rounded-full bg-green-200 border border-green-400 inline-block" />
-                    RSVPed
+                    Coming
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-3 h-3 rounded-full bg-red-200 border border-red-400 inline-block" />
+                    Declined
                   </span>
                   <span className="flex items-center gap-1">
                     <span className="w-3 h-3 rounded-full bg-white border border-gray-300 inline-block" />
                     No RSVP
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-3 h-3 rounded-full bg-orange-200 border border-orange-400 inline-block" />
+                    Likely not coming
                   </span>
                 </>
               )}

@@ -66,10 +66,14 @@ function SeatChip({
   if (isLikelyNotComing) {
     chipClass = 'bg-orange-100 border-orange-400 text-orange-700';
   } else if (colorMode === 'rsvp') {
-    const hasRsvp = !!seat.rsvp_status;
-    chipClass = hasRsvp
-      ? 'bg-green-100 border-green-400 text-green-800'
-      : 'bg-white border-gray-300 text-gray-600';
+    // Coming green, declined red, no answer yet white.
+    if (seat.rsvp_status === 'declined') {
+      chipClass = 'bg-red-100 border-red-400 text-red-800';
+    } else if (seat.rsvp_status) {
+      chipClass = 'bg-green-100 border-green-400 text-green-800';
+    } else {
+      chipClass = 'bg-white border-gray-300 text-gray-600';
+    }
   } else {
     // party mode
     chipClass = isSplit
