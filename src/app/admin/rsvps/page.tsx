@@ -860,7 +860,7 @@ export default function RSVPDashboard() {
     const totalInvited = guests.filter(g => g.invited).reduce((acc, curr) => acc + curr.party_size, 0);
     const totalNotInvited = guests.filter(g => !g.invited).reduce((acc, curr) => acc + curr.party_size, 0);
     const likelyNotComingCount = guests.filter(g => g.rsvp_status === 'likely_not_coming').reduce((acc, curr) => acc + curr.party_size, 0);
-    const totalGuestListSize = guests.filter(g => g.rsvp_status !== 'likely_not_coming').reduce((acc, curr) => acc + curr.party_size, 0);
+    const totalGuestListSize = guests.filter(g => g.rsvp_status !== 'likely_not_coming' && g.rsvp_status !== 'declined').reduce((acc, curr) => acc + curr.party_size, 0);
     const missingRsvps = guests.filter(g => g.invited && !g.rsvp_status).reduce((acc, curr) => acc + curr.party_size, 0);
 
     const filteredGuests = guests.filter(g => {
@@ -1162,7 +1162,7 @@ export default function RSVPDashboard() {
                         <div className="bg-white p-6 rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 border border-gray-200">
                             <p className="text-sm font-medium text-gray-500">Expected Guests</p>
                             <p className="text-3xl font-bold text-gray-900">{totalGuestListSize}</p>
-                            <p className="text-xs text-gray-400 mt-1">excl. likely not coming</p>
+                            <p className="text-xs text-gray-400 mt-1">excl. likely not coming &amp; declined</p>
                         </div>
                         <div className="bg-white p-6 rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 border border-orange-200">
                             <p className="text-sm font-medium text-orange-600">Likely Not Coming</p>

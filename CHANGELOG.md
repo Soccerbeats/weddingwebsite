@@ -11,6 +11,13 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.61 — [Released] Expected guests counts who is still expected (`main`, 2026-08-28 23:28)
+
+The guest list's **Expected Guests** tile subtracted the guests marked *likely not coming* but still counted everyone who had actually declined — so a headcount meant to answer "how many people are we planning for" kept counting the people who had told us no.
+
+### Fixed
+- **Expected Guests now excludes declined RSVPs as well as likely-not-coming.** Both are people who are not showing up; only one of them was being taken out. The tile's caption says so — *excl. likely not coming & declined* — so the number is readable without opening the code. The other four tiles (Total Invited, Not Invited Yet, Likely Not Coming, Total Attending) are unchanged.
+
 ## v0.9.60 — [Released] Un-confirming a lassoed area (`main`, 2026-08-27 17:57)
 
 Confirming a lassoed area was one click. Putting one *back* to unconfirmed meant going through the ⋯ field menu — the wrong amount of work for "actually, those are wrong".
