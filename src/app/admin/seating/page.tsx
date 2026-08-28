@@ -131,29 +131,24 @@ function SeatingCanvas({
       party_group_id: guest.id,
     });
 
-    // Plus one (by name)
-    if (guest.plus_one_name) {
-      payload.push({
-        seating_table_id: tableId,
-        seat_index: nextIndex(),
-        guest_list_id: null,
-        display_name: guest.plus_one_name,
-        party_group_id: guest.id,
-      });
-    }
-
-    // Additional party members beyond primary + plus_one, by name when the
-    // guest list has one for the slot and "X's guest n" otherwise.
+    // Companions. `party_size` is the count the RSVP guest list edits, so it —
+    // not `plus_one_name` — decides how many seats a party takes: the guest plus
+    // party_size - 1 others. A plus-one still recorded against a guest whose
+    // party has since shrunk to one is *not* seated; that name is only settable
+    // by CSV import, so it outlives the party it belonged to.
+    const plusOne = (guest.plus_one_name ?? '').trim();
     const memberNames = (guest.party_members ?? [])
       .map(m => (m?.name ?? '').trim())
-      .filter(n => n && n.toLowerCase() !== (guest.plus_one_name ?? '').trim().toLowerCase());
-    const extraCount = (guest.party_size ?? 1) - (guest.plus_one_name ? 2 : 1);
-    for (let i = 0; i < extraCount; i++) {
+      .filter(n => n && n.toLowerCase() !== plusOne.toLowerCase());
+    // The plus-one is the first companion when there is room for one.
+    const companionNames = plusOne ? [plusOne, ...memberNames] : memberNames;
+    const companionCount = Math.max(0, (guest.party_size ?? 1) - 1);
+    for (let i = 0; i < companionCount; i++) {
       payload.push({
         seating_table_id: tableId,
         seat_index: nextIndex(),
         guest_list_id: null,
-        display_name: memberNames[i] || `${guest.guest_name.split(' ')[0]}'s guest ${i + 1}`,
+        display_name: companionNames[i] || `${guest.guest_name.split(' ')[0]}'s guest ${i + 1}`,
         party_group_id: guest.id,
       });
     }

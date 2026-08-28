@@ -61,10 +61,16 @@ export async function PUT(request: Request) {
     const membersJson = party_members ? JSON.stringify(party_members) : null;
 
     const result = await pool.query(
+      // A party of one cannot have a plus-one. The edit form has no plus-one
+      // field (that name arrives by CSV import), so without this a guest shrunk
+      // to a party of one kept a plus-one the guest list no longer showed — and
+      // the seating chart, which reads it, went on offering them a chair.
       `UPDATE guest_list
        SET guest_name = $1, email = $2, phone = $3, party_size = $4, notes = $5, invited = $6,
            party_members = $7, address = COALESCE($8, address), rsvp_status = $9, flag = $10,
-           relationship = $11, side = $12, updated_at = NOW()
+           relationship = $11, side = $12,
+           plus_one_name = CASE WHEN COALESCE($4, 1) < 2 THEN NULL ELSE plus_one_name END,
+           updated_at = NOW()
        WHERE id = $13
        RETURNING *`,
       [guest_name, email, phone, party_size, notes, invited, membersJson, address, rsvp_status || null, flag ?? null, relationship ?? null, side ?? null, id]

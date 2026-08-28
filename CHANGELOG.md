@@ -11,6 +11,15 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.64 — [Released] A party is as big as the guest list says it is (`main`, 2026-08-28 23:45)
+
+The seating chart and the RSVP guest list disagreed about who was in a party. The guest list edits `party_size`; the seating chart read `plus_one_name` — a field only a CSV import can set, and which nothing can clear. Shrink a guest to a party of one and the guest list said one, while the seating sidebar still listed their plus-one and dragging them in still took two chairs. One guest on the live list was in exactly that state.
+
+### Fixed
+- **Seating now takes the party size from the same field the guest list edits.** A guest seats themselves plus `party_size - 1` companions; the plus-one is simply the first companion, seated when there is room for one. A plus-one left over from a party that has since shrunk is no longer given a chair.
+- **The sidebar stops advertising that leftover** — the `+1` line shows only when the party is big enough to hold one, so the sidebar and the RSVP guest list now describe the same party.
+- **Saving a guest as a party of one clears their plus-one.** The edit form has no plus-one field, so a name that arrived by import could otherwise never be removed — the guest list showed a party of one while the stored name quietly outlived it, waiting to reappear the next time the party grew.
+
 ## v0.9.63 — [Released] The guest sidebar answers the same question as the chart (`main`, 2026-08-28 23:39)
 
 v0.9.62 taught the seats on the canvas to colour by the RSVP answer, but the guest list beside them still coloured by whether someone had been given a chair — green meant *seated*, so a guest who had accepted and not yet been placed looked identical to one who had never replied, and a guest who had declined looked like neither.

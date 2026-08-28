@@ -282,7 +282,10 @@ export default function GuestSidebar({
                 </div>
               </div>
 
-              {guest.plus_one_name && (
+              {/* Only when the party is actually big enough to hold one — a plus-one
+                  recorded against a party of one is a leftover, and seating does
+                  not seat them either. */}
+              {guest.plus_one_name && guest.party_size > 1 && (
                 <div className={`text-xs pl-4 truncate ${isDeclined ? 'text-red-400' : isLikely ? 'text-orange-400' : 'text-gray-500'}`}>+1 {guest.plus_one_name}</div>
               )}
 
