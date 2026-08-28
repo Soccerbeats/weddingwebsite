@@ -11,6 +11,14 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.63 — [Released] The guest sidebar answers the same question as the chart (`main`, 2026-08-28 23:39)
+
+v0.9.62 taught the seats on the canvas to colour by the RSVP answer, but the guest list beside them still coloured by whether someone had been given a chair — green meant *seated*, so a guest who had accepted and not yet been placed looked identical to one who had never replied, and a guest who had declined looked like neither.
+
+### Changed
+- **A sidebar guest is now green when they are coming, red when they have declined, orange when they are likely not coming, and white only while nobody has answered** — the same reading as the chart, so the two halves of the page no longer use one colour for two different things. Accepting is what turns a guest green; being seated no longer does, because "has a chair" was never the question the colour was being asked.
+- **A declined guest is labelled `Declined`** under their name, the way a likely-not-coming one already said so, and their party-size badge, plus-one and seat line follow the same red. Where they are sitting is still printed on the row, so nothing that the green background used to convey is lost.
+
 ## v0.9.62 — [Released] The seating chart's RSVP view tells coming from declined (`main`, 2026-08-28 23:31)
 
 RSVP view coloured a seat green for *any* answer at all, so a guest who had declined sat in the same green as one who had accepted. The one thing the view exists to show — who is actually coming — was the one thing it did not distinguish.
