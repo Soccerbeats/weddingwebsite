@@ -470,6 +470,32 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
     );
     const selected = selectedId == null ? null : api.placeById.get(selectedId) ?? null;
 
+    /**
+     * The day the itinerary column should scroll to.
+     *
+     * Clicking a pin already answers "where is this?"; the day it belongs to is
+     * the other half of the same question, and the column beside the map is
+     * where the answer lives. A place on several days scrolls to the first —
+     * the day you get there.
+     *
+     * Carries the click's timestamp so clicking the same pin again scrolls back
+     * to its day rather than doing nothing because the id has not changed.
+     */
+    const [revealDay, setRevealDay] = useState<{ id: number; at: number } | null>(null);
+    const selectPlace = useCallback((id: number | null) => {
+        setSelectedId(id);
+        if (id == null) { setRevealDay(null); return; }
+        const dayNumbers = api.dayOfPlace.get(id);
+        const first = dayNumbers?.length ? Math.min(...dayNumbers) : null;
+        const day = first == null
+            ? null
+            : (api.data?.days ?? []).find((row) => row.day_number === first);
+        // Nothing to scroll to for a place that is not on the itinerary yet;
+        // the pin is still selected, and the panel stays where it was rather
+        // than jumping somewhere arbitrary.
+        setRevealDay(day ? { id: day.id, at: Date.now() } : null);
+    }, [api.dayOfPlace, api.data]);
+
     const resetFilters = () => {
         setRegionFilter(''); setCategoryFilter(''); setStatusFilter('');
         setDayFilter(''); setShowUnconfirmed(false); setSourceFilter('');
@@ -778,7 +804,12 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                             href="/admin/honeymoon/itinerary"
                             width={widths.left}
                         >
-                            <ItineraryTab api={api} panel onFocusDay={focusDay} />
+                            <ItineraryTab
+                                api={api}
+                                panel
+                                onFocusDay={focusDay}
+                                revealDay={revealDay}
+                            />
                         </SidePanel>
                         <ColumnDivider
                             label="Resize the itinerary column"
@@ -811,7 +842,7 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                         routes={routes}
                         legs={legs}
                         selectedId={selectedId}
-                        onSelect={setSelectedId}
+                        onSelect={selectPlace}
                         fitSignal={fitSignal}
                         fitPoints={fitPoints}
                         layer={layer}
@@ -1089,7 +1120,7 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                                         Edit
                                     </Button>
                                     <button
-                                        onClick={() => setSelectedId(null)}
+                                        onClick={() => selectPlace(null)}
                                         className="text-gray-400 hover:text-gray-700 text-xl leading-none"
                                         aria-label="Close"
                                     >

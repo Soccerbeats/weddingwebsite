@@ -11,6 +11,14 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.67 — [Released] Clicking a pin scrolls the itinerary to its day (`main`, 2026-08-29 23:05)
+
+On the map's split view, selecting a pin told you where a place is and left you to find out *when* it is by reading down a column twenty days long — an answer the map already had.
+
+### Added
+- **Clicking a dot on the map scrolls the itinerary column to the day that place is on**, and rings that day for a moment so the scroll reads as an answer rather than a jump. A place planned for more than one day scrolls to the first — the day you get there. A place not on the itinerary yet leaves the column where it was; there is nothing to scroll to, and moving it anywhere would be a guess.
+- Clicking the **same** pin again scrolls back to its day. The request carries the moment it was made rather than just a day id, so a second click is a second request instead of a no-op — which matters, because the usual reason to click a pin twice is having scrolled away from the answer.
+
 ## v0.9.66 — [Released] A travel leg is drawn on the date it carries (`main`, 2026-08-29 21:20)
 
 A flight could appear on the wrong day of the itinerary, and stay there. `day_id` was derived from the leg's dates *once* — at the moment a date was typed — but the date a day **has** changes underneath a leg afterwards: moving the trip's start date re-dates every day, deleting one renumbers the rest. Nothing went back and re-derived the placement, so a leg would sit on a day that was not its date. The Travel tab spotted the disagreement and reported it as a warning to be fixed by hand, which is a strange thing to ask of a person about arithmetic — and the itinerary, where you actually read the day, said nothing at all.

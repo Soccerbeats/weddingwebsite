@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
     DndContext, PointerSensor, TouchSensor, closestCenter, useSensor, useSensors,
     type DragEndEvent,
@@ -45,7 +45,7 @@ const VIEW_KEY = 'honeymoon.itinerary.view';
  *   calendar view, print, export, the hint line — is dropped, and the days
  *   stack in one column whatever the window is doing.
  */
-export default function ItineraryTab({ api, panel = false, onFocusDay }: {
+export default function ItineraryTab({ api, panel = false, onFocusDay, revealDay }: {
     api: HoneymoonApi;
     panel?: boolean;
     /**
@@ -54,6 +54,13 @@ export default function ItineraryTab({ api, panel = false, onFocusDay }: {
      * calls it is simply not rendered.
      */
     onFocusDay?: (day: Day) => void;
+    /**
+     * The other direction: a day to scroll to, asked for by the map when a pin
+     * is clicked. `at` is what makes it a request rather than a state — clicking
+     * the same pin twice should scroll back to the day both times, and a plain
+     * id would not change on the second click.
+     */
+    revealDay?: { id: number; at: number } | null;
 }) {
     const { data } = api;
     // Stable identity: a fresh `?? []` per render would make the memo below
@@ -88,6 +95,31 @@ export default function ItineraryTab({ api, panel = false, onFocusDay }: {
      * component is the left-hand column.
      */
     const [editingPlace, setEditingPlace] = useState<Place | null>(null);
+
+    /*
+     * Scrolling to the day a clicked pin belongs to.
+     *
+     * The column beside the map is often twenty days long, so selecting a pin
+     * without this means reading the day list to find out which day you just
+     * clicked — the answer the map already knows. The ring is what makes the
+     * scroll legible: landing on a day that looks like every other day is not
+     * obviously an answer to anything.
+     */
+    const listRef = useRef<HTMLDivElement>(null);
+    // The ring is derived from the request rather than stored: state here only
+    // records which request has already faded, so nothing is set as the effect
+    // runs and the card is ringed on the same render that scrolls it.
+    const [faded, setFaded] = useState(0);
+    useEffect(() => {
+        if (!revealDay) return;
+        const card = listRef.current
+            ?.querySelector<HTMLElement>(`[data-day-id="${revealDay.id}"]`);
+        if (!card) return;
+        card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        const timer = setTimeout(() => setFaded(revealDay.at), 1800);
+        return () => clearTimeout(timer);
+    }, [revealDay]);
+    const flashDay = revealDay && revealDay.at !== faded ? revealDay.id : null;
     useEffect(() => {
         const saved = localStorage.getItem(VIEW_KEY);
         // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -382,9 +414,12 @@ export default function ItineraryTab({ api, panel = false, onFocusDay }: {
             ) : (
                 <DndContext sensors={daySensors} collisionDetection={closestCenter} onDragEnd={onDayDragEnd}>
                     <SortableContext items={days.map((d) => d.id)} strategy={rectSortingStrategy}>
-                        <div className={`grid gap-3 items-start ${panel
-                            ? 'grid-cols-1'
-                            : 'grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3'}`}>
+                        <div
+                            ref={listRef}
+                            className={`grid gap-3 items-start ${panel
+                                ? 'grid-cols-1'
+                                : 'grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3'}`}
+                        >
                             {days.map((day) => (
                                 <DayCard
                                     key={day.id}
@@ -395,6 +430,7 @@ export default function ItineraryTab({ api, panel = false, onFocusDay }: {
                                     onEditPlace={setEditingPlace}
                                     onFocusDay={onFocusDay}
                                     beyondRange={beyond.has(day.day_number)}
+                                    flash={flashDay === day.id}
                                     arrivals={arrivalsOn(days, day.day_number)}
                                 />
                             ))}
@@ -648,7 +684,7 @@ function CalendarCellBox({ cell, day, api, beyondRange, arrivals, onOpen }: {
 
 function DayCard({
     day, api, intel, onEditPlace, onFocusDay, beyondRange = false, arrivals = [],
-    compact = false,
+    compact = false, flash = false,
 }: {
     day: Day;
     api: HoneymoonApi;
@@ -659,6 +695,8 @@ function DayCard({
     onFocusDay?: (day: Day) => void;
     /** This day is numbered past the end of the trip's dates. */
     beyondRange?: boolean;
+    /** Just scrolled to, from a pin on the map — briefly ringed so it is findable. */
+    flash?: boolean;
     /** Legs that left on an earlier day and land on this one. */
     arrivals?: { leg: TravelLeg; fromDay: Day }[];
 }) {
@@ -900,12 +938,17 @@ function DayCard({
     return (
         <div
             ref={setDayRef}
+            // What the tab scrolls to when the map asks for a day — see
+            // `revealDayId`. An attribute rather than a ref per card because the
+            // card already spends its ref on the sortable.
+            data-day-id={day.id}
             style={{ transform: CSS.Transform.toString(dayTransform), transition: dayTransition }}
             // The ring goes on the wrapper rather than the Card: Card sets its own
             // border colour, and two same-specificity border classes leave which
             // one wins up to the order Tailwind happened to emit them in.
             className={`${dayDragging ? 'opacity-60' : ''}
-                ${beyondRange ? 'rounded-2xl ring-2 ring-rose-300' : ''}`}
+                ${beyondRange ? 'rounded-2xl ring-2 ring-rose-300' : ''}
+                ${flash ? 'rounded-2xl ring-2 ring-accent transition-shadow' : ''}`}
             /*
              * Native drag-and-drop, deliberately not dnd-kit.
              *
