@@ -11,6 +11,17 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.65 — [Released] Move a stop to a day you can actually see (`main`, 2026-08-29 20:48)
+
+A stop's ⋯ menu listed every day of the trip twice — once to move to, once to copy to. Eighteen days made a menu of thirty-eight entries, with the four actions worth reading buried at either end. Worse, it did not matter that the list scrolled: the menu hung off the button inside the day card, and the card clipped it, so a fortnight of days showed one and a half of them with no way to reach the rest.
+
+### Changed
+- **The stop menu is now Edit, Add a note, Move to day, Copy to day, Add a reservation, Remove stop.** The days live one level in, behind `Move to day ›`, in a list that scrolls to the last day of the trip and has a `‹ Move to day` header to come back out. Both surfaces that draw the itinerary — the Itinerary tab and the map's side panel — get it, because they are the same component.
+
+### Fixed
+- **The ⋯ menu is no longer clipped by whatever card it sits in.** It is drawn against the window instead of inside the row, flips above the button when the row is near the bottom of the screen, follows the button while the page scrolls, and caps its height to the space actually available. This was the reason a long menu was unusable — the scrolling worked; the visible part of it was two lines tall.
+- An entry that would open an empty submenu is not shown at all — a one-day trip has nowhere to move a stop to.
+
 ## v0.9.64 — [Released] A party is as big as the guest list says it is (`main`, 2026-08-28 23:45)
 
 The seating chart and the RSVP guest list disagreed about who was in a party. The guest list edits `party_size`; the seating chart read `plus_one_name` — a field only a CSV import can set, and which nothing can clear. Shrink a guest to a party of one and the guest list said one, while the seating sidebar still listed their plus-one and dragging them in still took two chairs. One guest on the live list was in exactly that state.

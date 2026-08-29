@@ -1388,6 +1388,10 @@ function StopRow({
      * day 7" through a list is two taps against a scroll-and-hold. The drag is
      * the native one — see dragTypes.ts for why it is not dnd-kit.
      */
+    // Every day but the one this stop is already on — the destinations both
+    // "move to day" and "copy to day" offer.
+    const otherDays = (api.data?.days ?? []).filter((d) => d.day_number !== dayNumber);
+
     const moveTo = (dayId: number) => api.update('stops', {
         id: stop.id,
         day_id: dayId,
@@ -1564,19 +1568,23 @@ function StopRow({
                 label: showNotes || stop.notes ? 'Hide note' : 'Add a note',
                 onClick: () => setShowNotes((v) => !v),
             },
-            ...(api.data?.days ?? [])
-                .filter((d) => d.day_number !== dayNumber)
-                .map((d) => ({
-                    label: `Move to day ${d.day_number}${d.title ? ` — ${d.title}` : ''}`,
+            // One entry each, not one per day: a fortnight's trip put thirty
+            // "move to day N" lines above the actions worth reading. The days
+            // live one level in, in a list that scrolls.
+            {
+                label: 'Move to day',
+                submenu: otherDays.map((d) => ({
+                    label: `Day ${d.day_number}${d.title ? ` — ${d.title}` : ''}`,
                     onClick: () => moveTo(d.id),
                 })),
+            },
             // Copy rather than move: the same beach twice in a week is a
             // plan, not a mistake, and rebuilding the stop by hand to
             // say so is busywork.
-            ...(api.data?.days ?? [])
-                .filter((d) => d.day_number !== dayNumber)
-                .map((d) => ({
-                    label: `Copy to day ${d.day_number}${d.title ? ` — ${d.title}` : ''}`,
+            {
+                label: 'Copy to day',
+                submenu: otherDays.map((d) => ({
+                    label: `Day ${d.day_number}${d.title ? ` — ${d.title}` : ''}`,
                     onClick: () => api.create('stops', {
                         day_id: d.id,
                         place_id: stop.place_id,
@@ -1586,6 +1594,7 @@ function StopRow({
                         notes: stop.notes,
                     }),
                 })),
+            },
             {
                 // A dinner reservation is a booking on a stop: time,
                 // party size, confirmation, dress code, and the date

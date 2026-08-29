@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Modal } from '@/components/admin/Modal';
 import {
@@ -694,37 +694,131 @@ export function BulkFieldMenu({ fields, onApply, label = 'Change…' }: {
 /**
  * Only primary and destructive actions sit on the bar; everything else lives
  * behind the ⋯ menu.
+ *
+ * An item can carry a `submenu` instead of an `onClick`, and the menu then
+ * drills into it rather than flying out sideways: "move to day" against a
+ * three-week trip is twenty entries, and inlining them buried the four actions
+ * the menu is actually for. A drill-down also survives a phone, where a flyout
+ * has nowhere to go. The list scrolls, so the last day is always reachable.
  */
-export function OverflowMenu({ items }: { items: { label: string; onClick: () => void; danger?: boolean }[] }) {
+export interface OverflowMenuItem {
+    label: string;
+    onClick?: () => void;
+    danger?: boolean;
+    submenu?: OverflowMenuItem[];
+}
+
+export function OverflowMenu({ items }: { items: OverflowMenuItem[] }) {
     const [open, setOpen] = useState(false);
-    if (!items.length) return null;
+    // Which submenu is showing, by label — null is the top level.
+    const [drilled, setDrilled] = useState<string | null>(null);
+    const trigger = useRef<HTMLButtonElement>(null);
+    /**
+     * Where to draw the panel, in viewport coordinates.
+     *
+     * The panel is portalled to the body and positioned by hand rather than
+     * hung off the button with `absolute`: every one of these buttons sits
+     * inside a rounded card, and a card clips. A menu of eighteen days scrolled
+     * perfectly well and still showed one and a half of them, because the card
+     * cut it off two lines down. Nothing can clip a child of the body.
+     */
+    const [box, setBox] = useState<{ top: number; right: number; maxHeight: number } | null>(null);
+
+    const place = useCallback(() => {
+        const rect = trigger.current?.getBoundingClientRect();
+        if (!rect) return;
+        const below = window.innerHeight - rect.bottom - 16;
+        const above = rect.top - 16;
+        // Under the button when there is room for a usable menu; over it when
+        // the row is near the bottom of the window and there is more room up there.
+        const flip = below < 220 && above > below;
+        setBox({
+            top: flip ? Math.max(8, rect.top - Math.min(above, 420)) : rect.bottom + 4,
+            right: Math.max(8, window.innerWidth - rect.right),
+            maxHeight: Math.min(flip ? above : below, 420),
+        });
+    }, []);
+
+    // Follow the button while the page moves under it — the itinerary scrolls,
+    // and a menu left behind at the old coordinates is worse than one that closes.
+    // The first measurement happens on the click that opens it, not here: an
+    // effect that sets state as it runs costs a second render of the whole menu.
+    useEffect(() => {
+        if (!open) return;
+        window.addEventListener('scroll', place, true);
+        window.addEventListener('resize', place);
+        return () => {
+            window.removeEventListener('scroll', place, true);
+            window.removeEventListener('resize', place);
+        };
+    }, [open, place]);
+
+    // An item with an empty submenu is not an action; a one-day trip has nowhere
+    // to move a stop to, and an entry that opens an empty list is a dead end.
+    const visible = items.filter((item) => !item.submenu || item.submenu.length > 0);
+    if (!visible.length) return null;
+
+    const close = () => { setOpen(false); setDrilled(null); };
+    const current = drilled ? visible.find((item) => item.label === drilled) : null;
+    const shown = current?.submenu ?? visible;
+
+    const panel = box && (
+        <>
+            <div className="fixed inset-0 z-[900]" onClick={close} />
+            <div
+                className="fixed z-[901] bg-white rounded-2xl shadow-lg border border-gray-100
+                    py-1 min-w-[10rem] max-w-[18rem] flex flex-col"
+                style={{ top: box.top, right: box.right, maxHeight: box.maxHeight }}
+            >
+                {current && (
+                    <button
+                        onClick={() => setDrilled(null)}
+                        className="flex w-full shrink-0 items-center gap-1 px-3 py-2 text-xs font-semibold
+                            text-gray-500 hover:text-gray-800 border-b border-gray-100"
+                    >
+                        <span aria-hidden>‹</span>
+                        <span className="truncate">{current.label}</span>
+                    </button>
+                )}
+                {/* Scrolls rather than running off the screen — the reason a long
+                    day list was unusable before. */}
+                <div className="min-h-0 overflow-y-auto overscroll-contain py-1">
+                    {shown.map((item) => (
+                        <button
+                            key={item.label}
+                            onClick={() => {
+                                if (item.submenu) { setDrilled(item.label); return; }
+                                close();
+                                item.onClick?.();
+                            }}
+                            className={`flex w-full items-center justify-between gap-2 text-left
+                                px-4 py-2 text-sm hover:bg-gray-50
+                                ${item.danger ? 'text-rose-600' : 'text-gray-700'}`}
+                        >
+                            <span className="truncate">{item.label}</span>
+                            {item.submenu && <span className="text-gray-300 shrink-0" aria-hidden>›</span>}
+                        </button>
+                    ))}
+                </div>
+            </div>
+        </>
+    );
+
     return (
         <div className="relative">
             <button
-                onClick={() => setOpen((v) => !v)}
+                ref={trigger}
+                onClick={() => {
+                    if (!open) place();
+                    setOpen((v) => !v);
+                    setDrilled(null);
+                }}
                 className="text-gray-400 hover:text-gray-700 px-2 py-1 rounded-full hover:bg-gray-50"
                 aria-label="More actions"
             >
                 ⋯
             </button>
-            {open && (
-                <>
-                    <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-                    <div className="absolute right-0 top-full mt-1 z-20 bg-white rounded-2xl shadow-lg
-                        border border-gray-100 py-1 min-w-[10rem]">
-                        {items.map((item) => (
-                            <button
-                                key={item.label}
-                                onClick={() => { setOpen(false); item.onClick(); }}
-                                className={`block w-full text-left px-4 py-2 text-sm hover:bg-gray-50
-                                    ${item.danger ? 'text-rose-600' : 'text-gray-700'}`}
-                            >
-                                {item.label}
-                            </button>
-                        ))}
-                    </div>
-                </>
-            )}
+            {open && typeof document !== 'undefined' && panel && createPortal(panel, document.body)}
         </div>
     );
 }
