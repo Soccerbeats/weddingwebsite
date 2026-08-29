@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { TRAVEL_MODES, type TravelLeg, type TravelMode } from '@/lib/honeymoon';
-import { placementFor, type JourneyGroup } from '@/lib/honeymoonJourneys';
+import { TRAVEL_MODES, daysBetween, type TravelLeg, type TravelMode } from '@/lib/honeymoon';
+import { dayForDate, placementFor, type JourneyGroup } from '@/lib/honeymoonJourneys';
 import { nominalZone } from '@/lib/honeymoonSun';
 import { formatDuration, legRealMinutes } from '@/lib/honeymoonTimeline';
 import LegEnd from './LegEnd';
@@ -38,6 +38,7 @@ export default function LegFields({ api, leg, group }: {
 }) {
     const trip = api.data?.trip;
     const days = api.data?.days ?? [];
+    const lastDay = days.length ? Math.max(...days.map((day) => day.day_number)) : 0;
     const [lookupState, setLookupState] = useState<'idle' | 'busy' | 'unconfigured'>('idle');
     const [lookupNote, setLookupNote] = useState('');
 
@@ -46,22 +47,52 @@ export default function LegFields({ api, leg, group }: {
      *
      * The whole point of the rework: `day_id` and `arrive_day_offset` are
      * derived. They are written in the same request as the dates, so the leg is
-     * never briefly filed in the wrong place.
+     * never briefly filed in the wrong place. Every read re-derives them from
+     * the dates as well (`refileLegsByDate`), so this write is the fast path
+     * rather than the only thing standing between a date and the right day.
      */
     const save = async (fields: Record<string, unknown>) => {
         const patch: Record<string, unknown> = { id: leg.id, ...fields };
         const touchesDates = 'depart_date' in fields || 'arrive_date' in fields;
+        let extendTo = 0;
         if (touchesDates && trip) {
             const depart = (fields.depart_date as string | undefined) ?? leg.depart_date;
             const arrive = (fields.arrive_date as string | undefined) ?? leg.arrive_date;
             const placement = placementFor(
                 { depart_date: depart ?? null, arrive_date: arrive ?? null }, days, trip,
             );
-            // No placement means the date has no day; the journey card says so
-            // and offers the two ways out rather than guessing here.
             if (placement) Object.assign(patch, placement);
+            else if (depart) {
+                /*
+                 * The date has no day row. When the trip's own dates already
+                 * run that far, the day simply was never created — the range
+                 * was set without filling it in — and the honest thing is to
+                 * create it, not to leave the leg on whichever day it happened
+                 * to be on and mention it in a warning on another tab. That is
+                 * how a flight home on the last day of the trip came to sit on
+                 * the day before it.
+                 *
+                 * A date past the end of the trip is a different matter: it may
+                 * well be a typo, so it keeps the journey card's warning and its
+                 * "add days up to N" button rather than silently growing the
+                 * trip by a year.
+                 */
+                const target = dayForDate(days, trip.start_date, depart).dayNumber;
+                const covered = trip.end_date
+                    ? (daysBetween(trip.start_date, trip.end_date) ?? 0) + 1
+                    : 0;
+                if (target != null && target > lastDay && target <= covered) extendTo = target;
+            }
         }
         await api.update('travel', patch);
+        if (extendTo > lastDay) {
+            const rows = [];
+            for (let n = lastDay + 1; n <= extendTo; n += 1) rows.push({ day_number: n });
+            await api.createMany('days', rows);
+            // No placement write needed: the day now exists, and the next read
+            // files the leg onto it from its date.
+            await api.refresh();
+        }
     };
 
     const realMinutes = legRealMinutes(leg, leg.depart_date);

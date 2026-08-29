@@ -1,11 +1,12 @@
 'use client';
 
 import {
-    TRAVEL_MODES, formatDayDate, formatTime, legArrivalDay, legEnds, legIsOvernight,
+    TRAVEL_MODES, formatDate, formatDayDate, formatTime, legArrivalDay, legEnds, legIsOvernight,
     travelModeMeta,
     type Day, type TravelLeg, type TravelMode,
 } from '@/lib/honeymoon';
 import { journeysOf } from '@/lib/honeymoonJourneys';
+import { addDaysIso } from '@/lib/honeymoonTimeline';
 import LegFields from './LegFields';
 import type { HoneymoonApi } from './useHoneymoon';
 import { OverflowMenu, SelectField } from './ui';
@@ -32,6 +33,17 @@ export default function TravelLegCard({ leg, day, api }: {
     const startDate = api.data?.trip.start_date ?? null;
     const realDate = formatDayDate(startDate, day.day_number);
     const meta = travelModeMeta(leg.mode);
+
+    /*
+     * The date this leg is drawn under, when it is not the leg's own date.
+     *
+     * Null in every ordinary case: the payload files a dated leg onto the day
+     * whose date matches, so the two agree by construction.
+     */
+    const misdated = leg.depart_date && startDate
+        && leg.depart_date !== addDaysIso(startDate, day.day_number - 1)
+        ? formatDate(leg.depart_date)
+        : null;
 
     /* The journey this leg belongs to, so the card can say so. */
     const group = api.data
@@ -105,6 +117,20 @@ export default function TravelLegCard({ leg, day, api }: {
                     },
                 ]} />
             </div>
+
+            {/* A dated leg is filed on the day its date names, on every read — so
+                the only way it can be drawn on a day with a different date is
+                that the trip has no day for its date at all (the range was
+                shortened, or days were deleted under it). Saying so here is the
+                difference between a wrong date you can see and one you cannot:
+                without it the card reads as though the flight leaves today. */}
+            {misdated && (
+                <p className="mt-2 rounded-xl bg-rose-50 border border-rose-200 px-2.5 py-1.5
+                    text-[11px] text-rose-800">
+                    This leaves on {misdated}, and the trip has no day for that date — so it is
+                    parked here. Set the date on the Travel tab, or add the days it needs.
+                </p>
+            )}
 
             {legIsOvernight(leg) && (
                 <p className="mt-2 rounded-xl bg-slate-100 px-2.5 py-1.5 text-[11px] text-slate-700">

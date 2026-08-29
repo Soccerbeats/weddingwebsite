@@ -11,6 +11,17 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.66 — [Released] A travel leg is drawn on the date it carries (`main`, 2026-08-29 21:20)
+
+A flight could appear on the wrong day of the itinerary, and stay there. `day_id` was derived from the leg's dates *once* — at the moment a date was typed — but the date a day **has** changes underneath a leg afterwards: moving the trip's start date re-dates every day, deleting one renumbers the rest. Nothing went back and re-derived the placement, so a leg would sit on a day that was not its date. The Travel tab spotted the disagreement and reported it as a warning to be fixed by hand, which is a strange thing to ask of a person about arithmetic — and the itinerary, where you actually read the day, said nothing at all.
+
+### Fixed
+- **A leg's day is now derived from its date on every read**, in the single query the whole portal is built from, so the itinerary, the map, the calendar feed, the print sheet and the share link all place it identically. The stored column is a cache; the date is the authority. Nothing but changing the date on the Travel tab can move a leg, because every read puts it back where the date says.
+- **The arrival offset is re-derived from the same pair of dates**, so the `+2d` badge cannot disagree with them either.
+- **Setting a date the trip covers but has no day row for now creates that day.** A trip whose range says fifteen days but which only ever had fourteen day rows had nowhere to draw the fifteenth — so a flight home on the last day sat on the day before it, silently. A date *past* the end of the trip is left alone: that is as likely to be a typo, and it keeps the journey card's warning and its one-click "add days up to N".
+- **A leg that genuinely has nowhere to go now says so on the itinerary**, in red, on the leg itself: the trip has no day for its date, so it is parked where it is. Reachable only by shortening a trip out from under a dated leg — and the difference between a wrong date you can see and one you cannot.
+- The journey card's "add days up to N" button no longer tries to write the placement itself from a day list it read back in the same tick it refreshed — which was still the old list, so the write it computed was usually nothing. Creating the day is now the whole job; the next read files the leg onto it.
+
 ## v0.9.65 — [Released] Move a stop to a day you can actually see (`main`, 2026-08-29 20:48)
 
 A stop's ⋯ menu listed every day of the trip twice — once to move to, once to copy to. Eighteen days made a menu of thirty-eight entries, with the four actions worth reading buried at either end. Worse, it did not matter that the list scrolled: the menu hung off the button inside the day card, and the card clipped it, so a fortnight of days showed one and a half of them with no way to reach the rest.

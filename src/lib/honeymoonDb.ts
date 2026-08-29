@@ -7,6 +7,7 @@
  */
 import pool from './db';
 import { CATEGORIES } from './honeymoon';
+import { refileLegsByDate } from './honeymoonJourneys';
 import type {
     Booking, BookingKind, CategoryRow, CostPer, CurrencyRate, Day, DocumentKind, GuideNote,
     HoneymoonPayload, Journey, LatLng, Place, PlaceComment, Region, SavedView, ShareLink,
@@ -696,6 +697,18 @@ export async function getHoneymoonPayload(): Promise<HoneymoonPayload> {
         amenities: jsonArray<string>(r.amenities),
     }));
 
+    // The day rows on their own, needed before the stops and legs can be filed
+    // onto them — a leg's day is worked out from its date and these numbers.
+    const dayRows: Day[] = dayRes.rows.map((r) => ({
+        id: r.id,
+        day_number: r.day_number,
+        title: r.title ?? null,
+        base_place_id: r.base_place_id ?? null,
+        notes: r.notes ?? null,
+        stops: [],
+        travel: [],
+    }));
+
     const stopsByDay = new Map<number, Stop[]>();
     for (const r of stopRes.rows) {
         const stop: Stop = {
@@ -717,7 +730,7 @@ export async function getHoneymoonPayload(): Promise<HoneymoonPayload> {
         if (list) list.push(stop); else stopsByDay.set(stop.day_id, [stop]);
     }
 
-    const travelByDay = new Map<number, TravelLeg[]>();
+    const legs: TravelLeg[] = [];
     for (const r of travelRes.rows) {
         const leg: TravelLeg = {
             id: r.id,
@@ -748,18 +761,38 @@ export async function getHoneymoonPayload(): Promise<HoneymoonPayload> {
             to_terminal: r.to_terminal ?? null,
             aircraft: r.aircraft ?? null,
         };
+        legs.push(leg);
+    }
+
+    /*
+     * A leg's day comes from its date, on every read.
+     *
+     * It is derived when a date is typed too, but that alone is not enough: the
+     * date a day *has* changes underneath a leg — moving the trip's start date
+     * renumbers every day, deleting one renumbers the rest — and nothing went
+     * back to re-derive the placement. A leg could then be drawn on a day that
+     * was not its date, which is how a flight home on the 3rd came to sit on the
+     * 2nd. Doing it here, in the one read the whole portal is built from, means
+     * the itinerary, the map, the calendar, the print sheet and the share link
+     * all agree, and nothing but the date on the Travel tab can move a leg.
+     */
+    const travelByDay = new Map<number, TravelLeg[]>();
+    for (const leg of refileLegsByDate(legs, dayRows, trip)) {
         const list = travelByDay.get(leg.day_id);
         if (list) list.push(leg); else travelByDay.set(leg.day_id, [leg]);
     }
+    // Re-filing can land a leg among a day's existing ones, so the order a day
+    // reads in is restored here rather than left to the order rows arrived in.
+    for (const list of travelByDay.values()) {
+        list.sort((a, b) => (a.sort_order - b.sort_order)
+            || (a.depart_time ?? '~').localeCompare(b.depart_time ?? '~')
+            || (a.id - b.id));
+    }
 
-    const days: Day[] = dayRes.rows.map((r) => ({
-        id: r.id,
-        day_number: r.day_number,
-        title: r.title ?? null,
-        base_place_id: r.base_place_id ?? null,
-        notes: r.notes ?? null,
-        stops: stopsByDay.get(r.id) ?? [],
-        travel: travelByDay.get(r.id) ?? [],
+    const days: Day[] = dayRows.map((day) => ({
+        ...day,
+        stops: stopsByDay.get(day.id) ?? [],
+        travel: travelByDay.get(day.id) ?? [],
     }));
 
     const notes: GuideNote[] = noteRes.rows.map((r) => ({

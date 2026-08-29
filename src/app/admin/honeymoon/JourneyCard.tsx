@@ -6,7 +6,7 @@ import {
     type TravelLeg, type TravelMode,
 } from '@/lib/honeymoon';
 import {
-    dayForDate, formatMinutes, journeyTitle, placementFor, sameInstantIn,
+    dayForDate, formatMinutes, journeyTitle, sameInstantIn,
     type JourneyGroup,
 } from '@/lib/honeymoonJourneys';
 import BookingPanel from './BookingPanel';
@@ -313,13 +313,12 @@ function FixDay({ api, group, legId }: {
         const rows = [];
         for (let n = lastDay + 1; n <= target.dayNumber; n += 1) rows.push({ day_number: n });
         await api.createMany('days', rows);
+        // Creating the day is the whole job: every read files a leg onto the day
+        // its date names, so the leg lands there as soon as the day exists. This
+        // used to write the placement itself, from a `days` list read back out
+        // of the hook in the same tick it was refreshed — which was still the
+        // old one, so the write it computed was usually nothing at all.
         await api.refresh();
-        // The day now exists, so the leg can be placed properly.
-        const placement = placementFor(
-            { depart_date: leg.depart_date, arrive_date: leg.arrive_date },
-            api.data?.days ?? [], trip,
-        );
-        if (placement) await api.update('travel', { id: leg.id, ...placement });
     };
 
     return (

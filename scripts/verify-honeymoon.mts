@@ -33,7 +33,7 @@ import {
 import { parseFlight } from '../src/lib/honeymoonFetch';
 import {
     dayForDate, formatMinutes, journeyDays, journeyTitle, journeysOf, legArriveDate,
-    legDepartDate, parseFlightPaste, placementFor, sameInstantIn,
+    legDepartDate, parseFlightPaste, placementFor, refileLegsByDate, sameInstantIn,
 } from '../src/lib/honeymoonJourneys';
 import {
     addDaysIso, buildTimeline, estimateHop, formatDuration, instantOf, isWalkable,
@@ -2033,6 +2033,49 @@ console.log('\nJourneys');
             ?.arrive_day_offset === 0);
     check('a date with no day cannot be placed, rather than being guessed at',
         placementFor({ depart_date: '2026-09-30', arrive_date: '2026-09-30' }, days, trip) === null);
+
+    /*
+     * Re-filing on read: the date is the only thing that decides a leg's day.
+     *
+     * These are the states that used to be reachable and stick — a leg filed on
+     * one day carrying a date belonging to another, because the day it was
+     * placed on was renumbered or re-dated after the placement was worked out.
+     */
+    {
+        const stray = { ...LEG_DEFAULTS, id: 1, day_id: 10, depart_date: '2026-09-14',
+            arrive_date: '2026-09-14' };
+        const refiled = refileLegsByDate([stray], days, trip);
+        check('a leg filed on the wrong day is put on the day its date names',
+            refiled[0].day_id === 30);
+        check('and the leg is a new object, not the stored row mutated',
+            stray.day_id === 10);
+
+        const overnight = { ...LEG_DEFAULTS, id: 2, day_id: 10, depart_date: '2026-09-13',
+            arrive_date: '2026-09-15', arrive_day_offset: 0 };
+        const span = refileLegsByDate([overnight], days, trip)[0];
+        check('the arrival offset is re-derived from the dates too',
+            span.day_id === 20 && span.arrive_day_offset === 2);
+
+        const undated = { ...LEG_DEFAULTS, id: 3, day_id: 40 };
+        check('a leg with no date keeps the day it was filed on',
+            refileLegsByDate([undated], days, trip)[0].day_id === 40);
+
+        const beyond = { ...LEG_DEFAULTS, id: 4, day_id: 40, depart_date: '2026-09-30' };
+        check('a date the trip has no day for leaves the leg where it is',
+            refileLegsByDate([beyond], days, trip)[0].day_id === 40);
+
+        const before = { ...LEG_DEFAULTS, id: 5, day_id: 10, depart_date: '2026-09-01' };
+        check('and so does a date before the trip starts',
+            refileLegsByDate([before], days, trip)[0].day_id === 10);
+
+        const right = { ...LEG_DEFAULTS, id: 6, day_id: 20, depart_date: '2026-09-13',
+            arrive_date: '2026-09-13' };
+        check('a leg already on the right day is returned untouched',
+            refileLegsByDate([right], days, trip)[0] === right);
+
+        check('with no start date nothing is re-filed — there are no dates to file by',
+            refileLegsByDate([stray], days, { start_date: null })[0].day_id === 10);
+    }
 
     /*
      * One ticket, three legs, across the date line: SAN 19:00 → SEA, SEA 23:59 →

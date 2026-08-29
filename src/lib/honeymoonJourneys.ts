@@ -132,6 +132,49 @@ export function placementFor(
     return { day_id: day.id, arrive_day_offset: span };
 }
 
+/**
+ * Re-file every dated leg onto the day its own date names.
+ *
+ * `placementFor` derives the day at the moment a date is typed, which is only
+ * half the job: the mapping from date to day changes afterwards without the leg
+ * ever being touched. Move the trip's start date and every day takes a new date;
+ * delete or reorder a day and the rest renumber. Nothing re-derived the
+ * placement, so a leg could sit on a day whose date was not its date — the
+ * Travel tab noticed and said so in a warning, and left it to be corrected by
+ * hand, which is a strange thing to ask of a person about arithmetic.
+ *
+ * Deriving it on every read instead makes the stored `day_id` a cache and the
+ * date the only authority: a leg cannot be moved to another day by anything
+ * except changing its date, because every read puts it back.
+ *
+ * A leg with no departure date keeps the day it is filed on — with no date, the
+ * day it sits on *is* its date (see `legDepartDate`), and that is how a leg is
+ * placed by the itinerary's own "add travel leg".
+ *
+ * A date the trip has no day for (past the last day row, or before day one) also
+ * leaves the leg where it is: there is nowhere truthful to put it, and the
+ * journey card says so and offers to add the days.
+ */
+export function refileLegsByDate(
+    legs: TravelLeg[],
+    days: Day[],
+    trip: Pick<Trip, 'start_date'>,
+): TravelLeg[] {
+    if (!trip.start_date) return legs;
+    return legs.map((leg) => {
+        if (!leg.depart_date) return leg;
+        const { day } = dayForDate(days, trip.start_date, leg.depart_date);
+        if (!day) return leg;
+        // The span is derived from the same pair of dates, so the "+2d" badge
+        // cannot disagree with them either.
+        const span = leg.arrive_date
+            ? Math.max(0, daysBetween(leg.depart_date, leg.arrive_date) ?? 0)
+            : leg.arrive_day_offset;
+        if (leg.day_id === day.id && leg.arrive_day_offset === span) return leg;
+        return { ...leg, day_id: day.id, arrive_day_offset: span };
+    });
+}
+
 /** Minutes between two instants at their own ends of the world. */
 function minutesBetween(
     fromDate: string | null, fromTime: string | null, fromZone: string | null,
