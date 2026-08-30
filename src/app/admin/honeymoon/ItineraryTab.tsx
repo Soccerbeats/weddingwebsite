@@ -11,7 +11,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import {
     SPREAD_WARNING_KM, arrivalsOn, calendarMonths, dayHops, daysBeyondRange,
-    dateForDay, isoOf,
+    dateForDay, daysBetween, isoOf, stayBookedOn,
     formatDate, formatDayDate, formatDistance, formatTime, hasCoords, legIsOvernight,
     travelModeMeta,
     type CalendarCell, type Day, type Place, type Stop, type TravelLeg,
@@ -28,6 +28,7 @@ import Markdown from './Markdown';
 import { useTripIntel } from './useTripIntel';
 import type { TripIntel } from './useTripIntel';
 import type { HoneymoonApi } from './useHoneymoon';
+import PlaceDrawer from './PlaceDrawer';
 import PlaceEditor from './PlaceEditor';
 import PrintSheet, { DEFAULT_PRINT_OPTIONS, type PrintOptions } from './PrintSheet';
 import TravelLegCard from './TravelLeg';
@@ -95,6 +96,12 @@ export default function ItineraryTab({ api, panel = false, onFocusDay, revealDay
      * component is the left-hand column.
      */
     const [editingPlace, setEditingPlace] = useState<Place | null>(null);
+    /**
+     * A place opened to be read rather than edited — the night's stay, from the
+     * day card. The same panel the Places tab opens, so "everything about this
+     * hotel" is one thing that exists once, booking and all.
+     */
+    const [viewingPlace, setViewingPlace] = useState<Place | null>(null);
 
     /*
      * Scrolling to the day a clicked pin belongs to.
@@ -407,6 +414,7 @@ export default function ItineraryTab({ api, panel = false, onFocusDay, revealDay
                     api={api}
                     days={days}
                     onEditPlace={setEditingPlace}
+                    onViewPlace={setViewingPlace}
                     onFocusDay={onFocusDay}
                     beyond={beyond}
                     intel={intel}
@@ -428,6 +436,7 @@ export default function ItineraryTab({ api, panel = false, onFocusDay, revealDay
                                     intel={intel}
                                     compact={panel}
                                     onEditPlace={setEditingPlace}
+                                    onViewPlace={setViewingPlace}
                                     onFocusDay={onFocusDay}
                                     beyondRange={beyond.has(day.day_number)}
                                     flash={flashDay === day.id}
@@ -452,6 +461,17 @@ export default function ItineraryTab({ api, panel = false, onFocusDay, revealDay
                 place={editingPlace}
                 open={editingPlace != null}
                 onClose={() => setEditingPlace(null)}
+            />
+
+            {/* Read first, edit if you then want to — the same pair the Places
+                tab offers, so a stay opened from a day is the same panel as a
+                stay opened from the list. Re-read from the store each render so
+                an edit made in the drawer shows without reopening it. */}
+            <PlaceDrawer
+                api={api}
+                place={viewingPlace ? api.placeById.get(viewingPlace.id) ?? viewingPlace : null}
+                onClose={() => setViewingPlace(null)}
+                onEdit={(place) => { setViewingPlace(null); setEditingPlace(place); }}
             />
         </div>
     );
@@ -496,10 +516,11 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
  * the list view uses, so there is one place a day is edited and no second
  * implementation to keep in step.
  */
-function CalendarView({ api, days, onEditPlace, onFocusDay, beyond, intel }: {
+function CalendarView({ api, days, onEditPlace, onViewPlace, onFocusDay, beyond, intel }: {
     api: HoneymoonApi;
     days: Day[];
     onEditPlace: (place: Place) => void;
+    onViewPlace: (place: Place) => void;
     onFocusDay?: (day: Day) => void;
     /** Day numbers past the end of the trip's dates. */
     beyond: Set<number>;
@@ -589,6 +610,7 @@ function CalendarView({ api, days, onEditPlace, onFocusDay, beyond, intel }: {
                                 api={api}
                                 intel={intel}
                                 onEditPlace={onEditPlace}
+                                onViewPlace={onViewPlace}
                                 onFocusDay={onFocusDay}
                                 beyondRange={beyond.has(openDay.day_number)}
                                 arrivals={arrivalsOn(days, openDay.day_number)}
@@ -684,12 +706,14 @@ function CalendarCellBox({ cell, day, api, beyondRange, arrivals, onOpen }: {
 
 function DayCard({
     day, api, intel, onEditPlace, onFocusDay, beyondRange = false, arrivals = [],
-    compact = false, flash = false,
+    compact = false, flash = false, onViewPlace,
 }: {
     day: Day;
     api: HoneymoonApi;
     intel: TripIntel;
     onEditPlace: (place: Place) => void;
+    /** Open the full read-out of a place — used by the night's stay. */
+    onViewPlace: (place: Place) => void;
     /** Rendered in the map's split view, in a column rather than a page. */
     compact?: boolean;
     onFocusDay?: (day: Day) => void;
@@ -716,8 +740,24 @@ function DayCard({
 
     const startDate = api.data?.trip.start_date ?? null;
     const realDate = formatDayDate(startDate, day.day_number);
-    /** The stay this day is based at, if one is set — editable like any stop. */
+    /** Where this night is spent — the stay whose booking covers this date. */
     const base = day.base_place_id == null ? null : api.placeById.get(day.base_place_id) ?? null;
+    /**
+     * "Night 2 of 3", from the booking the base came from.
+     *
+     * The name alone does not say whether you arrived today or leave tomorrow,
+     * which is most of what you want from a day card the night before.
+     */
+    const stayNights = useMemo(() => {
+        const date = dateForDay(startDate, day.day_number);
+        const iso = date ? date.toISOString().slice(0, 10) : null;
+        const booking = stayBookedOn(iso, api.data?.bookings ?? []);
+        if (!booking?.check_in || !booking.check_out || !iso) return null;
+        const total = daysBetween(booking.check_in, booking.check_out);
+        const night = daysBetween(booking.check_in, iso);
+        if (total == null || night == null || total < 1) return null;
+        return `night ${night + 1} of ${total}`;
+    }, [startDate, day.day_number, api.data?.bookings]);
     /**
      * Whether there is anything on this day the map could actually fly to.
      *
@@ -1124,39 +1164,38 @@ function DayCard({
                 </p>
             ))}
 
-            {/* ---- Base ---- */}
-            <div className="mt-2 flex items-center gap-2">
+            {/* ---- Where you sleep ----
+                Read-only, and deliberately: the night is the booking's to state,
+                and it used to be a dropdown that could disagree with it. Where
+                you sleep is changed by booking somewhere — on the Stays tab —
+                and the itinerary reports it. Clicking it opens everything the
+                trip knows about the place, the confirmation included. */}
+            <div className="mt-2 flex items-center gap-2 min-w-0">
                 <span className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold shrink-0">
-                    Base
+                    Sleep
                 </span>
-                <SelectField
-                    className="max-w-xs"
-                    value={day.base_place_id != null ? String(day.base_place_id) : ''}
-                    onChange={(e) => api.update('days', {
-                        id: day.id,
-                        base_place_id: e.target.value === '' ? null : Number(e.target.value),
-                    })}
-                >
-                    <option value="">— not set —</option>
-                    {(api.data?.places ?? [])
-                        // A removed stay is no longer a candidate to sleep in —
-                        // unless it is already this day's base, which must stay
-                        // listed or the day would silently lose it.
-                        .filter((p) => (p.category === 'stay' && !p.archived)
-                            || p.id === day.base_place_id)
-                        .map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </SelectField>
-                {/* The base is a place too — the same one you booked and will want
-                    to add a confirmation number to. */}
-                {base && (
+                {base ? (
                     <button
-                        onClick={() => onEditPlace(base)}
-                        title={`Edit ${base.name}`}
-                        aria-label={`Edit ${base.name}`}
-                        className="shrink-0 text-gray-300 hover:text-accent px-1 leading-none"
+                        onClick={() => onViewPlace(base)}
+                        title={`${base.name} — open the booking and everything else about it`}
+                        className="min-w-0 flex items-baseline gap-1.5 text-left rounded-xl px-1.5 py-0.5
+                            hover:bg-gray-50 group/base"
                     >
-                        ✎
+                        <span className="truncate text-sm text-gray-800
+                            group-hover/base:text-accent group-hover/base:underline
+                            decoration-dotted underline-offset-2">
+                            {base.name}
+                        </span>
+                        {stayNights && (
+                            <span className="shrink-0 text-[11px] text-gray-400 tabular-nums">
+                                {stayNights}
+                            </span>
+                        )}
                     </button>
+                ) : (
+                    <span className="text-xs text-gray-400">
+                        No stay booked for this night — add the dates on Stays.
+                    </span>
                 )}
             </div>
 

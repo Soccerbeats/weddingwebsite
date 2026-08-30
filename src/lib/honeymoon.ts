@@ -1305,6 +1305,53 @@ export function addDays(date: string, days: number): string {
 }
 
 /**
+ * The stay you sleep at on a date, according to the bookings.
+ *
+ * A booking covers the nights from check-in up to but **not** including
+ * check-out: on the morning of the 27th you leave, and that night belongs to
+ * wherever you go next. Getting this wrong shows up as two stays claiming the
+ * same night, every changeover day.
+ */
+export function stayBookedOn(date: string | null, bookings: Booking[]): Booking | null {
+    if (!date) return null;
+    return bookings.find((booking) => booking.kind === 'stay'
+        && booking.place_id != null
+        && booking.check_in != null
+        && booking.check_out != null
+        && booking.check_in <= date
+        && date < booking.check_out) ?? null;
+}
+
+/**
+ * Where each day is based, worked out from the stay bookings.
+ *
+ * A day's base used to be a dropdown on the itinerary, which made it a second
+ * place to say something the booking already said — and the two drifted, which
+ * is how a night could be filed against a villa that had never been booked
+ * while the villa that *was* booked showed nowhere. The booking is the fact;
+ * this turns it into the day's base.
+ *
+ * Untouched when there is nothing to derive from — a trip with no dates cannot
+ * place a booking on a day at all, and a trip with no dated stay booking has
+ * nothing to say yet. In both cases whatever is stored stays, so a plan made
+ * before this existed is not stripped of its bases by an upgrade.
+ */
+export function basesFromBookings(
+    days: Day[], bookings: Booking[], startDate: string | null,
+): Day[] {
+    const dated = bookings.filter((booking) => booking.kind === 'stay'
+        && booking.place_id != null && booking.check_in && booking.check_out);
+    if (!startDate || !dated.length) return days;
+    return days.map((day) => {
+        const date = dateForDay(startDate, day.day_number);
+        const iso = date ? date.toISOString().slice(0, 10) : null;
+        const base = stayBookedOn(iso, dated)?.place_id ?? null;
+        return day.base_place_id === base ? day : { ...day, base_place_id: base };
+    });
+}
+
+
+/**
  * Every month the trip touches, as full Sunday-first week grids.
  *
  * Thin wrapper over `monthMatrix` that numbers the trip's own days.

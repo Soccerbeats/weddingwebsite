@@ -6,7 +6,7 @@
  * with no separate migration step.
  */
 import pool from './db';
-import { CATEGORIES } from './honeymoon';
+import { CATEGORIES, basesFromBookings } from './honeymoon';
 import { refileLegsByDate } from './honeymoonJourneys';
 import type {
     Booking, BookingKind, CategoryRow, CostPer, CurrencyRate, Day, DocumentKind, GuideNote,
@@ -926,7 +926,19 @@ export async function getHoneymoonPayload(): Promise<HoneymoonPayload> {
     }));
 
     return {
-        trip, journeys, categories, regions, places, days, notes, todos,
+        trip, journeys, categories, regions, places, notes, todos,
+        /*
+         * Where each night is spent comes from the stay bookings, not from a
+         * field on the day.
+         *
+         * Same reasoning as a travel leg's day (`refileLegsByDate` above it):
+         * the fact lives in one place — the booking, with its check-in and
+         * check-out — and everything that draws the trip reads it derived, so a
+         * day cannot claim a villa that was never booked for that night. Done
+         * here, the Today view, the conflicts, the calendar, the print sheet and
+         * the budget's night counts all agree without each doing its own sums.
+         */
+        days: basesFromBookings(days, bookings, trip.start_date),
         bookings, documents, comments, views, rates, shares, price_checks, archives,
     };
 }

@@ -16,7 +16,7 @@ import {
     pointInPolygon, placesInPolygon, nameFromStayUrl, stayUrlsFromText, isStayUrl, cleanListingTitle, formatPerNight,
     formatPrice, nameFromAnyUrl, priceValue, effectiveCountry, countriesInUse, calendarMonths,
     monthMatrix, planRange, daysBeyondRange, tripLength, daysBetween, addDays, isoOf, buildIcs,
-    tripEvents, searchHoneymoon, reviewToggleFor,
+    tripEvents, searchHoneymoon, reviewToggleFor, basesFromBookings, stayBookedOn,
     type Day, type GuideNote, type Region, type TodoItem,
     type Place, type Stop, type TravelLeg,
 } from '../src/lib/honeymoon';
@@ -1334,6 +1334,61 @@ console.log('\nBudget');
 
     check('money reads as money', formatMoney(1260, 'USD') === '$1,260');
     check('and an unknown code still prints', formatMoney(1260, 'XXZ').includes('1,260'));
+}
+
+console.log('\nWhere each night is spent');
+{
+    /*
+     * The base is the booking's to say. These are the cases that used to be
+     * possible while it was a dropdown of its own: a night filed against a place
+     * nobody booked, and a changeover day claimed by both stays at once.
+     */
+    const bed = (id: number, placeId: number, checkIn: string | null, checkOut: string | null) => ({
+        id, place_id: placeId, travel_id: null, stop_id: null, journey_id: null,
+        kind: 'stay' as const, provider: null, confirmation: null, url: null, contact: null,
+        check_in: checkIn, check_out: checkOut, check_in_time: null, check_out_time: null,
+        cost: null, cost_currency: null, cost_paid: null, deposit_due_on: null, cancel_by: null,
+        party_size: null, dress_code: null, paid: false, documents: [], notes: null,
+        created_at: null,
+    });
+    const days: Day[] = [1, 2, 3, 4, 5].map((n) => ({
+        id: n * 10, day_number: n, title: null, notes: null,
+        base_place_id: n === 3 ? 99 : null, stops: [], travel: [],
+    }));
+    const start = '2026-09-12';
+    // Villa 7 for the 12th and 13th, hotel 8 for the 14th. Nothing after that.
+    const bookings = [bed(1, 7, '2026-09-12', '2026-09-14'), bed(2, 8, '2026-09-14', '2026-09-15')];
+    const based = basesFromBookings(days, bookings, start);
+
+    check('the first night comes from the booking that covers it',
+        based[0].base_place_id === 7);
+    check('and so does the second', based[1].base_place_id === 7);
+    check('check-out day belongs to the place you move to, not the one you leave',
+        based[2].base_place_id === 8);
+    check('a day nothing covers has no base, whatever was stored against it',
+        based[3].base_place_id === null && days[2].base_place_id === 99);
+    check('the last night of the last booking is still covered',
+        basesFromBookings(days, [bed(1, 7, '2026-09-12', '2026-09-17')], start)[4]
+            .base_place_id === 7);
+
+    check('a booking with no dates places nobody, so the days come back untouched',
+        basesFromBookings(days, [bed(1, 7, null, null)], start) === days);
+    check('which means a plan made before this existed keeps the bases it had',
+        basesFromBookings(days, [bed(1, 7, null, null)], start)[2].base_place_id === 99);
+    check('and a trip with no dates cannot derive anything, so it keeps its bases',
+        basesFromBookings(days, bookings, null)[2].base_place_id === 99);
+    check('an unchanged day is returned as the same object, not a copy',
+        basesFromBookings(days, bookings, start)[3] === days[3]);
+
+    check('the stay on a date is the one whose nights include it',
+        stayBookedOn('2026-09-13', bookings)?.place_id === 7);
+    check('a date before every booking has no stay',
+        stayBookedOn('2026-09-11', bookings) === null);
+    check('and so does a date after the last check-out',
+        stayBookedOn('2026-09-16', bookings) === null);
+    check('an excursion booking is never somewhere to sleep',
+        stayBookedOn('2026-09-13', [{ ...bed(3, 7, '2026-09-12', '2026-09-14'),
+            kind: 'excursion' as const }]) === null);
 }
 
 console.log('\nWhat still needs doing');

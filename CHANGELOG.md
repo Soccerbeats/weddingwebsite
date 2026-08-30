@@ -11,6 +11,18 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.68 — [Released] The night belongs to the booking (`main`, 2026-08-30 03:25)
+
+A day's base was a dropdown on the itinerary — a second place to state something the stay booking already stated, with nothing keeping the two in agreement. On the live trip they had already come apart: the night of 1 November was filed against a villa that was never booked, while the resort actually booked for that night showed nowhere.
+
+### Changed
+- **Where you sleep is now read from the stay bookings**, on every read of the trip, so it is derived rather than chosen. A booking covers the nights from check-in up to but not including check-out — you leave on the morning of the 27th, and that night belongs to wherever you go next — which means changeover days can no longer be claimed by both stays at once. The Today view, the conflicts, the calendar, the print sheet and the budget's night counts all read the same answer instead of each keeping their own.
+- **The itinerary's Base dropdown is gone**, replaced by what is booked: the stay's name and which night of the stay this is. **Clicking it opens the full panel for that place** — photos, address, directions, links, what you two said, and the booking itself with its confirmation number, dates and payment. The same panel the Places tab opens, so a stay is one thing however you arrive at it.
+- **A night with no booking says so** — "no stay booked for this night — add the dates on Stays" — rather than silently reading as a night you have somewhere to be.
+- **The Stays tab shows the nights each booking covers**, because that is now what puts a stay on the itinerary; the dates are edited there, under *Edit details*, with the rest of the booking.
+- Nothing is stripped from a plan that predates this: a trip with no dates, or with no dated stay booking yet, keeps the bases it has.
+- The demo trip gained its stay bookings, so its nights are derived the same way yours are — and it now demonstrates the booking vault, which it never had.
+
 ## v0.9.67 — [Released] Clicking a pin scrolls the itinerary to its day (`main`, 2026-08-29 23:05)
 
 On the map's split view, selecting a pin told you where a place is and left you to find out *when* it is by reading down a column twenty days long — an answer the map already had.

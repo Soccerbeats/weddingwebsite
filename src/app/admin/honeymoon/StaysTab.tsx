@@ -9,8 +9,8 @@ import {
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
-    RATINGS, STATUSES, byRank, cleanListingTitle, formatPerNight, hasCoords, isStayUrl,
-    nameFromStayUrl, priceValue, stayUrlsFromText,
+    RATINGS, STATUSES, byRank, cleanListingTitle, daysBetween, formatDate, formatPerNight,
+    hasCoords, isStayUrl, nameFromStayUrl, priceValue, stayUrlsFromText,
     type Place, type PlaceStatus,
 } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
@@ -927,6 +927,32 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                                                 )}
                                             </div>
                                         )}
+                                        {/* The nights this stay is booked for.
+                                            They are what puts it on the itinerary
+                                            — the day cards read the booking, not a
+                                            dropdown of their own — so the tab that
+                                            owns stays has to show them. Edit them
+                                            under "Edit details", with the rest of
+                                            the booking. */}
+                                        {(() => {
+                                            const booked = (data?.bookings ?? []).find(
+                                                (row) => row.kind === 'stay'
+                                                    && row.place_id === stay.id
+                                                    && row.check_in && row.check_out,
+                                            );
+                                            if (!booked) return null;
+                                            const nights = daysBetween(
+                                                booked.check_in, booked.check_out,
+                                            );
+                                            return (
+                                                <p className="px-2 text-[11px] text-emerald-700">
+                                                    🛏 {formatDate(booked.check_in)} →{' '}
+                                                    {formatDate(booked.check_out)}
+                                                    {nights != null && nights > 0
+                                                        && ` · ${nights} night${nights === 1 ? '' : 's'}`}
+                                                </p>
+                                            );
+                                        })()}
                                         <InlineText
                                             value={stay.price_note ?? ''}
                                             placeholder="Price per night — type 250"

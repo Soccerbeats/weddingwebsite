@@ -553,12 +553,16 @@ async function seedHoneymoon() {
     }
 
     let stops = 0;
+    /** Which stay each day sleeps at, so the bookings below can be built from it. */
+    const stayByDay = new Map<number, number>();
     for (const [dayNumber, title, notes, stopNames] of DEMO_DAYS) {
         const stay = stopNames.find((name) => name.includes(',') && placeIds.has(name));
+        const stayId = stay ? placeIds.get(stay) ?? null : null;
+        if (stayId != null) stayByDay.set(dayNumber, stayId);
         const day = await pool.query(
             `INSERT INTO honeymoon_days (day_number, title, notes, base_place_id)
              VALUES ($1,$2,$3,$4) RETURNING id`,
-            [dayNumber, title, notes, stay ? placeIds.get(stay) ?? null : null],
+            [dayNumber, title, notes, stayId],
         );
         for (const [index, name] of stopNames.entries()) {
             const placeId = placeIds.get(name);
@@ -572,6 +576,41 @@ async function seedHoneymoon() {
             );
             stops += 1;
         }
+    }
+
+    /*
+     * The stays, as bookings.
+     *
+     * A day's base is derived from these — the booking is where "we are
+     * sleeping here on these nights" is actually said, and the itinerary reads
+     * it rather than being told separately. Consecutive days at the same place
+     * are one booking, checking out on the morning after the last night, which
+     * is what a hotel means by check-out.
+     */
+    const nightsAt: { placeId: number; from: number; to: number }[] = [];
+    for (const [dayNumber, placeId] of [...stayByDay.entries()].sort((a, b) => a[0] - b[0])) {
+        const run = nightsAt[nightsAt.length - 1];
+        if (run && run.placeId === placeId && run.to === dayNumber - 1) run.to = dayNumber;
+        else nightsAt.push({ placeId, from: dayNumber, to: dayNumber });
+    }
+    const dayDate = (dayNumber: number) => {
+        const date = new Date(`${start}T00:00:00Z`);
+        date.setUTCDate(date.getUTCDate() + dayNumber - 1);
+        return date.toISOString().slice(0, 10);
+    };
+    for (const [index, run] of nightsAt.entries()) {
+        const nights = run.to - run.from + 1;
+        await pool.query(
+            `INSERT INTO honeymoon_bookings
+             (place_id, kind, provider, confirmation, check_in, check_out, check_in_time,
+              check_out_time, cost, cost_currency, paid, party_size, notes)
+             VALUES ($1,'stay',$2,$3,$4,$5,'15:00','11:00',$6,'EUR',$7,2,$8)`,
+            [run.placeId, index % 2 === 0 ? 'Booking.com' : 'Direct',
+                `DEMO-${String(1000 + index * 137).slice(0, 4)}`,
+                dayDate(run.from), dayDate(run.to + 1),
+                (nights * 180 + index * 25).toFixed(2), index % 3 !== 0,
+                nights === 1 ? 'One night on the way through.' : null],
+        );
     }
 
     // One flight in and one between the mainland and Madeira.
