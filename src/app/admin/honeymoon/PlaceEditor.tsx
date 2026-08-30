@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import {
-    SOURCE_MANUAL, countriesInUse, sourceLabel, sourcesOf,
+    SOURCE_MANUAL, bookingKindFor, countriesInUse, sourceLabel, sourcesOf,
     type Place, type PlaceLink, type PlaceStatus,
 } from '@/lib/honeymoon';
 import BookingPanel from './BookingPanel';
@@ -69,6 +69,15 @@ export default function PlaceEditor({ api, place, open, onClose }: {
     onClose: () => void;
 }) {
     const editing = place != null;
+    /**
+     * What the cost box is denominated in.
+     *
+     * There is no picker: a place keeps whatever currency it arrived with — an
+     * import can carry euros — and anything new is in the trip's own. Both the
+     * label and the saved row read this one value, so they cannot disagree.
+     */
+    const homeCurrency = api.data?.trip.home_currency || 'USD';
+    const costCurrency = place?.cost_currency || homeCurrency;
 
     const [name, setName] = useState('');
     const [category, setCategory] = useState('misc');
@@ -123,7 +132,16 @@ export default function PlaceEditor({ api, place, open, onClose }: {
             source: place ? sourceLabel(place.source) : SOURCE_MANUAL,
             country: place?.country ?? '',
             cost: place?.cost != null ? String(place.cost) : '',
-            costPer: place?.cost_per ?? 'total',
+            /*
+             * With no number yet, "per" says nothing — and the column's own
+             * default is "total", so an unpriced stay opened here read Total
+             * while the Stays card it was typed on said per night. Start a stay
+             * where a stay belongs and only trust the stored value once there
+             * is a figure for it to describe.
+             */
+            costPer: place?.cost != null
+                ? place.cost_per
+                : (place?.category ?? 'misc') === 'stay' ? 'night' : 'total',
             openingHours: place?.opening_hours ?? '',
             bestTime: place?.best_time ?? '',
         };
@@ -263,6 +281,10 @@ export default function PlaceEditor({ api, place, open, onClose }: {
             // in the route turns '' into NULL and keeps that distinction.
             cost: cost.trim(),
             cost_per: costPer,
+            // The label above the box names a currency, so the row is stored
+            // saying the same thing. Left unstamped, a cost imported as euros
+            // kept meaning euros while the box that edited it said dollars.
+            cost_currency: cost.trim() ? costCurrency : '',
             opening_hours: openingHours.trim(),
             best_time: bestTime.trim(),
         };
@@ -540,7 +562,7 @@ export default function PlaceEditor({ api, place, open, onClose }: {
                         <div className="grid grid-cols-2 gap-3">
                             <div>
                                 <label className="block text-xs font-semibold text-gray-500 mb-1">
-                                    Cost ({api.data?.trip.home_currency || 'USD'})
+                                    Cost ({costCurrency})
                                 </label>
                                 <TextField
                                     type="number"
@@ -552,8 +574,10 @@ export default function PlaceEditor({ api, place, open, onClose }: {
                                     placeholder="420"
                                 />
                                 <p className="text-[11px] text-gray-400 mt-1">
-                                    A number the trip total can use. The note above stays for the
-                                    detail — &ldquo;breakfast included&rdquo; is not arithmetic.
+                                    The one price for this place — the booking below multiplies it
+                                    by the nights rather than asking for it again. The note above
+                                    stays for the detail; &ldquo;breakfast included&rdquo; is not
+                                    arithmetic.
                                 </p>
                             </div>
                             <div>
@@ -602,15 +626,22 @@ export default function PlaceEditor({ api, place, open, onClose }: {
 
                         {/* ---- Booking ----
                             Only for a place that exists: a booking hangs off a
-                            place_id, and there isn't one until the first save. */}
-                        {editing && (status === 'booked' || place?.is_excursion) && (
+                            place_id, and there isn't one until the first save.
+
+                            Not gated on the status any more. A stay's check-in
+                            and check-out are what put it on the itinerary, and
+                            they were reachable only after flipping the status
+                            dropdown — so the day card could say "add the dates
+                            on Stays" and the Stays tab show nowhere to add them.
+                            Excursions were never gated; now nothing is. */}
+                        {editing && (
                             <div>
                                 <label className="block text-xs font-semibold text-gray-500 mb-1">
                                     Booking
                                 </label>
                                 <BookingPanel
                                     api={api}
-                                    kind={place?.is_excursion ? 'excursion' : 'stay'}
+                                    kind={bookingKindFor(place)}
                                     placeId={place.id}
                                     compact
                                 />

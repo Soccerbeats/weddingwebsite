@@ -11,6 +11,23 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.69 — [Released] A stay costs what it costs, once (`main`, 2026-08-30 03:42)
+
+A hotel's price could be typed in three different boxes on the Stays tab — the card's free-text line, the editor's Cost field, and the booking's own Cost field right underneath it — and every part of the portal read a different one. The budget had a rule for deciding which copy to believe. The price is one fact, so it now has one home.
+
+### Changed
+- **The stay's price is entered once, on the stay.** The booking no longer asks for the money: it supplies the nights and reports the total the price works out to — `3 nights × 310` — so the figure it shows can never disagree with the figure you typed. Anything already recorded against a stay booking moves onto the stay on the next boot, keeping the number the budget was already using, so no trip total changes on the way past.
+- **The card's price box writes a real number** rather than free text, which is what the budget, the compare table and the sorts can actually add up. Something that isn't a figure — "ask at the desk" — still lands in the note, because that is not arithmetic.
+- **One reading of a stay's price everywhere.** The shortlist sort, the ranking list, the compare table and the dashboard's nightly range each used to pick a different field, so a properly priced stay could sort as unpriced and show nothing on the dashboard. They all read the same answer now.
+- **A booking can be filled in without first marking the place booked.** The check-in and check-out dates are what put a stay on the itinerary, and they were reachable only after flipping the status dropdown — so a day card could say "add the dates on Stays" and the Stays tab show nowhere to add them. Excursions were never gated; now nothing is.
+
+### Fixed
+- **A booked restaurant is no longer filed as somewhere you sleep.** Any place that was neither a stay nor an excursion got a booking labelled "stay", which the itinerary now reads as a claim about where the night is spent.
+- **The Cost box says which currency it means, and stores it.** A price imported in euros kept meaning euros while the box that edited it was labelled dollars.
+- **An unpriced stay opens on "per night" rather than "total".** The column's default said total, so a stay typed on the card — where the box says per night — read back as a total for the whole trip.
+- **A stay marked paid in full counts as paid.** With the money now on the place, reading only the booking's own figure would have counted such a stay as nothing paid while counting it in full in the total.
+- **The place panel stops showing the same price twice**, once as the cost and again as a note restating it.
+
 ## v0.9.68 — [Released] The night belongs to the booking (`main`, 2026-08-30 03:25)
 
 A day's base was a dropdown on the itinerary — a second place to state something the stay booking already stated, with nothing keeping the two in agreement. On the live trip they had already come apart: the night of 1 November was filed against a villa that was never booked, while the resort actually booked for that night showed nowhere.

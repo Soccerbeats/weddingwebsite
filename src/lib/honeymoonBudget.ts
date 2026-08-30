@@ -210,9 +210,26 @@ export function buildBudget(
 
     const total = lines.reduce((running, line) => running + line.amount, 0);
     const paid = payload.bookings.reduce((running, booking) => {
-        const amount = booking.cost_paid ?? (booking.paid ? booking.cost : null);
+        /*
+         * "Paid in full" with nothing in the paid box means the whole thing is
+         * settled — and for a stay the whole thing is now the place's price
+         * times the nights, since the booking no longer carries a second copy
+         * of it. Reading `booking.cost` alone here counted such a stay as zero
+         * paid while the same stay was counted in full in the total.
+         */
+        const whole = bookingTotal(
+            booking,
+            booking.place_id != null
+                ? payload.places.find((row) => row.id === booking.place_id) ?? null
+                : null,
+            travellers,
+        );
+        const amount = booking.cost_paid ?? (booking.paid ? whole?.amount ?? null : null);
+        const currency = booking.cost_paid != null
+            ? booking.cost_currency ?? whole?.currency ?? null
+            : whole?.currency ?? booking.cost_currency;
         const converted = amount != null
-            ? convert(amount, booking.cost_currency, home, payload.rates) ?? amount
+            ? convert(amount, currency, home, payload.rates) ?? amount
             : 0;
         return running + converted;
     }, 0);
@@ -426,6 +443,49 @@ export function completenessOf(
 }
 
 /** The booking attached to a place, leg or stop — at most one of each. */
+/**
+ * What a booking comes to, in money.
+ *
+ * A stay's price is the place's — it is the same number whether you have
+ * booked yet or not, and the booking used to carry a second copy of it. Two
+ * boxes labelled "Cost" on one screen is how the two came to disagree, and the
+ * budget had to arbitrate between them. So the booking supplies the nights and
+ * the place supplies the rate, and the total is arithmetic.
+ *
+ * `booking.cost` still wins where it is set, because a flight, a table or a
+ * ticket has no place to hang a price on — and an old stay row restored from an
+ * archive keeps showing the number it was saved with.
+ */
+export function bookingTotal(
+    booking: Booking,
+    place: Pick<Place, 'cost' | 'cost_currency' | 'cost_per'> | null | undefined,
+    travellers = 2,
+): { amount: number; currency: string | null; detail: string | null } | null {
+    if (booking.cost != null) {
+        return { amount: booking.cost, currency: booking.cost_currency, detail: null };
+    }
+    if (!place || place.cost == null) return null;
+    if (place.cost_per === 'total') {
+        return { amount: place.cost, currency: place.cost_currency, detail: null };
+    }
+    if (place.cost_per === 'person') {
+        return {
+            amount: place.cost * travellers,
+            currency: place.cost_currency,
+            detail: `${travellers} × ${place.cost}`,
+        };
+    }
+    // Per night, so the nights have to be known — and only the booking knows
+    // them. Without dates there is a rate and no span, which is not a total.
+    const nights = daysBetween(booking.check_in, booking.check_out);
+    if (nights == null || nights < 1) return null;
+    return {
+        amount: place.cost * nights,
+        currency: place.cost_currency,
+        detail: `${nights} night${nights === 1 ? '' : 's'} × ${place.cost}`,
+    };
+}
+
 export function bookingFor(bookings: Booking[], target: {
     place?: Place | null; leg?: TravelLeg | null; stopId?: number | null;
 }): Booking | null {

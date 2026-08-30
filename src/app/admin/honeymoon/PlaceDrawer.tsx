@@ -3,7 +3,8 @@
 import Image from 'next/image';
 import { useMemo } from 'react';
 import {
-    categoryMeta, formatDistance, formatPrice, hasCoords, sourceLabel, STATUSES,
+    bookingKindFor, categoryMeta, formatDistance, formatPrice, hasCoords, priceValue, sourceLabel,
+    STATUSES,
 } from '@/lib/honeymoon';
 import type { Place } from '@/lib/honeymoon';
 import { formatMoney } from '@/lib/honeymoonBudget';
@@ -206,11 +207,20 @@ export default function PlaceDrawer({ api, place, onClose, onEdit, onAddToDay }:
                                         </span>
                                     </Row>
                                 )}
-                                {place.price_note && (
-                                    <Row label="Price note">
-                                        {formatPrice(place.price_note, currency)}
-                                    </Row>
-                                )}
+                                {/* The note only earns its line when it says
+                                    something the cost above does not. A note
+                                    that is just the same figure in words —
+                                    which is what the old free-text price field
+                                    left behind, and what the price watch writes
+                                    when it re-checks a listing — reads as a
+                                    second, disagreeing price. */}
+                                {place.price_note
+                                    && !(place.cost != null && priceValue(place.price_note) != null)
+                                    && (
+                                        <Row label="Price note">
+                                            {formatPrice(place.price_note, currency)}
+                                        </Row>
+                                    )}
                                 {hours && <Row label="Hours">{hours}</Row>}
                                 {place.best_time && <Row label="Best time">{place.best_time}</Row>}
                                 {place.star_rating != null && (
@@ -269,7 +279,7 @@ export default function PlaceDrawer({ api, place, onClose, onEdit, onAddToDay }:
                     <Section title="Booking">
                         <BookingPanel
                             api={api}
-                            kind={place.is_excursion ? 'excursion' : 'stay'}
+                            kind={bookingKindFor(place)}
                             placeId={place.id}
                             compact
                         />

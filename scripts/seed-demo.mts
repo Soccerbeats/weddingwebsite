@@ -603,13 +603,25 @@ async function seedHoneymoon() {
         await pool.query(
             `INSERT INTO honeymoon_bookings
              (place_id, kind, provider, confirmation, check_in, check_out, check_in_time,
-              check_out_time, cost, cost_currency, paid, party_size, notes)
-             VALUES ($1,'stay',$2,$3,$4,$5,'15:00','11:00',$6,'EUR',$7,2,$8)`,
+              check_out_time, paid, party_size, notes)
+             VALUES ($1,'stay',$2,$3,$4,$5,'15:00','11:00',$6,2,$7)`,
             [run.placeId, index % 2 === 0 ? 'Booking.com' : 'Direct',
                 `DEMO-${String(1000 + index * 137).slice(0, 4)}`,
                 dayDate(run.from), dayDate(run.to + 1),
-                (nights * 180 + index * 25).toFixed(2), index % 3 !== 0,
+                index % 3 !== 0,
                 nights === 1 ? 'One night on the way through.' : null],
+        );
+        /*
+         * The rate goes on the stay, not on the booking. There is one price for
+         * a hotel and the booking supplies the nights it is charged for — so
+         * the demo shows the same arithmetic the portal does rather than a
+         * figure typed twice.
+         */
+        await pool.query(
+            `UPDATE honeymoon_places
+                SET cost = $2, cost_currency = 'EUR', cost_per = 'night'
+              WHERE id = $1 AND cost IS NULL`,
+            [run.placeId, (180 + index * 25).toFixed(2)],
         );
     }
 

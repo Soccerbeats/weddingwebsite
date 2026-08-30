@@ -17,7 +17,8 @@ import {
     formatPrice, nameFromAnyUrl, priceValue, effectiveCountry, countriesInUse, calendarMonths,
     monthMatrix, planRange, daysBeyondRange, tripLength, daysBetween, addDays, isoOf, buildIcs,
     tripEvents, searchHoneymoon, reviewToggleFor, basesFromBookings, stayBookedOn,
-    type Day, type GuideNote, type Region, type TodoItem,
+    bookingKindFor, nightlyRate,
+    type Booking, type Day, type GuideNote, type Region, type TodoItem,
     type Place, type Stop, type TravelLeg,
 } from '../src/lib/honeymoon';
 import {
@@ -40,7 +41,7 @@ import {
     legRealMinutes, zoneOffsetMinutes,
 } from '../src/lib/honeymoonTimeline';
 import {
-    buildBudget, completenessOf, convert, deadlinesOf, describeRate, formatMoney,
+    bookingTotal, buildBudget, completenessOf, convert, deadlinesOf, describeRate, formatMoney,
     nightsAtBase, unbookedDays,
 } from '../src/lib/honeymoonBudget';
 import {
@@ -1334,6 +1335,63 @@ console.log('\nBudget');
 
     check('money reads as money', formatMoney(1260, 'USD') === '$1,260');
     check('and an unknown code still prints', formatMoney(1260, 'XXZ').includes('1,260'));
+}
+
+console.log('\nOne price per stay');
+{
+    /*
+     * A stay's price used to be typed in three boxes — the card's free-text
+     * note, the editor's number, and the booking's own cost — and every view
+     * read a different one. These pin down the single reading they now share.
+     */
+    const note = { ...makePlace(1, 'Villa', null, null), price_note: '$250 per night' };
+    const priced = { ...makePlace(2, 'Resort', null, null), cost: 310,
+        cost_currency: 'USD', cost_per: 'night' as const };
+    const lump = { ...makePlace(3, 'Whole week', null, null), cost: 2100,
+        cost_currency: 'USD', cost_per: 'total' as const };
+
+    check('a real number is the rate', nightlyRate(priced) === 310);
+    check('the note is read when there is no number', nightlyRate(note) === 250);
+    check('the number wins over a note that disagrees',
+        nightlyRate({ ...priced, price_note: '$99 per night' }) === 310);
+    check('a price for the whole stay is not a nightly rate', nightlyRate(lump) === null);
+    check('but it falls back to a note if one is there',
+        nightlyRate({ ...lump, price_note: '$300 per night' }) === 300);
+    check('nothing priced is nothing, not zero', nightlyRate(makePlace(4, 'X', null, null)) === null);
+
+    /* Which booking a place gets. A booked restaurant filed as a `stay` would
+       now be read as somewhere you sleep, which it is not. */
+    check('a stay books a stay', bookingKindFor({ category: 'stay', is_excursion: false }) === 'stay');
+    check('an excursion books an excursion',
+        bookingKindFor({ category: 'stay', is_excursion: true }) === 'excursion');
+    check('anything else books neither',
+        bookingKindFor({ category: 'food', is_excursion: false }) === 'other');
+
+    const bed = (over: Partial<Booking> = {}): Booking => ({
+        id: 1, place_id: 2, travel_id: null, stop_id: null, journey_id: null,
+        kind: 'stay', provider: null, confirmation: null, url: null, contact: null,
+        check_in: '2026-09-12', check_out: '2026-09-15', check_in_time: null,
+        check_out_time: null, cost: null, cost_currency: null, cost_paid: null,
+        deposit_due_on: null, cancel_by: null, party_size: null, dress_code: null,
+        paid: false, documents: [], notes: null, created_at: null, ...over,
+    });
+
+    check('a booking costs the rate times the nights it covers',
+        bookingTotal(bed(), priced)?.amount === 930);
+    check('and says so, so a wrong figure is traceable',
+        bookingTotal(bed(), priced)?.detail === '3 nights × 310');
+    check('a rate with no dates is not a total',
+        bookingTotal(bed({ check_out: null }), priced) === null);
+    check('a price for the whole stay needs no nights',
+        bookingTotal(bed({ check_in: null, check_out: null }), lump)?.amount === 2100);
+    check('a per-person price is doubled', bookingTotal(bed(), {
+        cost: 90, cost_currency: 'USD', cost_per: 'person',
+    })?.amount === 180);
+    check("a booking's own cost still wins, for a flight or an archive restore",
+        bookingTotal(bed({ cost: 1180, cost_currency: 'USD' }), priced)?.amount === 1180);
+    check('an unpriced stay has no total', bookingTotal(bed(), note) === null);
+    check('and neither has a booking with nothing behind it',
+        bookingTotal(bed(), null) === null);
 }
 
 console.log('\nWhere each night is spent');

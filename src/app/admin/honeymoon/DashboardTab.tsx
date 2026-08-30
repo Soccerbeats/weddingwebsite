@@ -4,7 +4,8 @@ import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { useMemo } from 'react';
 import {
-    currencySymbol, dateForDay, dayColor, daysBetween, effectiveCountry, formatDayDate, hasCoords, priceValue,
+    currencySymbol, dateForDay, dayColor, daysBetween, effectiveCountry, formatDayDate, hasCoords,
+    nightlyRate, priceValue,
 } from '@/lib/honeymoon';
 import { todayIso } from '@/lib/honeymoon';
 import {
@@ -78,7 +79,9 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
     const stayCost = useMemo(() => {
         const priced = stays
             .filter((s) => s.rating === 'yes')
-            .map((s) => priceValue(s.price_note))
+            // The rate wherever it is written — reading the free-text note
+            // alone made a properly priced stay invisible here.
+            .map((s) => nightlyRate(s))
             .filter((v): v is number => v != null);
         if (!priced.length) return null;
         return { min: Math.min(...priced), max: Math.max(...priced), count: priced.length };

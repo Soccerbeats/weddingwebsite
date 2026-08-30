@@ -1130,6 +1130,37 @@ export function priceValue(note: string | null | undefined): number | null {
 }
 
 /**
+ * What a stay costs per night, wherever that number happens to be written.
+ *
+ * There are two: `cost` — a real number the budget can add up — and the older
+ * free-text `price_note`. Every view that showed a price picked one of them and
+ * they picked differently: the shortlist sorted on the note alone, so a stay
+ * priced properly sorted as unpriced, while the compare table read the number
+ * first. One reading, used everywhere, is the point.
+ *
+ * Only a `night` cost answers here. A stay entered as a total for the week is
+ * not a nightly rate, and dividing one into the other without knowing the
+ * nights would be inventing a figure.
+ */
+export function nightlyRate(place: Pick<Place, 'cost' | 'cost_per' | 'price_note'>): number | null {
+    if (place.cost != null && place.cost_per === 'night') return place.cost;
+    return priceValue(place.price_note);
+}
+
+/**
+ * What kind of booking a place's paperwork is.
+ *
+ * Both panels that offer a booking on a place used to answer "excursion or
+ * stay", which filed a booked restaurant as a stay — and now that a night's
+ * base is read from the stay bookings, a stay is not a label any more, it is a
+ * claim about where you sleep. Anything that is neither is `other`.
+ */
+export function bookingKindFor(place: Pick<Place, 'category' | 'is_excursion'>): BookingKind {
+    if (place.is_excursion) return 'excursion';
+    return place.category === 'stay' ? 'stay' : 'other';
+}
+
+/**
  * A usable name for any link, booking site or not.
  *
  * Falls back through the shapes that actually carry a name: a booking slug, then

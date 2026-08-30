@@ -9,8 +9,8 @@ import {
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
-    RATINGS, STATUSES, byRank, cleanListingTitle, daysBetween, formatDate, formatPerNight,
-    hasCoords, isStayUrl, nameFromStayUrl, priceValue, stayUrlsFromText,
+    COST_PER_LABELS, RATINGS, STATUSES, byRank, cleanListingTitle, daysBetween, formatDate,
+    formatPrice, hasCoords, isStayUrl, nameFromStayUrl, nightlyRate, priceValue, stayUrlsFromText,
     type Place, type PlaceStatus,
 } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
@@ -72,6 +72,8 @@ const STATUS_RANK: Record<PlaceStatus, number> = { booked: 3, shortlisted: 2, id
  */
 export default function StaysTab({ api }: { api: HoneymoonApi }) {
     const { data } = api;
+    /** What a price with no currency of its own is in. */
+    const home = data?.trip.home_currency || 'USD';
     const [bulk, setBulk] = useState('');
     const [adding, setAdding] = useState(false);
     const [fetching, setFetching] = useState(0);
@@ -215,8 +217,8 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
         switch (sort) {
             case 'price':
                 sorted.sort((a, b) => {
-                    const pa = priceValue(a.price_note);
-                    const pb = priceValue(b.price_note);
+                    const pa = nightlyRate(a);
+                    const pb = nightlyRate(b);
                     // Unpriced last in either case: a stay with no number on it
                     // is not "free", and floating it to the top of a cost sort
                     // would bury the cheapest real option.
@@ -775,6 +777,7 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
             ) : view === 'ranking' ? (
                 <RankingList
                     stays={rankedRows}
+                    currency={home}
                     pickedId={picked?.id ?? null}
                     onPick={pickFromList}
                     onReorder={applyRanking}
@@ -953,16 +956,48 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                                                 </p>
                                             );
                                         })()}
+                                        {/* The stay's price, and the only place
+                                            it is typed. It writes the real
+                                            number the budget adds up rather than
+                                            a second copy in free text, and the
+                                            booking multiplies it by the nights
+                                            instead of asking for the money
+                                            again. Anything that isn't a figure —
+                                            "ask at the desk" — still lands in the
+                                            note, because that is not arithmetic
+                                            and pretending it is would be worse
+                                            than keeping the words. */}
                                         <InlineText
-                                            value={stay.price_note ?? ''}
+                                            value={stayPriceText(stay, home)}
                                             placeholder="Price per night — type 250"
                                             className="text-xs text-gray-500 -ml-2"
-                                            onCommit={(price_note) => api.update('places', {
-                                                id: stay.id,
-                                                price_note: formatPerNight(
-                                                    price_note, data?.trip.home_currency,
-                                                ),
-                                            })}
+                                            onCommit={(typed) => {
+                                                const text = typed.trim();
+                                                const amount = priceValue(text);
+                                                api.update('places', amount != null
+                                                    ? {
+                                                        id: stay.id,
+                                                        cost: String(amount),
+                                                        // A first price is a
+                                                        // nightly one, which is
+                                                        // what the box asks for.
+                                                        // An existing figure
+                                                        // keeps whatever it was
+                                                        // per — the text above
+                                                        // says so, and editing
+                                                        // it must not quietly
+                                                        // turn a week's total
+                                                        // into a rate.
+                                                        cost_per: stay.cost != null
+                                                            ? stay.cost_per : 'night',
+                                                        cost_currency: stay.cost_currency || home,
+                                                    }
+                                                    : {
+                                                        id: stay.id,
+                                                        cost: '',
+                                                        price_note: text,
+                                                    });
+                                            }}
                                         />
                                         {/* Where it is, and whether the map knows.
                                             "no pin" is the honest state of a stay
@@ -1272,6 +1307,19 @@ function ViewToggle({ view, onChange }: { view: View; onChange: (view: View) => 
 }
 
 /**
+ * The stay's price, in words, from wherever its number lives.
+ *
+ * Shows what `nightlyRate` reads, so the box you type into and the sort, the
+ * compare table and the budget cannot show three different prices for one hotel
+ * — which they did while the card knew only about the free-text note.
+ */
+function stayPriceText(stay: Place, currency: string | null | undefined): string {
+    if (stay.cost == null) return stay.price_note ?? '';
+    const money = formatPrice(String(stay.cost), stay.cost_currency || currency);
+    return stay.cost_per === 'total' ? money : `${money} ${COST_PER_LABELS[stay.cost_per]}`;
+}
+
+/**
  * The shortlist as an ordered list you can drag.
  *
  * One column of thin rows rather than the card grid: ordering things is a job
@@ -1280,8 +1328,10 @@ function ViewToggle({ view, onChange }: { view: View; onChange: (view: View) => 
  * hand and the ranking is written behind them — because a drag that waits for a
  * round trip before it lands feels broken.
  */
-function RankingList({ stays, pickedId, onPick, onReorder, cardRefs }: {
+function RankingList({ stays, currency, pickedId, onPick, onReorder, cardRefs }: {
     stays: Place[];
+    /** The trip's own currency, for any stay that does not name one. */
+    currency: string;
     pickedId: number | null;
     onPick: (stay: Place) => void;
     onReorder: (ids: number[]) => void;
@@ -1332,6 +1382,7 @@ function RankingList({ stays, pickedId, onPick, onReorder, cardRefs }: {
                             <RankRow
                                 key={stay.id}
                                 stay={stay}
+                                currency={currency}
                                 position={index + 1}
                                 picked={pickedId === stay.id}
                                 onPick={() => onPick(stay)}
@@ -1345,7 +1396,8 @@ function RankingList({ stays, pickedId, onPick, onReorder, cardRefs }: {
     );
 }
 
-function RankRow({ stay, position, picked, onPick, cardRefs }: {
+function RankRow({ stay, currency, position, picked, onPick, cardRefs }: {
+    currency: string;
     stay: Place;
     position: number;
     picked: boolean;
@@ -1354,7 +1406,7 @@ function RankRow({ stay, position, picked, onPick, cardRefs }: {
 }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
         useSortable({ id: stay.id });
-    const price = priceValue(stay.price_note);
+    const price = nightlyRate(stay);
     const rating = RATINGS.find((r) => r.key === stay.rating);
 
     return (
@@ -1441,7 +1493,7 @@ function RankRow({ stay, position, picked, onPick, cardRefs }: {
             )}
             <span className="shrink-0 self-center text-xs text-gray-500 tabular-nums w-20
                 text-right">
-                {price != null ? stay.price_note : '—'}
+                {price != null ? stayPriceText(stay, currency) : '—'}
             </span>
         </li>
     );

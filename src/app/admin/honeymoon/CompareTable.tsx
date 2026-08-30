@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import {
-    RATINGS, distanceKm, formatDistance, formatPerNight, hasCoords, priceValue,
+    RATINGS, distanceKm, formatDistance, formatPerNight, hasCoords, nightlyRate,
 } from '@/lib/honeymoon';
 import type { Place } from '@/lib/honeymoon';
 import { formatMoney } from '@/lib/honeymoonBudget';
@@ -52,9 +52,7 @@ export default function CompareTable({ api, stays, onPick }: {
             stay,
             average,
             nearest: distances.length ? Math.min(...distances) : null,
-            nightly: stay.cost != null && stay.cost_per === 'night'
-                ? stay.cost
-                : priceValue(stay.price_note),
+            nightly: nightlyRate(stay),
         };
     }), [stays, wanted]);
 

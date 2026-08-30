@@ -474,6 +474,40 @@ async function createTables() {
     await pool.query(`
         CREATE INDEX IF NOT EXISTS honeymoon_stops_day_idx ON honeymoon_stops (day_id)
     `);
+
+    /*
+     * A stay costs what it costs, once.
+     *
+     * The price was typed in two boxes — one on the place, one on its booking —
+     * and the budget had a rule for deciding which copy to believe. The place is
+     * now the only one that asks: it is the number you compare hotels on before
+     * anything is booked, and the booking supplies the nights to multiply it by.
+     *
+     * So the booking's figure moves onto the stay. It moves rather than being
+     * dropped, and it wins where both were filled in, because the budget already
+     * preferred it — which means no trip total changes on the way past. It lands
+     * as a `total` because that is what a booking's cost was: the whole stay,
+     * not a nightly rate. Idempotent by construction — after this there is no
+     * stay booking left carrying a cost to move.
+     */
+    await pool.query(`
+        UPDATE honeymoon_places p
+           SET cost = b.cost,
+               cost_currency = COALESCE(b.cost_currency, p.cost_currency),
+               cost_per = 'total'
+          FROM (
+              SELECT DISTINCT ON (place_id) place_id, cost, cost_currency
+                FROM honeymoon_bookings
+               WHERE kind = 'stay' AND place_id IS NOT NULL AND cost IS NOT NULL
+               ORDER BY place_id, id
+          ) b
+         WHERE b.place_id = p.id
+    `);
+    await pool.query(`
+        UPDATE honeymoon_bookings
+           SET cost = NULL
+         WHERE kind = 'stay' AND place_id IS NOT NULL AND cost IS NOT NULL
+    `);
 }
 
 export function ensureHoneymoonTables(): Promise<void> {

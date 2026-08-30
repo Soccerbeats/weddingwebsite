@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { formatDate } from '@/lib/honeymoon';
 import type { Booking, BookingKind } from '@/lib/honeymoon';
-import { bookingFor, formatMoney } from '@/lib/honeymoonBudget';
+import { bookingFor, bookingTotal, formatMoney } from '@/lib/honeymoonBudget';
 import type { HoneymoonApi } from './useHoneymoon';
 import { Button, SelectField, TextArea, TextField } from './ui';
 
@@ -87,8 +87,20 @@ export default function BookingPanel({
         id: booking.id, ...fields,
     });
 
-    const owed = booking.cost != null
-        ? Math.max(0, booking.cost - (booking.cost_paid ?? 0))
+    /*
+     * What this booking comes to.
+     *
+     * For a stay that is the place's price times the nights — the price is the
+     * stay's, entered once on the Stays tab, and this panel supplies the dates
+     * it is multiplied by. It used to have a Cost box of its own, so the same
+     * figure was typed twice and the budget had to decide which copy to trust.
+     */
+    const place = placeId != null ? api.placeById.get(placeId) ?? null : null;
+    const total = bookingTotal(booking, place);
+    /** The place owns the money, so this panel reports it rather than asking. */
+    const derived = kind === 'stay' && place != null && booking.cost == null;
+    const owed = total != null
+        ? Math.max(0, total.amount - (booking.cost_paid ?? 0))
         : null;
 
     return (
@@ -206,19 +218,39 @@ export default function BookingPanel({
             )}
 
             <div className="grid grid-cols-3 gap-2">
-                <Field label={`Cost (${currency})`}>
-                    <TextField
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        key={`ct${booking.cost ?? ''}`}
-                        defaultValue={booking.cost != null ? String(booking.cost) : ''}
-                        onBlur={(e) => {
-                            if (e.target.value !== (booking.cost != null ? String(booking.cost) : '')) {
-                                set({ cost: e.target.value, cost_currency: currency });
-                            }
-                        }}
-                    />
+                <Field label={`Cost (${total?.currency || currency})`}>
+                    {derived ? (
+                        /* Reported, not asked for. Where it comes from is said
+                           out loud, so a wrong number is fixed in the one place
+                           that can change it rather than hunted for. */
+                        <div className="rounded-2xl bg-gray-50 px-3 py-2">
+                            <p className="text-sm text-gray-800 tabular-nums">
+                                {total != null
+                                    ? formatMoney(total.amount, total.currency || currency)
+                                    : '—'}
+                            </p>
+                            <p className="text-[10px] leading-tight text-gray-400">
+                                {total?.detail
+                                    ?? (place.cost == null
+                                        ? 'Add the price to the stay'
+                                        : 'From the stay’s price')}
+                            </p>
+                        </div>
+                    ) : (
+                        <TextField
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            key={`ct${booking.cost ?? ''}`}
+                            defaultValue={booking.cost != null ? String(booking.cost) : ''}
+                            onBlur={(e) => {
+                                const current = booking.cost != null ? String(booking.cost) : '';
+                                if (e.target.value !== current) {
+                                    set({ cost: e.target.value, cost_currency: currency });
+                                }
+                            }}
+                        />
+                    )}
                 </Field>
                 <Field label="Paid so far">
                     <TextField
@@ -316,7 +348,7 @@ export default function BookingPanel({
                 </>
             )}
 
-            <BookingSummary booking={booking} currency={currency} />
+            <BookingSummary booking={booking} currency={currency} total={total?.amount ?? null} />
         </div>
     );
 }
@@ -334,9 +366,13 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 /** One line restating the booking in words, which is how it gets checked. */
-function BookingSummary({ booking, currency }: { booking: Booking; currency: string }) {
+function BookingSummary({ booking, currency, total }: {
+    booking: Booking; currency: string;
+    /** The booking's own cost, or the stay's price times the nights. */
+    total: number | null;
+}) {
     const parts = [
-        booking.cost != null ? formatMoney(booking.cost, currency) : null,
+        total != null ? formatMoney(total, currency) : null,
         booking.check_in && booking.check_out
             ? `${formatDate(booking.check_in)} → ${formatDate(booking.check_out)}`
             : null,
