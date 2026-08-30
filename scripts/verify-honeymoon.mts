@@ -37,8 +37,9 @@ import {
     legDepartDate, parseFlightPaste, placementFor, refileLegsByDate, sameInstantIn,
 } from '../src/lib/honeymoonJourneys';
 import {
-    addDaysIso, buildTimeline, estimateHop, formatDuration, instantOf, isWalkable,
-    legRealMinutes, zoneOffsetMinutes,
+    ASSUMED_STOP_MINUTES, MIN_SEGMENT_MINUTES,
+    addDaysIso, buildTimeline, clockLayout, daySegments, estimateHop, formatDuration, instantOf,
+    isWalkable, legRealMinutes, resizeSegments, zoneOffsetMinutes,
 } from '../src/lib/honeymoonTimeline';
 import {
     bookingTotal, buildBudget, completenessOf, convert, deadlinesOf, describeRate, formatMoney,
@@ -2103,6 +2104,97 @@ console.log('\nReading a pasted ticket');
 
     check('a line with neither is dropped', paste('Confirmation: booked').length === 0);
     check('empty text is no legs', paste('   ').length === 0);
+}
+
+console.log('\nThe day as a shape');
+{
+    const stop = (id: number, extra: Partial<Stop> = {}): Stop => ({
+        ...STOP_DEFAULTS, id, day_id: 1, sort_order: id, ...extra,
+    } as Stop);
+    const name = (row: Stop) => row.custom_label ?? `Stop ${row.id}`;
+
+    /* ---- The stacked bar ---- */
+    const untimed = [stop(1), stop(2), stop(3)];
+    const even = daySegments(untimed, name);
+    check('with no lengths at all, the day divides evenly',
+        even.every((seg) => Math.abs(seg.share - 1 / 3) < 1e-9));
+    check('and every slice says it is a stand-in', even.every((seg) => seg.assumed));
+    check('a stand-in is the assumed length', even[0].minutes === ASSUMED_STOP_MINUTES);
+
+    const mixed = [stop(1, { duration_minutes: 60 }), stop(2, { duration_minutes: 180 }), stop(3)];
+    const segments = daySegments(mixed, name);
+    check('a typed length is used as typed', segments[0].minutes === 60);
+    check('and a missing one borrows the average of the typed ones',
+        segments[2].minutes === 120 && segments[2].assumed);
+    check('shares are of the whole bar',
+        Math.abs(segments.reduce((sum, seg) => sum + seg.share, 0) - 1) < 1e-9);
+    check('the longest stop takes the widest slice',
+        segments[1].share > segments[0].share && segments[1].share > segments[2].share);
+
+    /* ---- Dragging a boundary ---- */
+    const moved = resizeSegments(segments, 0, 30);
+    check('dragging right lengthens the stop before the handle',
+        moved[0].stopId === 1 && moved[0].minutes === 90);
+    check('and shortens the one after it by the same amount',
+        moved[1].stopId === 2 && moved[1].minutes === 150);
+    check('so the day keeps its total length',
+        moved[0].minutes + moved[1].minutes === 60 + 180);
+    check('a drag is snapped to a round number',
+        resizeSegments(segments, 0, 7)[0].minutes === 65);
+    check('a segment cannot be dragged below the minimum',
+        resizeSegments(segments, 0, -1000)[0].minutes === MIN_SEGMENT_MINUTES);
+    check('nor can the one it is taking from',
+        resizeSegments(segments, 0, 1000)[1].minutes === MIN_SEGMENT_MINUTES);
+    check('a drag that moves nothing writes nothing',
+        resizeSegments(segments, 0, 1).length === 0);
+    check('and there is no handle after the last segment',
+        resizeSegments(segments, 2, 30).length === 0);
+
+    /* ---- The clock ---- */
+    const spread = clockLayout([stop(1), stop(2), stop(3)], name);
+    check('three untimed stops sit evenly through the whole day',
+        spread.items[0].startMinutes === 360
+        && spread.items[1].startMinutes === 720
+        && spread.items[2].startMinutes === 1080, String(spread.items.map((i) => i.startMinutes)));
+    check('the axis starts at the first thing, not at midnight',
+        spread.startMinutes === 360);
+    check('and ends when the last thing does', spread.endMinutes === 1080 + ASSUMED_STOP_MINUTES);
+    check('the first item is hard against the left edge', spread.items[0].startPct === 0);
+    check('and the last one runs to the right edge',
+        Math.abs(spread.items[2].startPct + spread.items[2].widthPct - 100) < 1e-9);
+    check('labels alternate so two neighbours never collide',
+        spread.items.map((row) => row.above).join() === 'true,false,true');
+
+    const timed = clockLayout([
+        stop(1, { start_time: '09:00', duration_minutes: 60 }),
+        stop(2),
+        stop(3, { start_time: '15:00', duration_minutes: 30 }),
+    ], name);
+    check('a stop with a time is nailed to it', timed.items[0].start === '09:00');
+    // 10:00 (when the first stop ends) to 15:00 (when the third starts) — the gap
+    // is measured from the end of the thing before, not from its start.
+    check('an untimed stop is spread through the gap it falls in',
+        timed.items[1].start === '12:30', timed.items[1].start);
+    check('the last stop ends when its length says', timed.items[2].end === '15:30');
+    check('the axis covers exactly what the day covers',
+        timed.startMinutes === 540 && timed.endMinutes === 930);
+    check('hour ticks land inside the axis, never on its ends',
+        timed.ticks.every((tick) => tick.minutes > timed.startMinutes
+            && tick.minutes < timed.endMinutes));
+    check('a wide day is ticked in coarser steps than an hour',
+        timed.ticks.length > 1 && timed.ticks[1].minutes - timed.ticks[0].minutes === 120);
+
+    const trailing = clockLayout([stop(1, { start_time: '18:00' }), stop(2)], name);
+    check('an untimed stop after the last fixed one is spread towards midnight',
+        trailing.items[1].startMinutes === (1080 + ASSUMED_STOP_MINUTES + 1440) / 2,
+        String(trailing.items[1].startMinutes));
+
+    check('an empty day lays out as an empty day, not as a crash',
+        clockLayout([], name).items.length === 0);
+    check('one stop still gets a scale to sit in',
+        clockLayout([stop(1, { start_time: '09:00', duration_minutes: 0 })], name)
+            .endMinutes > clockLayout([stop(1, { start_time: '09:00', duration_minutes: 0 })], name)
+            .startMinutes);
 }
 
 console.log('\nJourneys');

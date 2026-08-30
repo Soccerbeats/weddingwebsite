@@ -243,7 +243,7 @@ order, before the commit:
   | `honeymoon.ts` | Types, categories, distances, dates, search, `.ics` building |
   | `honeymoonJourneys.ts` | Journeys: grouping legs, layovers, **day placement from dates** |
   | `honeymoonToday.ts` | Trip mode: which day is today, the day's plan, emergency numbers |
-  | `honeymoonTimeline.ts` | A day as a sequence; hops; time-zone arithmetic |
+  | `honeymoonTimeline.ts` | A day as a sequence; hops; time-zone arithmetic; the day's *shape* for the timeline view (the stacked bar, the clock) |
   | `honeymoonBudget.ts` | The trip total, currency conversion, deadlines, completeness |
   | `honeymoonChecks.ts` | Conflicts, stay stretches, due-date buckets, packing |
   | `honeymoonPlaces.ts` | Import/export, region filing, nearby, day suggestions |

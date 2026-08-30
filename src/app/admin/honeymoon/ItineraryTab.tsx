@@ -24,6 +24,7 @@ import { conflictsOf, stayStretches } from '@/lib/honeymoonChecks';
 import { DROP_TYPES, PLACE_DRAG, STOP_DRAG } from './dragTypes';
 import type { TimelineRow } from '@/lib/honeymoonTimeline';
 import BookingPanel from './BookingPanel';
+import { DayBar, DayClock } from './DayShape';
 import Markdown from './Markdown';
 import { useTripIntel } from './useTripIntel';
 import type { TripIntel } from './useTripIntel';
@@ -36,9 +37,16 @@ import {
     Button, Card, CategoryChip, EmptyState, InlineText, Modal, OverflowMenu, SelectField, TextField,
 } from './ui';
 
-type View = 'list' | 'calendar';
+type View = 'list' | 'calendar' | 'timeline';
+
+/**
+ * The two ways the timeline view can draw a day: as a stacked bar of lengths,
+ * or along a clock. Same view, same cards — only the last row differs.
+ */
+export type DayShape = 'bars' | 'clock';
 
 const VIEW_KEY = 'honeymoon.itinerary.view';
+const SHAPE_KEY = 'honeymoon.itinerary.shape';
 
 /**
  * @param panel Rendered as a narrow column beside the map rather than as the
@@ -87,6 +95,8 @@ export default function ItineraryTab({ api, panel = false, onFocusDay, revealDay
     // localStorage, so seeding from it directly would render one view on the
     // server and the other on the client and blow up hydration.
     const [view, setView] = useState<View>('list');
+    /** Which shape the timeline view draws — remembered like the view itself. */
+    const [shape, setShape] = useState<DayShape>('bars');
 
     /**
      * The place a stop points at, opened for editing.
@@ -130,7 +140,9 @@ export default function ItineraryTab({ api, panel = false, onFocusDay, revealDay
     useEffect(() => {
         const saved = localStorage.getItem(VIEW_KEY);
         // eslint-disable-next-line react-hooks/set-state-in-effect
-        if (saved === 'calendar' || saved === 'list') setView(saved);
+        if (saved === 'calendar' || saved === 'list' || saved === 'timeline') setView(saved);
+        const savedShape = localStorage.getItem(SHAPE_KEY);
+        if (savedShape === 'bars' || savedShape === 'clock') setShape(savedShape);
     }, []);
     /**
      * Days that sit past the end of the trip's dates.
@@ -153,6 +165,10 @@ export default function ItineraryTab({ api, panel = false, onFocusDay, revealDay
     const chooseView = (next: View) => {
         setView(next);
         localStorage.setItem(VIEW_KEY, next);
+    };
+    const chooseShape = (next: DayShape) => {
+        setShape(next);
+        localStorage.setItem(SHAPE_KEY, next);
     };
 
     // A slightly longer press than the stop handles use: days are the bigger,
@@ -220,6 +236,27 @@ export default function ItineraryTab({ api, panel = false, onFocusDay, revealDay
                         🗓 Export
                     </a>
                     <ViewToggle view={view} onChange={chooseView} />
+                    {/* Only where it applies: a shape switch beside the other two
+                        views would be a control that does nothing. */}
+                    {view === 'timeline' && (
+                        <div className="shrink-0 inline-flex rounded-full border border-gray-200
+                            bg-white p-0.5">
+                            {([['bars', '▤ Stacked'], ['clock', '⏱ Clock']] as const)
+                                .map(([key, label]) => (
+                                    <button
+                                        key={key}
+                                        onClick={() => chooseShape(key)}
+                                        aria-pressed={shape === key}
+                                        className={`rounded-full px-3 py-1 text-xs font-medium transition
+                                            ${shape === key
+                                            ? 'bg-gray-900 text-white'
+                                            : 'text-gray-600 hover:bg-gray-50'}`}
+                                    >
+                                        {label}
+                                    </button>
+                                ))}
+                        </div>
+                    )}
                 </div>
             </div>
             )}
@@ -422,9 +459,12 @@ export default function ItineraryTab({ api, panel = false, onFocusDay, revealDay
             ) : (
                 <DndContext sensors={daySensors} collisionDetection={closestCenter} onDragEnd={onDayDragEnd}>
                     <SortableContext items={days.map((d) => d.id)} strategy={rectSortingStrategy}>
+                        {/* One column, full width, in the timeline view: the
+                            whole point is that a day gets the page's width to
+                            lay its hours out across. */}
                         <div
                             ref={listRef}
-                            className={`grid gap-3 items-start ${panel
+                            className={`grid gap-3 items-start ${panel || shownView === 'timeline'
                                 ? 'grid-cols-1'
                                 : 'grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3'}`}
                         >
@@ -435,6 +475,7 @@ export default function ItineraryTab({ api, panel = false, onFocusDay, revealDay
                                     api={api}
                                     intel={intel}
                                     compact={panel}
+                                    shape={shownView === 'timeline' ? shape : null}
                                     onEditPlace={setEditingPlace}
                                     onViewPlace={setViewingPlace}
                                     onFocusDay={onFocusDay}
@@ -481,6 +522,7 @@ export default function ItineraryTab({ api, panel = false, onFocusDay, revealDay
 function ViewToggle({ view, onChange }: { view: View; onChange: (view: View) => void }) {
     const options: { key: View; label: string }[] = [
         { key: 'list', label: '☰ Days' },
+        { key: 'timeline', label: '▤ Timeline' },
         { key: 'calendar', label: '🗓 Calendar' },
     ];
     return (
@@ -706,7 +748,7 @@ function CalendarCellBox({ cell, day, api, beyondRange, arrivals, onOpen }: {
 
 function DayCard({
     day, api, intel, onEditPlace, onFocusDay, beyondRange = false, arrivals = [],
-    compact = false, flash = false, onViewPlace,
+    compact = false, flash = false, onViewPlace, shape = null,
 }: {
     day: Day;
     api: HoneymoonApi;
@@ -714,6 +756,12 @@ function DayCard({
     onEditPlace: (place: Place) => void;
     /** Open the full read-out of a place — used by the night's stay. */
     onViewPlace: (place: Place) => void;
+    /**
+     * Draw the day's stops as a shape instead of a list — the timeline view.
+     * The top of the card is the same either way; only what sits under the
+     * travel legs changes.
+     */
+    shape?: DayShape | null;
     /** Rendered in the map's split view, in a column rather than a page. */
     compact?: boolean;
     onFocusDay?: (day: Day) => void;
@@ -1201,16 +1249,53 @@ function DayCard({
 
             {/* ---- Travel legs ---- */}
             {/* The same editor the Travel tab uses — a leg can be worked on from
-                either end, and one form means they cannot drift apart. */}
-            {day.travel.map((leg) => (
-                <div key={leg.id} className="mt-2">
-                    <TravelLegCard leg={leg} day={day} api={api} />
-                </div>
-            ))}
+                either end, and one form means they cannot drift apart. Across the
+                page in the timeline view: the legs are the day's spine, and a
+                stack of them would push the hours off the bottom of the card. */}
+            {shape ? (
+                day.travel.length > 0 && (
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                        {day.travel.map((leg) => (
+                            <TravelLegCard key={leg.id} leg={leg} day={day} api={api} />
+                        ))}
+                    </div>
+                )
+            ) : (
+                day.travel.map((leg) => (
+                    <div key={leg.id} className="mt-2">
+                        <TravelLegCard leg={leg} day={day} api={api} />
+                    </div>
+                ))
+            )}
 
             {/* ---- Stops ---- */}
             <div className="mt-3">
-                {day.stops.length === 0 ? (
+                {shape ? (
+                    /* The same stops, drawn rather than listed. Both shapes open
+                       the place behind a stop on click, which is the read the
+                       list gets from its rows. */
+                    shape === 'bars' ? (
+                        <DayBar
+                            api={api}
+                            stops={day.stops}
+                            onOpenStop={(stop) => {
+                                const place = stop.place_id == null
+                                    ? null : api.placeById.get(stop.place_id) ?? null;
+                                if (place) onViewPlace(place);
+                            }}
+                        />
+                    ) : (
+                        <DayClock
+                            api={api}
+                            stops={day.stops}
+                            onOpenStop={(stop) => {
+                                const place = stop.place_id == null
+                                    ? null : api.placeById.get(stop.place_id) ?? null;
+                                if (place) onViewPlace(place);
+                            }}
+                        />
+                    )
+                ) : day.stops.length === 0 ? (
                     <p className="text-xs text-gray-400 py-2">Nothing planned yet.</p>
                 ) : (
                     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>

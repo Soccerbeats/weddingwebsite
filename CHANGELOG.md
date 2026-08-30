@@ -11,6 +11,20 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.70 — [Released] A day you can see the shape of (`main`, 2026-08-30 03:47)
+
+The itinerary could be read as a list of days or as a month grid. Neither says what a day actually *looks* like — how it is divided up, how much of it is spoken for, or where the empty afternoon is.
+
+### Added
+- **A third view: Timeline.** Each day gets the full width of the page. The top of the card is the card you already know — the day, its date, where you sleep, its ⋯ menu — the travel legs run across in a row rather than stacking, and underneath them the day is drawn rather than listed. It has two shapes, and the toggle beside the view switch picks one:
+- **Stacked** — the day as one bar, a slice per stop, each as wide as the stop is long and in that place's own category colour, the way a screen-time chart reads. **The dividers drag**: pull one and the stop before it gets more of the day while the stop after it gives that time up, so the day keeps its length and you are dividing it rather than growing it. Lengths are shown live and written once you let go. Arrow keys move a divider in quarter hours; nothing goes below fifteen minutes, where a slice would be too thin to grab.
+- **Clock** — the same day along a real time axis, with the labels alternating above and below the line so two neighbours never sit on top of each other. **A stop with a time is nailed to it; the rest are spread evenly through the gap they fall in** — which makes a day with no times at all spread evenly across the whole twenty-four hours, the same rule rather than a special case. **The axis runs from the first thing to the last**, not midnight to midnight, so a day that happens between nine and six uses the whole width instead of drawing fifteen empty hours either side of itself.
+- A length nobody typed is drawn faintly and borrows the average of the ones that were typed, so a day of untimed stops comes out as equal slices — the honest picture of "no plan yet" rather than an order of magnitude nobody chose.
+- Clicking any slice or any label opens that place's full panel, booking and all — the same panel a stop, a stay or a map pin opens.
+
+### Changed
+- The arithmetic behind both shapes lives in `honeymoonTimeline` with the rest of the day-as-a-sequence logic, under 30 new assertions in `check:honeymoon` — the geometry is the components' only job.
+
 ## v0.9.69 — [Released] A stay costs what it costs, once (`main`, 2026-08-30 03:42)
 
 A hotel's price could be typed in three different boxes on the Stays tab — the card's free-text line, the editor's Cost field, and the booking's own Cost field right underneath it — and every part of the portal read a different one. The budget had a rule for deciding which copy to believe. The price is one fact, so it now has one home.
