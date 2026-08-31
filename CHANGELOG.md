@@ -11,6 +11,18 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.71 — [Released] Room to read a message (`main`, 2026-08-31 19:10)
+
+The RSVP table truncated every message to one line, so the column that carries the only thing a guest actually wrote to you was the one you could not read — while Dietary, which holds two or three short flags, sat on half as much width again.
+
+### Changed
+- **A message wraps instead of being cut off.** A note trimmed at one line is a note nobody read.
+- **Dietary is about a third narrower, and the message column has exactly that width.** Measured rather than guessed: dietary goes from 190px to 128px and the message from 351px to 412px on a 1500px window, with every other column untouched.
+
+### Added
+- **Every column header has a grab handle.** Drag one and that column resizes, to the pixel — the table grows or shrinks with it and the panel scrolls, rather than a neighbour quietly giving up the difference. Arrow keys move a handle in 16px steps; nothing goes below 72px, where a column would be too narrow to grab back.
+- **The widths are gone on refresh, deliberately.** Widening a column to read one long note is a "let me see that" move, not a preference, and a width that outlived the question would be a setting nobody asked for. Until the first drag the table sizes itself as it always did.
+
 ## v0.9.70 — [Released] A day you can see the shape of (`main`, 2026-08-30 03:47)
 
 The itinerary could be read as a list of days or as a month grid. Neither says what a day actually *looks* like — how it is divided up, how much of it is spoken for, or where the empty afternoon is.

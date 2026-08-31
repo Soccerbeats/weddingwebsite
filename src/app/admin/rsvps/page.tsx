@@ -147,6 +147,21 @@ export default function RSVPDashboard() {
     const guestTableWrapRef = useRef<HTMLDivElement | null>(null);
     const [hiddenGuestCols, setHiddenGuestCols] = useState<string[]>([]);
 
+    /*
+     * Column widths for the RSVP table, in pixels, for as long as this page is open.
+     *
+     * Deliberately not remembered anywhere. Widening the message column is a
+     * "let me read that one" move, not a preference, and a width that outlived
+     * the question would be a setting nobody asked for — so a refresh puts the
+     * table back to the layout it works out for itself.
+     *
+     * Null until the first grab, which freezes what the browser had already
+     * worked out for *every* column: otherwise dragging one re-flows the rest.
+     */
+    const [rsvpColWidths, setRsvpColWidths] = useState<Record<string, number> | null>(null);
+    const rsvpHeadRef = useRef<HTMLTableRowElement>(null);
+    const colDrag = useRef<{ key: string; x: number; width: number } | null>(null);
+
     useEffect(() => {
         fetchRsvps();
         fetchGuests();
@@ -957,6 +972,96 @@ export default function RSVPDashboard() {
     // Returns 'hidden' for a guest-table column the measurer has dropped, else ''.
     const H = (c: string) => (hiddenGuestCols.includes(c) ? 'hidden' : '');
 
+    /** Nothing narrower than this: a column you cannot grab again is a trap. */
+    const MIN_COL_WIDTH = 72;
+
+    const beginColumnResize = (key: string, clientX: number) => {
+        const row = rsvpHeadRef.current;
+        if (!row) return;
+        const frozen: Record<string, number> = { ...(rsvpColWidths ?? {}) };
+        row.querySelectorAll<HTMLTableCellElement>('th[data-rsvp-col]').forEach((th) => {
+            const name = th.dataset.rsvpCol;
+            if (name && frozen[name] == null) {
+                frozen[name] = Math.round(th.getBoundingClientRect().width);
+            }
+        });
+        colDrag.current = { key, x: clientX, width: frozen[key] ?? MIN_COL_WIDTH };
+        setRsvpColWidths(frozen);
+    };
+
+    const dragColumnTo = (clientX: number) => {
+        const drag = colDrag.current;
+        if (!drag) return;
+        const next = Math.max(MIN_COL_WIDTH, Math.round(drag.width + (clientX - drag.x)));
+        setRsvpColWidths((prev) => ({ ...(prev ?? {}), [drag.key]: next }));
+    };
+
+    const nudgeColumn = (key: string, by: number) => {
+        const row = rsvpHeadRef.current;
+        const current = rsvpColWidths?.[key]
+            ?? row?.querySelector<HTMLTableCellElement>(`th[data-rsvp-col="${key}"]`)
+                ?.getBoundingClientRect().width;
+        if (current == null) return;
+        beginColumnResize(key, 0);
+        setRsvpColWidths((prev) => ({
+            ...(prev ?? {}), [key]: Math.max(MIN_COL_WIDTH, Math.round(current + by)),
+        }));
+        colDrag.current = null;
+    };
+
+    /**
+     * One header cell, with the grip that resizes it.
+     *
+     * Pointer capture on the grip itself rather than window listeners: the drag
+     * then survives the cursor leaving this 8px strip, which it does at once.
+     */
+    const rsvpHeader = (key: string, label: string, share?: string) => (
+        <th
+            key={key}
+            data-rsvp-col={key}
+            // A dragged width wins; otherwise the share, where one is asked for.
+            style={rsvpColWidths ? { width: rsvpColWidths[key] } : share ? { width: share } : undefined}
+            className="relative group/col px-6 py-3 text-left text-xs font-medium text-gray-500
+                uppercase tracking-wider select-none"
+        >
+            {label}
+            <span
+                role="separator"
+                aria-orientation="vertical"
+                aria-label={`Resize the ${label} column`}
+                tabIndex={0}
+                title={`Drag to resize ${label} — until you reload`}
+                onPointerDown={(event) => {
+                    event.preventDefault();
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                    beginColumnResize(key, event.clientX);
+                }}
+                onPointerMove={(event) => {
+                    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                        dragColumnTo(event.clientX);
+                    }
+                }}
+                onPointerUp={(event) => {
+                    event.currentTarget.releasePointerCapture(event.pointerId);
+                    colDrag.current = null;
+                }}
+                onPointerCancel={() => { colDrag.current = null; }}
+                onKeyDown={(event) => {
+                    const step = event.key === 'ArrowLeft' ? -16
+                        : event.key === 'ArrowRight' ? 16 : 0;
+                    if (!step) return;
+                    event.preventDefault();
+                    nudgeColumn(key, step);
+                }}
+                className="absolute right-0 top-0 z-10 flex h-full w-2 translate-x-1/2 cursor-col-resize
+                    touch-none items-center justify-center focus:outline-none"
+            >
+                <span className="h-4 w-0.5 rounded-full bg-gray-200 transition-colors
+                    group-hover/col:bg-gray-400 hover:!bg-accent" />
+            </span>
+        </th>
+    );
+
     return (
         <div>
             {/* Nav Card Subtitle */}
@@ -1054,15 +1159,35 @@ export default function RSVPDashboard() {
                     {/* RSVP Table */}
                     <div className="bg-white shadow-lg border border-gray-200 rounded-2xl overflow-hidden">
                         <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-gray-200">
+                            {/* Fixed layout only once a column has been dragged: until
+                                then the browser's own sizing is better than anything
+                                hard-coded, and after it the drag has to move one
+                                column rather than re-flow all six. */}
+                            <table
+                                className={`divide-y divide-gray-200 ${rsvpColWidths ? '' : 'min-w-full'}`}
+                                style={rsvpColWidths
+                                    ? {
+                                        tableLayout: 'fixed',
+                                        // The table is as wide as its columns add up to, and the
+                                        // wrapper scrolls. Left at 100% it would take back from
+                                        // one column whatever another was given, so a 160px drag
+                                        // moved a column 23px and shrank its neighbour.
+                                        width: Object.values(rsvpColWidths)
+                                            .reduce((sum, width) => sum + width, 0),
+                                    }
+                                    : undefined}
+                            >
                                 <thead className="bg-gray-50">
-                                    <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Guests</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dietary</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Message</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                    <tr ref={rsvpHeadRef}>
+                                        {rsvpHeader('name', 'Name')}
+                                        {rsvpHeader('status', 'Status')}
+                                        {rsvpHeader('guests', 'Guests')}
+                                        {/* Dietary hands roughly a third of its width to the
+                                            message beside it: it holds a few short flags, and the
+                                            message is the column anyone actually leans in to read. */}
+                                        {rsvpHeader('dietary', 'Dietary', '10%')}
+                                        {rsvpHeader('message', 'Message', '35%')}
+                                        {rsvpHeader('date', 'Date')}
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
@@ -1089,10 +1214,10 @@ export default function RSVPDashboard() {
                                             <React.Fragment key={rsvp.id}>
                                                 {/* Primary guest row */}
                                                 <tr className="group hover:bg-gray-50 relative">
-                                                    <td className="px-6 py-4 whitespace-nowrap">
-                                                        <div className="text-sm font-medium text-gray-900">{rsvp.guest_name}</div>
-                                                        <div className="text-xs text-gray-400">{rsvp.email}</div>
-                                                        {rsvp.phone && <div className="text-xs text-gray-400">{rsvp.phone}</div>}
+                                                    <td className="px-6 py-4 whitespace-nowrap overflow-hidden">
+                                                        <div className="text-sm font-medium text-gray-900 truncate">{rsvp.guest_name}</div>
+                                                        <div className="text-xs text-gray-400 truncate">{rsvp.email}</div>
+                                                        {rsvp.phone && <div className="text-xs text-gray-400 truncate">{rsvp.phone}</div>}
                                                     </td>
                                                     <td className="px-6 py-4 whitespace-nowrap">
                                                         <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${rsvp.attending ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
@@ -1102,10 +1227,13 @@ export default function RSVPDashboard() {
                                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                                         {rsvp.attending ? rsvp.number_of_guests : '-'}
                                                     </td>
-                                                    <td className="px-6 py-4 text-sm text-gray-500 max-w-xs">
+                                                    <td className="px-6 py-4 text-sm text-gray-500">
                                                         {dietaryFlags(primaryDietary)}
                                                     </td>
-                                                    <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">
+                                                    {/* Wraps rather than truncating — a note cut off at
+                                                        one line is a note nobody read. */}
+                                                    <td className="px-6 py-4 text-sm text-gray-500
+                                                        whitespace-pre-wrap break-words">
                                                         {rsvp.message || '-'}
                                                     </td>
                                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 relative">
