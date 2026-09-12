@@ -18,8 +18,8 @@ import GuestSidebar from '@/components/seating/GuestSidebar';
 import AddTableModal from '@/components/seating/AddTableModal';
 import RoomEditor, { RoomShape, Vertex } from '@/components/seating/RoomEditor';
 import SeatingListView from '@/components/seating/SeatingListView';
-import { SeatingTableData, GuestListEntry, FloorPlan, SeatTransferPayload, ColorMode } from '@/components/seating/types';
-import { buildPartySeats, splitPartyGroupIds as computeSplitParties } from '@/lib/seating';
+import { SeatingTableData, GuestListEntry, FloorPlan, OffListRsvp, SeatTransferPayload, ColorMode } from '@/components/seating/types';
+import { buildPartySeats, headcount, splitPartyGroupIds as computeSplitParties } from '@/lib/seating';
 
 const nodeTypes = { tableNode: TableNode };
 
@@ -576,6 +576,7 @@ export default function SeatingPage() {
   const [floorPlan, setFloorPlan] = useState<FloorPlan | null>(null);
   const [tables, setTables] = useState<SeatingTableData[]>([]);
   const [guests, setGuests] = useState<GuestListEntry[]>([]);
+  const [offListRsvps, setOffListRsvps] = useState<OffListRsvp[]>([]);
   const [room, setRoom] = useState<RoomShape | null>(null);
   const [loading, setLoading] = useState(true);
   // The canvas is the room; the list is the roster. Both edit the same plan, so
@@ -595,6 +596,7 @@ export default function SeatingPage() {
 
     setFloorPlan(fpData.floorPlan ?? null);
     setTables(fpData.tables ?? []);
+    setOffListRsvps(fpData.offListRsvps ?? []);
     setRoom(roomData.room ?? null);
     setGuests(
       (guestData.guests ?? guestData ?? []).map((g: GuestListEntry) => ({
@@ -606,6 +608,7 @@ export default function SeatingPage() {
         side: g.side ?? null,
         rsvp_status: g.rsvp_status ?? null,
         invited: g.invited ?? true,
+        rsvp_guests: g.rsvp_guests ?? null,
       }))
     );
     setLoading(false);
@@ -641,6 +644,11 @@ export default function SeatingPage() {
     refresh();
   }, [floorPlan, refresh]);
 
+  // Households, chairs filled and people expected are three different numbers.
+  // The header used to show only `guests.length` and call it "guests", so a
+  // chart seating 102 people read as 100 — the count of households.
+  const counts = headcount(tables, guests, offListRsvps);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -655,7 +663,18 @@ export default function SeatingPage() {
         <div>
           <h1 className="text-2xl font-serif font-bold text-gray-800">Seating Chart</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            {tables.length} table{tables.length !== 1 ? 's' : ''} · {guests.length} guests
+            {tables.length} table{tables.length !== 1 ? 's' : ''} · {counts.parties} part{counts.parties === 1 ? 'y' : 'ies'} ·{' '}
+            <span className={counts.seated === counts.expected ? undefined : 'text-amber-600 font-medium'}>
+              {counts.seated} of {counts.expected} guests seated
+            </span>
+            {counts.offList > 0 && (
+              <span
+                className="text-amber-600 font-medium"
+                title="They answered the RSVP form under a name the guest list does not have, so they cannot be seated until they are added. The list view names them."
+              >
+                {' '}· {counts.offList} not on the guest list
+              </span>
+            )}
           </p>
         </div>
 
@@ -691,6 +710,7 @@ export default function SeatingPage() {
           <SeatingListView
             tables={tables}
             guests={guests}
+            offListRsvps={offListRsvps}
             onRefresh={refresh}
             onAddTable={() => setShowAddModal(true)}
           />

@@ -6,7 +6,7 @@
  * list) can share one answer to "what does dropping this party here do?" rather
  * than each keeping their own. Covered by `npm run check:seating`.
  */
-import type { GuestListEntry, SeatData, SeatingTableData } from '@/components/seating/types';
+import type { GuestListEntry, OffListRsvp, SeatData, SeatingTableData } from '@/components/seating/types';
 
 /** One row of `seat_assignments`, as the assign endpoint wants it. */
 export interface SeatPayload {
@@ -98,6 +98,47 @@ export function buildPartySeats(
         display_name: person.name,
         party_group_id: guest.id,
     }));
+}
+
+/**
+ * How many chairs a household is expected to need.
+ *
+ * The RSVP answer wins whenever there is one: `party_size` is the number they
+ * were *invited* for, and a party of four that answers for two keeps its
+ * party_size of four. Reading the invitation as the headcount is what made the
+ * chart and the RSVP totals disagree with no way to see which was right.
+ * Without an answer, an attending household falls back to the people the
+ * invitation covers; anyone who has declined, is likely not coming, has not
+ * answered, or was never invited needs none.
+ */
+export function expectedSeats(guest: GuestListEntry): number {
+    if (!guest.invited) return 0;
+    if (guest.rsvp_status !== 'attending') return 0;
+    const answered = guest.rsvp_guests;
+    if (typeof answered === 'number' && Number.isFinite(answered) && answered >= 0) {
+        return Math.floor(answered);
+    }
+    return partyAttendees(guest).length;
+}
+
+/**
+ * The plan in three numbers: households, chairs filled, and people expected.
+ *
+ * `parties` counts households and `seated`/`expected` count people — three
+ * different things the header used to collapse into one figure labelled
+ * "guests", which is how a chart seating 102 people could read as 100.
+ */
+export function headcount(
+    tables: SeatingTableData[],
+    guests: GuestListEntry[],
+    offList: OffListRsvp[] = [],
+): { parties: number; seated: number; expected: number; offList: number } {
+    return {
+        parties: guests.length,
+        seated: allSeats(tables).length,
+        expected: guests.reduce((n, g) => n + expectedSeats(g), 0),
+        offList: offList.reduce((n, r) => n + (Number(r.number_of_guests) || 0), 0),
+    };
 }
 
 /** Every seat at every table, flattened, with the table it belongs to. */
@@ -316,7 +357,9 @@ export function planUnseatSelection(selection: Selection, tables: SeatingTableDa
     return change;
 }
 
-export type IssueKind = 'split-party' | 'declined-seated' | 'over-capacity' | 'unseated-guest';
+export type IssueKind =
+    | 'split-party' | 'declined-seated' | 'over-capacity' | 'unseated-guest'
+    | 'rsvp-mismatch' | 'rsvp-off-list';
 
 export interface SeatingIssue {
     kind: IssueKind;
@@ -330,11 +373,22 @@ export interface SeatingIssue {
 /**
  * What is wrong with the plan right now.
  *
- * Deliberately only the four things a person cannot see at a glance on a canvas
- * of thirty tables: a party split across tables, someone seated who said no, a
- * table past its own chair count, and a guest who is coming with nowhere to sit.
+ * Deliberately only the things a person cannot see at a glance on a canvas of
+ * thirty tables: a party split across tables, someone seated who said no, a
+ * table past its own chair count, a guest who is coming with nowhere to sit, a
+ * party holding a different number of chairs than it answered for, and an RSVP
+ * that matches no household at all.
+ *
+ * The last two are why the chart's total and the RSVP total could drift apart
+ * silently: nothing compared them, so a party seated for two who answered for
+ * one, and a whole household that answered without ever being on the guest
+ * list, both counted in exactly one of the two figures.
  */
-export function seatingIssues(tables: SeatingTableData[], guests: GuestListEntry[]): SeatingIssue[] {
+export function seatingIssues(
+    tables: SeatingTableData[],
+    guests: GuestListEntry[],
+    offList: OffListRsvp[] = [],
+): SeatingIssue[] {
     const issues: SeatingIssue[] = [];
     const seats = allSeats(tables);
 
@@ -384,6 +438,44 @@ export function seatingIssues(tables: SeatingTableData[], guests: GuestListEntry
                 guestIds: [],
             });
         }
+    }
+
+    // A party that is coming but holds a different number of chairs than it
+    // answered for — the drift that let the chart's total and the RSVP total
+    // disagree with nothing on screen saying so. Only parties that answered
+    // "attending" and hold *some* chairs: no chairs at all is the unseated case
+    // below, and a seated party that declined is already `declined-seated`.
+    for (const guest of guests) {
+        if (guest.rsvp_status !== 'attending') continue;
+        const partySeats = seats.filter(s => s.seat.party_group_id === guest.id);
+        if (partySeats.length === 0) continue;
+        const expected = expectedSeats(guest);
+        if (expected === partySeats.length) continue;
+        const chairs = `${partySeats.length} chair${partySeats.length === 1 ? '' : 's'}`;
+        issues.push({
+            kind: 'rsvp-mismatch',
+            label: partySeats.length > expected
+                ? `${guest.guest_name}'s party answered for ${expected} but has ${chairs}`
+                : `${guest.guest_name}'s party answered for ${expected} but has only ${chairs}`,
+            seats: partySeats.map(({ table, seat }) => ({ seating_table_id: table.id, seat_index: seat.seat_index })),
+            guestIds: [guest.id],
+        });
+    }
+
+    // Someone answered the RSVP form under a name the guest list does not have —
+    // a household never added, or the same person spelt two ways. They are in
+    // the RSVP headcount and can never appear on the chart, so neither total is
+    // wrong on its own and only a comparison finds them.
+    if (offList.length > 0) {
+        const people = offList.reduce((n, r) => n + (Number(r.number_of_guests) || 0), 0);
+        const shown = offList.slice(0, 3).map(r => r.guest_name).join(', ');
+        const rest = offList.length - 3;
+        issues.push({
+            kind: 'rsvp-off-list',
+            label: `${people} ${people === 1 ? 'person' : 'people'} RSVP'd but ${offList.length === 1 ? 'is' : 'are'} not on the guest list — ${shown}${rest > 0 ? ` and ${rest} more` : ''}`,
+            seats: [],
+            guestIds: [],
+        });
     }
 
     const seatedGroupIds = new Set(seats.map(s => s.seat.party_group_id).filter((id): id is number => id !== null));

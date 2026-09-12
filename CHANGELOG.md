@@ -11,6 +11,19 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.77 — [Released] The chart and the RSVPs agree on a number (`main`, 2026-09-12 20:39)
+
+The seating chart said 100 and the RSVP page said 105, and neither was lying: the chart's figure counted **households**, not people, and the two totals had never once been compared.
+
+### Fixed
+- **The seating header counted households and called them guests.** It now reads tables, parties, and *"N of M guests seated"* — three numbers that are three different things. With 100 households seating 102 people, the old label was out by more than the gap anyone was chasing.
+- **A party's headcount comes from what they answered, not what they were invited for.** A household invited for four that RSVPs for one keeps its invited size of four, and everything that read that number treated all four as coming.
+
+### Added
+- **A warning when a party holds a different number of chairs than it answered for** — over or under, naming both numbers and pointing at the chairs.
+- **A warning for RSVPs that match no household on the guest list.** They count in the RSVP total and can never appear on the chart, so neither figure looks wrong on its own; only comparing the two finds them. The header shows the count, the list view names them.
+- 26 more assertions in `check:seating` covering the expected headcount and both new warnings (78 in total).
+
 ## v0.9.76 — [Released] The list opens folded (`main`, 2026-09-12 17:50)
 
 Thirteen tables expanded is a thousand rows to scroll past before you find the one you came for.

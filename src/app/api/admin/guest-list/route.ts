@@ -3,7 +3,24 @@ import pool from '@/lib/db';
 
 export async function GET() {
   try {
-    const result = await pool.query('SELECT * FROM guest_list ORDER BY guest_name');
+    // `rsvp_guests` is what the household actually answered for; `party_size` is
+    // what they were invited for. The seating chart needs both — reading the
+    // invitation as the headcount is what let the chart and the RSVP totals
+    // disagree. A lateral keeps it one row per guest however many RSVP rows a
+    // name has collected.
+    const result = await pool.query(`
+      SELECT g.*, r.number_of_guests AS rsvp_guests
+        FROM guest_list g
+        LEFT JOIN LATERAL (
+          SELECT number_of_guests
+            FROM rsvps
+           WHERE LOWER(TRIM(guest_name)) = LOWER(TRIM(g.guest_name))
+             AND attending = true
+           ORDER BY updated_at DESC NULLS LAST, id DESC
+           LIMIT 1
+        ) r ON TRUE
+       ORDER BY g.guest_name
+    `);
     return NextResponse.json(result.rows);
   } catch (error) {
     console.error('Error fetching guest list:', error);

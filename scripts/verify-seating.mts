@@ -11,9 +11,9 @@
  */
 import type { GuestListEntry, SeatData, SeatingTableData } from '../src/components/seating/types';
 import {
-    allSeats, buildPartySeats, occupancy, partyAttendees, planAutoSeat, planGatherParty,
-    planMove, planSeatSelection, planSwap, planUnseat, planUnseatSelection, seatIndexer,
-    seatingIssues, splitPartyGroupIds,
+    allSeats, buildPartySeats, expectedSeats, headcount, occupancy, partyAttendees,
+    planAutoSeat, planGatherParty, planMove, planSeatSelection, planSwap, planUnseat,
+    planUnseatSelection, seatIndexer, seatingIssues, splitPartyGroupIds,
 } from '../src/lib/seating';
 
 let failures = 0;
@@ -319,6 +319,99 @@ console.log('\nWhat is wrong with the plan');
             .every(i => i.kind !== 'over-capacity'));
 
     check('flattening finds every seat at every table', allSeats(tables).length === 5);
+}
+
+/* ---- the RSVP answer against the invitation ---- */
+{
+    console.log('\nexpected headcount');
+
+    // The bug this covers: `party_size` is what a household was *invited* for.
+    // A party of four that answers for one keeps its party_size of four, so
+    // reading the invitation as the headcount seated three people who said no
+    // — and nothing on screen compared the chart's total with the RSVP's.
+    check('the RSVP answer beats the invitation',
+        expectedSeats(guest(1, 'Ada', 4, [], { rsvp_guests: 1 })) === 1);
+    check('answering for more than the invitation is still what they answered',
+        expectedSeats(guest(1, 'Ada', 2, [], { rsvp_guests: 3 })) === 3);
+    check('with no answer, an attending party falls back to the invitation',
+        expectedSeats(guest(1, 'Ada', 3)) === 3);
+    check('with no answer, a declined member still takes no chair',
+        expectedSeats(guest(1, 'Ada', 3, [{ name: 'B', attending: false }, { name: 'C' }])) === 2);
+    check('a party that declined needs no chairs',
+        expectedSeats(guest(1, 'Ada', 4, [], { rsvp_status: 'declined', rsvp_guests: 4 })) === 0);
+    check('a party that is likely not coming needs no chairs',
+        expectedSeats(guest(1, 'Ada', 2, [], { rsvp_status: 'likely_not_coming' })) === 0);
+    check('a party that has not answered needs no chairs yet',
+        expectedSeats(guest(1, 'Ada', 2, [], { rsvp_status: null })) === 0);
+    check('someone not invited needs no chairs',
+        expectedSeats(guest(1, 'Ada', 2, [], { invited: false })) === 0);
+    check('an answer of zero is an answer, not a missing one',
+        expectedSeats(guest(1, 'Ada', 4, [], { rsvp_guests: 0 })) === 0);
+
+    const t = table(1, 'Table 1', 8, [seat(0, 'Ada', 1, 1), seat(1, 'Bea', 1)]);
+    const hc = headcount(
+        [t],
+        [guest(1, 'Ada', 2, [], { rsvp_guests: 2 }), guest(2, 'Cy', 3, [], { rsvp_guests: 3 })],
+        [{ guest_name: 'Off List Olive', number_of_guests: 2 }],
+    );
+    // Households, chairs filled and people expected are three different numbers.
+    // The header showed only the first and called it "guests", which is how a
+    // chart seating 102 people could read as 100.
+    check('households are counted as households', hc.parties === 2);
+    check('chairs filled are counted as people', hc.seated === 2);
+    check('people expected come from the RSVP answers', hc.expected === 5);
+    check('people who answered off the guest list are counted apart', hc.offList === 2);
+}
+
+/* ---- the two totals disagreeing ---- */
+{
+    console.log('\nRSVP against the chart');
+
+    const over = table(1, 'Table 1', 8, [seat(0, 'Ada', 1, 1), seat(1, "Ada's guest 1", 1)]);
+    const overIssues = seatingIssues([over], [guest(1, 'Ada', 2, [], { rsvp_guests: 1 })]);
+    check('a party holding more chairs than it answered for is flagged',
+        overIssues.some(i => i.kind === 'rsvp-mismatch'), JSON.stringify(overIssues.map(i => i.kind)));
+    check('that line says both numbers',
+        overIssues.find(i => i.kind === 'rsvp-mismatch')!.label.includes('answered for 1')
+        && overIssues.find(i => i.kind === 'rsvp-mismatch')!.label.includes('2 chairs'));
+    check('that line points at the chairs to free',
+        overIssues.find(i => i.kind === 'rsvp-mismatch')!.seats.length === 2);
+
+    const under = table(1, 'Table 1', 8, [seat(0, 'Ada', 1, 1), seat(1, 'Bea', 1), seat(2, 'Cy', 1)]);
+    const underIssue = seatingIssues([under], [guest(1, 'Ada', 4, [], { rsvp_guests: 4 })])
+        .find(i => i.kind === 'rsvp-mismatch')!;
+    check('a party short a chair is flagged too', underIssue !== undefined);
+    check('and reads as short, not spare', underIssue.label.includes('only 3 chairs'), underIssue.label);
+
+    check('a party seated for exactly what it answered is not flagged',
+        seatingIssues([over], [guest(1, 'Ada', 4, [], { rsvp_guests: 2 })])
+            .every(i => i.kind !== 'rsvp-mismatch'));
+
+    // One household, one line: a party that declined but is still seated is
+    // already `declined-seated`, and a party with no chairs at all is
+    // `unseated-guest`.
+    const declinedSeated = seatingIssues(
+        [table(1, 'Table 1', 8, [seat(0, 'Ada', 1, 1, 'declined')])],
+        [guest(1, 'Ada', 1, [], { rsvp_status: 'declined' })],
+    );
+    check('a seated party that declined is one line, not two',
+        declinedSeated.filter(i => i.kind === 'rsvp-mismatch').length === 0
+        && declinedSeated.some(i => i.kind === 'declined-seated'));
+    const noChairs = seatingIssues([table(1, 'Table 1', 8, [])], [guest(1, 'Ada', 2, [], { rsvp_guests: 2 })]);
+    check('a party with no chairs is unseated, not a mismatch',
+        noChairs.some(i => i.kind === 'unseated-guest')
+        && noChairs.every(i => i.kind !== 'rsvp-mismatch'));
+
+    const offList = seatingIssues([table(1, 'Table 1', 8, [])], [], [
+        { guest_name: 'Greg', number_of_guests: 2 },
+        { guest_name: 'Olive', number_of_guests: 1 },
+    ]).find(i => i.kind === 'rsvp-off-list')!;
+    check('RSVPs matching no household are flagged', offList !== undefined);
+    check('that line counts the people, not the forms',
+        offList.label.includes('3 people'), offList.label);
+    check('and names them', offList.label.includes('Greg') && offList.label.includes('Olive'));
+    check('no off-list RSVPs, no line',
+        seatingIssues([table(1, 'Table 1', 8, [])], []).every(i => i.kind !== 'rsvp-off-list'));
 }
 
 console.log(`\n${failures === 0 ? 'PASS' : 'FAIL'} — ${checks - failures}/${checks} checks passed.\n`);

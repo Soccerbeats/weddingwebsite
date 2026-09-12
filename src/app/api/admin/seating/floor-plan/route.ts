@@ -121,7 +121,25 @@ export async function GET() {
       };
     });
 
-    return NextResponse.json({ floorPlan, tables });
+    // Attending RSVPs whose name matches no household. They are in the RSVP
+    // headcount and can never appear on the chart, so neither total is wrong on
+    // its own — only comparing the two finds them.
+    const offListResult = await client.query(
+      `SELECT r.guest_name, r.number_of_guests
+         FROM rsvps r
+        WHERE r.attending = true
+          AND NOT EXISTS (
+            SELECT 1 FROM guest_list g
+             WHERE LOWER(TRIM(g.guest_name)) = LOWER(TRIM(r.guest_name))
+          )
+        ORDER BY r.guest_name`
+    );
+    const offListRsvps = offListResult.rows.map((r) => ({
+      guest_name: r.guest_name as string,
+      number_of_guests: Number(r.number_of_guests) || 0,
+    }));
+
+    return NextResponse.json({ floorPlan, tables, offListRsvps });
   } catch (error) {
     console.error('Error fetching floor plan:', error);
     return NextResponse.json(

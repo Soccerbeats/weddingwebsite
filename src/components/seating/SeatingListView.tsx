@@ -20,7 +20,7 @@
  */
 
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { SeatingTableData, GuestListEntry, SeatData } from './types';
+import { SeatingTableData, GuestListEntry, OffListRsvp, SeatData } from './types';
 import {
     allSeats,
     splitPartyGroupIds,
@@ -113,14 +113,20 @@ function OverflowMenu({ items }: { items: { label: string; onClick: () => void; 
 
 // ── The view ───────────────────────────────────────────────────────────────
 
+/** A stable empty default, so omitting the prop does not rebuild the issue list
+ *  on every render. */
+const NO_OFF_LIST: OffListRsvp[] = [];
+
 export default function SeatingListView({
     tables,
     guests,
+    offListRsvps = NO_OFF_LIST,
     onRefresh,
     onAddTable,
 }: {
     tables: SeatingTableData[];
     guests: GuestListEntry[];
+    offListRsvps?: OffListRsvp[];
     onRefresh: () => void;
     onAddTable: () => void;
 }) {
@@ -156,7 +162,7 @@ export default function SeatingListView({
     useEffect(() => { setSelected(new Set()); lastClicked.current = null; }, [grouping]);
 
     const split = useMemo(() => splitPartyGroupIds(tables), [tables]);
-    const issues = useMemo(() => seatingIssues(tables, guests), [tables, guests]);
+    const issues = useMemo(() => seatingIssues(tables, guests, offListRsvps), [tables, guests, offListRsvps]);
     const guestById = useMemo(() => new Map(guests.map(g => [g.id, g])), [guests]);
 
     /** Where each party is sitting, if anywhere. */
@@ -609,7 +615,8 @@ export default function SeatingListView({
                                         onClick={() => {
                                             const keys = [
                                                 ...issue.seats.map(s => seatKey(s.seating_table_id, s.seat_index)),
-                                                ...(issue.kind === 'unseated-guest' ? issue.guestIds.map(guestKey) : []),
+                                                ...(issue.kind === 'unseated-guest' || issue.kind === 'rsvp-mismatch'
+                                                    ? issue.guestIds.map(guestKey) : []),
                                             ].filter(k => rowByKey.has(k));
                                             setSelected(new Set(keys));
                                         }}
