@@ -5,6 +5,9 @@ import { DEFAULT_ROOM_BLOCK_MESSAGE } from '@/lib/roomBlock';
 
 interface PartyMember {
     name: string | null;
+    // Whether this person is coming. Recorded per person by the RSVP form —
+    // a party of three where one declines seats two, not three.
+    attending?: boolean | null;
 }
 
 interface DietaryEntry {
@@ -76,12 +79,17 @@ function buildCards(primaryName: string, partyMembers: PartyMember[], existingDi
             // A brand-new RSVP starts blank so the guest has to tick Attending or Not
             // attending for each person themselves — nothing is guessed on their behalf.
             // Re-opening an RSVP they already sent shows back what they chose, otherwise it
-            // looks like their answers were lost. Attendance isn't stored per member; a
-            // submitted RSVP lists exactly its attendees in dietary_restrictions, and
-            // submitting requires answering everyone, so "absent from that list" means
-            // they were marked not attending.
+            // looks like their answers were lost. The answer is stored on the member itself
+            // (`attending`); RSVPs sent before that field existed fall back to the older
+            // inference — a submitted RSVP lists exactly its attendees in
+            // dietary_restrictions, and submitting requires answering everyone, so "absent
+            // from that list" means they were marked not attending.
             // (The primary guest is covered by the "Will you be attending?" answer above.)
-            attendance: isFirst ? 'yes' : (hasExistingRsvp ? (existing ? 'yes' : 'no') : null),
+            attendance: isFirst
+                ? 'yes'
+                : typeof slot?.attending === 'boolean'
+                    ? (slot.attending ? 'yes' : 'no')
+                    : (hasExistingRsvp ? (existing ? 'yes' : 'no') : null),
             vegetarian: existing?.vegetarian ?? false,
             vegan: existing?.vegan ?? false,
             gluten_free: existing?.gluten_free ?? false,
@@ -234,8 +242,13 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
 
         const attendingCards = formData.attending === 'yes' ? cards.filter(c => c.attendance === 'yes') : [];
         const guestCount = attendingCards.length;
-        // Send resolved names for all additional members back so guest_list.party_members stays up to date
-        const resolvedMembers = cards.slice(1).map(c => ({ name: c.name || null }));
+        // Send resolved names *and* each person's answer back so guest_list.party_members
+        // stays up to date. Attendance per member is what the seating chart reads: without
+        // it a declined plus-one still got a chair, coloured as if they were coming.
+        const resolvedMembers = cards.slice(1).map(c => ({
+            name: c.name || null,
+            attending: formData.attending === 'yes' ? c.attendance === 'yes' : false,
+        }));
         const dietaryRestrictions = attendingCards.map(c => ({
             name: c.name,
             vegetarian: c.vegetarian,

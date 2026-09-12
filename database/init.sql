@@ -159,6 +159,70 @@ BEGIN
   END IF;
 END $$;
 
+-- ---------------------------------------------------------------------------
+-- Backfill: each party member's own RSVP answer.
+--
+-- An RSVP used to record only *how many* of a party were coming —
+-- `guest_list.party_members` held names alone — so a party of three where one
+-- person declined still took three chairs on the seating chart, every one of
+-- them coloured as if that person were coming.
+--
+-- The answer is recoverable: a submitted RSVP lists exactly its attendees in
+-- `rsvps.dietary_restrictions` (one entry per attending person, restriction or
+-- not), and the form has always required an answer for everyone before it will
+-- submit. So, for a party whose members carry no `attending` key yet:
+--   household declined -> every member is marked not attending
+--   household accepted -> a member attends exactly when their name is in that list
+--   no RSVP at all     -> left alone; nobody has answered
+-- An unnamed "+1" slot is left without the key rather than guessed at, and
+-- "no answer" still gets a chair.
+--
+-- Idempotent, and it must stay that way: the guard is the *presence* of the
+-- key, so a later edit that sets it back to no answer (a JSON null) is never
+-- overwritten by a subsequent boot.
+-- ---------------------------------------------------------------------------
+UPDATE guest_list g
+   SET party_members = sub.members,
+       updated_at = NOW()
+  FROM (
+    SELECT g2.id,
+           jsonb_agg(
+             CASE
+               WHEN jsonb_typeof(t.m) <> 'object' THEN t.m
+               WHEN r.attending = false THEN t.m || jsonb_build_object('attending', false)
+               WHEN COALESCE(TRIM(t.m->>'name'), '') = '' THEN t.m
+               ELSE t.m || jsonb_build_object('attending', EXISTS (
+                      SELECT 1
+                        FROM jsonb_array_elements(r.dietary_restrictions) d
+                       WHERE LOWER(TRIM(d->>'name')) = LOWER(TRIM(t.m->>'name'))
+                    ))
+             END
+             ORDER BY t.ord
+           ) AS members
+      FROM guest_list g2
+      JOIN LATERAL (
+             SELECT attending, dietary_restrictions
+               FROM rsvps
+              WHERE LOWER(TRIM(guest_name)) = LOWER(TRIM(g2.guest_name))
+              ORDER BY created_at DESC
+              LIMIT 1
+           ) r ON TRUE
+      CROSS JOIN LATERAL jsonb_array_elements(g2.party_members) WITH ORDINALITY AS t(m, ord)
+     WHERE jsonb_typeof(g2.party_members) = 'array'
+       AND jsonb_array_length(g2.party_members) > 0
+       AND NOT EXISTS (
+             SELECT 1 FROM jsonb_array_elements(g2.party_members) e WHERE e ? 'attending'
+           )
+       AND (
+             r.attending = false
+             OR (r.attending = true
+                 AND jsonb_typeof(r.dietary_restrictions) = 'array'
+                 AND jsonb_array_length(r.dietary_restrictions) > 0)
+           )
+     GROUP BY g2.id
+  ) sub
+ WHERE g.id = sub.id;
+
 -- Seating chart tables
 CREATE TABLE IF NOT EXISTS floor_plans (
   id SERIAL PRIMARY KEY,

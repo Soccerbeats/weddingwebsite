@@ -11,6 +11,21 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.72 — [Released] A declined plus-one is not a guest (`main`, 2026-09-12 04:20)
+
+A party of three where one person declined still took three chairs on the seating chart, and all three were coloured as if everyone were coming — so the headcount was wrong and nothing on screen said so. Removing the one who is not coming removed the other two with them.
+
+The cause: an RSVP recorded only *how many* of a party were coming. Each person's own answer — which the form has always asked for, and always required — was thrown away on submit, and a companion seat simply inherited the answer of whoever led the party.
+
+### Fixed
+- **A companion seat shows that person's own answer, not their party leader's.** Someone who declined is red and struck through in both colour modes, because a chair that needs freeing is not a fact about which toggle you have selected.
+- **The × on a seat removes that one person.** It used to clear the whole party, which is exactly what you do not want when one of three is not coming. Alt-click (or Shift-click) still removes the party.
+- **Dropping a party onto a table seats only the people who are coming.** Someone who has not answered still gets a chair — nothing is assumed on their behalf.
+
+### Added
+- **Each party member carries their own RSVP answer** (`guest_list.party_members[].attending`), written by the RSVP form and editable per person in the admin's guest editor — for the ones who answer by phone.
+- **A one-time backfill in `database/init.sql`** recovers the answers already given: a submitted RSVP lists exactly its attendees, so a named member is marked coming or not coming from that list. Guests with no RSVP, and unnamed "+1" slots, are left alone rather than guessed at. It is guarded on the presence of the key, so a later edit is never overwritten on the next boot.
+
 ## v0.9.71 — [Released] Room to read a message (`main`, 2026-08-31 19:10)
 
 The RSVP table truncated every message to one line, so the column that carries the only thing a guest actually wrote to you was the one you could not read — while Dietary, which holds two or three short flags, sat on half as much width again.

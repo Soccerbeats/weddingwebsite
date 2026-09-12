@@ -27,6 +27,7 @@ interface TableNodeProps {
     onDropGuest: (tableId: number, guestId: string) => void;
     onMoveSeat: (payload: SeatTransferPayload, toTableId: number) => void;
     onUnassignParty: (tableId: number, partyGroupId: number) => void;
+    onUnassignSeat: (tableId: number, seatIndex: number) => void;
     onReorderSeats: (tableId: number, orderedSeatIndices: { seat_index: number; display_name: string; guest_list_id: number | null; party_group_id: number | null }[]) => void;
     onDeleteTable: (tableId: number) => void;
     onRenameTable: (tableId: number, name: string) => void;
@@ -41,12 +42,14 @@ function SeatChip({
   tableId,
   isSplit,
   colorMode,
+  onRemoveSeat,
   onRemoveParty,
 }: {
   seat: SeatData;
   tableId: number;
   isSplit: boolean;
   colorMode: ColorMode;
+  onRemoveSeat: () => void;
   onRemoveParty: () => void;
 }) {
   const [hover, setHover] = useState(false);
@@ -62,18 +65,19 @@ function SeatChip({
 
   // Determine chip color classes based on mode
   const isLikelyNotComing = seat.rsvp_status === 'likely_not_coming';
+  const hasDeclined = seat.rsvp_status === 'declined';
   let chipClass: string;
   if (isLikelyNotComing) {
     chipClass = 'bg-orange-100 border-orange-400 text-orange-700';
+  } else if (hasDeclined) {
+    // Red in *both* modes, not just RSVP mode: someone who said no is sitting in
+    // a chair that needs freeing, which is not a fact about the colour toggle.
+    chipClass = 'bg-red-100 border-red-400 text-red-800 line-through decoration-red-400/70';
   } else if (colorMode === 'rsvp') {
-    // Coming green, declined red, no answer yet white.
-    if (seat.rsvp_status === 'declined') {
-      chipClass = 'bg-red-100 border-red-400 text-red-800';
-    } else if (seat.rsvp_status) {
-      chipClass = 'bg-green-100 border-green-400 text-green-800';
-    } else {
-      chipClass = 'bg-white border-gray-300 text-gray-600';
-    }
+    // Coming green, no answer yet white.
+    chipClass = seat.rsvp_status
+      ? 'bg-green-100 border-green-400 text-green-800'
+      : 'bg-white border-gray-300 text-gray-600';
   } else {
     // party mode
     chipClass = isSplit
@@ -91,17 +95,26 @@ function SeatChip({
       className={`nodrag relative flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border select-none cursor-grab active:cursor-grabbing ${chipClass}`}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      title={colorMode === 'rsvp'
-        ? (seat.rsvp_status ? `RSVP: ${seat.rsvp_status}` : 'No RSVP yet')
-        : (isSplit ? 'Party is split — drag to move' : `Drag ${name} to another table`)}
+      title={hasDeclined
+        ? `${name} is not coming — remove them from this table`
+        : colorMode === 'rsvp'
+          ? (seat.rsvp_status ? `RSVP: ${seat.rsvp_status}` : 'No RSVP yet')
+          : (isSplit ? 'Party is split — drag to move' : `Drag ${name} to another table`)}
     >
       {colorMode === 'party' && isSplit && <span className="text-yellow-500 mr-0.5">⚠</span>}
       <span className="truncate max-w-[80px]">{name}</span>
       {hover && (
         <button
           className="nodrag ml-1 text-gray-400 hover:text-red-500 transition-colors leading-none"
-          onClick={e => { e.stopPropagation(); onRemoveParty(); }}
-          title="Remove party from table"
+          // Removes this one person. It used to clear the whole party, so freeing
+          // the one chair a declined plus-one was sitting in took the other two
+          // with it. Hold Alt (or Shift) to remove the party, as before.
+          onClick={e => {
+            e.stopPropagation();
+            if (e.altKey || e.shiftKey) onRemoveParty();
+            else onRemoveSeat();
+          }}
+          title={`Remove ${name} from this table (Alt-click to remove their whole party)`}
         >
           ×
         </button>
@@ -454,11 +467,13 @@ function SeatsDisplay({
   splitPartyGroupIds,
   colorMode,
   onUnassignParty,
+  onUnassignSeat,
 }: {
   table: SeatingTableData;
   splitPartyGroupIds: Set<number>;
   colorMode: ColorMode;
   onUnassignParty: (tableId: number, partyGroupId: number) => void;
+  onUnassignSeat: (tableId: number, seatIndex: number) => void;
 }) {
   if (table.seats.length === 0) return null;
 
@@ -491,6 +506,7 @@ function SeatsDisplay({
                 tableId={table.id}
                 isSplit={isSplit}
                 colorMode={colorMode}
+                onRemoveSeat={() => onUnassignSeat(table.id, seat.seat_index)}
                 onRemoveParty={() => seat.party_group_id !== null && onUnassignParty(table.id, seat.party_group_id)}
               />
             </div>
@@ -514,6 +530,7 @@ function SeatsDisplay({
             tableId={table.id}
             isSplit={isSplit}
             colorMode={colorMode}
+            onRemoveSeat={() => onUnassignSeat(table.id, seat.seat_index)}
             onRemoveParty={() => seat.party_group_id !== null && onUnassignParty(table.id, seat.party_group_id)}
           />
         );
@@ -525,7 +542,7 @@ function SeatsDisplay({
 // ── Main node export ───────────────────────────────────────────────────────
 
 export default function TableNode({ data }: TableNodeProps) {
-  const { table, colorMode, onDropGuest, onMoveSeat, onUnassignParty, onReorderSeats, onDeleteTable, onRenameTable, splitPartyGroupIds } = data;
+  const { table, colorMode, onDropGuest, onMoveSeat, onUnassignParty, onUnassignSeat, onReorderSeats, onDeleteTable, onRenameTable, splitPartyGroupIds } = data;
 
   const isRound = table.table_type === 'round';
   const tableW = isRound ? 160 : table.table_type === 'head' ? Math.max(240, table.seats.length * 48) : 200;
@@ -570,6 +587,7 @@ export default function TableNode({ data }: TableNodeProps) {
         splitPartyGroupIds={splitPartyGroupIds}
         colorMode={colorMode}
         onUnassignParty={onUnassignParty}
+        onUnassignSeat={onUnassignSeat}
       />
     </div>
   );

@@ -49,5 +49,6 @@ export interface GuestListEntry {
   rsvp_status: string | null;
   invited: boolean;
   assigned_seat?: { table_name: string; seat_index: number } | null;
-  party_members?: { name: string | null }[];
+  // `attending` is the person's own RSVP answer (null when they have not answered).
+  party_members?: { name: string | null; attending?: boolean | null }[];
 }

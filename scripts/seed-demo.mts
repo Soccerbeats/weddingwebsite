@@ -311,7 +311,9 @@ async function seedGuests() {
              (guest_name, email, phone, attending, number_of_guests, message, dietary_restrictions)
              VALUES ($1,$2,$3,$4,$5,$6,$7)`,
             [guest.guest_name, guest.email ?? 'demo@example.com', guest.phone,
-                attending, attending ? guest.party_size : 0,
+                attending,
+                // The headcount is the people actually coming, not the party's size.
+                attending ? 1 + guest.party_members.filter((m) => m.attending).length : 0,
                 index % 3 === 0 ? DEMO_MESSAGES[message++ % DEMO_MESSAGES.length] : null,
                 JSON.stringify(guest.party_members
                     .filter((m) => m.dietary)

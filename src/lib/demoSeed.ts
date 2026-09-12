@@ -213,7 +213,10 @@ export interface DemoGuest {
     rsvp_status: string | null;
     notes: string | null;
     address: string | null;
-    party_members: { name: string; dietary?: string }[];
+    // `attending` is each person's own RSVP answer — the seating chart reads it,
+    // and setting it here also keeps init.sql's one-time backfill (which infers
+    // the answer from an RSVP's attendee list) off demo data it cannot read.
+    party_members: { name: string; dietary?: string; attending: boolean | null }[];
     plus_one_name: string | null;
     flag: string | null;
     relationship: string | null;
@@ -250,12 +253,12 @@ export function demoGuests(count = 90): DemoGuest[] {
         const partySize = roll < 0.18 ? 1 : roll < 0.72 ? 2 : roll < 0.9 ? 3 : 4;
         const [town, state, zip] = pick(TOWNS);
 
-        const members: { name: string; dietary?: string }[] = [];
+        const members: { name: string; dietary?: string; attending: boolean | null }[] = [];
         for (let m = 1; m < partySize; m += 1) {
             // Some party members are named, some are a plus-one nobody has met.
             members.push(rand() < 0.75
-                ? { name: `${pick(FIRST)} ${name.split(' ')[1]}` }
-                : { name: '' });
+                ? { name: `${pick(FIRST)} ${name.split(' ')[1]}`, attending: null }
+                : { name: '', attending: null });
         }
         if (rand() < 0.2 && members[0]) members[0].dietary = pick(['Vegetarian', 'Vegan', 'Gluten free', 'No shellfish']);
 
@@ -263,6 +266,16 @@ export function demoGuests(count = 90): DemoGuest[] {
         const rsvpStatus = answered < 0.26 ? 'attending'
             : answered < 0.34 ? 'declined'
                 : answered < 0.4 ? 'likely_not' : null;
+
+        // Who in the party is actually coming. A household that declined brings
+        // nobody; one that accepted usually brings everyone, but sometimes a
+        // partner or a child cannot make it — which is the case the seating
+        // chart has to get right.
+        for (const member of members) {
+            member.attending = rsvpStatus === 'attending' ? rand() > 0.15
+                : rsvpStatus === 'declined' ? false
+                    : null;
+        }
 
         guests.push({
             guest_name: name,

@@ -49,14 +49,34 @@ export async function GET() {
 
     // Get all seat assignments with guest info for this floor plan's tables
     const assignmentsResult = await client.query(
+      // rsvp_status per seat. A companion seat (guest_list_id IS NULL) carries no
+      // guest_list row of its own, so its answer comes from the matching entry in
+      // the party leader's `party_members` — matched on the name the seat was
+      // created with. Falling straight back to the leader's own status, as this
+      // used to, painted a declined plus-one green and counted them as coming.
+      // A member with no recorded answer still inherits the leader's status.
       `SELECT sa.seating_table_id, sa.seat_index, sa.guest_list_id,
               sa.display_name, sa.party_group_id,
               gl.guest_name, gl.plus_one_name, gl.party_size,
-              -- rsvp_status: use direct guest match, fall back to party leader for plus-ones/extras
-              COALESCE(gl.rsvp_status, party_leader.rsvp_status) AS rsvp_status
+              CASE
+                WHEN sa.guest_list_id IS NOT NULL THEN gl.rsvp_status
+                WHEN member.attending IS FALSE THEN 'declined'
+                ELSE party_leader.rsvp_status
+              END AS rsvp_status
        FROM seat_assignments sa
        LEFT JOIN guest_list gl ON gl.id = sa.guest_list_id
        LEFT JOIN guest_list party_leader ON party_leader.id = sa.party_group_id AND sa.guest_list_id IS NULL
+       LEFT JOIN LATERAL (
+         SELECT CASE WHEN jsonb_typeof(m->'attending') = 'boolean'
+                     THEN (m->>'attending')::boolean END AS attending
+         FROM jsonb_array_elements(
+           CASE WHEN jsonb_typeof(party_leader.party_members) = 'array'
+                THEN party_leader.party_members ELSE '[]'::jsonb END
+         ) AS m
+         WHERE m->>'name' IS NOT NULL
+           AND LOWER(TRIM(m->>'name')) = LOWER(TRIM(sa.display_name))
+         LIMIT 1
+       ) member ON TRUE
        WHERE sa.seating_table_id IN (
          SELECT id FROM seating_tables WHERE floor_plan_id = $1
        )

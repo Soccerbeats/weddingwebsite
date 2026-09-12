@@ -37,6 +37,9 @@ interface RSVP {
 
 interface PartyMember {
     name: string | null;
+    // The person's own RSVP answer. null = not answered. The seating chart reads
+    // this, so an edit here must never drop it.
+    attending?: boolean | null;
 }
 
 interface Guest {
@@ -565,6 +568,7 @@ export default function RSVPDashboard() {
         const existing = guest.party_members || [];
         const slots: PartyMember[] = Array.from({ length: Math.max(0, guest.party_size - 1) }, (_, i) => ({
             name: existing[i]?.name ?? null,
+            attending: existing[i]?.attending ?? null,
         }));
         setGuestForm({
             guest_name: guest.guest_name,
@@ -2054,18 +2058,41 @@ export default function RSVPDashboard() {
                                         <label className="block text-sm font-semibold text-gray-700 mb-1.5">
                                             Guest {i + 2} Name <span className="text-gray-400 font-normal">(leave blank if unknown)</span>
                                         </label>
-                                        <input
-                                            type="text"
-                                            value={guestForm.party_members[i]?.name ?? ''}
-                                            onChange={(e) => {
-                                                const updated = [...guestForm.party_members];
-                                                while (updated.length <= i) updated.push({ name: null });
-                                                updated[i] = { name: e.target.value || null };
-                                                setGuestForm({ ...guestForm, party_members: updated });
-                                            }}
-                                            className="w-full px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-gray-900 placeholder-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
-                                            placeholder="Optional"
-                                        />
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="text"
+                                                value={guestForm.party_members[i]?.name ?? ''}
+                                                onChange={(e) => {
+                                                    const updated = [...guestForm.party_members];
+                                                    while (updated.length <= i) updated.push({ name: null, attending: null });
+                                                    updated[i] = { ...updated[i], name: e.target.value || null };
+                                                    setGuestForm({ ...guestForm, party_members: updated });
+                                                }}
+                                                className="flex-1 min-w-0 px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-gray-900 placeholder-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
+                                                placeholder="Optional"
+                                            />
+                                            {/* Per-person answer. The RSVP form sets this; it is editable here for
+                                                the people who answer by phone. The seating chart reads it: someone
+                                                marked Not coming is not given a chair. */}
+                                            <select
+                                                value={guestForm.party_members[i]?.attending === true ? 'yes' : guestForm.party_members[i]?.attending === false ? 'no' : ''}
+                                                onChange={(e) => {
+                                                    const updated = [...guestForm.party_members];
+                                                    while (updated.length <= i) updated.push({ name: null, attending: null });
+                                                    updated[i] = {
+                                                        ...updated[i],
+                                                        attending: e.target.value === 'yes' ? true : e.target.value === 'no' ? false : null,
+                                                    };
+                                                    setGuestForm({ ...guestForm, party_members: updated });
+                                                }}
+                                                className="w-32 shrink-0 px-3 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-sm text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
+                                                title="Is this person coming?"
+                                            >
+                                                <option value="">No answer</option>
+                                                <option value="yes">Coming</option>
+                                                <option value="no">Not coming</option>
+                                            </select>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -2102,6 +2129,7 @@ export default function RSVPDashboard() {
                                             const size = parseInt(e.target.value) || 1;
                                             const slots = Array.from({ length: Math.max(0, size - 1) }, (_, i) => ({
                                                 name: guestForm.party_members[i]?.name ?? null,
+                                                attending: guestForm.party_members[i]?.attending ?? null,
                                             }));
                                             setGuestForm({ ...guestForm, party_size: size, party_members: slots });
                                         }}

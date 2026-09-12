@@ -136,19 +136,26 @@ function SeatingCanvas({
     // party_size - 1 others. A plus-one still recorded against a guest whose
     // party has since shrunk to one is *not* seated; that name is only settable
     // by CSV import, so it outlives the party it belonged to.
+    //
+    // A member who answered "not attending" is skipped: a party of three where
+    // one declined takes two chairs, not three. Members who have not answered
+    // are still seated — nothing is assumed on their behalf.
     const plusOne = (guest.plus_one_name ?? '').trim();
-    const memberNames = (guest.party_members ?? [])
-      .map(m => (m?.name ?? '').trim())
-      .filter(n => n && n.toLowerCase() !== plusOne.toLowerCase());
+    const members = (guest.party_members ?? [])
+      .filter(m => (m?.name ?? '').trim().toLowerCase() !== plusOne.toLowerCase());
     // The plus-one is the first companion when there is room for one.
-    const companionNames = plusOne ? [plusOne, ...memberNames] : memberNames;
-    const companionCount = Math.max(0, (guest.party_size ?? 1) - 1);
-    for (let i = 0; i < companionCount; i++) {
+    const companions = plusOne
+      ? [{ name: plusOne, attending: null as boolean | null | undefined }, ...members]
+      : members;
+    const slotCount = Math.max(0, (guest.party_size ?? 1) - 1);
+    for (let i = 0; i < slotCount; i++) {
+      const companion = companions[i];
+      if (companion?.attending === false) continue;
       payload.push({
         seating_table_id: tableId,
         seat_index: nextIndex(),
         guest_list_id: null,
-        display_name: companionNames[i] || `${guest.guest_name.split(' ')[0]}'s guest ${i + 1}`,
+        display_name: (companion?.name ?? '').trim() || `${guest.guest_name.split(' ')[0]}'s guest ${i + 1}`,
         party_group_id: guest.id,
       });
     }
@@ -160,6 +167,17 @@ function SeatingCanvas({
     });
     onRefresh();
   }, [guests, tables, onRefresh]);
+
+  // Free one chair. The whole-party removal below is still a click away (Alt-click
+  // the ×), but removing one person no longer takes their party with them.
+  const handleUnassignSeat = useCallback(async (tableId: number, seatIndex: number) => {
+    await fetch('/api/admin/seating/assign', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ seating_table_id: tableId, seat_index: seatIndex }),
+    });
+    onRefresh();
+  }, [onRefresh]);
 
   const handleUnassignParty = useCallback(async (tableId: number, partyGroupId: number) => {
     await fetch('/api/admin/seating/assign', {
@@ -302,6 +320,7 @@ function SeatingCanvas({
         onMoveSeat: handleMoveSeat,
         onReorderSeats: handleReorderSeats,
         onUnassignParty: handleUnassignParty,
+        onUnassignSeat: handleUnassignSeat,
         onDeleteTable: handleDeleteTable,
         onRenameTable: handleRenameTable,
         splitPartyGroupIds: split,

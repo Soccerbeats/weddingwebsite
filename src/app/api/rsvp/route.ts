@@ -31,7 +31,7 @@ interface RsvpInput {
     guestCount: number;
     dietaryJson: string | null;
     message: string | null;
-    resolvedMembers: { name: string | null }[] | null;
+    resolvedMembers: { name: string | null; attending: boolean | null }[] | null;
 }
 
 /**
@@ -61,11 +61,15 @@ function parseInput(body: unknown): RsvpInput | string {
     const message = typeof b.message === 'string' ? b.message.slice(0, 5000) : null;
 
     const resolvedMembers = Array.isArray(b.resolvedMembers) && b.resolvedMembers.length
-        ? b.resolvedMembers.slice(0, 50).map((m) => ({
-            name: m && typeof m === 'object' && typeof (m as { name?: unknown }).name === 'string'
-                ? ((m as { name: string }).name).slice(0, 255)
-                : null,
-        }))
+        ? b.resolvedMembers.slice(0, 50).map((m) => {
+            const obj = m && typeof m === 'object' ? (m as { name?: unknown; attending?: unknown }) : {};
+            return {
+                name: typeof obj.name === 'string' ? obj.name.slice(0, 255) : null,
+                // Per-person answer. Absent (an older client) stays null rather than
+                // becoming a guess — the seating chart treats null as "not answered".
+                attending: typeof obj.attending === 'boolean' ? obj.attending : null,
+            };
+        })
         : null;
 
     return { guestName, email, phone, attending: b.attending, guestCount, dietaryJson, message, resolvedMembers };
