@@ -17,7 +17,9 @@ import TableNode from '@/components/seating/TableNode';
 import GuestSidebar from '@/components/seating/GuestSidebar';
 import AddTableModal from '@/components/seating/AddTableModal';
 import RoomEditor, { RoomShape, Vertex } from '@/components/seating/RoomEditor';
+import SeatingListView from '@/components/seating/SeatingListView';
 import { SeatingTableData, GuestListEntry, FloorPlan, SeatTransferPayload, ColorMode } from '@/components/seating/types';
+import { buildPartySeats, splitPartyGroupIds as computeSplitParties } from '@/lib/seating';
 
 const nodeTypes = { tableNode: TableNode };
 
@@ -30,6 +32,7 @@ function SeatingCanvas({
   room,
   onRefresh,
   onRoomChange,
+  onAddTable,
 }: {
   floorPlan: FloorPlan | null;
   tables: SeatingTableData[];
@@ -37,10 +40,10 @@ function SeatingCanvas({
   room: RoomShape | null;
   onRefresh: () => void;
   onRoomChange: (room: RoomShape | null) => void;
+  onAddTable: () => void;
 }) {
   const { screenToFlowPosition } = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
-  const [showAddModal, setShowAddModal] = useState(false);
   const [showRoomSettings, setShowRoomSettings] = useState(false);
   const [colorMode, setColorMode] = useState<ColorMode>('party');
   const [roomWidth, setRoomWidth] = useState(floorPlan?.room_width ?? '');
@@ -61,24 +64,12 @@ function SeatingCanvas({
     return () => window.removeEventListener('keydown', onKey);
   }, [roomEditMode]);
 
-  // Compute split party group IDs using party_group_id
-  const splitPartyGroupIds = useCallback((): Set<number> => {
-    const split = new Set<number>();
-    // Map party_group_id → set of table IDs it appears in
-    const partyTableMap = new Map<number, Set<number>>();
-    for (const table of tables) {
-      for (const seat of table.seats) {
-        if (seat.party_group_id !== null) {
-          if (!partyTableMap.has(seat.party_group_id)) partyTableMap.set(seat.party_group_id, new Set());
-          partyTableMap.get(seat.party_group_id)!.add(table.id);
-        }
-      }
-    }
-    for (const [groupId, tableIds] of partyTableMap) {
-      if (tableIds.size > 1) split.add(groupId);
-    }
-    return split;
-  }, [tables]);
+  // Which parties sit at more than one table — shared with the list view so the
+  // two never disagree about what "split" means.
+  const splitPartyGroupIds = useCallback(
+    (): Set<number> => computeSplitParties(tables),
+    [tables],
+  );
 
   // Build guest sidebar data: compute assigned_seat for each guest
   const guestsWithAssignment = useCallback((): GuestListEntry[] => {
@@ -111,54 +102,10 @@ function SeatingCanvas({
     const alreadyHere = table.seats.some(s => s.party_group_id === guestId);
     if (alreadyHere) return;
 
-    // Next available seat index at this table
-    const usedIndices = new Set(table.seats.map(s => s.seat_index));
-    const nextIndex = () => {
-      let i = 0;
-      while (usedIndices.has(i)) i++;
-      usedIndices.add(i);
-      return i;
-    };
-
-    const payload = [];
-
-    // Primary guest
-    payload.push({
-      seating_table_id: tableId,
-      seat_index: nextIndex(),
-      guest_list_id: guest.id,
-      display_name: guest.guest_name,
-      party_group_id: guest.id,
-    });
-
-    // Companions. `party_size` is the count the RSVP guest list edits, so it —
-    // not `plus_one_name` — decides how many seats a party takes: the guest plus
-    // party_size - 1 others. A plus-one still recorded against a guest whose
-    // party has since shrunk to one is *not* seated; that name is only settable
-    // by CSV import, so it outlives the party it belonged to.
-    //
-    // A member who answered "not attending" is skipped: a party of three where
-    // one declined takes two chairs, not three. Members who have not answered
-    // are still seated — nothing is assumed on their behalf.
-    const plusOne = (guest.plus_one_name ?? '').trim();
-    const members = (guest.party_members ?? [])
-      .filter(m => (m?.name ?? '').trim().toLowerCase() !== plusOne.toLowerCase());
-    // The plus-one is the first companion when there is room for one.
-    const companions = plusOne
-      ? [{ name: plusOne, attending: null as boolean | null | undefined }, ...members]
-      : members;
-    const slotCount = Math.max(0, (guest.party_size ?? 1) - 1);
-    for (let i = 0; i < slotCount; i++) {
-      const companion = companions[i];
-      if (companion?.attending === false) continue;
-      payload.push({
-        seating_table_id: tableId,
-        seat_index: nextIndex(),
-        guest_list_id: null,
-        display_name: (companion?.name ?? '').trim() || `${guest.guest_name.split(' ')[0]}'s guest ${i + 1}`,
-        party_group_id: guest.id,
-      });
-    }
+    // Who takes a chair, and which chair, is decided in one place —
+    // src/lib/seating.ts — so the canvas and the list agree. It skips anyone who
+    // answered "not attending" and seats everyone else in the party.
+    const payload = buildPartySeats(guest, tableId, table.seats.map(s => s.seat_index));
 
     await fetch('/api/admin/seating/assign', {
       method: 'POST',
@@ -268,24 +215,6 @@ function SeatingCanvas({
     });
   }, []);
 
-  const handleAddTable = useCallback(async (opts: { name: string; table_type: string }) => {
-    if (!floorPlan) return;
-    await fetch('/api/admin/seating/tables', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        floor_plan_id: floorPlan.id,
-        name: opts.name,
-        table_type: opts.table_type,
-        seat_count: 0,
-        x: 200 + Math.random() * 400,
-        y: 200 + Math.random() * 300,
-      }),
-    });
-    setShowAddModal(false);
-    onRefresh();
-  }, [floorPlan, onRefresh]);
-
   // Handle drag from sidebar → drop onto canvas (drop on a seat slot)
   const handleCanvasDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -346,7 +275,7 @@ function SeatingCanvas({
         {/* Toolbar */}
         <div className="h-12 bg-white border-b border-gray-200 flex items-center gap-2 px-4 shrink-0">
           <button
-            onClick={() => setShowAddModal(true)}
+            onClick={onAddTable}
             className="flex items-center gap-1.5 bg-accent text-white text-sm font-medium px-3 py-1.5 rounded-md hover:opacity-90 transition-opacity"
             style={{ backgroundColor: 'var(--accent)' }}
           >
@@ -544,15 +473,6 @@ function SeatingCanvas({
         </div>
       </div>
 
-      {/* Add Table Modal */}
-      {showAddModal && (
-        <AddTableModal
-          defaultName={`Table ${tables.length + 1}`}
-          onAdd={handleAddTable}
-          onClose={() => setShowAddModal(false)}
-        />
-      )}
-
       {/* Room Settings Modal */}
       {showRoomSettings && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
@@ -614,6 +534,10 @@ export default function SeatingPage() {
   const [guests, setGuests] = useState<GuestListEntry[]>([]);
   const [room, setRoom] = useState<RoomShape | null>(null);
   const [loading, setLoading] = useState(true);
+  // The canvas is the room; the list is the roster. Both edit the same plan, so
+  // the switch lives here and the modal that adds a table is shared.
+  const [view, setView] = useState<'canvas' | 'list'>('canvas');
+  const [showAddModal, setShowAddModal] = useState(false);
 
   const refresh = useCallback(async () => {
     const [fpRes, guestRes, roomRes] = await Promise.all([
@@ -646,6 +570,24 @@ export default function SeatingPage() {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { refresh(); }, [refresh]);
 
+  const handleAddTable = useCallback(async (opts: { name: string; table_type: string }) => {
+    if (!floorPlan) return;
+    await fetch('/api/admin/seating/tables', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        floor_plan_id: floorPlan.id,
+        name: opts.name,
+        table_type: opts.table_type,
+        seat_count: 0,
+        x: 200 + Math.random() * 400,
+        y: 200 + Math.random() * 300,
+      }),
+    });
+    setShowAddModal(false);
+    refresh();
+  }, [floorPlan, refresh]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -656,25 +598,59 @@ export default function SeatingPage() {
 
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
-      <div className="px-8 py-4 bg-white border-b border-gray-200 shrink-0">
-        <h1 className="text-2xl font-serif font-bold text-gray-800">Seating Chart</h1>
-        <p className="text-sm text-gray-500 mt-0.5">
-          {tables.length} table{tables.length !== 1 ? 's' : ''} · {guests.length} guests
-        </p>
+      <div className="px-8 py-4 bg-white border-b border-gray-200 shrink-0 flex items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-serif font-bold text-gray-800">Seating Chart</h1>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {tables.length} table{tables.length !== 1 ? 's' : ''} · {guests.length} guests
+          </p>
+        </div>
+
+        <div className="ml-auto flex bg-gray-100 rounded-full p-0.5 text-xs font-medium">
+          {(['canvas', 'list'] as const).map(v => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={`px-4 py-1.5 rounded-full transition-colors ${
+                view === v ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {v === 'canvas' ? 'Canvas' : 'List'}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-        <ReactFlowProvider>
-          <SeatingCanvas
-            floorPlan={floorPlan}
+        {view === 'canvas' ? (
+          <ReactFlowProvider>
+            <SeatingCanvas
+              floorPlan={floorPlan}
+              tables={tables}
+              guests={guests}
+              room={room}
+              onRefresh={refresh}
+              onRoomChange={setRoom}
+              onAddTable={() => setShowAddModal(true)}
+            />
+          </ReactFlowProvider>
+        ) : (
+          <SeatingListView
             tables={tables}
             guests={guests}
-            room={room}
             onRefresh={refresh}
-            onRoomChange={setRoom}
+            onAddTable={() => setShowAddModal(true)}
           />
-        </ReactFlowProvider>
+        )}
       </div>
+
+      {showAddModal && (
+        <AddTableModal
+          defaultName={`Table ${tables.length + 1}`}
+          onAdd={handleAddTable}
+          onClose={() => setShowAddModal(false)}
+        />
+      )}
     </div>
   );
 }

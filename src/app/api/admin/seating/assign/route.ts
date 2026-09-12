@@ -11,22 +11,37 @@ interface SeatPayload {
   party_group_id: number | null;
 }
 
+interface SeatRef {
+  seating_table_id: number;
+  seat_index: number;
+}
+
 // POST: assign one or more seats (whole party at once), in one transaction so a
-// party is never half-seated. `{ seating_table_id, replace: true, seats: [...] }`
-// swaps a table's whole seat list atomically — the reorder used to be a DELETE
-// followed by a POST, and a failed second request emptied the table.
+// party is never half-seated. Three shapes:
+//
+//   [{...}] | {...}                              insert or overwrite these seats
+//   { seating_table_id, replace: true, seats }   swap a table's whole seat list —
+//     the reorder used to be a DELETE followed by a POST, and a failed second
+//     request emptied the table
+//   { deletes: [{seating_table_id, seat_index}], seats: [...] }
+//     a move: the deletes and the inserts land together, so a bulk move of
+//     twenty people across four tables cannot half-happen and leave someone
+//     sitting in two chairs or none. Deletes run first, which is what frees the
+//     indices the inserts may be about to claim.
 export async function POST(request: Request) {
   const client = await pool.connect();
   try {
     const body = await request.json();
-    const replaceTable: number | null = body && !Array.isArray(body) && body.replace === true
+    const isObject = body && !Array.isArray(body) && typeof body === 'object';
+    const replaceTable: number | null = isObject && body.replace === true
       ? Number(body.seating_table_id)
       : null;
-    const seats: SeatPayload[] = replaceTable != null
+    const deletes: SeatRef[] = isObject && Array.isArray(body.deletes) ? body.deletes : [];
+    const seats: SeatPayload[] = replaceTable != null || deletes.length > 0 || (isObject && Array.isArray(body.seats))
       ? (Array.isArray(body.seats) ? body.seats : [])
       : (Array.isArray(body) ? body : [body]);
 
-    for (const seat of seats) {
+    for (const seat of [...seats, ...deletes]) {
       if (!Number.isInteger(seat.seating_table_id) || !Number.isInteger(seat.seat_index) || seat.seat_index < 0) {
         return NextResponse.json({ error: 'seating_table_id and seat_index must be integers' }, { status: 400 });
       }
@@ -35,6 +50,12 @@ export async function POST(request: Request) {
     await client.query('BEGIN');
     if (replaceTable != null) {
       await client.query('DELETE FROM seat_assignments WHERE seating_table_id = $1', [replaceTable]);
+    }
+    for (const ref of deletes) {
+      await client.query(
+        'DELETE FROM seat_assignments WHERE seating_table_id = $1 AND seat_index = $2',
+        [ref.seating_table_id, ref.seat_index],
+      );
     }
     for (const seat of seats) {
       await client.query(

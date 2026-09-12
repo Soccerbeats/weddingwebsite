@@ -50,7 +50,9 @@ a honeymoon fund, and an RSVP form that recognises them by name.
 
 - **RSVPs and guests** — import a CSV, track a hundred-odd people and their
   parties, dietary notes, addresses, and export a mailing list
-- **Seating** — draw the room, drop tables in it, drag guests into seats
+- **Seating** — draw the room, drop tables in it, drag guests into seats — or
+  work the same plan as a list, grouped by table or by guest, with multi-select
+  and bulk moves
 - **Money** — a real budget: lines, quantities, who is paying, who has
   contributed, what is still owed and when it is due
 - **Photos** — upload, drag to reorder, heart the ones that go public

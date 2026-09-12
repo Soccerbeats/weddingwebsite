@@ -45,8 +45,9 @@ docker compose -f docker/docker-compose.dev.yml up -d
 
 None need a network except `check:finance:db` (live database) and
 `check:finance:ui` (a browser), so they are cheap to run before a commit — and
-CI runs `check:types`, `lint`, `check:photos`, `check:finance` and
-`check:honeymoon` on every push, so a red one blocks the image:
+CI runs `check:types`, `lint`, `check:photos`, `check:finance`,
+`check:honeymoon` and `check:seating` on every push, so a red one blocks the
+image:
 
 | Command | What it covers |
 |---|---|
@@ -58,6 +59,7 @@ CI runs `check:types`, `lint`, `check:photos`, `check:finance` and
 | `npm run check:finance:db` | The same against a live database |
 | `npm run check:finance:ui` | The finance UI's contracts (needs a browser; fetches Playwright on demand) |
 | `npm run audit:finance` | A deeper sweep over the finance logic |
+| `npm run check:seating` | 50+ assertions with no database or browser: who takes a chair (a party member who declined takes none), seat-index allocation, moves, swaps, gathering a split party, auto-seating, and the plan's own warnings |
 | `npm run check:honeymoon` | 550+ assertions with no database or network: distances, date maths, URL parsing, the calendar grid, `.ics` output, search ranking, seed integrity, the trip-mode day resolution, sunrise/sunset, OSM opening hours, the day timeline, time zones on legs, the budget, conflicts, imports/exports, markdown, the flight parser, and journeys (layovers, day placement, door-to-door time) |
 
 Seeds: `npm run seed:honeymoon` (bundles the Bali/Singapore travel guide,
@@ -235,8 +237,10 @@ order, before the commit:
   `seed`, `archives`, `shares`, `price-checks`, `upload`
 - `src/lib/` — `db.ts` (pg pool), `financeDb.ts` and `honeymoonDb.ts` (the
   runtime schema owners), `changelog.ts` (parses CHANGELOG.md for the in-app
-  viewer), `demoSeed.ts` (the fictional-wedding generator), and the honeymoon
-  portal's pure logic, all covered by `check:honeymoon`:
+  viewer), `demoSeed.ts` (the fictional-wedding generator), `seating.ts` (the
+  seating chart's pure logic, shared by the canvas and the list view and covered
+  by `check:seating`), and the honeymoon portal's pure logic, all covered by
+  `check:honeymoon`:
 
   | Module | Owns |
   |---|---|
@@ -343,10 +347,24 @@ order, before the commit:
   server: a draft of that workflow SSHed in to save the redeploy click, which
   would have let anyone able to push to this public repository run commands on
   the box that also hosts production.
-- **Seating chart** (`/admin/seating`) — a React Flow (`@xyflow/react`)
-  canvas: draw the room, drop tables, drag guests from `guest_list` into
-  seats. A "party" is a guest with `plus_one_name` set — dragging one
-  auto-fills the adjacent seat — and split parties are flagged in the UI.
+- **Seating chart** (`/admin/seating`) — two views over one plan, switched in
+  the page header:
+  - **Canvas** — a React Flow (`@xyflow/react`) surface: draw the room, drop
+    tables, drag guests from `guest_list` into seats.
+  - **List** (`SeatingListView.tsx`) — the same plan as a roster, grouped **by
+    table** (rows are people, with an "Not seated" block on top) or **by guest**
+    (rows are whole parties). Multi-select (click, ⌘/Ctrl-click, Shift-range,
+    per-group select-all), drag rows onto a group to seat or free them, and a
+    bulk bar: move to table, unseat, and behind the ⋯ — swap two people, gather
+    split parties, auto-seat into free chairs. Double-clicking a seat renames
+    it, which is how `Anna's guest 1` becomes a person.
+  A party takes `party_size` chairs, minus anyone who answered "not attending";
+  split parties are flagged in both views. **All of that logic lives in
+  `src/lib/seating.ts`, not in either view** — `partyAttendees`, `buildPartySeats`,
+  the `plan*` functions and `seatingIssues` — so the canvas and the list cannot
+  drift apart, and `check:seating` covers it. Every change goes through
+  `POST /api/admin/seating/assign`, whose `{ deletes, seats }` shape applies a
+  bulk move in one transaction.
 - **Honeymoon portal** (`/admin/honeymoon`) — a private planner *and* a trip
   companion: map (Leaflet, four base layers), day-by-day itinerary with a
   timeline, **journeys** (a whole ticket with its legs, layovers and one booking),

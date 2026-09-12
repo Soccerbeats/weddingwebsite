@@ -11,6 +11,25 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.73 — [Released] The seating chart as a list (`main`, 2026-09-12 08:45)
+
+A canvas is the right way to see a room and the wrong way to work through a hundred and forty people. The same plan is now also a list, and the list is where the bulk work happens.
+
+### Added
+- **A Canvas / List switch** in the page header. Both views edit the same plan, live.
+- **Two groupings.** *By table* is a block per table — its people as rows, a "Not seated" block on top — so you rebalance chair by chair. *By guest* is a row per party, wherever they are, so you seat households in one move. The switch clears the selection, because a row means something different on each side.
+- **Multi-select that behaves like a file manager**: click, ⌘/Ctrl-click to add, Shift-click for a range, a checkbox per row and one per group. Clicking the only selected row clears it.
+- **Drag rows onto a table to seat them, onto "Not seated" to free the chairs** — one row or the whole selection.
+- **A bulk bar**: *Move to table* (with each table's free chairs shown in the menu) and *Unseat* inline; behind the ⋯ — *swap these two*, *keep each party together*, and *auto-seat into free chairs*, which puts each party at the first table with room for all of it and tells you which ones fit nowhere rather than splitting them.
+- **Double-click a seat to rename it**, which is how `Anna's guest 1` becomes a person.
+- **A "things to look at" banner**: parties split across tables, people seated who are not coming, a table past its own chair count, and guests who are coming with nowhere to sit. Clicking one selects exactly the people it is about. One line per table, not per person — a family that declined together used to fill the screen with its own warnings.
+- **Search, filters (side, RSVP, seated or not) and sorting** over either grouping.
+- **`npm run check:seating`** — 53 assertions over the seating logic, in CI from this version on.
+
+### Changed
+- **The seating logic moved to `src/lib/seating.ts`**, shared by both views: who takes a chair, which chair, moves, swaps, gathering a split party, and what is wrong with the plan. The canvas now asks the same functions the list does, so the two cannot drift apart — the declined-member rule from v0.9.72 is one implementation, not two.
+- **`POST /api/admin/seating/assign` takes `{ deletes, seats }`**, so a bulk move of twenty people across four tables lands in one transaction. It cannot half-happen and leave someone in two chairs or none.
+
 ## v0.9.72 — [Released] A declined plus-one is not a guest (`main`, 2026-09-12 04:20)
 
 A party of three where one person declined still took three chairs on the seating chart, and all three were coloured as if everyone were coming — so the headcount was wrong and nothing on screen said so. Removing the one who is not coming removed the other two with them.
