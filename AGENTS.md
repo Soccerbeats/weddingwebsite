@@ -360,10 +360,15 @@ order, before the commit:
   - **List** (`SeatingListView.tsx`) — the same plan as a roster, grouped **by
     table** (rows are people, with an "Not seated" block on top) or **by guest**
     (rows are whole parties). Multi-select (click, ⌘/Ctrl-click, Shift-range,
-    per-group select-all), drag rows onto a group to seat or free them, and a
+    per-group select-all; shift-click *is* the range, so it narrows as well as
+    widens, and ⌘-shift adds a second range), drag rows onto a group to seat or
+    free them, and a
     bulk bar: move to table, unseat, and behind the ⋯ — swap two people, gather
     split parties, auto-seat into free chairs. Double-clicking a seat renames
-    it, which is how `Anna's guest 1` becomes a person. **Below 768px this is
+    it, which is how `Anna's guest 1` becomes a person. **Every group starts
+    collapsed** — thirteen open tables is a thousand-row page — and a search or a
+    filter overrides that for whatever it matched, or the search would look
+    broken. **Below 768px this is
     the view the page opens on** (decided in an effect after mount, never during
     render — the server has no viewport), the filters fold behind a Filters
     button, and the drag hints are hidden, because touch has no HTML5 drag: on a

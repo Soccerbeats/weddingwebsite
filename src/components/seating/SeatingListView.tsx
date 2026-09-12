@@ -44,6 +44,9 @@ type Row =
     | { kind: 'guest'; key: string; name: string; guest: GuestListEntry; seatedAt: SeatingTableData[]; rsvp: string | null };
 
 const UNSEATED = -1;
+/** The guest grouping's single block. Its own id, not UNSEATED's: collapsing
+ *  "Not seated" must not also collapse it, and it is not a drop target. */
+const ALL_PARTIES = -2;
 
 const seatKey = (tableId: number, seatIndex: number) => `s:${tableId}:${seatIndex}`;
 const guestKey = (guestId: number) => `g:${guestId}`;
@@ -123,7 +126,14 @@ export default function SeatingListView({
 }) {
     const [grouping, setGrouping] = useState<Grouping>('table');
     const [selected, setSelected] = useState<Set<string>>(new Set());
-    const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
+    // Everything starts collapsed: thirteen tables expanded is a thousand-row
+    // page you have to scroll past to find anything. The counts in each header
+    // are what you read first; you open the table you are working on.
+    // ALL_PARTIES is deliberately absent — collapsing the guest grouping's only
+    // block would leave an empty screen.
+    const [collapsed, setCollapsed] = useState<Set<number>>(
+        () => new Set([UNSEATED, ...tables.map(t => t.id)]),
+    );
     const [search, setSearch] = useState('');
     const [filterSide, setFilterSide] = useState('all');
     const [filterRsvp, setFilterRsvp] = useState('all');
@@ -213,7 +223,7 @@ export default function SeatingListView({
                     rsvp: g.rsvp_status ?? null,
                 }))
                 .filter(r => matches(r.name, r.guest, r.rsvp, r.seatedAt.length > 0));
-            return [{ id: UNSEATED, title: 'All parties', subtitle: `${rows.length} of ${guests.filter(g => g.invited).length}`, table: null, rows: sortRows(rows) }];
+            return [{ id: ALL_PARTIES, title: 'All parties', subtitle: `${rows.length} of ${guests.filter(g => g.invited).length}`, table: null, rows: sortRows(rows) }];
         }
 
         const unseatedRows: Row[] = guests
@@ -265,8 +275,24 @@ export default function SeatingListView({
         ];
     }, [grouping, tables, guests, placement, matches, sortRows, sortBy, guestById]);
 
+    /**
+     * Whether a group is folded shut right now.
+     *
+     * A search or a filter overrides it: the rows it matched are the whole point,
+     * and leaving them inside a collapsed block makes the search look broken.
+     */
+    const narrowing = search.trim().length > 0
+        || filterSide !== 'all' || filterRsvp !== 'all' || filterSeated !== 'all';
+    const isCollapsed = useCallback(
+        (groupId: number, rowCount: number) => !(narrowing && rowCount > 0) && collapsed.has(groupId),
+        [narrowing, collapsed],
+    );
+
     /** Every visible row in display order — what shift-click ranges over. */
-    const flatRows = useMemo(() => groups.flatMap(g => (collapsed.has(g.id) ? [] : g.rows)), [groups, collapsed]);
+    const flatRows = useMemo(
+        () => groups.flatMap(g => (isCollapsed(g.id, g.rows.length) ? [] : g.rows)),
+        [groups, isCollapsed],
+    );
     const rowByKey = useMemo(() => new Map(flatRows.map(r => [r.key, r])), [flatRows]);
 
     /** Turn rows into the shape the planners take. */
@@ -291,17 +317,32 @@ export default function SeatingListView({
     // ── Selection ────────────────────────────────────────────────────────────
 
     const clickRow = useCallback((key: string, e: React.MouseEvent) => {
+        // Read the anchor and the modifiers *now*, not inside the updater. The
+        // updater runs during the next render, by which point `lastClicked` had
+        // already been moved to this row — so every shift-click ranged from a row
+        // to itself and behaved like a plain ⌘-click.
+        const anchor = lastClicked.current;
+        const extend = e.shiftKey;
+        const additive = e.metaKey || e.ctrlKey;
+        // Shift-clicking keeps the anchor where it was, so a range can be widened
+        // and narrowed; anything else moves it here.
+        if (!extend) lastClicked.current = key;
+
         setSelected(prev => {
             const next = new Set(prev);
-            if (e.shiftKey && lastClicked.current) {
-                const from = flatRows.findIndex(r => r.key === lastClicked.current);
+            if (extend && anchor) {
+                const from = flatRows.findIndex(r => r.key === anchor);
                 const to = flatRows.findIndex(r => r.key === key);
                 if (from !== -1 && to !== -1) {
-                    for (let i = Math.min(from, to); i <= Math.max(from, to); i += 1) next.add(flatRows[i].key);
-                    return next;
+                    const range = flatRows.slice(Math.min(from, to), Math.max(from, to) + 1).map(r => r.key);
+                    // Shift *is* the range, so shift-clicking closer to the anchor
+                    // narrows it — adding to the old one only ever grew it, and
+                    // there was no way back short of starting again. ⌘-shift keeps
+                    // what was already picked, for ranges at two different tables.
+                    return additive ? new Set([...prev, ...range]) : new Set(range);
                 }
             }
-            if (e.metaKey || e.ctrlKey) {
+            if (additive) {
                 if (next.has(key)) next.delete(key); else next.add(key);
                 return next;
             }
@@ -310,7 +351,6 @@ export default function SeatingListView({
             if (next.size === 1 && next.has(key)) return new Set();
             return new Set([key]);
         });
-        lastClicked.current = key;
     }, [flatRows]);
 
     /** The checkbox path: add or remove one row without disturbing the rest. */
@@ -407,6 +447,9 @@ export default function SeatingListView({
         // setSelected has not landed yet, so act on the dragged keys directly.
         const dragged = toSelection(keys.map(k => rowByKey.get(k)).filter((r): r is Row => !!r));
 
+        // The guest grouping's block stands for "everyone", not a place to put
+        // anyone — dropping on it used to unseat the whole selection.
+        if (groupId === ALL_PARTIES) return;
         if (groupId === UNSEATED) {
             const change = planUnseatSelection(dragged, tables);
             await run(change, `Freed ${change.deletes.length} chair${change.deletes.length === 1 ? '' : 's'}.`);
@@ -594,7 +637,7 @@ export default function SeatingListView({
             {/* Groups */}
             <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-3">
                 {groups.map(group => {
-                    const isCollapsed = collapsed.has(group.id);
+                    const folded = isCollapsed(group.id, group.rows.length);
                     const allSelected = group.rows.length > 0 && group.rows.every(r => selected.has(r.key));
                     return (
                         <div
@@ -620,13 +663,13 @@ export default function SeatingListView({
                                     if (next.has(group.id)) next.delete(group.id); else next.add(group.id);
                                     return next;
                                 })} className="flex items-baseline gap-2 text-left min-w-0 flex-1">
-                                    <span className="text-gray-400 text-xs shrink-0">{isCollapsed ? '▸' : '▾'}</span>
+                                    <span className="text-gray-400 text-xs shrink-0">{folded ? '▸' : '▾'}</span>
                                     <span className="text-sm font-semibold text-gray-800 truncate">{group.title}</span>
                                     <span className="text-xs text-gray-400 whitespace-nowrap shrink-0">{group.subtitle}</span>
                                 </button>
                                 {/* Hidden on touch-sized screens: there is no HTML5 drag there, and
                                     the hint was stealing enough width to wrap the table's own name. */}
-                                {group.id !== UNSEATED && (
+                                {group.id !== UNSEATED && group.id !== ALL_PARTIES && (
                                     <span className="ml-auto hidden md:inline text-xs text-gray-400">drop here to seat</span>
                                 )}
                                 {group.id === UNSEATED && grouping === 'table' && (
@@ -634,11 +677,13 @@ export default function SeatingListView({
                                 )}
                             </div>
 
-                            {!isCollapsed && (
+                            {!folded && (
                                 <div className="border-t border-gray-100">
                                     {group.rows.length === 0 ? (
                                         <p className="px-5 py-3 text-xs text-gray-400">
-                                            {group.id === UNSEATED ? 'Everyone invited has a chair.' : 'No one here yet.'}
+                                            {group.id === UNSEATED ? 'Everyone invited has a chair.'
+                                                : group.id === ALL_PARTIES ? 'Nobody matches that.'
+                                                    : 'No one here yet.'}
                                         </p>
                                     ) : group.rows.map(row => {
                                         const isSelected = selected.has(row.key);

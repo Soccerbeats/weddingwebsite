@@ -11,6 +11,19 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.76 — [Released] The list opens folded (`main`, 2026-09-12 17:50)
+
+Thirteen tables expanded is a thousand rows to scroll past before you find the one you came for.
+
+### Changed
+- **Every group in the list starts collapsed.** You land on each table's name and its counts, and open the one you are working on. "Expand all" is right there.
+- **A search or a filter opens whatever it matched.** Otherwise the rows it found would stay folded inside a shut group and the search would look broken.
+- **The guest grouping is exempt**, and is no longer a drop target: it has one block, so collapsing it by default would have been an empty screen, and dropping onto "everyone" used to unseat the selection.
+
+### Fixed
+- **Shift-click selects a range.** It was reading the anchor inside a state updater, which by then had already been moved to the row just clicked — so every shift-click ranged from a row to itself and behaved like a ⌘-click.
+- **Shift-click now narrows a range as well as widening it**, because the range *is* the selection rather than something added to it. ⌘-shift still adds a second range, for picking people at two different tables.
+
 ## v0.9.75 — [Released] Give the diagram the whole screen (`main`, 2026-09-12 17:05)
 
 The guest list is 288px of a 390px phone, which left the canvas a sliver it could not draw a room in.
