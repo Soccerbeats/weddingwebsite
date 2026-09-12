@@ -47,8 +47,8 @@ export default function AppShell({
     return (
       <>
         {/* Public nav stays at top for admin too.
-            The wrapper is the handle the honeymoon portal's full-screen mode
-            hides by — see `.hm-fullscreen` in globals.css. Everything Navigation
+            The wrapper is the handle full-screen mode hides by — see
+            `.admin-fullscreen` in globals.css. Everything Navigation
             draws is `position: fixed`, so a plain wrapper costs no layout. */}
         <div data-site-nav>
           <Navigation

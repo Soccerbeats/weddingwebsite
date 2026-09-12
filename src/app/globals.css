@@ -501,34 +501,35 @@ html {
 }
 
 /* ---------------------------------------------------------------------------
-   Full-screen mode (the honeymoon portal's ⤢ button)
+   Full-screen mode — shared by the honeymoon map and the seating chart
 
-   The map wants every pixel, and on a laptop the site nav (80px) and the admin
+   Both want every pixel, and on a laptop the site nav (80px) and the admin
    sidebar (256px) are a quarter of the screen spent on links you are not about
    to follow. This hands both back.
 
    Driven by a class on <html> rather than React state because the things being
-   hidden live in *ancestor* trees — AppShell and AdminShell — while the button
-   lives in the honeymoon shell far below them. AppShell already toggles a root
-   class this way for the scrollbar gutter.
+   hidden live in *ancestor* trees — AppShell and AdminShell — while the buttons
+   live in shells far below them. AppShell already toggles a root class this way
+   for the scrollbar gutter. An overlay is the obvious alternative and the wrong
+   one: the site nav is `position: fixed` outside the admin tree, so covering it
+   is a z-index argument you have to keep winning.
 
    These rules sit outside every `@layer`, so they win over the Tailwind
-   utilities they override without needing `!important`. HoneymoonShell removes
-   the class on unmount and when you leave the map, so it can never strand you
-   on a page with no way out.
+   utilities they override without needing `!important`. Every caller removes
+   the class on unmount, so it can never strand you on a page with no way out.
    --------------------------------------------------------------------------- */
-html.hm-fullscreen [data-site-nav],
-html.hm-fullscreen [data-admin-sidebar],
-html.hm-fullscreen [data-admin-topbar] {
+html.admin-fullscreen [data-site-nav],
+html.admin-fullscreen [data-admin-sidebar],
+html.admin-fullscreen [data-admin-topbar] {
   display: none;
 }
 
 /* The admin frame is positioned from the top of the window, below the nav that
    is now gone — and below the demo banner, which is also hidden with the nav. */
-html.hm-fullscreen [data-admin-frame] {
+html.admin-fullscreen [data-admin-frame] {
   top: 0;
 }
 
-html.hm-fullscreen [data-demo-banner] {
+html.admin-fullscreen [data-demo-banner] {
   display: none;
 }

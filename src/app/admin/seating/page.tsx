@@ -30,17 +30,21 @@ function SeatingCanvas({
   tables,
   guests,
   room,
+  fullscreen,
   onRefresh,
   onRoomChange,
   onAddTable,
+  onToggleFullscreen,
 }: {
   floorPlan: FloorPlan | null;
   tables: SeatingTableData[];
   guests: GuestListEntry[];
   room: RoomShape | null;
+  fullscreen: boolean;
   onRefresh: () => void;
   onRoomChange: (room: RoomShape | null) => void;
   onAddTable: () => void;
+  onToggleFullscreen: () => void;
 }) {
   const { fitView } = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
@@ -269,6 +273,17 @@ function SeatingCanvas({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tables, guests, colorMode]);
 
+  /** The canvas just changed size; put the room back in view rather than
+   *  leaving it half off-screen. */
+  const refit = useCallback(() => {
+    setTimeout(() => fitView({ padding: 0.2, duration: 200 }), 120);
+  }, [fitView]);
+
+  // Entering or leaving full screen resizes the canvas by the width of the admin
+  // nav and the height of the page header, which would otherwise leave the room
+  // sitting off in a corner.
+  useEffect(() => { refit(); }, [fullscreen, refit]);
+
   return (
     <div className="relative flex flex-1 min-h-0 overflow-hidden">
       {/* Guest sidebar — a column beside the canvas on a desktop; on a phone a
@@ -294,12 +309,7 @@ function SeatingCanvas({
               on a phone this is the difference between a usable diagram and a
               100px sliver beside the guest list. */}
           <button
-            onClick={() => {
-              setShowGuests(v => !v);
-              // The canvas just changed width; put the room back in view rather
-              // than leaving it half off-screen.
-              setTimeout(() => fitView({ padding: 0.2, duration: 200 }), 60);
-            }}
+            onClick={() => { setShowGuests(v => !v); refit(); }}
             className={`flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-md border transition-colors ${
               showGuests
                 ? 'bg-gray-100 text-gray-700 border-gray-300'
@@ -313,6 +323,29 @@ function SeatingCanvas({
               <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
             </svg>
             {showGuests ? 'Hide guests' : 'Guests'}
+          </button>
+
+          {/* Second in the row, beside the other view control: the toolbar
+              scrolls sideways on a phone, so these two stay reachable together.
+              While full screen this is the only way back other than Esc, so it
+              is never hidden behind an overflow menu. */}
+          <button
+            onClick={onToggleFullscreen}
+            className={`flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-md border transition-colors ${
+              fullscreen
+                ? 'bg-gray-100 text-gray-700 border-gray-300'
+                : 'text-gray-600 border-gray-200 hover:bg-gray-50'
+            }`}
+            title={fullscreen ? 'Exit full screen (Esc)' : 'Give the diagram the whole screen'}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              {fullscreen ? (
+                <path d="M8 3v3a2 2 0 0 1-2 2H3M16 3v3a2 2 0 0 0 2 2h3M8 21v-3a2 2 0 0 0-2-2H3M16 21v-3a2 2 0 0 1 2-2h3" />
+              ) : (
+                <path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3" />
+              )}
+            </svg>
+            {fullscreen ? 'Exit full screen' : 'Full screen'}
           </button>
 
           <button
@@ -583,6 +616,59 @@ export default function SeatingPage() {
   // the switch lives here and the modal that adds a table is shared.
   const [view, setView] = useState<'canvas' | 'list'>('canvas');
   const [showAddModal, setShowAddModal] = useState(false);
+  // Full screen hands back the site nav and the admin sidebar by way of a class
+  // on <html> — the same mechanism the honeymoon map uses, and the reason it is
+  // a class and not an overlay: the site nav is `position: fixed` outside the
+  // admin tree, so covering it is a z-index argument you have to keep winning.
+  // The native Fullscreen API goes on top of that where the browser allows it,
+  // taking the browser's own chrome too; iOS Safari refuses it on anything but a
+  // <video>, so it is a bonus that is allowed to fail, never the mechanism.
+  const [fullscreen, setFullscreen] = useState(false);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle('admin-fullscreen', fullscreen);
+    // Also on unmount: navigating away with the class still set would leave the
+    // whole admin panel with no sidebar and nothing on screen to explain why.
+    return () => root.classList.remove('admin-fullscreen');
+  }, [fullscreen]);
+
+  const toggleFullscreen = useCallback(async () => {
+    const next = !fullscreen;
+    setFullscreen(next);
+    try {
+      if (next) {
+        if (!document.fullscreenElement) await document.documentElement.requestFullscreen?.();
+      } else if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      }
+    } catch {
+      // The browser said no. The class has already handed back the nav and the
+      // sidebar, which is the part that matters.
+    }
+  }, [fullscreen]);
+
+  // Leaving native full screen by any route this button does not own — Esc, F11,
+  // the browser's own control — has to put the chrome back too.
+  useEffect(() => {
+    const onChange = () => { if (!document.fullscreenElement) setFullscreen(false); };
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+
+  // Escape leaves it, the way it leaves anything else that took the screen. Not
+  // while a dialog is up — Escape belongs to whatever is on top — and not while
+  // the browser is in native full screen, where the handler above answers.
+  useEffect(() => {
+    if (!fullscreen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || document.fullscreenElement) return;
+      if (document.querySelector('[role="dialog"]')) return;
+      setFullscreen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [fullscreen]);
 
   const refresh = useCallback(async () => {
     const [fpRes, guestRes, roomRes] = await Promise.all([
@@ -659,7 +745,9 @@ export default function SeatingPage() {
 
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
-      <div className="px-8 py-4 bg-white border-b border-gray-200 shrink-0 flex items-center gap-4">
+      {/* Hidden while full screen: the canvas toolbar already carries the way
+          back out, and the point of the button was the vertical space. */}
+      <div className={`px-8 py-4 bg-white border-b border-gray-200 shrink-0 items-center gap-4 ${fullscreen ? 'hidden' : 'flex'}`}>
         <div>
           <h1 className="text-2xl font-serif font-bold text-gray-800">Seating Chart</h1>
           <p className="text-sm text-gray-500 mt-0.5">
@@ -701,9 +789,11 @@ export default function SeatingPage() {
               tables={tables}
               guests={guests}
               room={room}
+              fullscreen={fullscreen}
               onRefresh={refresh}
               onRoomChange={setRoom}
               onAddTable={() => setShowAddModal(true)}
+              onToggleFullscreen={toggleFullscreen}
             />
           </ReactFlowProvider>
         ) : (

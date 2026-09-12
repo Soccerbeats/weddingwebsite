@@ -121,8 +121,8 @@ export default function HoneymoonShell({ children }: { children: React.ReactNode
      */
     useEffect(() => {
         const root = document.documentElement;
-        root.classList.toggle('hm-fullscreen', fullScreen);
-        return () => root.classList.remove('hm-fullscreen');
+        root.classList.toggle('admin-fullscreen', fullScreen);
+        return () => root.classList.remove('admin-fullscreen');
     }, [fullScreen]);
 
     /* The button is on the map tab, so leaving the map turns it off rather than

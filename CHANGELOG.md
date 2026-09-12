@@ -11,6 +11,16 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.78 — [Released] A full-screen button on the seating chart (`main`, 2026-09-12 21:03)
+
+The diagram was sharing a 1440px laptop with an 80px site nav, a 256px admin sidebar and its own page header. Now it can have all of it.
+
+### Added
+- **A Full screen button in the canvas toolbar**, second in the row beside Guests so both view controls stay reachable when the toolbar scrolls sideways on a phone. It hands back the site nav, the admin sidebar and the page header, and asks the browser for its own full screen on top of that where it is allowed. Esc leaves, and so does the button — which is never hidden behind a menu, because while full screen it is the way out.
+
+### Changed
+- **The full-screen mechanism is now shared with the honeymoon map** rather than reinvented: the class on `<html>` is renamed `admin-fullscreen`, since two features use it and neither is the honeymoon portal's alone. An overlay was the obvious alternative and the wrong one — the site nav is fixed and lives outside the admin tree, so covering it is a z-index argument you have to keep winning.
+
 ## v0.9.77 — [Released] The chart and the RSVPs agree on a number (`main`, 2026-09-12 20:39)
 
 The seating chart said 100 and the RSVP page said 105, and neither was lying: the chart's figure counted **households**, not people, and the two totals had never once been compared.
