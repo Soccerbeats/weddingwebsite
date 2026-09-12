@@ -135,6 +135,10 @@ export default function SeatingListView({
     const [note, setNote] = useState<string | null>(null);
     const [showIssues, setShowIssues] = useState(true);
     const [issuesExpanded, setIssuesExpanded] = useState(false);
+    // On a phone the four filters plus the sort fill the screen before a single
+    // name appears, so below `md` they fold behind a button. Above it they are
+    // always shown and this flag is ignored.
+    const [filtersOpen, setFiltersOpen] = useState(false);
     const lastClicked = useRef<string | null>(null);
 
     // A grouping switch changes what a row *is*, so a selection made under the
@@ -458,6 +462,10 @@ export default function SeatingListView({
 
     // ── Render ───────────────────────────────────────────────────────────────
 
+    // So the collapsed Filters button can say whether anything is hiding behind it.
+    const activeFilterCount = [filterSide, filterRsvp, filterSeated].filter(v => v !== 'all').length
+        + (sortBy !== 'name' ? 1 : 0);
+
     const sides = useMemo(() => [...new Set(guests.map(g => g.side).filter(Boolean))] as string[], [guests]);
     const rsvpStatuses = useMemo(() => [...new Set(guests.map(g => g.rsvp_status).filter(Boolean))].sort() as string[], [guests]);
 
@@ -483,9 +491,21 @@ export default function SeatingListView({
                     value={search}
                     onChange={e => setSearch(e.target.value)}
                     placeholder="Search people…"
-                    className="px-4 py-2 w-52 text-sm border border-gray-200 rounded-2xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
+                    className="flex-1 min-w-[8rem] md:flex-none md:w-52 px-4 py-2 text-sm border border-gray-200 rounded-2xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
                 />
 
+                <button
+                    onClick={() => setFiltersOpen(v => !v)}
+                    className={`md:hidden px-3 py-2 rounded-2xl border text-sm transition-colors ${
+                        filtersOpen || activeFilterCount > 0
+                            ? 'bg-accent/10 border-accent text-accent-dark'
+                            : 'border-gray-200 text-gray-500'
+                    }`}
+                >
+                    Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+                </button>
+
+                <div className={`${filtersOpen ? 'flex' : 'hidden'} md:flex w-full md:w-auto flex-wrap items-center gap-2`}>
                 <select value={filterSide} onChange={e => setFilterSide(e.target.value)} className="px-3 py-2 text-sm border border-gray-200 rounded-2xl bg-gray-50 focus:bg-white focus:outline-none">
                     <option value="all">Either side</option>
                     {sides.map(s => <option key={s} value={s}>{s}</option>)}
@@ -509,6 +529,7 @@ export default function SeatingListView({
                     <option value="party">Sort by party size</option>
                     <option value="rsvp">Sort by RSVP</option>
                 </select>
+                </div>
 
                 <div className="ml-auto flex items-center gap-2">
                     <button
@@ -598,16 +619,18 @@ export default function SeatingListView({
                                     const next = new Set(prev);
                                     if (next.has(group.id)) next.delete(group.id); else next.add(group.id);
                                     return next;
-                                })} className="flex items-baseline gap-2 text-left">
-                                    <span className="text-gray-400 text-xs">{isCollapsed ? '▸' : '▾'}</span>
-                                    <span className="text-sm font-semibold text-gray-800">{group.title}</span>
-                                    <span className="text-xs text-gray-400">{group.subtitle}</span>
+                                })} className="flex items-baseline gap-2 text-left min-w-0 flex-1">
+                                    <span className="text-gray-400 text-xs shrink-0">{isCollapsed ? '▸' : '▾'}</span>
+                                    <span className="text-sm font-semibold text-gray-800 truncate">{group.title}</span>
+                                    <span className="text-xs text-gray-400 whitespace-nowrap shrink-0">{group.subtitle}</span>
                                 </button>
+                                {/* Hidden on touch-sized screens: there is no HTML5 drag there, and
+                                    the hint was stealing enough width to wrap the table's own name. */}
                                 {group.id !== UNSEATED && (
-                                    <span className="ml-auto text-xs text-gray-400">drop here to seat</span>
+                                    <span className="ml-auto hidden md:inline text-xs text-gray-400">drop here to seat</span>
                                 )}
                                 {group.id === UNSEATED && grouping === 'table' && (
-                                    <span className="ml-auto text-xs text-gray-400">drop here to free the chair</span>
+                                    <span className="ml-auto hidden md:inline text-xs text-gray-400">drop here to free the chair</span>
                                 )}
                             </div>
 
@@ -683,7 +706,7 @@ export default function SeatingListView({
             {/* Bulk bar */}
             {totalSelected > 0 && (
                 <div className="shrink-0 bg-white/95 backdrop-blur border-t border-gray-200 px-4 py-3 flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-medium text-gray-700">
+                    <span className="text-sm font-medium text-gray-700 shrink-0">
                         {totalSelected} selected
                     </span>
                     <button
@@ -693,11 +716,14 @@ export default function SeatingListView({
                         clear
                     </button>
 
+                    {/* The bar sits at the bottom of the list, so every row it wraps to is a
+                        row taken off the list itself. At phone width the move target, Unseat
+                        and the ⋯ share one line rather than claiming three. */}
                     <select
                         value=""
                         disabled={busy}
                         onChange={e => { if (e.target.value) moveSelectionTo(Number(e.target.value)); }}
-                        className="ml-2 px-4 py-2 text-sm border border-gray-200 rounded-2xl bg-gray-50 focus:bg-white focus:outline-none"
+                        className="order-2 md:order-none flex-1 min-w-[9rem] md:flex-none md:ml-2 px-3 py-2 text-sm border border-gray-200 rounded-2xl bg-gray-50 focus:bg-white focus:outline-none"
                     >
                         <option value="">Move to table…</option>
                         {tables.map(t => {
@@ -709,14 +735,19 @@ export default function SeatingListView({
                     <button
                         onClick={unseatSelection}
                         disabled={busy}
-                        className="px-4 py-2 rounded-full text-sm font-medium text-red-600 border border-red-200 hover:bg-red-50 transition-colors disabled:opacity-50"
+                        className="order-2 md:order-none shrink-0 px-4 py-2 rounded-full text-sm font-medium text-red-600 border border-red-200 hover:bg-red-50 transition-colors disabled:opacity-50"
                     >
                         Unseat
                     </button>
 
-                    <OverflowMenu items={bulkItems} />
+                    {/* Ordered ahead of the two controls below `md` so the bar reads as
+                        "what is selected" then "what to do with it", in two tidy lines
+                        rather than three ragged ones. */}
+                    <div className="order-1 md:order-none">
+                        <OverflowMenu items={bulkItems} />
+                    </div>
 
-                    {note && <span className="text-xs text-gray-500 ml-2">{note}</span>}
+                    {note && <span className="order-3 md:order-none w-full md:w-auto md:ml-2 text-xs text-gray-500">{note}</span>}
                 </div>
             )}
             {totalSelected === 0 && note && (

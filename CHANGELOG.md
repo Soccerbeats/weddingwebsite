@@ -11,6 +11,16 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.74 — [Released] The seating chart opens as a list on a phone (`main`, 2026-09-12 16:50)
+
+The canvas is a pan-and-zoom surface, which on a 400px screen is no way to seat anyone.
+
+### Changed
+- **Below 768px the seating chart opens on the List view.** Only a default — the Canvas / List switch still decides, and nothing changes on a desktop.
+- **On a phone the four filters and the sort fold behind a Filters button** (which shows how many are active). They filled the screen before a single name appeared. Above 768px they are always out, exactly as before.
+- **The "drop here to seat" hints are hidden on touch-sized screens.** There is no HTML5 drag there, and the hint was stealing enough width to wrap a table's own name onto two lines. The phone workflow is select, then the bulk bar.
+- **The bulk bar fits two tidy lines instead of three ragged ones** at phone width — it sits under the list, so every line it wraps to is a line taken off the list.
+
 ## v0.9.73 — [Released] The seating chart as a list (`main`, 2026-09-12 08:45)
 
 A canvas is the right way to see a room and the wrong way to work through a hundred and forty people. The same plan is now also a list, and the list is where the bulk work happens.

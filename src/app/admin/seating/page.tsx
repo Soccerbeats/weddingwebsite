@@ -570,6 +570,15 @@ export default function SeatingPage() {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { refresh(); }, [refresh]);
 
+  // On a phone the canvas is a pan-and-zoom surface on a 400px screen, which is
+  // no way to seat anyone — so the list is what opens there. Decided once, after
+  // mount (the server has no viewport, and guessing one is a hydration
+  // mismatch), and only as a default: the switch is still the user's.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (window.matchMedia('(max-width: 768px)').matches) setView('list');
+  }, []);
+
   const handleAddTable = useCallback(async (opts: { name: string; table_type: string }) => {
     if (!floorPlan) return;
     await fetch('/api/admin/seating/tables', {

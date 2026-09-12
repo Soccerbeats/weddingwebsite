@@ -357,7 +357,11 @@ order, before the commit:
     per-group select-all), drag rows onto a group to seat or free them, and a
     bulk bar: move to table, unseat, and behind the ⋯ — swap two people, gather
     split parties, auto-seat into free chairs. Double-clicking a seat renames
-    it, which is how `Anna's guest 1` becomes a person.
+    it, which is how `Anna's guest 1` becomes a person. **Below 768px this is
+    the view the page opens on** (decided in an effect after mount, never during
+    render — the server has no viewport), the filters fold behind a Filters
+    button, and the drag hints are hidden, because touch has no HTML5 drag: on a
+    phone the workflow is select, then the bulk bar.
   A party takes `party_size` chairs, minus anyone who answered "not attending";
   split parties are flagged in both views. **All of that logic lives in
   `src/lib/seating.ts`, not in either view** — `partyAttendees`, `buildPartySeats`,
