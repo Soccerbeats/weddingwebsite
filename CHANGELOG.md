@@ -11,6 +11,18 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.75 — [Released] Give the diagram the whole screen (`main`, 2026-09-12 17:05)
+
+The guest list is 288px of a 390px phone, which left the canvas a sliver it could not draw a room in.
+
+### Added
+- **A Guests / Hide guests toggle** in the canvas toolbar, at any width. Hiding it gives the diagram the whole screen; the view refits so the room is not left half off it.
+
+### Changed
+- **On a phone the guest list starts closed** and opens as a drawer over the canvas rather than beside it. The drawer sits *below* the toolbar deliberately: at full width as a column it pushed the toolbar off-screen, so the button that opened it was gone and there was no way back. On a desktop nothing moves — the list is the same 288px column, open as before.
+- **The minimap is hidden on a phone.** It was a quarter of the screen showing a map of the map, over the tables you had just freed the space to see.
+- **The canvas toolbar scrolls sideways instead of squeezing its buttons**, so "Add Table" stops wrapping onto two lines, and the colour legend is desktop-only.
+
 ## v0.9.74 — [Released] The seating chart opens as a list on a phone (`main`, 2026-09-12 16:50)
 
 The canvas is a pan-and-zoom surface, which on a 400px screen is no way to seat anyone.

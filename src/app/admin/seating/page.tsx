@@ -42,19 +42,28 @@ function SeatingCanvas({
   onRoomChange: (room: RoomShape | null) => void;
   onAddTable: () => void;
 }) {
-  const { screenToFlowPosition } = useReactFlow();
+  const { fitView } = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [showRoomSettings, setShowRoomSettings] = useState(false);
   const [colorMode, setColorMode] = useState<ColorMode>('party');
   const [roomWidth, setRoomWidth] = useState(floorPlan?.room_width ?? '');
   const [roomHeight, setRoomHeight] = useState(floorPlan?.room_height ?? '');
   const [roomEditMode, setRoomEditMode] = useState(false);
+  // The guest list is 288px of a 390px phone, which leaves no room to look at.
+  // So on a phone the canvas starts full width and the list is a drawer over it;
+  // on a desktop it starts open, as it always has. Either way the toggle is the
+  // user's. Decided after mount — the server has no viewport.
+  const [showGuests, setShowGuests] = useState(true);
   const [localRoom, setLocalRoom] = useState<RoomShape | null>(room);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const dragGuestRef = useRef<GuestListEntry | null>(null);
 
   // Sync local room when prop changes
   React.useEffect(() => { setLocalRoom(room); }, [room]);
+
+  useEffect(() => {
+    if (window.matchMedia('(max-width: 768px)').matches) setShowGuests(false);
+  }, []);
 
   // The room editor's legend promises "Press Esc to exit".
   useEffect(() => {
@@ -261,19 +270,51 @@ function SeatingCanvas({
   }, [tables, guests, colorMode]);
 
   return (
-    <div className="flex flex-1 min-h-0 overflow-hidden">
-      {/* Guest sidebar */}
-      <GuestSidebar
-        guests={guestsWithAssignment()}
-        onDragGuest={g => { dragGuestRef.current = g; }}
-        onAssignGuest={() => {}}
-        splitPartyGuestIds={splitPartyGroupIds()}
-      />
+    <div className="relative flex flex-1 min-h-0 overflow-hidden">
+      {/* Guest sidebar — a column beside the canvas on a desktop; on a phone a
+          drawer over the canvas, deliberately starting *below* the toolbar so the
+          button that opened it is still there to close it. As a flex sibling at
+          full width it pushed the toolbar off-screen and there was no way back. */}
+      {showGuests && (
+        <GuestSidebar
+          guests={guestsWithAssignment()}
+          onDragGuest={g => { dragGuestRef.current = g; }}
+          onAssignGuest={() => {}}
+          splitPartyGuestIds={splitPartyGroupIds()}
+        />
+      )}
 
       {/* Canvas area */}
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         {/* Toolbar */}
-        <div className="h-12 bg-white border-b border-gray-200 flex items-center gap-2 px-4 shrink-0">
+        {/* Scrolls sideways rather than overflowing the page on a phone; the
+            Guests toggle is first, so it is the one thing always in view. */}
+        <div className="h-12 bg-white border-b border-gray-200 flex items-center gap-2 px-4 shrink-0 overflow-x-auto [&>*]:shrink-0 [&_button]:whitespace-nowrap">
+          {/* First in the row so it is reachable however narrow the toolbar gets:
+              on a phone this is the difference between a usable diagram and a
+              100px sliver beside the guest list. */}
+          <button
+            onClick={() => {
+              setShowGuests(v => !v);
+              // The canvas just changed width; put the room back in view rather
+              // than leaving it half off-screen.
+              setTimeout(() => fitView({ padding: 0.2, duration: 200 }), 60);
+            }}
+            className={`flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-md border transition-colors ${
+              showGuests
+                ? 'bg-gray-100 text-gray-700 border-gray-300'
+                : 'text-gray-600 border-gray-200 hover:bg-gray-50'
+            }`}
+            title={showGuests ? 'Hide the guest list' : 'Show the guest list'}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+            {showGuests ? 'Hide guests' : 'Guests'}
+          </button>
+
           <button
             onClick={onAddTable}
             className="flex items-center gap-1.5 bg-accent text-white text-sm font-medium px-3 py-1.5 rounded-md hover:opacity-90 transition-opacity"
@@ -376,7 +417,7 @@ function SeatingCanvas({
             </div>
 
             {/* Legend */}
-            <div className="flex items-center gap-3 text-xs text-gray-400">
+            <div className="hidden md:flex items-center gap-3 text-xs text-gray-400">
               {colorMode === 'party' ? (
                 <>
                   <span className="flex items-center gap-1">
@@ -464,7 +505,10 @@ function SeatingCanvas({
           >
             <Background color="#e5e7eb" gap={24} size={1} />
             <Controls />
+            {/* A quarter of a phone screen for a map of a map; the point of
+                hiding the guest list was to get that space back. */}
             <MiniMap
+              className="!hidden md:!block"
               nodeColor={() => '#e5e7eb'}
               maskColor="rgba(255,255,255,0.6)"
             />

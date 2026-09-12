@@ -350,7 +350,13 @@ order, before the commit:
 - **Seating chart** (`/admin/seating`) — two views over one plan, switched in
   the page header:
   - **Canvas** — a React Flow (`@xyflow/react`) surface: draw the room, drop
-    tables, drag guests from `guest_list` into seats.
+    tables, drag guests from `guest_list` into seats. The guest list is a
+    **Guests / Hide guests** toggle in the toolbar: a 288px column from `md` up
+    (open by default), and below it a drawer over the canvas that starts closed
+    and is positioned *under* the toolbar — as a full-width flex sibling it
+    pushed the toolbar off-screen and there was no way to close it again.
+    Toggling refits the view. On a phone the minimap is hidden and the toolbar
+    scrolls sideways.
   - **List** (`SeatingListView.tsx`) — the same plan as a roster, grouped **by
     table** (rows are people, with an "Not seated" block on top) or **by guest**
     (rows are whole parties). Multi-select (click, ⌘/Ctrl-click, Shift-range,
