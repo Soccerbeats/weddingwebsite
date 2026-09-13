@@ -1,13 +1,26 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import {
+    blankEvent, isPublicEvent, moveEvent, sortByTime, type ScheduleEvent,
+} from '@/lib/schedule';
 
-interface ScheduleEvent {
-    time: string;
-    title: string;
-    description: string;
-    location: string;
-}
+/**
+ * The run of the day, as a table.
+ *
+ * This is the *whole* day — vendor call times, hair and makeup, setup,
+ * breakdown — not only the parts a guest sees. The Public tick on each row is
+ * what decides which of them reach `/schedule`; everything else stays here.
+ * Rows are a table rather than the stack of cards this used to be because a
+ * full run-of-show is thirty rows, and thirty cards is a page you scroll rather
+ * than read.
+ */
+
+/** The header cell style, shared so the two column sets line up. */
+const TH = 'text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500 px-3 py-2';
+const CELL_INPUT =
+    'w-full rounded-xl bg-gray-50 border border-transparent px-3 py-2 text-sm text-gray-900 ' +
+    'focus:bg-white focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/20 transition-colors';
 
 export default function AdminSchedule() {
     const [events, setEvents] = useState<ScheduleEvent[]>([]);
@@ -25,7 +38,7 @@ export default function AdminSchedule() {
                     setEvents(data.scheduleEvents);
                 } else {
                     // Default starter event if empty
-                    setEvents([{ time: '4:00 PM', title: 'Ceremony', description: '', location: '' }]);
+                    setEvents([{ time: '4:00 PM', title: 'Ceremony', description: '', location: '', public: true }]);
                 }
                 if (data.scheduleSubtitle) setScheduleSubtitle(data.scheduleSubtitle);
                 if (data.scheduleShuttleText) setShuttleText(data.scheduleShuttleText);
@@ -33,18 +46,14 @@ export default function AdminSchedule() {
             });
     }, []);
 
-    const handleEventChange = (index: number, field: keyof ScheduleEvent, value: string) => {
+    const publicCount = useMemo(() => events.filter(isPublicEvent).length, [events]);
+
+    const handleEventChange = <K extends keyof ScheduleEvent>(index: number, field: K, value: ScheduleEvent[K]) => {
         setEvents(events.map((ev, i) => (i === index ? { ...ev, [field]: value } : ev)));
     };
 
-    const addEvent = () => {
-        setEvents([...events, { time: '', title: '', description: '', location: '' }]);
-    };
-
-    const removeEvent = (index: number) => {
-        const newEvents = events.filter((_, i) => i !== index);
-        setEvents(newEvents);
-    };
+    const addEvent = () => setEvents([...events, blankEvent()]);
+    const removeEvent = (index: number) => setEvents(events.filter((_, i) => i !== index));
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -77,10 +86,63 @@ export default function AdminSchedule() {
         }
     };
 
+    /** The row controls, identical in the table and in the phone cards. */
+    const rowActions = (index: number) => (
+        <div className="flex items-center gap-0.5">
+            <button
+                type="button"
+                onClick={() => setEvents(moveEvent(events, index, index - 1))}
+                disabled={index === 0}
+                className="p-1.5 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:opacity-25 disabled:hover:bg-transparent transition-colors"
+                title="Move up"
+            >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+                </svg>
+            </button>
+            <button
+                type="button"
+                onClick={() => setEvents(moveEvent(events, index, index + 1))}
+                disabled={index === events.length - 1}
+                className="p-1.5 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:opacity-25 disabled:hover:bg-transparent transition-colors"
+                title="Move down"
+            >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
+            </button>
+            <button
+                type="button"
+                onClick={() => removeEvent(index)}
+                className="p-1.5 rounded-full text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                title="Remove this row"
+            >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+            </button>
+        </div>
+    );
+
+    /** The Public tick, which is the whole point of the table. */
+    const publicToggle = (index: number, event: ScheduleEvent) => (
+        <input
+            type="checkbox"
+            checked={isPublicEvent(event)}
+            onChange={e => handleEventChange(index, 'public', e.target.checked)}
+            className="h-4 w-4 rounded border-gray-300 text-accent focus:ring-accent/30 cursor-pointer"
+            style={{ accentColor: 'var(--accent)' }}
+            title={isPublicEvent(event) ? 'Guests can see this' : 'Only you can see this'}
+        />
+    );
+
     return (
-        <div className="max-w-4xl">
+        <div className="max-w-6xl">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Schedule Management</h1>
-            <p className="text-gray-600 mb-8">Create and organize your wedding day timeline</p>
+            <p className="text-gray-600 mb-8">
+                The whole run of the day. Tick <span className="font-medium text-gray-800">Public</span> on the rows
+                guests should see on the schedule page — everything else stays here.
+            </p>
 
             {message && (
                 <div className={`p-4 rounded-xl mb-6 ${message.includes('success') ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
@@ -89,77 +151,154 @@ export default function AdminSchedule() {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-8">
-                <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-lg space-y-6">
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-lg overflow-hidden">
+                    <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-gray-200">
+                        <p className="text-sm text-gray-500">
+                            {events.length} row{events.length === 1 ? '' : 's'} ·{' '}
+                            <span className="font-medium text-gray-700">{publicCount} public</span>
+                            {events.length - publicCount > 0 && ` · ${events.length - publicCount} private`}
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => setEvents(sortByTime(events))}
+                            className="ml-auto px-4 py-1.5 rounded-full text-sm font-medium text-gray-600 border border-gray-200 hover:bg-gray-50 transition-colors"
+                            title="Order the rows by their time. Anything with a time this cannot read keeps its place."
+                        >
+                            Sort by time
+                        </button>
+                    </div>
 
-                    {events.map((event, index) => (
-                        <div key={index} className="bg-gradient-to-br from-accent/5 to-accent-light/10 p-4 rounded-xl border border-accent/10 relative group shadow-md hover:shadow-lg transition-all duration-300">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-medium text-gray-500 uppercase">Time</label>
+                    {/* A table from `md` up. Below that it is six columns on a
+                        390px screen, so the same rows are stacked as cards. */}
+                    <div className="hidden md:block overflow-x-auto">
+                        <table className="w-full">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th scope="col" className={`${TH} w-20 text-center`}>Public</th>
+                                    <th scope="col" className={`${TH} w-32`}>Time</th>
+                                    <th scope="col" className={`${TH} w-56`}>Event</th>
+                                    <th scope="col" className={`${TH} w-56`}>Location</th>
+                                    <th scope="col" className={TH}>Description</th>
+                                    <th scope="col" className={`${TH} w-28`}><span className="sr-only">Actions</span></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {events.map((event, index) => (
+                                    // A private row is tinted, so a glance down the
+                                    // table answers "what do guests actually see?"
+                                    <tr
+                                        key={index}
+                                        className={`border-t border-gray-100 ${isPublicEvent(event) ? '' : 'bg-gray-50/70'}`}
+                                    >
+                                        <td className="px-3 py-2 text-center">{publicToggle(index, event)}</td>
+                                        <td className="px-3 py-2">
+                                            <input
+                                                type="text"
+                                                value={event.time}
+                                                onChange={e => handleEventChange(index, 'time', e.target.value)}
+                                                className={CELL_INPUT}
+                                                placeholder="4:00 PM"
+                                                aria-label={`Time for row ${index + 1}`}
+                                            />
+                                        </td>
+                                        <td className="px-3 py-2">
+                                            <input
+                                                type="text"
+                                                value={event.title}
+                                                onChange={e => handleEventChange(index, 'title', e.target.value)}
+                                                className={CELL_INPUT}
+                                                placeholder="Ceremony"
+                                                aria-label={`Event for row ${index + 1}`}
+                                            />
+                                        </td>
+                                        <td className="px-3 py-2">
+                                            <input
+                                                type="text"
+                                                value={event.location}
+                                                onChange={e => handleEventChange(index, 'location', e.target.value)}
+                                                className={CELL_INPUT}
+                                                placeholder="Garden Courtyard"
+                                                aria-label={`Location for row ${index + 1}`}
+                                            />
+                                        </td>
+                                        <td className="px-3 py-2">
+                                            <input
+                                                type="text"
+                                                value={event.description}
+                                                onChange={e => handleEventChange(index, 'description', e.target.value)}
+                                                className={CELL_INPUT}
+                                                placeholder="Brief details…"
+                                                aria-label={`Description for row ${index + 1}`}
+                                            />
+                                        </td>
+                                        <td className="px-3 py-2">{rowActions(index)}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Phone: the same row, stacked. */}
+                    <div className="md:hidden divide-y divide-gray-100">
+                        {events.map((event, index) => (
+                            <div key={index} className={`p-4 space-y-2 ${isPublicEvent(event) ? '' : 'bg-gray-50/70'}`}>
+                                <div className="flex items-center gap-3">
+                                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                                        {publicToggle(index, event)}
+                                        Public
+                                    </label>
+                                    <div className="ml-auto">{rowActions(index)}</div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
                                     <input
                                         type="text"
                                         value={event.time}
-                                        onChange={(e) => handleEventChange(index, 'time', e.target.value)}
-                                        className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
-                                        placeholder="e.g. 4:00 PM"
+                                        onChange={e => handleEventChange(index, 'time', e.target.value)}
+                                        className={CELL_INPUT}
+                                        placeholder="4:00 PM"
+                                        aria-label={`Time for row ${index + 1}`}
                                     />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-medium text-gray-500 uppercase">Event Title</label>
                                     <input
                                         type="text"
                                         value={event.title}
-                                        onChange={(e) => handleEventChange(index, 'title', e.target.value)}
-                                        className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
-                                        placeholder="e.g. Ceremony"
+                                        onChange={e => handleEventChange(index, 'title', e.target.value)}
+                                        className={CELL_INPUT}
+                                        placeholder="Ceremony"
+                                        aria-label={`Event for row ${index + 1}`}
                                     />
                                 </div>
-                                <div className="md:col-span-2">
-                                    <label className="block text-xs font-medium text-gray-500 uppercase">Location</label>
-                                    <input
-                                        type="text"
-                                        value={event.location}
-                                        onChange={(e) => handleEventChange(index, 'location', e.target.value)}
-                                        className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
-                                        placeholder="e.g. Garden Courtyard"
-                                    />
-                                </div>
-                                <div className="md:col-span-2">
-                                    <label className="block text-xs font-medium text-gray-500 uppercase">Description</label>
-                                    <input
-                                        type="text"
-                                        value={event.description}
-                                        onChange={(e) => handleEventChange(index, 'description', e.target.value)}
-                                        className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border text-gray-900"
-                                        placeholder="Brief details..."
-                                    />
-                                </div>
+                                <input
+                                    type="text"
+                                    value={event.location}
+                                    onChange={e => handleEventChange(index, 'location', e.target.value)}
+                                    className={CELL_INPUT}
+                                    placeholder="Garden Courtyard"
+                                    aria-label={`Location for row ${index + 1}`}
+                                />
+                                <input
+                                    type="text"
+                                    value={event.description}
+                                    onChange={e => handleEventChange(index, 'description', e.target.value)}
+                                    className={CELL_INPUT}
+                                    placeholder="Brief details…"
+                                    aria-label={`Description for row ${index + 1}`}
+                                />
                             </div>
+                        ))}
+                    </div>
 
-                            <button
-                                type="button"
-                                onClick={() => removeEvent(index)}
-                                className="absolute top-2 right-2 text-red-400 hover:text-red-600 p-1"
-                                title="Remove Event"
-                            >
-                                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                            </button>
-                        </div>
-                    ))}
-
-                    <button
-                        type="button"
-                        onClick={addEvent}
-                        className="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 hover:border-accent hover:text-accent transition-all duration-300 font-medium flex items-center justify-center gap-2 hover:shadow-lg"
-                    >
-                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-                        </svg>
-                        Add New Event
-                    </button>
-
+                    <div className="p-3 border-t border-gray-100">
+                        <button
+                            type="button"
+                            onClick={addEvent}
+                            className="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 hover:border-accent hover:text-accent transition-all duration-300 font-medium flex items-center justify-center gap-2"
+                        >
+                            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                            </svg>
+                            Add row
+                        </button>
+                    </div>
                 </div>
 
                 {/* Extra cards under the timeline. Blank = not shown. */}

@@ -1,12 +1,10 @@
 import fs from 'fs';
 import path from 'path';
 
-export interface ScheduleEvent {
-    time: string;
-    title: string;
-    description: string;
-    location: string;
-}
+// Defined in `schedule.ts` — this module reads the filesystem, and the schedule
+// editor is a client component that needs the type without `fs` behind it.
+export type { ScheduleEvent } from './schedule';
+import type { ScheduleEvent } from './schedule';
 
 export interface FAQItem {
     question: string;

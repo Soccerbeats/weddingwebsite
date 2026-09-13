@@ -14,6 +14,7 @@
     "check:finance:ui": "npx --yes -p playwright -p tsx tsx scripts/verify-finance-ui.mts",
     "check:honeymoon": "npx --yes tsx scripts/verify-honeymoon.mts",
     "check:seating": "npx --yes tsx scripts/verify-seating.mts",
+    "check:schedule": "npx --yes tsx scripts/verify-schedule.mts",
     "seed:honeymoon": "npx --yes tsx scripts/seed-honeymoon.mts",
     "check:types": "tsc --noEmit && tsc --noEmit -p tsconfig.scripts.json",
     "audit:finance": "npx --yes tsx scripts/audit-finance-logic.mts",

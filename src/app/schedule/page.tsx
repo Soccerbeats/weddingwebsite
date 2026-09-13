@@ -1,17 +1,24 @@
 import Link from 'next/link';
 import { getSiteConfig } from '@/lib/config';
+import { publicScheduleEvents } from '@/lib/schedule';
 import FadeIn from '@/components/FadeIn';
 
 export default function SchedulePage() {
     const config = getSiteConfig();
-    const events = config.scheduleEvents || [
-        {
-            time: config.weddingTime || '4:00 PM',
-            title: 'Ceremony',
-            description: 'We say "I do"!',
-            location: 'Main Venue'
-        }
-    ];
+    // The admin schedule is the whole run of the day — vendor call times, hair
+    // and makeup, breakdown — and only the rows ticked "public" belong here.
+    // Nothing configured at all still falls back to the ceremony, so a fresh
+    // install has a page rather than an empty one.
+    const events = config.scheduleEvents
+        ? publicScheduleEvents(config.scheduleEvents)
+        : [
+            {
+                time: config.weddingTime || '4:00 PM',
+                title: 'Ceremony',
+                description: 'We say "I do"!',
+                location: 'Main Venue'
+            }
+        ];
     const bgColor = config.pageBgColors?.schedule || '#ffffff';
     const shuttleText = (config.scheduleShuttleText || '').trim();
     const dressCode = (config.scheduleDressCode || '').trim();
@@ -43,6 +50,11 @@ export default function SchedulePage() {
                     </div>
                 </FadeIn>
 
+                {events.length === 0 ? (
+                    <p className="text-center text-gray-400 italic font-serif">
+                        Timings to come.
+                    </p>
+                ) : (
                 <div className="max-w-3xl mx-auto">
                     <div className="space-y-12">
                         {events.map((event, index) => (
@@ -86,6 +98,7 @@ export default function SchedulePage() {
                         ))}
                     </div>
                 </div>
+                )}
 
                 {/* Transportation & Details — only the cards that have content.
                     These used to be hard-coded placeholders ("[Hotel Name]",

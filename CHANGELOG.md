@@ -11,6 +11,22 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.79 — [Released] The schedule holds the whole day (`main`, 2026-09-13 17:26)
+
+The schedule page was the only place to write down what happens on the day, so it could only hold the parts guests are allowed to read. Now it holds all of it, and a tick decides what leaves the room.
+
+### Added
+- **A Public tick on every schedule row.** Vendor call times, hair and makeup, setup, breakdown — put them all in; only the ticked rows reach `/schedule`. Existing events have no tick recorded and are treated as public, so nothing that was on the page came off it.
+- **The editor is a table.** A full run-of-show is thirty rows, and thirty of the old cards is a page you scroll rather than read. Each row has move up/down and a delete; the header counts what is public against what is not; below 768px the same rows stack, because six columns do not fit a phone.
+- **A "Sort by time" button** that reads `4:00 PM`, `4pm`, `16:00`, `9.30am`, `noon` and `midnight`. A time it cannot read — "after the toasts", "TBD" — keeps its place rather than being guessed into the wrong slot.
+- `npm run check:schedule`: 41 assertions with no database or browser, over the public rule, the time parser and the ordering. Now runs in CI.
+
+### Fixed
+- **The private rows would have been world-readable.** `GET /api/admin/site-config` is one of three admin reads the middleware answers without a login, because the nav and the RSVP form need it — so everything in it is public by definition, which the schedule stopped being the moment a row could be private. That GET now checks the caller and hands an anonymous one only the rows a guest may see.
+
+### Changed
+- **The public schedule page shows only public rows**, and says "Timings to come" rather than drawing an empty rail if none of them are. A site with no schedule configured at all still falls back to the ceremony, as before.
+
 ## v0.9.78 — [Released] A full-screen button on the seating chart (`main`, 2026-09-12 21:03)
 
 The diagram was sharing a 1440px laptop with an 80px site nav, a 256px admin sidebar and its own page header. Now it can have all of it.

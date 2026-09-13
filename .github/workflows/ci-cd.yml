@@ -81,7 +81,7 @@ jobs:
         run: npm run lint
 
       - name: Photo route, finance maths, honeymoon and seating checks
-        run: npm run check:photos && npm run check:finance && npm run check:honeymoon && npm run check:seating
+        run: npm run check:photos && npm run check:finance && npm run check:honeymoon && npm run check:seating && npm run check:schedule
 
   docker:
     name: "Wedding Planner · pack & publish the image"

@@ -1,11 +1,35 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
+import { ADMIN_COOKIE, verifyAdminToken } from '@/lib/auth';
 import { DEFAULT_SITE_CONFIG, getSiteConfig, updateSiteConfig, type SiteConfig } from '@/lib/config';
+import { isDemoMode } from '@/lib/demo';
+import { publicScheduleEvents } from '@/lib/schedule';
 
 const HEX = /^#[0-9a-fA-F]{3,8}$/;
 const COLOR_KEYS = ['accentColor', 'accentLightColor', 'accentDarkColor'] as const;
 
+/**
+ * This GET is one of three under `/api/admin/` that `src/middleware.ts` answers
+ * without the admin cookie, because the nav, the RSVP form and the registry page
+ * all read it. Everything it returns is therefore world-readable — which the
+ * schedule stopped being the moment events could be marked private.
+ *
+ * So the caller is checked here, and a caller without the cookie gets the
+ * schedule a guest would see. The alternative — trusting that no private key
+ * ever lands in `site.json` — is the assumption that made this a hole in the
+ * first place. A demo instance is login-free by design and its data is
+ * fictional, so it answers in full.
+ */
+async function isAdminRequest(): Promise<boolean> {
+    if (isDemoMode()) return true;
+    const token = (await cookies()).get(ADMIN_COOKIE)?.value;
+    return (await verifyAdminToken(token)) !== null;
+}
+
 export async function GET() {
-    return NextResponse.json({ ...DEFAULT_SITE_CONFIG, countdownMode: 'full', ...getSiteConfig() });
+    const config = { ...DEFAULT_SITE_CONFIG, countdownMode: 'full', ...getSiteConfig() } as SiteConfig;
+    if (await isAdminRequest()) return NextResponse.json(config);
+    return NextResponse.json({ ...config, scheduleEvents: publicScheduleEvents(config.scheduleEvents) });
 }
 
 /**
