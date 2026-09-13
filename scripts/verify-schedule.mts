@@ -10,8 +10,8 @@
  * schedule.
  */
 import {
-    blankEvent, isPublicEvent, moveEvent, parseEventTime, publicScheduleEvents, sortByTime,
-    type ScheduleEvent,
+    blankEvent, formatEventTime, isPublicEvent, normalizeEventTime, parseEventTime,
+    publicScheduleEvents, sortByTime, type ScheduleEvent,
 } from '../src/lib/schedule';
 
 let failures = 0;
@@ -58,6 +58,13 @@ function ev(title: string, time = '', isPublic?: boolean): ScheduleEvent {
     check('a day with nothing public shows nothing',
         publicScheduleEvents([ev('Setup', '6:00 AM', false)]).length === 0);
     check('a new row starts public', isPublicEvent(blankEvent()));
+
+    // What the public page actually renders: filtered, then put in clock order.
+    const timeline = sortByTime(publicScheduleEvents([
+        ev('Reception', '6:00 PM'), ev('Vendor load-in', '7:00 AM', false), ev('Ceremony', '4pm'),
+    ]));
+    check('the public timeline is the public rows, in clock order',
+        timeline.map(e => e.title).join(',') === 'Ceremony,Reception', timeline.map(e => e.title).join(','));
 }
 
 /* ---- reading a time off the page ---- */
@@ -88,9 +95,40 @@ function ev(title: string, time = '', isPublic?: boolean): ScheduleEvent {
     check('4:75 is unknown', parseEventTime('4:75') === null);
 }
 
-/* ---- putting the day in order ---- */
+/* ---- tidying what was typed ---- */
 {
-    console.log('\nsorting the run of the day');
+    console.log('\ntidying the time');
+
+    // The whole point: nobody types "8:00 AM" when "8am" will do, and the
+    // timeline should not then show three notations for one day.
+    check('8am becomes 8:00 AM', normalizeEventTime('8am') === '8:00 AM', normalizeEventTime('8am'));
+    check('8 AM becomes 8:00 AM', normalizeEventTime('8 AM') === '8:00 AM');
+    check('4pm becomes 4:00 PM', normalizeEventTime('4pm') === '4:00 PM');
+    check('16:00 becomes 4:00 PM', normalizeEventTime('16:00') === '4:00 PM', normalizeEventTime('16:00'));
+    check('9.30am becomes 9:30 AM', normalizeEventTime('9.30am') === '9:30 AM');
+    check('4:00 p.m. becomes 4:00 PM', normalizeEventTime('4:00 p.m.') === '4:00 PM');
+    check('noon becomes 12:00 PM', normalizeEventTime('noon') === '12:00 PM');
+    check('midnight becomes 12:00 AM', normalizeEventTime('midnight') === '12:00 AM');
+    check('00:30 becomes 12:30 AM', normalizeEventTime('00:30') === '12:30 AM');
+    check('already tidy is left alone', normalizeEventTime('4:00 PM') === '4:00 PM');
+    check('tidying twice changes nothing', normalizeEventTime(normalizeEventTime('8am')) === '8:00 AM');
+
+    // A row can legitimately say when it happens in words. Rewriting that would
+    // be worse than leaving it.
+    check('"after the toasts" is left as written', normalizeEventTime('after the toasts') === 'after the toasts');
+    check('"TBD" is left as written', normalizeEventTime('TBD') === 'TBD');
+    check('an empty time stays empty', normalizeEventTime('') === '');
+    check('only the surrounding spaces go', normalizeEventTime('  TBD  ') === 'TBD');
+
+    check('formatting the top of the hour', formatEventTime(8 * 60) === '8:00 AM');
+    check('formatting noon', formatEventTime(12 * 60) === '12:00 PM');
+    check('formatting midnight', formatEventTime(0) === '12:00 AM');
+    check('formatting pads the minutes', formatEventTime(9 * 60 + 5) === '9:05 AM');
+}
+
+/* ---- the order is the times ---- */
+{
+    console.log('\nthe order is the times');
 
     const out = sortByTime([ev('Reception', '6:00 PM'), ev('Hair', '8:00 AM'), ev('Ceremony', '4:00 PM')]);
     check('rows land in clock order', out.map(e => e.title).join(',') === 'Hair,Ceremony,Reception',
@@ -99,34 +137,31 @@ function ev(title: string, time = '', isPublic?: boolean): ScheduleEvent {
     check('AM and PM are not sorted as text',
         sortByTime([ev('a', '9:00 PM'), ev('b', '10:00 AM')]).map(e => e.title).join(',') === 'b,a');
 
-    // A row whose time nobody can parse is a row the user placed by hand. It
-    // keeps its index; the rows around it sort among themselves.
+    check('a 24-hour time sorts against a 12-hour one',
+        sortByTime([ev('late', '18:00'), ev('early', '9am')]).map(e => e.title).join(',') === 'early,late');
+
+    // There is no hand-ordering left to preserve, so a row with no readable time
+    // has nowhere to be but the end — which is also where a blank new row wants
+    // to sit until it is given a time.
     const mixed = sortByTime([
-        ev('Late', '9:00 PM'), ev('Whenever', 'after the toasts'), ev('Early', '9:00 AM'),
+        ev('Whenever', 'after the toasts'), ev('Late', '9:00 PM'), ev('Blank', ''), ev('Early', '9:00 AM'),
     ]);
-    check('an unreadable time keeps its place',
-        mixed.map(e => e.title).join(',') === 'Early,Whenever,Late', mixed.map(e => e.title).join(','));
+    check('rows with no readable time go to the end',
+        mixed.map(e => e.title).join(',') === 'Early,Late,Whenever,Blank', mixed.map(e => e.title).join(','));
+    check('and keep the order they were in among themselves',
+        mixed[2].title === 'Whenever' && mixed[3].title === 'Blank');
+    check('a new blank row sorts to the bottom',
+        sortByTime([ev('Ceremony', '4pm'), blankEvent()])[1].title === '');
 
     check('equal times keep the order they were in',
         sortByTime([ev('first', '4:00 PM'), ev('second', '4:00 PM')]).map(e => e.title).join(',') === 'first,second');
+    check('sorting an already sorted day changes nothing',
+        sortByTime(sortByTime(out)).map(e => e.title).join(',') === out.map(e => e.title).join(','));
 
     check('sorting keeps every row', sortByTime([ev('a', '2pm'), ev('b'), ev('c', '1pm')]).length === 3);
     check('sorting an empty day is an empty day', sortByTime([]).length === 0);
     check('sorting does not disturb the public flags',
         sortByTime([ev('b', '5pm', false), ev('a', '4pm', true)]).map(e => String(e.public)).join(',') === 'true,false');
-}
-
-/* ---- moving a row by hand ---- */
-{
-    console.log('\nmoving a row');
-
-    const rows = [ev('a'), ev('b'), ev('c')];
-    check('up', moveEvent(rows, 2, 1).map(e => e.title).join(',') === 'a,c,b');
-    check('down', moveEvent(rows, 0, 1).map(e => e.title).join(',') === 'b,a,c');
-    check('off the top does nothing', moveEvent(rows, 0, -1).map(e => e.title).join(',') === 'a,b,c');
-    check('off the bottom does nothing', moveEvent(rows, 2, 3).map(e => e.title).join(',') === 'a,b,c');
-    check('onto itself does nothing', moveEvent(rows, 1, 1).map(e => e.title).join(',') === 'a,b,c');
-    check('the original list is not mutated', rows.map(e => e.title).join(',') === 'a,b,c');
 }
 
 console.log(`\n${failures === 0 ? 'PASS' : 'FAIL'} — ${checks - failures}/${checks} checks passed.\n`);

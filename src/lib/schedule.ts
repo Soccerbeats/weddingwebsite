@@ -66,42 +66,55 @@ export function parseEventTime(time: string): number | null {
 }
 
 /**
- * Sort by the clock, leaving anything unparseable exactly where it was.
+ * Minutes past midnight, written the way the schedule shows them.
  *
- * A run-of-show is filled in as things are decided, not in order, so the button
- * that tidies it has to be predictable: rows it understands are ordered by time
- * among themselves, rows it does not keep their index, and equal times keep
- * their existing order. Nobody's hand-placed row jumps to the bottom because the
- * time said "after the toasts".
+ * One canonical shape for every row, so a day typed as `8am`, `16:00` and
+ * `9.30 a.m.` does not read as three different notations on the public
+ * timeline.
+ */
+export function formatEventTime(minutes: number): string {
+    const wrapped = ((Math.round(minutes) % 1440) + 1440) % 1440;
+    const hour24 = Math.floor(wrapped / 60);
+    const minute = wrapped % 60;
+    const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
+    return `${hour12}:${String(minute).padStart(2, '0')} ${hour24 < 12 ? 'AM' : 'PM'}`;
+}
+
+/**
+ * Tidy a time as it was typed into the one the schedule keeps.
+ *
+ * `8am` becomes `8:00 AM`. Anything the parser does not recognise is handed
+ * back trimmed and otherwise untouched — "after the toasts" is a real answer
+ * for a row, and rewriting it would be worse than leaving it alone.
+ */
+export function normalizeEventTime(time: string): string {
+    const at = parseEventTime(time);
+    return at === null ? (time ?? '').trim() : formatEventTime(at);
+}
+
+/**
+ * The day in clock order.
+ *
+ * The order *is* the times — there is no separate hand-ordering to preserve, so
+ * moving something means changing when it happens. Rows whose time cannot be
+ * read (blank, "TBD", "after the toasts") collect at the end in the order they
+ * were already in, which is also where a freshly added blank row belongs: at
+ * the bottom, until it is given a time and takes its place.
  */
 export function sortByTime(events: ScheduleEvent[]): ScheduleEvent[] {
     const timed: { event: ScheduleEvent; at: number; index: number }[] = [];
-    const fixed = new Map<number, ScheduleEvent>();
+    const untimed: { event: ScheduleEvent; index: number }[] = [];
 
     events.forEach((event, index) => {
         const at = parseEventTime(event.time);
-        if (at === null) fixed.set(index, event);
+        if (at === null) untimed.push({ event, index });
         else timed.push({ event, at, index });
     });
 
+    // Ties keep the order they were in, so re-sorting a sorted day changes
+    // nothing and two things at 4:00 PM do not swap on every keystroke.
     timed.sort((a, b) => a.at - b.at || a.index - b.index);
-
-    const out: ScheduleEvent[] = [];
-    let next = 0;
-    for (let i = 0; i < events.length; i += 1) {
-        const held = fixed.get(i);
-        out.push(held ?? timed[next++].event);
-    }
-    return out;
-}
-
-/** Move one row, or return the list untouched when it cannot go that way. */
-export function moveEvent(events: ScheduleEvent[], from: number, to: number): ScheduleEvent[] {
-    if (from === to || from < 0 || to < 0 || from >= events.length || to >= events.length) return events;
-    const next = [...events];
-    const [row] = next.splice(from, 1);
-    next.splice(to, 0, row);
-    return next;
+    return [...timed.map(t => t.event), ...untimed.map(u => u.event)];
 }
 
 /** A blank row, with every field the editor writes. */

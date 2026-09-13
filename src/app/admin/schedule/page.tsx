@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import {
-    blankEvent, isPublicEvent, moveEvent, sortByTime, type ScheduleEvent,
+    blankEvent, isPublicEvent, normalizeEventTime, sortByTime, type ScheduleEvent,
 } from '@/lib/schedule';
 
 /**
@@ -14,6 +14,13 @@ import {
  * Rows are a table rather than the stack of cards this used to be because a
  * full run-of-show is thirty rows, and thirty cards is a page you scroll rather
  * than read.
+ *
+ * The order is the times. Leaving a time field tidies what was typed — `8am`
+ * becomes `8:00 AM` — and drops the row where the clock says it goes, which is
+ * why there is nothing here for dragging rows about: to move something, change
+ * when it happens. Sorting waits for the field to be left rather than firing on
+ * each keystroke, or typing the second `1` of `11:00` would throw the row you
+ * are editing to the other end of the table.
  */
 
 /** The header cell style, shared so the two column sets line up. */
@@ -35,7 +42,7 @@ export default function AdminSchedule() {
             .then(res => res.json())
             .then(data => {
                 if (data.scheduleEvents) {
-                    setEvents(data.scheduleEvents);
+                    setEvents(sortByTime(data.scheduleEvents));
                 } else {
                     // Default starter event if empty
                     setEvents([{ time: '4:00 PM', title: 'Ceremony', description: '', location: '', public: true }]);
@@ -54,6 +61,13 @@ export default function AdminSchedule() {
 
     const addEvent = () => setEvents([...events, blankEvent()]);
     const removeEvent = (index: number) => setEvents(events.filter((_, i) => i !== index));
+
+    /** Leaving a time field tidies it and re-files the row by the clock. */
+    const commitTime = (index: number) => {
+        setEvents(current => sortByTime(current.map(
+            (ev, i) => (i === index ? { ...ev, time: normalizeEventTime(ev.time) } : ev),
+        )));
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -86,42 +100,19 @@ export default function AdminSchedule() {
         }
     };
 
-    /** The row controls, identical in the table and in the phone cards. */
+    /** The row controls, identical in the table and in the phone cards. There is
+     *  no reordering here on purpose: the times are the order. */
     const rowActions = (index: number) => (
-        <div className="flex items-center gap-0.5">
-            <button
-                type="button"
-                onClick={() => setEvents(moveEvent(events, index, index - 1))}
-                disabled={index === 0}
-                className="p-1.5 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:opacity-25 disabled:hover:bg-transparent transition-colors"
-                title="Move up"
-            >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
-                </svg>
-            </button>
-            <button
-                type="button"
-                onClick={() => setEvents(moveEvent(events, index, index + 1))}
-                disabled={index === events.length - 1}
-                className="p-1.5 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:opacity-25 disabled:hover:bg-transparent transition-colors"
-                title="Move down"
-            >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                </svg>
-            </button>
-            <button
-                type="button"
-                onClick={() => removeEvent(index)}
-                className="p-1.5 rounded-full text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
-                title="Remove this row"
-            >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-            </button>
-        </div>
+        <button
+            type="button"
+            onClick={() => removeEvent(index)}
+            className="p-1.5 rounded-full text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+            title="Remove this row"
+        >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+        </button>
     );
 
     /** The Public tick, which is the whole point of the table. */
@@ -158,14 +149,9 @@ export default function AdminSchedule() {
                             <span className="font-medium text-gray-700">{publicCount} public</span>
                             {events.length - publicCount > 0 && ` · ${events.length - publicCount} private`}
                         </p>
-                        <button
-                            type="button"
-                            onClick={() => setEvents(sortByTime(events))}
-                            className="ml-auto px-4 py-1.5 rounded-full text-sm font-medium text-gray-600 border border-gray-200 hover:bg-gray-50 transition-colors"
-                            title="Order the rows by their time. Anything with a time this cannot read keeps its place."
-                        >
-                            Sort by time
-                        </button>
+                        <p className="ml-auto text-xs text-gray-400">
+                            Ordered by time — edit a time to move a row.
+                        </p>
                     </div>
 
                     {/* A table from `md` up. Below that it is six columns on a
@@ -179,7 +165,7 @@ export default function AdminSchedule() {
                                     <th scope="col" className={`${TH} w-56`}>Event</th>
                                     <th scope="col" className={`${TH} w-56`}>Location</th>
                                     <th scope="col" className={TH}>Description</th>
-                                    <th scope="col" className={`${TH} w-28`}><span className="sr-only">Actions</span></th>
+                                    <th scope="col" className={`${TH} w-12`}><span className="sr-only">Actions</span></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -196,6 +182,7 @@ export default function AdminSchedule() {
                                                 type="text"
                                                 value={event.time}
                                                 onChange={e => handleEventChange(index, 'time', e.target.value)}
+                                                onBlur={() => commitTime(index)}
                                                 className={CELL_INPUT}
                                                 placeholder="4:00 PM"
                                                 aria-label={`Time for row ${index + 1}`}
@@ -254,6 +241,7 @@ export default function AdminSchedule() {
                                         type="text"
                                         value={event.time}
                                         onChange={e => handleEventChange(index, 'time', e.target.value)}
+                                        onBlur={() => commitTime(index)}
                                         className={CELL_INPUT}
                                         placeholder="4:00 PM"
                                         aria-label={`Time for row ${index + 1}`}

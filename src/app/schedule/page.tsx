@@ -1,16 +1,18 @@
 import Link from 'next/link';
 import { getSiteConfig } from '@/lib/config';
-import { publicScheduleEvents } from '@/lib/schedule';
+import { publicScheduleEvents, sortByTime } from '@/lib/schedule';
 import FadeIn from '@/components/FadeIn';
 
 export default function SchedulePage() {
     const config = getSiteConfig();
     // The admin schedule is the whole run of the day — vendor call times, hair
     // and makeup, breakdown — and only the rows ticked "public" belong here.
+    // Sorted here as well as in the editor: the timeline reads by the clock even
+    // if the stored order is older than that rule, or was written by hand.
     // Nothing configured at all still falls back to the ceremony, so a fresh
     // install has a page rather than an empty one.
     const events = config.scheduleEvents
-        ? publicScheduleEvents(config.scheduleEvents)
+        ? sortByTime(publicScheduleEvents(config.scheduleEvents))
         : [
             {
                 time: config.weddingTime || '4:00 PM',

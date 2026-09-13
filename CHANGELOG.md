@@ -11,6 +11,20 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.80 — [Released] The times are the order (`main`, 2026-09-13 17:43)
+
+Typing `8am` should mean eight in the morning, and eight in the morning should sit at the top of the day without anyone dragging it there.
+
+### Added
+- **A time tidies itself when you leave the field.** `8am` becomes `8:00 AM`, `19:30` becomes `7:30 PM`, `9.30 a.m.` becomes `9:30 AM`, `noon` becomes `12:00 PM`. One notation down the whole timeline, however each row was typed.
+
+### Changed
+- **The row order is the times.** Leaving a time re-files that row by the clock, in the editor and on the public page both. Sorting waits for the field to be left rather than firing per keystroke — typing the second `1` of `11:00` would otherwise throw the row you are editing to the far end of the table.
+- **A time written in words is left exactly as written** — "after the toasts" is a real answer for a row, and rewriting it would be worse than leaving it. Those rows, and rows with no time yet, gather at the end, which is also where a freshly added blank row belongs until it is given a time.
+
+### Removed
+- **The up/down arrows and the "Sort by time" button.** Both were answers to a question that no longer exists: to move something, change when it happens.
+
 ## v0.9.79 — [Released] The schedule holds the whole day (`main`, 2026-09-13 17:26)
 
 The schedule page was the only place to write down what happens on the day, so it could only hold the parts guests are allowed to read. Now it holds all of it, and a tick decides what leaves the room.
