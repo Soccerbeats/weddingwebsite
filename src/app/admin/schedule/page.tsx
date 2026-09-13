@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
     blankEvent, isPublicEvent, normalizeEventTime, sortByTime, type ScheduleEvent,
 } from '@/lib/schedule';
@@ -21,7 +21,22 @@ import {
  * when it happens. Sorting waits for the field to be left rather than firing on
  * each keystroke, or typing the second `1` of `11:00` would throw the row you
  * are editing to the other end of the table.
+ *
+ * Everything saves itself. There is no save button, so the page has to be
+ * honest about where a change has got to — hence the status by the row counts,
+ * which is the one thing on screen that says whether what you typed is safe.
  */
+
+/** The form as the API takes it. Built in one place so what autosave compares
+ *  against storage is exactly what it would write. */
+function buildPayload(events: ScheduleEvent[], subtitle: string, shuttle: string, dress: string) {
+    return {
+        scheduleEvents: events,
+        scheduleSubtitle: subtitle,
+        scheduleShuttleText: shuttle,
+        scheduleDressCode: dress,
+    };
+}
 
 /** The header cell style, shared so the two column sets line up. */
 const TH = 'text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500 px-3 py-2';
@@ -34,23 +49,41 @@ export default function AdminSchedule() {
     const [scheduleSubtitle, setScheduleSubtitle] = useState('');
     const [shuttleText, setShuttleText] = useState('');
     const [dressCode, setDressCode] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [message, setMessage] = useState('');
+    /**
+     * Where the last change has got to.
+     *
+     * `pending` is the debounce window — a change made but not yet sent. It is a
+     * state of its own rather than folded into `saving` because "we have your
+     * change and have not written it yet" and "we are writing it" fail
+     * differently, and closing the tab in the first one loses the edit.
+     */
+    const [saveState, setSaveState] = useState<'clean' | 'pending' | 'saving' | 'saved' | 'error'>('clean');
+    const [loaded, setLoaded] = useState(false);
 
     useEffect(() => {
         fetch('/api/admin/site-config')
             .then(res => res.json())
             .then(data => {
-                if (data.scheduleEvents) {
-                    setEvents(sortByTime(data.scheduleEvents));
-                } else {
+                const day: ScheduleEvent[] = data.scheduleEvents
+                    ? sortByTime(data.scheduleEvents)
                     // Default starter event if empty
-                    setEvents([{ time: '4:00 PM', title: 'Ceremony', description: '', location: '', public: true }]);
-                }
-                if (data.scheduleSubtitle) setScheduleSubtitle(data.scheduleSubtitle);
-                if (data.scheduleShuttleText) setShuttleText(data.scheduleShuttleText);
-                if (data.scheduleDressCode) setDressCode(data.scheduleDressCode);
-            });
+                    : [{ time: '4:00 PM', title: 'Ceremony', description: '', location: '', public: true }];
+                const subtitle = data.scheduleSubtitle ?? '';
+                const shuttle = data.scheduleShuttleText ?? '';
+                const dress = data.scheduleDressCode ?? '';
+
+                setEvents(day);
+                setScheduleSubtitle(subtitle);
+                setShuttleText(shuttle);
+                setDressCode(dress);
+                // What was loaded *is* what is stored, so autosave has nothing to
+                // do until something differs from it. Recorded from the sorted
+                // day, which is what is now on screen: opening the page and
+                // reading it must not write the file back.
+                stored.current = JSON.stringify(buildPayload(day, subtitle, shuttle, dress));
+                setLoaded(true);
+            })
+            .catch(() => setSaveState('error'));
     }, []);
 
     const publicCount = useMemo(() => events.filter(isPublicEvent).length, [events]);
@@ -69,36 +102,91 @@ export default function AdminSchedule() {
         )));
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setLoading(true);
-        setMessage('');
+    /**
+     * The form as the API takes it. One place, so what is compared against
+     * storage is exactly what would be written.
+     */
+    const payload = useMemo(
+        () => buildPayload(events, scheduleSubtitle, shuttleText, dressCode),
+        [events, scheduleSubtitle, shuttleText, dressCode],
+    );
 
+    /** The payload, in a ref, so the saver sends what is on screen rather than
+     *  whatever was current when its timer was set. */
+    const latest = useRef(payload);
+    latest.current = payload;
+
+    /**
+     * The last payload known to match what is stored.
+     *
+     * Autosave fires on a *difference* from this rather than on "the state
+     * changed", which is the only version that holds up: React invokes effects
+     * twice in development, so a "skip the first run" flag lets the second run
+     * through and merely opening the page writes the file back. It also means
+     * typing something and undoing it costs no request.
+     */
+    const stored = useRef<string | null>(null);
+
+    /** True while a request is in flight, and true again if one is queued. */
+    const inFlight = useRef(false);
+    const queued = useRef(false);
+
+    /**
+     * Write the whole form.
+     *
+     * Never two at once: a second change during a request is queued and sent
+     * after, so the last thing typed is the last thing written. Overlapping
+     * requests could otherwise land out of order and leave the file holding an
+     * older version of the day than the screen shows.
+     */
+    const save = useCallback(async () => {
+        if (inFlight.current) { queued.current = true; return; }
+        inFlight.current = true;
+        setSaveState('saving');
         try {
-            // Only update scheduleEvents property
+            const sent = JSON.stringify(latest.current);
             const res = await fetch('/api/admin/site-config', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    scheduleEvents: events,
-                    scheduleSubtitle,
-                    scheduleShuttleText: shuttleText,
-                    scheduleDressCode: dressCode,
-                }),
+                body: sent,
             });
-
-            if (res.ok) {
-                setMessage('Schedule updated successfully!');
-            } else {
-                setMessage('Failed to update.');
-            }
+            if (!res.ok) throw new Error(String(res.status));
+            stored.current = sent;
+            setSaveState(queued.current ? 'pending' : 'saved');
         } catch (err) {
-            console.error(err);
-            setMessage('An error occurred.');
+            console.error('Schedule autosave failed:', err);
+            setSaveState('error');
+            queued.current = false;
         } finally {
-            setLoading(false);
+            inFlight.current = false;
+            if (queued.current) { queued.current = false; void save(); }
         }
-    };
+    }, []);
+
+    /*
+     * Autosave, debounced.
+     *
+     * Debounced rather than per keystroke: a location typed out is sixteen
+     * changes and should be one request. The saver reads the form when the timer
+     * fires, so the last keystroke is the one that gets written.
+     */
+    useEffect(() => {
+        if (!loaded || stored.current === null) return;
+        if (JSON.stringify(payload) === stored.current) return;
+        setSaveState('pending');
+        const timer = setTimeout(() => { void save(); }, 700);
+        return () => clearTimeout(timer);
+    }, [payload, loaded, save]);
+
+    /* A change still in the debounce window, or mid-flight, is a change that
+       closing the tab would lose. */
+    const unsaved = saveState === 'pending' || saveState === 'saving' || saveState === 'error';
+    useEffect(() => {
+        if (!unsaved) return;
+        const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+        window.addEventListener('beforeunload', warn);
+        return () => window.removeEventListener('beforeunload', warn);
+    }, [unsaved]);
 
     /** The row controls, identical in the table and in the phone cards. There is
      *  no reordering here on purpose: the times are the order. */
@@ -113,6 +201,38 @@ export default function AdminSchedule() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
             </svg>
         </button>
+    );
+
+    /**
+     * Where the last change got to, in words.
+     *
+     * With no save button this is the only thing on screen that answers "is what
+     * I typed safe?", so a failure says so plainly and offers the retry rather
+     * than sitting quiet and losing the day's edits.
+     */
+    const status = saveState === 'error' ? (
+        <button
+            type="button"
+            onClick={() => void save()}
+            className="flex items-center gap-1.5 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 px-3 py-1 rounded-full transition-colors"
+        >
+            <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+            Not saved — retry
+        </button>
+    ) : (
+        <span
+            className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full ${
+                saveState === 'saved' ? 'text-green-700 bg-green-50' : 'text-gray-500 bg-gray-100'
+            }`}
+        >
+            <span className={`h-1.5 w-1.5 rounded-full ${
+                saveState === 'saved' ? 'bg-green-500'
+                    : saveState === 'clean' ? 'bg-gray-300' : 'bg-amber-400 animate-pulse'
+            }`} />
+            {/* `clean` also reads "Saved": nothing on screen differs from what
+                is stored, which is the question being asked. */}
+            {saveState === 'saving' || saveState === 'pending' ? 'Saving…' : 'Saved'}
+        </span>
     );
 
     /** The Public tick, which is the whole point of the table. */
@@ -132,16 +252,10 @@ export default function AdminSchedule() {
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Schedule Management</h1>
             <p className="text-gray-600 mb-8">
                 The whole run of the day. Tick <span className="font-medium text-gray-800">Public</span> on the rows
-                guests should see on the schedule page — everything else stays here.
+                guests should see on the schedule page — everything else stays here. Changes save themselves.
             </p>
 
-            {message && (
-                <div className={`p-4 rounded-xl mb-6 ${message.includes('success') ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
-                    {message}
-                </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-8">
+            <div className="space-y-8">
                 <div className="bg-white rounded-2xl border border-gray-200 shadow-lg overflow-hidden">
                     <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-gray-200">
                         <p className="text-sm text-gray-500">
@@ -149,9 +263,10 @@ export default function AdminSchedule() {
                             <span className="font-medium text-gray-700">{publicCount} public</span>
                             {events.length - publicCount > 0 && ` · ${events.length - publicCount} private`}
                         </p>
-                        <p className="ml-auto text-xs text-gray-400">
+                        <p className="hidden sm:block text-xs text-gray-400">
                             Ordered by time — edit a time to move a row.
                         </p>
+                        <div className="ml-auto">{status}</div>
                     </div>
 
                     {/* A table from `md` up. Below that it is six columns on a
@@ -328,16 +443,7 @@ export default function AdminSchedule() {
                     />
                 </div>
 
-                <div className="pt-4 sticky bottom-6">
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className="w-full md:w-auto ml-auto flex justify-center py-3 px-8 border border-transparent rounded-xl shadow-lg text-base font-medium text-white bg-accent hover:bg-accent-dark hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 transition-all duration-300"
-                    >
-                        {loading ? 'Saving Schedule...' : 'Save Schedule Changes'}
-                    </button>
-                </div>
-            </form>
+            </div>
         </div>
     );
 }

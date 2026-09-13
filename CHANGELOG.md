@@ -11,6 +11,16 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.81 — [Released] The schedule saves itself (`main`, 2026-09-13 17:58)
+
+### Changed
+- **Every change on the schedule page saves itself** — a typed cell, the Public tick, adding or removing a row, the details cards, the nav subtitle. The Save button is gone.
+- **A status by the row counts says where the last change got to** — *Saving…* while it is in the air, *Saved* when it is down. It is the only thing on screen that answers "is what I typed safe?" now that nothing asks you to save it, so a failure says **Not saved — retry** and offers the button rather than sitting quiet. A change still in the air also warns before the tab closes.
+
+### Fixed
+- **Saves are debounced and never overlap.** Typing a location is sixteen changes and one request; a change made mid-request is queued and sent after, so the last thing typed is the last thing written rather than whichever response happens to land last.
+- **Opening the page no longer writes the file back.** Loading sorts the stored day into clock order, so a plain "has the state changed since mount?" guard saved on arrival — and React double-invokes effects in development, which defeated the obvious fix of skipping the first run. Autosave now fires on the payload differing from the one that was loaded, which also means typing something and undoing it costs no request.
+
 ## v0.9.80 — [Released] The times are the order (`main`, 2026-09-13 17:43)
 
 Typing `8am` should mean eight in the morning, and eight in the morning should sit at the top of the day without anyone dragging it there.
