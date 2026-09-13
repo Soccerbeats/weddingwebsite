@@ -2,8 +2,10 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
-    blankEvent, isPublicEvent, normalizeEventTime, sortByTime, type ScheduleEvent,
+    blankEvent, isPublicEvent, normalizeEventTime, SCHEDULE_HEADERS, scheduleRows, sortByTime,
+    type ScheduleEvent,
 } from '@/lib/schedule';
+import { toCsv } from '@/lib/mailing';
 
 /**
  * The run of the day, as a table.
@@ -204,6 +206,23 @@ export default function AdminSchedule() {
     );
 
     /**
+     * The day as a spreadsheet — every row, in the order shown, with a Public
+     * column so the file is not mistaken for the guest-facing schedule.
+     */
+    const exportCsv = () => {
+        const csv = toCsv([...SCHEDULE_HEADERS], scheduleRows(events));
+        const stamp = new Date().toISOString().slice(0, 10);
+        const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `schedule-${stamp}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
+    /**
      * Where the last change got to, in words.
      *
      * With no save button this is the only thing on screen that answers "is what
@@ -266,7 +285,16 @@ export default function AdminSchedule() {
                         <p className="hidden sm:block text-xs text-gray-400">
                             Ordered by time — edit a time to move a row.
                         </p>
-                        <div className="ml-auto">{status}</div>
+                        <button
+                            type="button"
+                            onClick={exportCsv}
+                            disabled={events.length === 0}
+                            className="ml-auto px-4 py-1 rounded-full text-xs font-medium text-gray-600 border border-gray-200 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+                            title="Every row, with a Public column, as a spreadsheet"
+                        >
+                            ⬇ Export CSV
+                        </button>
+                        {status}
                     </div>
 
                     {/* A table from `md` up. Below that it is six columns on a

@@ -11,8 +11,9 @@
  */
 import {
     blankEvent, formatEventTime, isPublicEvent, normalizeEventTime, parseEventTime,
-    publicScheduleEvents, sortByTime, type ScheduleEvent,
+    publicScheduleEvents, SCHEDULE_HEADERS, scheduleRows, sortByTime, type ScheduleEvent,
 } from '../src/lib/schedule';
+import { toCsv } from '../src/lib/mailing';
 
 let failures = 0;
 let checks = 0;
@@ -162,6 +163,38 @@ function ev(title: string, time = '', isPublic?: boolean): ScheduleEvent {
     check('sorting an empty day is an empty day', sortByTime([]).length === 0);
     check('sorting does not disturb the public flags',
         sortByTime([ev('b', '5pm', false), ev('a', '4pm', true)]).map(e => String(e.public)).join(',') === 'true,false');
+}
+
+/* ---- the spreadsheet ---- */
+{
+    console.log('\nexporting');
+
+    const day: ScheduleEvent[] = [
+        { time: '8:00 AM', title: 'Hair and makeup', location: 'Suite 12', description: 'Both trailers', public: false },
+        { time: '4:00 PM', title: 'Ceremony', location: 'Garden', description: '', public: true },
+        { time: '6:00 PM', title: 'Reception', location: 'Ballroom', description: '' },
+    ];
+    const rows = scheduleRows(day);
+
+    check('a column for every header', rows.every(r => r.length === SCHEDULE_HEADERS.length));
+    check('every row is exported, private ones included', rows.length === 3);
+    check('the order shown is the order exported',
+        rows.map(r => r[1]).join(',') === 'Hair and makeup,Ceremony,Reception');
+    check('the columns are in header order',
+        rows[0].slice(0, 4).join('|') === '8:00 AM|Hair and makeup|Suite 12|Both trailers', rows[0].join('|'));
+    check('a private row says No', rows[0][4] === 'No');
+    check('a public row says Yes', rows[1][4] === 'Yes');
+    check('a row with no flag says Yes', rows[2][4] === 'Yes');
+    check('a missing field is an empty cell, not "undefined"',
+        scheduleRows([{ time: '', title: 'x' } as ScheduleEvent])[0].join('|') === '|x|||Yes');
+    check('an empty day exports no rows', scheduleRows([]).length === 0);
+
+    // The header row has to survive the trip into a spreadsheet.
+    const csv = toCsv([...SCHEDULE_HEADERS], rows);
+    check('the file starts with the headers',
+        csv.includes('"Time","Event","Location","Description","Public"'), csv.slice(0, 80));
+    check('a private row is in the file', csv.includes('"Hair and makeup"'));
+    check('rows are CRLF separated for Excel', csv.includes('\r\n'));
 }
 
 console.log(`\n${failures === 0 ? 'PASS' : 'FAIL'} — ${checks - failures}/${checks} checks passed.\n`);

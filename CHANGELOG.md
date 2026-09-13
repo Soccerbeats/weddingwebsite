@@ -11,6 +11,13 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.82 — [Released] Export the schedule (`main`, 2026-09-13 18:28)
+
+### Added
+- **Export CSV on the schedule page**, next to the row counts. Every row in the order shown — clock order — as `schedule-YYYY-MM-DD.csv`.
+- **A Public column in the file** rather than two separate exports. The file is the whole run of the day, so anyone who wants only the guest-facing rows filters that column; leaving it out would produce a file nobody could tell apart from a guest-facing one. It uses the same CSV writer as the guest-list export, so commas and quotes inside a cell survive and Excel opens it as UTF-8.
+- 12 more assertions in `check:schedule` (71 in total).
+
 ## v0.9.81 — [Released] The schedule saves itself (`main`, 2026-09-13 17:58)
 
 ### Changed

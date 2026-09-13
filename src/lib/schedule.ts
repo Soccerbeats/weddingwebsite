@@ -121,3 +121,28 @@ export function sortByTime(events: ScheduleEvent[]): ScheduleEvent[] {
 export function blankEvent(): ScheduleEvent {
     return { time: '', title: '', description: '', location: '', public: true };
 }
+
+/* ---------------------------------------------------------------------------
+   Export
+   --------------------------------------------------------------------------- */
+
+/**
+ * The spreadsheet's columns.
+ *
+ * `Public` is one of them rather than the export being split in two: the file
+ * is the whole run of the day, and a coordinator who only wants the guest-facing
+ * rows filters the column. Leaving it out would produce a file nobody could tell
+ * apart from a guest-facing one.
+ */
+export const SCHEDULE_HEADERS = ['Time', 'Event', 'Location', 'Description', 'Public'] as const;
+
+/** The day as rows, in the order it is shown — which is clock order. */
+export function scheduleRows(events: ScheduleEvent[]): string[][] {
+    return events.map(event => [
+        event.time ?? '',
+        event.title ?? '',
+        event.location ?? '',
+        event.description ?? '',
+        isPublicEvent(event) ? 'Yes' : 'No',
+    ]);
+}
