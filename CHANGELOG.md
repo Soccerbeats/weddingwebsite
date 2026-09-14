@@ -11,6 +11,16 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.83 — [Released] A new row stays put while you fill it (`main`, 2026-09-14 03:50)
+
+### Changed
+- **A row is filed by the clock when you press Enter, not when you leave the time cell.** Tab across a row — time, event, location, description — and it stays exactly where it is. Sorting on the way out of the time cell pulled the row out from under the cursor halfway through filling it in.
+- **Leaving the time cell still tidies what was typed** — `8am` becomes `8:00 AM` where it sits. Tidying is safe on blur precisely because it no longer reorders.
+- **Enter anywhere in the row files it**, and lets go of the cursor: rows are keyed by position, so after a sort the cell under the cursor would be showing a different row.
+
+### Added
+- **Add row puts the cursor in the new row's first cell.** It has no time yet, so nothing sorts it away while it is being filled.
+
 ## v0.9.82 — [Released] Export the schedule (`main`, 2026-09-13 18:28)
 
 ### Added

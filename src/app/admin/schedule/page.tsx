@@ -17,12 +17,12 @@ import { toCsv } from '@/lib/mailing';
  * full run-of-show is thirty rows, and thirty cards is a page you scroll rather
  * than read.
  *
- * The order is the times. Leaving a time field tidies what was typed — `8am`
- * becomes `8:00 AM` — and drops the row where the clock says it goes, which is
- * why there is nothing here for dragging rows about: to move something, change
- * when it happens. Sorting waits for the field to be left rather than firing on
- * each keystroke, or typing the second `1` of `11:00` would throw the row you
- * are editing to the other end of the table.
+ * The order is the times, so there is nothing here for dragging rows about: to
+ * move something, change when it happens. Leaving a time field tidies what was
+ * typed — `8am` becomes `8:00 AM` — but the row does not go anywhere until
+ * **Enter**. That split is the point: a new row is filled in by tabbing across
+ * it, and a table that re-sorted on each cell would pull the row out from under
+ * the cursor halfway through. Enter says "done, file it".
  *
  * Everything saves itself. There is no save button, so the page has to be
  * honest about where a change has got to — hence the status by the row counts,
@@ -94,14 +94,49 @@ export default function AdminSchedule() {
         setEvents(events.map((ev, i) => (i === index ? { ...ev, [field]: value } : ev)));
     };
 
-    const addEvent = () => setEvents([...events, blankEvent()]);
+    /** A blank row at the bottom, with the cursor already in its first cell.
+     *  It has no time yet, so nothing sorts it away while it is being filled. */
+    const addEvent = () => {
+        const index = events.length;
+        setEvents([...events, blankEvent()]);
+        requestAnimationFrame(() => {
+            document.querySelector<HTMLInputElement>(`[data-time-cell="${index}"]`)?.focus();
+        });
+    };
     const removeEvent = (index: number) => setEvents(events.filter((_, i) => i !== index));
 
-    /** Leaving a time field tidies it and re-files the row by the clock. */
-    const commitTime = (index: number) => {
+    /**
+     * Tidy a time, without moving the row.
+     *
+     * On leaving the time cell: `8am` becomes `8:00 AM` where it sits. Tidying
+     * is safe here precisely because it does not reorder — the row keeps its
+     * place while the rest of it is tabbed through.
+     */
+    const tidyTime = (index: number) => {
+        setEvents(current => current.map(
+            (ev, i) => (i === index ? { ...ev, time: normalizeEventTime(ev.time) } : ev),
+        ));
+    };
+
+    /**
+     * Enter: tidy the time and file the row by the clock.
+     *
+     * Focus is dropped on the way out. Rows are keyed by position, so after a
+     * sort the input under the cursor would be showing a different row's data —
+     * letting go is the honest answer to "done with this one".
+     */
+    const commitRow = (index: number, from: HTMLElement) => {
         setEvents(current => sortByTime(current.map(
             (ev, i) => (i === index ? { ...ev, time: normalizeEventTime(ev.time) } : ev),
         )));
+        from.blur();
+    };
+
+    /** Enter anywhere in a row files it; every other key is left alone. */
+    const rowKeyDown = (index: number) => (e: React.KeyboardEvent<HTMLElement>) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        commitRow(index, e.target as HTMLElement);
     };
 
     /**
@@ -283,7 +318,7 @@ export default function AdminSchedule() {
                             {events.length - publicCount > 0 && ` · ${events.length - publicCount} private`}
                         </p>
                         <p className="hidden sm:block text-xs text-gray-400">
-                            Ordered by time — edit a time to move a row.
+                            Ordered by time — press Enter to file a row.
                         </p>
                         <button
                             type="button"
@@ -317,6 +352,7 @@ export default function AdminSchedule() {
                                     // table answers "what do guests actually see?"
                                     <tr
                                         key={index}
+                                        onKeyDown={rowKeyDown(index)}
                                         className={`border-t border-gray-100 ${isPublicEvent(event) ? '' : 'bg-gray-50/70'}`}
                                     >
                                         <td className="px-3 py-2 text-center">{publicToggle(index, event)}</td>
@@ -325,7 +361,8 @@ export default function AdminSchedule() {
                                                 type="text"
                                                 value={event.time}
                                                 onChange={e => handleEventChange(index, 'time', e.target.value)}
-                                                onBlur={() => commitTime(index)}
+                                                onBlur={() => tidyTime(index)}
+                                                data-time-cell={index}
                                                 className={CELL_INPUT}
                                                 placeholder="4:00 PM"
                                                 aria-label={`Time for row ${index + 1}`}
@@ -371,7 +408,11 @@ export default function AdminSchedule() {
                     {/* Phone: the same row, stacked. */}
                     <div className="md:hidden divide-y divide-gray-100">
                         {events.map((event, index) => (
-                            <div key={index} className={`p-4 space-y-2 ${isPublicEvent(event) ? '' : 'bg-gray-50/70'}`}>
+                            <div
+                                key={index}
+                                onKeyDown={rowKeyDown(index)}
+                                className={`p-4 space-y-2 ${isPublicEvent(event) ? '' : 'bg-gray-50/70'}`}
+                            >
                                 <div className="flex items-center gap-3">
                                     <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
                                         {publicToggle(index, event)}
@@ -384,7 +425,7 @@ export default function AdminSchedule() {
                                         type="text"
                                         value={event.time}
                                         onChange={e => handleEventChange(index, 'time', e.target.value)}
-                                        onBlur={() => commitTime(index)}
+                                        onBlur={() => tidyTime(index)}
                                         className={CELL_INPUT}
                                         placeholder="4:00 PM"
                                         aria-label={`Time for row ${index + 1}`}
