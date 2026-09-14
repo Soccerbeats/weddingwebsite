@@ -6,6 +6,7 @@ import {
     type ScheduleEvent,
 } from '@/lib/schedule';
 import { toCsv } from '@/lib/mailing';
+import { ColumnResizer, useColumnWidths } from '@/components/admin/useColumnWidths';
 
 /**
  * The run of the day, as a table.
@@ -40,8 +41,28 @@ function buildPayload(events: ScheduleEvent[], subtitle: string, shuttle: string
     };
 }
 
+/**
+ * The table's columns, and how wide they start.
+ *
+ * The ids are the storage keys for a viewer's dragged widths, so renaming one
+ * costs that viewer their setting for that column — everything else survives,
+ * because unknown ids fall back to the default rather than being kept.
+ */
+const COLUMNS = [
+    { id: 'public', label: 'Public', width: 84 },
+    { id: 'time', label: 'Time', width: 132 },
+    { id: 'title', label: 'Event', width: 224 },
+    { id: 'location', label: 'Location', width: 224 },
+    { id: 'description', label: 'Description', width: 340 },
+    { id: 'actions', label: '', width: 56 },
+] as const;
+
+const DEFAULT_WIDTHS: Record<string, number> = Object.fromEntries(
+    COLUMNS.map(c => [c.id, c.width]),
+);
+
 /** The header cell style, shared so the two column sets line up. */
-const TH = 'text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500 px-3 py-2';
+const TH = 'relative text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500 px-3 py-2';
 const CELL_INPUT =
     'w-full rounded-xl bg-gray-50 border border-transparent px-3 py-2 text-sm text-gray-900 ' +
     'focus:bg-white focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/20 transition-colors';
@@ -89,6 +110,11 @@ export default function AdminSchedule() {
     }, []);
 
     const publicCount = useMemo(() => events.filter(isPublicEvent).length, [events]);
+
+    const { widths, startResize, resetColumn, resetAll, changed: resized } =
+        useColumnWidths('schedule.columnWidths.v1', DEFAULT_WIDTHS);
+    /** The table is at least as wide as its columns; the container scrolls. */
+    const totalWidth = COLUMNS.reduce((n, c) => n + (widths[c.id] ?? c.width), 0);
 
     const handleEventChange = <K extends keyof ScheduleEvent>(index: number, field: K, value: ScheduleEvent[K]) => {
         setEvents(events.map((ev, i) => (i === index ? { ...ev, [field]: value } : ev)));
@@ -320,30 +346,68 @@ export default function AdminSchedule() {
                         <p className="hidden sm:block text-xs text-gray-400">
                             Ordered by time — press Enter to file a row.
                         </p>
-                        <button
-                            type="button"
-                            onClick={exportCsv}
-                            disabled={events.length === 0}
-                            className="ml-auto px-4 py-1 rounded-full text-xs font-medium text-gray-600 border border-gray-200 hover:bg-gray-50 disabled:opacity-40 transition-colors"
-                            title="Every row, with a Public column, as a spreadsheet"
-                        >
-                            ⬇ Export CSV
-                        </button>
-                        {status}
+                        <div className="ml-auto flex items-center gap-2">
+                            {resized && (
+                                <button
+                                    type="button"
+                                    onClick={resetAll}
+                                    className="hidden md:inline-block px-4 py-1 rounded-full text-xs font-medium text-gray-500 border border-gray-200 hover:bg-gray-50 transition-colors"
+                                    title="Put every column back to its starting width"
+                                >
+                                    Reset widths
+                                </button>
+                            )}
+                            <button
+                                type="button"
+                                onClick={exportCsv}
+                                disabled={events.length === 0}
+                                className="px-4 py-1 rounded-full text-xs font-medium text-gray-600 border border-gray-200 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+                                title="Every row, with a Public column, as a spreadsheet"
+                            >
+                                ⬇ Export CSV
+                            </button>
+                            {status}
+                        </div>
                     </div>
 
                     {/* A table from `md` up. Below that it is six columns on a
                         390px screen, so the same rows are stacked as cards. */}
                     <div className="hidden md:block overflow-x-auto">
-                        <table className="w-full">
+                        <table className="w-full table-fixed" style={{ minWidth: totalWidth }}>
+                            {/* `table-fixed` plus an explicit colgroup: without
+                                both, the browser re-apportions the columns from
+                                their contents and a dragged width lasts until
+                                the next keystroke. The container scrolls
+                                sideways when the total outgrows it. */}
+                            <colgroup>
+                                {COLUMNS.map(col => (
+                                    <col key={col.id} style={{ width: widths[col.id] }} />
+                                ))}
+                            </colgroup>
                             <thead className="bg-gray-50">
                                 <tr>
-                                    <th scope="col" className={`${TH} w-20 text-center`}>Public</th>
-                                    <th scope="col" className={`${TH} w-32`}>Time</th>
-                                    <th scope="col" className={`${TH} w-56`}>Event</th>
-                                    <th scope="col" className={`${TH} w-56`}>Location</th>
-                                    <th scope="col" className={TH}>Description</th>
-                                    <th scope="col" className={`${TH} w-12`}><span className="sr-only">Actions</span></th>
+                                    {COLUMNS.map((col, i) => (
+                                        <th
+                                            key={col.id}
+                                            scope="col"
+                                            className={`${TH} ${col.id === 'public' ? 'text-center' : ''}`}
+                                        >
+                                            {col.label
+                                                ? <span className="truncate block">{col.label}</span>
+                                                : <span className="sr-only">Actions</span>}
+                                            {/* No handle on the last column: its
+                                                right edge is the table's, and
+                                                dragging it resizes nothing the
+                                                eye can follow. */}
+                                            {i < COLUMNS.length - 1 && (
+                                                <ColumnResizer
+                                                    label={col.label || 'actions'}
+                                                    onPointerDown={startResize(col.id)}
+                                                    onReset={() => resetColumn(col.id)}
+                                                />
+                                            )}
+                                        </th>
+                                    ))}
                                 </tr>
                             </thead>
                             <tbody>

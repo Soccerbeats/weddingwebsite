@@ -14,6 +14,9 @@ import {
     publicScheduleEvents, SCHEDULE_HEADERS, scheduleRows, sortByTime, type ScheduleEvent,
 } from '../src/lib/schedule';
 import { toCsv } from '../src/lib/mailing';
+import {
+    clampWidth, MAX_COLUMN_WIDTH, MIN_COLUMN_WIDTH, mergeWidths, parseWidths, widthAfterDrag,
+} from '../src/lib/columnWidths';
 
 let failures = 0;
 let checks = 0;
@@ -227,6 +230,47 @@ function ev(title: string, time = '', isPublic?: boolean): ScheduleEvent {
         csv.includes('"Time","Event","Location","Description","Public"'), csv.slice(0, 80));
     check('a private row is in the file', csv.includes('"Hair and makeup"'));
     check('rows are CRLF separated for Excel', csv.includes('\r\n'));
+}
+
+/* ---- remembered column widths ---- */
+{
+    console.log('\ncolumn widths');
+
+    // Lives with the schedule because the schedule table is its only caller.
+    const cols = { public: 84, time: 132, title: 224 };
+
+    check('a drag right widens', widthAfterDrag(200, 60) === 260);
+    check('a drag left narrows', widthAfterDrag(200, -60) === 140);
+    check('a column cannot be dragged away to nothing',
+        widthAfterDrag(80, -500) === MIN_COLUMN_WIDTH);
+    check('nor dragged wider than the screen', widthAfterDrag(800, 5000) === MAX_COLUMN_WIDTH);
+    check('a fractional drag lands on a whole pixel', Number.isInteger(widthAfterDrag(200, 12.4)));
+    check('nonsense clamps rather than propagating', clampWidth(Number.NaN) === MIN_COLUMN_WIDTH);
+
+    check('nothing stored means the defaults',
+        JSON.stringify(mergeWidths(cols, null)) === JSON.stringify(cols));
+    check('a stored width wins over the default', mergeWidths(cols, { time: 300 }).time === 300);
+    check('columns not stored keep their default', mergeWidths(cols, { time: 300 }).public === 84);
+
+    // Storage holds whatever was there last — an older version of this page, or
+    // a hand-edited value. None of it may produce a column nobody can see.
+    check('a column the table no longer has is dropped',
+        !('gone' in mergeWidths(cols, { gone: 200 })));
+    check('a stored width is clamped like a dragged one',
+        mergeWidths(cols, { time: 5 }).time === MIN_COLUMN_WIDTH);
+    check('a stored width that is not a number is ignored',
+        mergeWidths(cols, { time: 'wide' }).time === 132);
+    check('a negative stored width is ignored', mergeWidths(cols, { time: -50 }).time === 132);
+    check('a numeric string still works', mergeWidths(cols, { time: '300' }).time === 300);
+    check('an array is not a width set',
+        JSON.stringify(mergeWidths(cols, [1, 2])) === JSON.stringify(cols));
+    check('a string is not a width set',
+        JSON.stringify(mergeWidths(cols, 'nope')) === JSON.stringify(cols));
+
+    check('unreadable storage answers null rather than throwing', parseWidths('{oops') === null);
+    check('empty storage answers null', parseWidths(null) === null);
+    check('a stored set round-trips',
+        (parseWidths(JSON.stringify({ time: 300 })) as Record<string, number>).time === 300);
 }
 
 console.log(`\n${failures === 0 ? 'PASS' : 'FAIL'} — ${checks - failures}/${checks} checks passed.\n`);

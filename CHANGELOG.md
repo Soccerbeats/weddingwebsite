@@ -11,6 +11,13 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.85 — [Released] Drag the schedule's columns (`main`, 2026-09-14 04:12)
+
+### Added
+- **Resizable columns on the schedule table, remembered between visits.** Drag the divider on a column's right edge; double-click it to put that one column back; a **Reset widths** button appears once anything has been dragged and puts them all back. The last column has no handle — its right edge is the table's, so dragging it would move nothing the eye can follow.
+- Widths live in the browser rather than the site config: a width that suits a 27-inch monitor is wrong on a laptop, so this is a per-screen preference, not something to follow you between devices or cost a write to a shared file on every drag. Blocked or unavailable storage just means the table opens at its defaults.
+- 19 more assertions covering the width rules (111 in `check:schedule`). A stored set is treated as untrusted — it can be older than the page or hand-edited — so a width that is not a number, negative, or for a column that no longer exists falls back to the default rather than rendering a column nobody can see or grab.
+
 ## v0.9.84 — [Released] 1230, and new rows start private (`main`, 2026-09-14 03:59)
 
 ### Fixed
