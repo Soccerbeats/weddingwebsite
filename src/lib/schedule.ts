@@ -37,24 +37,44 @@ export function publicScheduleEvents(events: ScheduleEvent[] | undefined): Sched
  * Minutes past midnight for a time as a person types it, or null.
  *
  * Deliberately forgiving about the shapes that turn up in a run-of-show —
- * `4:00 PM`, `4pm`, `16:00`, `9.30am`, `noon` — and deliberately unwilling to
- * guess: anything it does not recognise answers null and keeps its place rather
- * than being sorted somewhere arbitrary.
+ * `4:00 PM`, `4pm`, `16:00`, `1230`, `830am`, `9.30am`, `noon` — and
+ * deliberately unwilling to guess: anything it does not recognise answers null
+ * and keeps its place rather than being sorted somewhere arbitrary.
+ *
+ * Anchored at both ends on purpose. Matching a prefix is how `1230` used to read
+ * as twelve o'clock: the hour matched, the minutes were left on the floor, and
+ * nothing said so.
  */
 export function parseEventTime(time: string): number | null {
     const text = (time ?? '').trim().toLowerCase();
     if (!text) return null;
-    if (/^noon$|^midday$/.test(text)) return 12 * 60;
+    if (/^(noon|midday)$/.test(text)) return 12 * 60;
     if (/^midnight$/.test(text)) return 0;
 
-    const match = text.match(/^(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?/);
+    const match = text.match(/^(\d{1,4})(?:[:.](\d{2}))?\s*(a\.?m\.?|p\.?m\.?)?$/);
     if (!match) return null;
 
-    let hour = Number(match[1]);
-    const minute = match[2] === undefined ? 0 : Number(match[2]);
-    const meridiem = (match[3] ?? '').replace(/\./g, '');
+    const digits = match[1];
+    let hour: number;
+    let minute: number;
+
+    if (match[2] !== undefined) {
+        // A separator says which half is which, so the hour cannot be four digits.
+        if (digits.length > 2) return null;
+        hour = Number(digits);
+        minute = Number(match[2]);
+    } else if (digits.length <= 2) {
+        // `8`, `16` — an hour on its own.
+        hour = Number(digits);
+        minute = 0;
+    } else {
+        // `830`, `1230`, `0800` — the last two digits are always the minutes.
+        hour = Number(digits.slice(0, -2));
+        minute = Number(digits.slice(-2));
+    }
     if (minute > 59) return null;
 
+    const meridiem = (match[3] ?? '').replace(/\./g, '');
     if (meridiem === 'am' || meridiem === 'pm') {
         if (hour < 1 || hour > 12) return null;
         if (hour === 12) hour = 0;
@@ -117,9 +137,18 @@ export function sortByTime(events: ScheduleEvent[]): ScheduleEvent[] {
     return [...timed.map(t => t.event), ...untimed.map(u => u.event)];
 }
 
-/** A blank row, with every field the editor writes. */
+/**
+ * A blank row, with every field the editor writes.
+ *
+ * Private until ticked. Most of what goes into a run-of-show — call times,
+ * setup, breakdown — is not for guests, and the safe default for a page that
+ * publishes is the one where forgetting to think about it shows nobody
+ * anything. Note this is an explicit `false`, not an absent flag: absent still
+ * means public, which is what keeps events written before the tick existed on
+ * the page.
+ */
 export function blankEvent(): ScheduleEvent {
-    return { time: '', title: '', description: '', location: '', public: true };
+    return { time: '', title: '', description: '', location: '', public: false };
 }
 
 /* ---------------------------------------------------------------------------

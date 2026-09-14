@@ -58,7 +58,14 @@ function ev(title: string, time = '', isPublic?: boolean): ScheduleEvent {
     check('nothing configured is not a crash', publicScheduleEvents(undefined).length === 0);
     check('a day with nothing public shows nothing',
         publicScheduleEvents([ev('Setup', '6:00 AM', false)]).length === 0);
-    check('a new row starts public', isPublicEvent(blankEvent()));
+    // Private until ticked: most of a run-of-show is not for guests, and the
+    // safe default on a page that publishes is the one where forgetting to think
+    // about it shows nobody anything.
+    check('a new row starts private', !isPublicEvent(blankEvent()));
+    check('and says so explicitly rather than leaving the flag off',
+        blankEvent().public === false);
+    check('which does not disturb the rule that an absent flag is public',
+        isPublicEvent({ public: undefined }));
 
     // What the public page actually renders: filtered, then put in clock order.
     const timeline = sortByTime(publicScheduleEvents([
@@ -86,6 +93,23 @@ function ev(title: string, time = '', isPublic?: boolean): ScheduleEvent {
     check('midnight', parseEventTime('midnight') === 0);
     check('surrounding spaces do not matter', parseEventTime('  4:00 PM  ') === 16 * 60);
 
+    // No colon, because nobody reaches for it on a number pad. The old parser
+    // matched a prefix, so `1230` read as twelve o'clock and the minutes were
+    // dropped without a word.
+    check('1230 is half past twelve', parseEventTime('1230') === 12 * 60 + 30);
+    check('830 is half past eight', parseEventTime('830') === 8 * 60 + 30);
+    check('0800 is eight', parseEventTime('0800') === 8 * 60);
+    check('1600 is four in the afternoon', parseEventTime('1600') === 16 * 60);
+    check('1230pm is half past noon', parseEventTime('1230pm') === 12 * 60 + 30);
+    check('830 am is half past eight', parseEventTime('830 am') === 8 * 60 + 30);
+    check('0015 is a quarter past midnight', parseEventTime('0015') === 15);
+    check('two digits are still an hour, not minutes', parseEventTime('12') === 12 * 60);
+    check('one digit is still an hour', parseEventTime('8') === 8 * 60);
+    check('2430 is unknown', parseEventTime('2430') === null);
+    check('1275 is unknown', parseEventTime('1275') === null);
+    check('999 is unknown', parseEventTime('999') === null);
+    check('12345 is unknown', parseEventTime('12345') === null);
+
     // Anything it cannot read must say so rather than guess — a guess is a row
     // that silently moves somewhere nobody asked for.
     check('an empty time is unknown', parseEventTime('') === null);
@@ -94,6 +118,9 @@ function ev(title: string, time = '', isPublic?: boolean): ScheduleEvent {
     check('25:00 is unknown', parseEventTime('25:00') === null);
     check('13:00 PM is unknown', parseEventTime('13:00 PM') === null);
     check('4:75 is unknown', parseEventTime('4:75') === null);
+    // Anchored at the end: a prefix that happens to look like a time is not one.
+    check('"4:00 PM sharp" is unknown', parseEventTime('4:00 PM sharp') === null);
+    check('"12 people" is unknown', parseEventTime('12 people') === null);
 }
 
 /* ---- tidying what was typed ---- */
@@ -107,6 +134,9 @@ function ev(title: string, time = '', isPublic?: boolean): ScheduleEvent {
     check('4pm becomes 4:00 PM', normalizeEventTime('4pm') === '4:00 PM');
     check('16:00 becomes 4:00 PM', normalizeEventTime('16:00') === '4:00 PM', normalizeEventTime('16:00'));
     check('9.30am becomes 9:30 AM', normalizeEventTime('9.30am') === '9:30 AM');
+    check('1230 becomes 12:30 PM', normalizeEventTime('1230') === '12:30 PM', normalizeEventTime('1230'));
+    check('830 becomes 8:30 AM', normalizeEventTime('830') === '8:30 AM');
+    check('0800 becomes 8:00 AM', normalizeEventTime('0800') === '8:00 AM');
     check('4:00 p.m. becomes 4:00 PM', normalizeEventTime('4:00 p.m.') === '4:00 PM');
     check('noon becomes 12:00 PM', normalizeEventTime('noon') === '12:00 PM');
     check('midnight becomes 12:00 AM', normalizeEventTime('midnight') === '12:00 AM');
@@ -153,6 +183,8 @@ function ev(title: string, time = '', isPublic?: boolean): ScheduleEvent {
         mixed[2].title === 'Whenever' && mixed[3].title === 'Blank');
     check('a new blank row sorts to the bottom',
         sortByTime([ev('Ceremony', '4pm'), blankEvent()])[1].title === '');
+    check('a bare-digit time sorts against a written one',
+        sortByTime([ev('late', '1630'), ev('early', '830')]).map(e => e.title).join(',') === 'early,late');
 
     check('equal times keep the order they were in',
         sortByTime([ev('first', '4:00 PM'), ev('second', '4:00 PM')]).map(e => e.title).join(',') === 'first,second');

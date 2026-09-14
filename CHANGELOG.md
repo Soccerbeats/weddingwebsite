@@ -11,6 +11,14 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.84 — [Released] 1230, and new rows start private (`main`, 2026-09-14 03:59)
+
+### Fixed
+- **A time typed without the colon now reads properly.** `1230` is half past twelve, `830` is half past eight, `0800` is eight — nobody reaches for the colon on a number pad. This was quietly wrong before rather than merely unsupported: the parser matched a *prefix*, so `1230` read as twelve o'clock and the minutes were dropped without a word. It is anchored at both ends now, so `4:00 PM sharp` and `12 people` answer "unknown" instead of half-matching.
+
+### Changed
+- **A new row starts private.** Most of a run-of-show — call times, setup, breakdown — is not for guests, and on a page that publishes, the safe default is the one where forgetting to think about it shows nobody anything. Tick Public on the rows guests should see. Rows written before the tick existed are untouched: an *absent* flag still means public, which is what keeps the live schedule on the page.
+
 ## v0.9.83 — [Released] A new row stays put while you fill it (`main`, 2026-09-14 03:50)
 
 ### Changed
