@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { AutosaveHeader, useAutosave } from '@/components/admin/useAutosave';
 import { DEFAULT_ROOM_BLOCK_MESSAGE } from '@/lib/roomBlock';
 
 export default function AdminSettings() {
@@ -19,8 +20,7 @@ export default function AdminSettings() {
         countdownMode: 'full',
         logoMode: false,
     });
-    const [loading, setLoading] = useState(false);
-    const [message, setMessage] = useState('');
+    const [loaded, setLoaded] = useState(false);
 
     useEffect(() => {
         fetch('/api/admin/site-config')
@@ -38,46 +38,31 @@ export default function AdminSettings() {
                 // it's visible and overwritable when nothing has been saved yet.
                 next.roomBlockMessage = data.roomBlockMessage || DEFAULT_ROOM_BLOCK_MESSAGE;
                 return next;
-            }));
+            }))
+            .then(() => setLoaded(true));
     }, []);
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setLoading(true);
-        setMessage('');
+    const save = useCallback(async (body: typeof config) => {
+        const res = await fetch('/api/admin/site-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error(String(res.status));
+    }, []);
 
-        try {
-            const res = await fetch('/api/admin/site-config', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(config),
-            });
-
-            if (res.ok) {
-                setMessage('Settings updated successfully!');
-            } else {
-                setMessage('Failed to update settings.');
-            }
-        } catch (err) {
-            console.error(err);
-            setMessage('An error occurred.');
-        } finally {
-            setLoading(false);
-        }
-    };
+    const { state, retry } = useAutosave({ value: config, ready: loaded, save });
 
     return (
         <div className="max-w-2xl">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">General Settings</h1>
-            <p className="text-gray-600 mb-8">Configure your wedding website details and appearance</p>
+            <AutosaveHeader
+                title="General Settings"
+                subtitle="Configure your wedding website details and appearance. Changes save themselves."
+                state={state}
+                onRetry={retry}
+            />
 
-            {message && (
-                <div className={`p-4 rounded-xl mb-6 ${message.includes('success') ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
-                    {message}
-                </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-6 bg-white p-8 rounded-2xl border border-gray-200 shadow-lg">
+            <div className="space-y-6 bg-white p-8 rounded-2xl border border-gray-200 shadow-lg">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                         <label className="block text-sm font-medium text-gray-700">Bride&apos;s Name</label>
@@ -260,17 +245,7 @@ export default function AdminSettings() {
                         </div>
                     </div>
                 </div>
-
-                <div className="pt-4">
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-lg text-sm font-medium text-white bg-accent hover:bg-accent-dark hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 transition-all duration-300"
-                    >
-                        {loading ? 'Saving...' : 'Save Settings'}
-                    </button>
-                </div>
-            </form >
+            </div>
         </div >
     );
 }

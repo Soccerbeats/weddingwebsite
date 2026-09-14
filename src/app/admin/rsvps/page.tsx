@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { FundItem, SiteConfig } from '@/lib/config';
 import AddressReconcileModal from '@/components/admin/AddressReconcileModal';
 import { MAILING_HEADERS, mailingRows, toCsv } from '@/lib/mailing';
+import { SaveStatus, useAutosave } from '@/components/admin/useAutosave';
 
 // Guest-table columns to drop as horizontal space runs out, in order (first dropped → last).
 // Name + Party/Invited/RSVP/Actions are never in this list, so they always stay.
@@ -112,7 +113,7 @@ export default function RSVPDashboard() {
     const [quickPick, setQuickPick] = useState<{ text: string; ok: boolean } | null>(null);
     const [config, setConfig] = useState<Partial<SiteConfig> | null>(null);
     const [rsvpSubtitle, setRsvpSubtitle] = useState('');
-    const [subtitleSaving, setSubtitleSaving] = useState(false);
+    const [subtitleLoaded, setSubtitleLoaded] = useState(false);
     const [showImportModal, setShowImportModal] = useState(false);
     // Bulk edit of the selected guests. Every field defaults to '' = leave unchanged,
     // with an explicit "Clear" option where clearing makes sense.
@@ -265,15 +266,17 @@ export default function RSVPDashboard() {
         // the effect would early-return on mount (null ref) and never re-run on tab switch.
     }, [activeTab, guests, guestFilter, guestSearch]);
 
-    const handleSaveSubtitle = async () => {
-        setSubtitleSaving(true);
-        await fetch('/api/admin/site-config', {
+    const saveSubtitle = useCallback(async (value: string) => {
+        const res = await fetch('/api/admin/site-config', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ rsvpSubtitle }),
-        }).catch(console.error);
-        setSubtitleSaving(false);
-    };
+            body: JSON.stringify({ rsvpSubtitle: value }),
+        });
+        if (!res.ok) throw new Error(String(res.status));
+    }, []);
+
+    const { state: subtitleState, retry: retrySubtitle } =
+        useAutosave({ value: rsvpSubtitle, ready: subtitleLoaded, save: saveSubtitle });
 
     const fetchConfig = async () => {
         try {
@@ -281,6 +284,7 @@ export default function RSVPDashboard() {
             const data = await response.json();
             setConfig(data);
             if (data.rsvpSubtitle) setRsvpSubtitle(data.rsvpSubtitle);
+            setSubtitleLoaded(true);
         } catch (error) {
             console.error('Error fetching config:', error);
         }
@@ -1080,13 +1084,7 @@ export default function RSVPDashboard() {
                         className="flex-1 rounded-full border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
                         placeholder="e.g. Let us know you're coming"
                     />
-                    <button
-                        onClick={handleSaveSubtitle}
-                        disabled={subtitleSaving}
-                        className="px-5 py-2 bg-accent text-white rounded-full text-sm font-medium hover:bg-accent-dark transition-colors disabled:opacity-50"
-                    >
-                        {subtitleSaving ? 'Saving…' : 'Save'}
-                    </button>
+                    <SaveStatus state={subtitleState} onRetry={retrySubtitle} />
                 </div>
             </div>
 

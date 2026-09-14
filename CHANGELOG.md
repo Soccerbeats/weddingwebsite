@@ -11,6 +11,24 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.86 — [Released] The admin panel saves itself (`main`, 2026-09-14 04:43)
+
+Every editor had the same Save button, and behind it the same three bugs waiting to be written eleven times. So it is one hook, applied everywhere.
+
+### Changed
+- **Every Save button in the admin panel is gone**, and the editor behind it saves as you type: **About**, **Colour**, **Q&A**, **Home**, **General Settings**, **Timeline**, **Wedding Party**, **Registry**, **Photos**, **Schedule** and the **RSVP** page's nav subtitle.
+- **The same status pill on all of them**, where the button used to be: *Saving…* while it is in the air, *Saved* when it is down, **Not saved — retry** with a button when it is not. With nothing left to press, that pill is the only thing answering "is what I typed safe?", so it never stays quiet about a failure. A change still in the air also warns before the tab closes.
+- **Saves are debounced and never overlap.** Typing a sentence is one request; a change made mid-request is queued and sent after it, so the last thing typed is the last thing written rather than whichever response happens to land last.
+
+### Fixed
+- **The Registry page could undo another page's work.** Its save read the whole config, changed three fields and wrote all of it back, so anything saved elsewhere in between was overwritten. That was a narrow window behind a button; on autosave it would have been a wide one. It now posts only the three keys it owns, like every other editor.
+- **Q&A no longer publishes a placeholder.** "Add" used to insert *New Question / New Answer* and save it, which put that text on the live site; the new row is blank until you write in it.
+- **No editor writes the file back just for being opened.** Several of them normalise what they load, so "has this changed since mount?" is true on arrival — and React double-invokes effects in development, which defeats the obvious fix of skipping the first run. The trigger is the payload differing from the one that was loaded, which is immune to both and means typing something and undoing it costs no request either.
+- Duplicate writes removed from the Wedding Party page, where reordering and the member dialog each saved on top of what autosave was already doing.
+
+### Note
+Dialogs keep their Save button — the honeymoon place editor, the timeline milestone editor, the registry item editor, the RSVP donation form. A dialog has a Cancel, and Cancel means *discard*; autosaving one would take that away.
+
 ## v0.9.85 — [Released] Drag the schedule's columns (`main`, 2026-09-14 04:12)
 
 ### Added

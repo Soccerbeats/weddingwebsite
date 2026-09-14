@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { AutosaveHeader, useAutosave } from '@/components/admin/useAutosave';
 
 interface FAQItem {
     question: string;
@@ -31,43 +32,28 @@ function insertLink(
 
 export default function AdminFAQ() {
     const [faqs, setFaqs] = useState<FAQItem[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [message, setMessage] = useState('');
+    const [loaded, setLoaded] = useState(false);
     useEffect(() => {
         fetch('/api/admin/site-config')
             .then(res => res.json())
-            .then(data => setFaqs(data.faqs || []));
+            .then(data => { setFaqs(data.faqs || []); setLoaded(true); });
     }, []);
 
-    const saveConfig = async (newFaqs: FAQItem[]) => {
-        setLoading(true);
-        setMessage('');
+    // Only the FAQs — posting the whole config back would overwrite whatever
+    // another page saved since this one loaded.
+    const save = useCallback(async (value: FAQItem[]) => {
+        const res = await fetch('/api/admin/site-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ faqs: value }),
+        });
+        if (!res.ok) throw new Error(String(res.status));
+    }, []);
 
-        try {
-            // Only the FAQs — posting the whole config back would overwrite
-            // whatever another page saved since this one loaded.
-            const res = await fetch('/api/admin/site-config', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ faqs: newFaqs }),
-            });
+    const { state, retry } = useAutosave({ value: faqs, ready: loaded, save });
 
-            if (res.ok) {
-                setMessage('FAQs updated successfully!');
-                setFaqs(newFaqs);
-            } else {
-                setMessage('Failed to update.');
-            }
-        } catch (err) {
-            console.error(err);
-            setMessage('An error occurred.');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // Added locally and saved with the Save button. Saving a placeholder
-    // straight away used to put "New Question / New Answer" on the live site.
+    // A blank pair, deliberately: this used to add "New Question / New Answer"
+    // as placeholder text, which autosave would now publish to the live site.
     const handleAdd = () => {
         setFaqs([...faqs, { question: '', answer: '' }]);
     };
@@ -75,7 +61,7 @@ export default function AdminFAQ() {
     const checkDelete = (index: number) => {
         if (confirm('Are you sure you want to delete this Q&A?')) {
             const newFaqs = faqs.filter((_, i) => i !== index);
-            saveConfig(newFaqs);
+            setFaqs(newFaqs);
         }
     };
 
@@ -85,7 +71,7 @@ export default function AdminFAQ() {
         const temp = newFaqs[index - 1];
         newFaqs[index - 1] = newFaqs[index];
         newFaqs[index] = temp;
-        saveConfig(newFaqs);
+        setFaqs(newFaqs);
     };
 
     const checkMoveDown = (index: number) => {
@@ -94,7 +80,7 @@ export default function AdminFAQ() {
         const temp = newFaqs[index + 1];
         newFaqs[index + 1] = newFaqs[index];
         newFaqs[index] = temp;
-        saveConfig(newFaqs);
+        setFaqs(newFaqs);
     };
 
     const handleChange = (index: number, field: keyof FAQItem, value: string) => {
@@ -106,25 +92,12 @@ export default function AdminFAQ() {
 
     return (
         <div className="max-w-4xl">
-            <div className="flex justify-between items-center mb-6">
-                <div>
-                    <h1 className="text-3xl font-bold text-gray-900 mb-2">Q&A / FAQ Management</h1>
-                    <p className="text-gray-600">Manage frequently asked questions for your guests</p>
-                </div>
-                <button
-                    onClick={() => saveConfig(faqs)}
-                    disabled={loading}
-                    className="py-2 px-6 border border-transparent rounded-xl shadow-lg text-sm font-medium text-white bg-accent hover:bg-accent-dark hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 transition-all duration-300"
-                >
-                    {loading ? 'Saving...' : 'Save All Changes'}
-                </button>
-            </div>
-
-            {message && (
-                <div className={`p-4 rounded-xl mb-6 ${message.includes('success') ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
-                    {message}
-                </div>
-            )}
+            <AutosaveHeader
+                title="Q&A / FAQ Management"
+                subtitle="Manage frequently asked questions for your guests. Changes save themselves."
+                state={state}
+                onRetry={retry}
+            />
 
             <div className="space-y-6">
                 {faqs.map((faq, index) => (

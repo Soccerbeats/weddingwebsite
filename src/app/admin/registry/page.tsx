@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { SaveStatus, useAutosave } from '@/components/admin/useAutosave';
 import type { FundItem } from '@/lib/config';
 import type { RegistryItem } from '@/app/api/admin/registry-items/route';
 
@@ -41,8 +42,7 @@ export default function AdminRegistryPage() {
     const [bgColor, setBgColor] = useState('#ffffff');
     const [registryPageSubtitle, setRegistryPageSubtitle] = useState('');
     const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
-    const [message, setMessage] = useState('');
+    const [loaded, setLoaded] = useState(false);
     const [tab, setTab] = useState<'settings' | 'experiences' | 'registry'>('experiences');
     const [registryItems, setRegistryItems] = useState<RegistryItem[]>([]);
     const [urlInput, setUrlInput] = useState('');
@@ -78,6 +78,7 @@ export default function AdminRegistryPage() {
                 if (data.registry) setFund({ ...DEFAULTS, ...data.registry, items: data.registry.items || [] });
                 setBgColor(data.pageBgColors?.registry || '#ffffff');
                 if (data.registryPageSubtitle) setRegistryPageSubtitle(data.registryPageSubtitle);
+                setLoaded(true);
             })
             .finally(() => setLoading(false));
         fetch('/api/admin/registry-items')
@@ -212,27 +213,24 @@ export default function AdminRegistryPage() {
         if (res.ok) setRegistryItems(prev => prev.filter(i => i.id !== id));
     };
 
-    const save = async (updatedFund?: FundConfig) => {
-        setSaving(true);
-        setMessage('');
-        try {
-            const configRes = await fetch('/api/admin/site-config');
-            const config = await configRes.json();
-            config.registry = updatedFund ?? fund;
-            config.pageBgColors = { ...(config.pageBgColors || {}), registry: bgColor };
-            config.registryPageSubtitle = registryPageSubtitle;
-            const res = await fetch('/api/admin/site-config', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(config),
-            });
-            setMessage(res.ok ? 'Saved!' : 'Failed to save.');
-        } catch { setMessage('An error occurred.'); }
-        finally {
-            setSaving(false);
-            setTimeout(() => setMessage(''), 3000);
-        }
-    };
+    /*
+     * Only this page's keys.
+     *
+     * This used to GET the whole config, mutate three fields and POST all of it
+     * back, which overwrote whatever another editor had saved in between. That
+     * was a narrow window with a Save button; with autosave firing on every
+     * keystroke it would be a wide one.
+     */
+    const save = useCallback(async (body: {
+        registry: FundConfig; pageBgColors: { registry: string }; registryPageSubtitle: string;
+    }) => {
+        const res = await fetch('/api/admin/site-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error(String(res.status));
+    }, []);
 
     const addItem = () => {
         if (!newItem.title || !newItem.price) return;
@@ -241,13 +239,19 @@ export default function AdminRegistryPage() {
         setFund(updated);
         setNewItem(BLANK_ITEM);
         setShowAddForm(false);
-        save(updated);
     };
+
+    const payload = useMemo(() => ({
+        registry: fund,
+        pageBgColors: { registry: bgColor },
+        registryPageSubtitle,
+    }), [fund, bgColor, registryPageSubtitle]);
+
+    const { state, retry } = useAutosave({ value: payload, ready: loaded, save });
 
     const deleteItem = (id: string) => {
         const updated = { ...fund, items: fund.items.filter(i => i.id !== id) };
         setFund(updated);
-        save(updated);
     };
 
     const saveEditItem = () => {
@@ -255,7 +259,6 @@ export default function AdminRegistryPage() {
         const updated = { ...fund, items: fund.items.map(i => i.id === editingItem.id ? editingItem : i) };
         setFund(updated);
         setEditingItem(null);
-        save(updated);
     };
 
     // People selectable as a donor / co-giver: every primary guest PLUS their
@@ -326,7 +329,6 @@ export default function AdminRegistryPage() {
         setOtherEvent('');
         setCoGivers([]);
         setCoGiverSearch('');
-        save(updated);
     };
 
     const updatePayment = (key: 'zelle' | 'venmo' | 'cashapp' | 'paypal', field: keyof PaymentEntry, value: string) => {
@@ -347,7 +349,7 @@ export default function AdminRegistryPage() {
                     <p className="text-gray-500">Build your Honeyfund-style registry.</p>
                 </div>
                 <div className="flex items-center gap-4">
-                    {message && <span className={`text-sm font-medium ${message === 'Saved!' ? 'text-green-600' : 'text-red-600'}`}>{message}</span>}
+                    <SaveStatus state={state} onRetry={retry} />
                     <a
                         href="/admin/rsvps?tab=donations"
                         className="px-4 py-2 rounded-xl text-sm font-medium bg-gray-200 text-gray-700 hover:bg-gray-300 shadow-md hover:shadow-lg transition-all duration-300"
@@ -386,7 +388,7 @@ export default function AdminRegistryPage() {
                     <p className="text-sm text-gray-500">Display prices, progress bars, and funding amounts to guests</p>
                 </div>
                 <button
-                    onClick={() => { const updated = { ...fund, showFinancials: !fund.showFinancials }; setFund(updated); save(updated); }}
+                    onClick={() => { const updated = { ...fund, showFinancials: !fund.showFinancials }; setFund(updated); }}
                     className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors ${fund.showFinancials !== false ? 'bg-accent' : 'bg-gray-300'}`}
                 >
                     <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform shadow-sm ${fund.showFinancials !== false ? 'translate-x-8' : 'translate-x-1'}`} />
@@ -926,10 +928,6 @@ export default function AdminRegistryPage() {
                         ))}
                     </div>
 
-                    <button onClick={() => save()} disabled={saving}
-                        className="bg-accent hover:bg-accent-dark text-white px-8 py-3 rounded-xl font-medium transition-colors disabled:opacity-50">
-                        {saving ? 'Saving...' : 'Save Settings'}
-                    </button>
                 </div>
             )}
 

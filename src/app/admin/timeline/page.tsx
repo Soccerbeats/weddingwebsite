@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { SaveStatus, useAutosave } from '@/components/admin/useAutosave';
 import Image from 'next/image';
 
 interface Milestone {
@@ -19,7 +20,7 @@ export default function AdminTimeline() {
     const [showAddModal, setShowAddModal] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [timelineSubtitle, setTimelineSubtitle] = useState('The journey of our love');
-    const [subtitleSaving, setSubtitleSaving] = useState(false);
+    const [subtitleLoaded, setSubtitleLoaded] = useState(false);
     const fileInputRef1 = useRef<HTMLInputElement>(null);
     const fileInputRef2 = useRef<HTMLInputElement>(null);
     const editFileInputRef1 = useRef<HTMLInputElement>(null);
@@ -42,7 +43,10 @@ export default function AdminTimeline() {
         fetchMilestones();
         fetch('/api/admin/site-config')
             .then(res => res.json())
-            .then(data => { if (data.timelineSubtitle) setTimelineSubtitle(data.timelineSubtitle); })
+            .then(data => {
+                if (data.timelineSubtitle) setTimelineSubtitle(data.timelineSubtitle);
+                setSubtitleLoaded(true);
+            })
             .catch(err => console.error('Error loading config:', err));
     }, []);
 
@@ -52,20 +56,17 @@ export default function AdminTimeline() {
         setMilestones(data.milestones || []);
     };
 
-    const handleSaveSubtitle = async () => {
-        setSubtitleSaving(true);
-        try {
-            await fetch('/api/admin/site-config', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ timelineSubtitle }),
-            });
-        } catch (err) {
-            console.error('Failed to save subtitle:', err);
-        } finally {
-            setSubtitleSaving(false);
-        }
-    };
+    const saveSubtitle = useCallback(async (value: string) => {
+        const res = await fetch('/api/admin/site-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ timelineSubtitle: value }),
+        });
+        if (!res.ok) throw new Error(String(res.status));
+    }, []);
+
+    const { state: subtitleState, retry: retrySubtitle } =
+        useAutosave({ value: timelineSubtitle, ready: subtitleLoaded, save: saveSubtitle });
 
     const handleAddMilestone = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -231,13 +232,7 @@ export default function AdminTimeline() {
                         className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent text-gray-900"
                         placeholder="e.g. The journey of our love"
                     />
-                    <button
-                        onClick={handleSaveSubtitle}
-                        disabled={subtitleSaving}
-                        className="px-5 py-2 bg-accent text-white rounded-xl hover:bg-accent-dark disabled:opacity-50 transition-all duration-300 shadow-md hover:shadow-lg font-medium"
-                    >
-                        {subtitleSaving ? 'Saving...' : 'Save'}
-                    </button>
+                    <SaveStatus state={subtitleState} onRetry={retrySubtitle} />
                 </div>
             </div>
 

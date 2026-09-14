@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { AutosaveHeader, useAutosave } from '@/components/admin/useAutosave';
 
 export default function AdminHome() {
     const [config, setConfig] = useState({
@@ -12,50 +13,38 @@ export default function AdminHome() {
         heroSlideshowInterval: 5000,
     });
     const [allPhotos, setAllPhotos] = useState<{ filename: string; title?: string }[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [message, setMessage] = useState('');
+    const [loaded, setLoaded] = useState(false);
 
     useEffect(() => {
         fetch('/api/admin/site-config')
             .then(res => res.json())
             // Only this page's keys — see Settings for why.
-            .then(data => setConfig((prev: typeof config) => ({
-                homeHeadline: data.homeHeadline ?? prev.homeHeadline,
-                homeIntroTitle: data.homeIntroTitle ?? prev.homeIntroTitle,
-                homeIntroBody: data.homeIntroBody ?? prev.homeIntroBody,
-                heroSlideshowEnabled: data.heroSlideshowEnabled ?? prev.heroSlideshowEnabled,
-                heroSlideshowImages: data.heroSlideshowImages || [],
-                heroSlideshowInterval: data.heroSlideshowInterval ?? prev.heroSlideshowInterval,
-            })));
+            .then(data => {
+                setConfig((prev: typeof config) => ({
+                    homeHeadline: data.homeHeadline ?? prev.homeHeadline,
+                    homeIntroTitle: data.homeIntroTitle ?? prev.homeIntroTitle,
+                    homeIntroBody: data.homeIntroBody ?? prev.homeIntroBody,
+                    heroSlideshowEnabled: data.heroSlideshowEnabled ?? prev.heroSlideshowEnabled,
+                    heroSlideshowImages: data.heroSlideshowImages || [],
+                    heroSlideshowInterval: data.heroSlideshowInterval ?? prev.heroSlideshowInterval,
+                }));
+                setLoaded(true);
+            });
         fetch('/api/admin/photos')
             .then(res => res.json())
             .then(data => setAllPhotos(data.photos || []));
     }, []);
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setLoading(true);
-        setMessage('');
+    const save = useCallback(async (body: typeof config) => {
+        const res = await fetch('/api/admin/site-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error(String(res.status));
+    }, []);
 
-        try {
-            const res = await fetch('/api/admin/site-config', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(config),
-            });
-
-            if (res.ok) {
-                setMessage('Home Page settings updated successfully!');
-            } else {
-                setMessage('Failed to update.');
-            }
-        } catch (err) {
-            console.error(err);
-            setMessage('An error occurred.');
-        } finally {
-            setLoading(false);
-        }
-    };
+    const { state, retry } = useAutosave({ value: config, ready: loaded, save });
 
     const toggleSlideshowImage = (filename: string) => {
         const imgs: string[] = config.heroSlideshowImages || [];
@@ -75,16 +64,14 @@ export default function AdminHome() {
 
     return (
         <div className="max-w-4xl">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Home Page Content</h1>
-            <p className="text-gray-600 mb-8">Customize the text content and hero image settings for your home page</p>
+            <AutosaveHeader
+                title="Home Page Content"
+                subtitle="Customize the text content and hero image settings for your home page. Changes save themselves."
+                state={state}
+                onRetry={retry}
+            />
 
-            {message && (
-                <div className={`p-4 rounded-xl mb-6 ${message.includes('success') ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
-                    {message}
-                </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-8 bg-white p-8 rounded-2xl border border-gray-200 shadow-lg">
+            <div className="space-y-8 bg-white p-8 rounded-2xl border border-gray-200 shadow-lg">
 
                 {/* Hero Section */}
                 <div className="space-y-6 bg-gradient-to-br from-accent/5 to-accent-light/10 rounded-xl p-6 border border-accent/10">
@@ -223,17 +210,7 @@ export default function AdminHome() {
                         />
                     </div>
                 </div>
-
-                <div className="pt-4">
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-lg text-sm font-medium text-white bg-accent hover:bg-accent-dark hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 transition-all duration-300"
-                    >
-                        {loading ? 'Saving...' : 'Save Changes'}
-                    </button>
-                </div>
-            </form>
+            </div>
         </div>
     );
 }

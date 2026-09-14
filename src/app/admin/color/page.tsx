@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { AutosaveHeader, useAutosave } from '@/components/admin/useAutosave';
 
 export default function AdminColorSettings() {
     const [config, setConfig] = useState({
@@ -18,60 +19,46 @@ export default function AdminColorSettings() {
             rsvp: '#ffffff',
         },
     });
-    const [loading, setLoading] = useState(false);
-    const [message, setMessage] = useState('');
+    const [loaded, setLoaded] = useState(false);
 
     useEffect(() => {
         fetch('/api/admin/site-config')
             .then(res => res.json())
             // Only this page's keys — see Settings for why.
-            .then(data => setConfig(prev => ({
-                ...prev,
-                accentColor: data.accentColor ?? prev.accentColor,
-                accentLightColor: data.accentLightColor ?? prev.accentLightColor,
-                accentDarkColor: data.accentDarkColor ?? prev.accentDarkColor,
-                weddingColorPalette: data.weddingColorPalette ?? prev.weddingColorPalette,
-                pageBgColors: { ...prev.pageBgColors, ...(data.pageBgColors ?? {}) },
-            })));
+            .then(data => {
+                setConfig(prev => ({
+                    ...prev,
+                    accentColor: data.accentColor ?? prev.accentColor,
+                    accentLightColor: data.accentLightColor ?? prev.accentLightColor,
+                    accentDarkColor: data.accentDarkColor ?? prev.accentDarkColor,
+                    weddingColorPalette: data.weddingColorPalette ?? prev.weddingColorPalette,
+                    pageBgColors: { ...prev.pageBgColors, ...(data.pageBgColors ?? {}) },
+                }));
+                setLoaded(true);
+            });
     }, []);
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setLoading(true);
-        setMessage('');
+    const save = useCallback(async (body: typeof config) => {
+        const res = await fetch('/api/admin/site-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error(String(res.status));
+    }, []);
 
-        try {
-            const res = await fetch('/api/admin/site-config', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(config),
-            });
-
-            if (res.ok) {
-                setMessage('Color settings updated successfully!');
-            } else {
-                setMessage('Failed to update color settings.');
-            }
-        } catch (err) {
-            console.error(err);
-            setMessage('An error occurred.');
-        } finally {
-            setLoading(false);
-        }
-    };
+    const { state, retry } = useAutosave({ value: config, ready: loaded, save });
 
     return (
         <div className="max-w-4xl">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Color Settings</h1>
-            <p className="text-gray-600 mb-8">Customize your wedding website colors and themes</p>
+            <AutosaveHeader
+                title="Color Settings"
+                subtitle="Customize your wedding website colors and themes. Changes save themselves."
+                state={state}
+                onRetry={retry}
+            />
 
-            {message && (
-                <div className={`p-4 rounded-xl mb-6 ${message.includes('success') ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
-                    {message}
-                </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-6">
                 {/* Accent Colors Section */}
                 <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-lg">
                     <div className="bg-gradient-to-br from-accent/10 to-accent-light/20 rounded-xl p-6 border border-accent/20">
@@ -280,17 +267,7 @@ export default function AdminColorSettings() {
                         </div>
                     </div>
                 </div>
-
-                <div className="pt-4">
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-lg text-sm font-medium text-white bg-accent hover:bg-accent-dark hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 transition-all duration-300"
-                    >
-                        {loading ? 'Saving...' : 'Save Color Settings'}
-                    </button>
-                </div>
-            </form>
+            </div>
         </div>
     );
 }

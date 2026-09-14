@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import { AutosaveHeader, useAutosave } from '@/components/admin/useAutosave';
 import Image from 'next/image';
 import {
   DndContext,
@@ -106,8 +107,8 @@ interface WeddingPartyData {
 export default function AdminWeddingPartyPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [config, setConfig] = useState<any>(null);
+  const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [editingParty, setEditingParty] = useState<'bride' | 'groom' | 'somethingBlueCrew' | 'officiant' | null>(null);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -171,12 +172,26 @@ export default function AdminWeddingPartyPage() {
       }
 
       setConfig(data);
+      setLoaded(true);
     } catch (error) {
       console.error('Error fetching config:', error);
     } finally {
       setLoading(false);
     }
   };
+
+  /* Exactly the keys `persistConfig` posts, so autosave watches what it writes
+     and nothing else on the config can trigger a save from this page. */
+  const payload = useMemo(() => (config ? {
+    weddingParty: config.weddingParty,
+    weddingPartySubtitle: config.weddingPartySubtitle,
+    somethingBlueCrewTitle: config.somethingBlueCrewTitle,
+    bridePartyTitle: config.bridePartyTitle,
+    groomPartyTitle: config.groomPartyTitle,
+  } : null), [config]);
+
+  const save = useCallback(async () => { await persistConfig(config); }, [config]);
+  const { state, retry } = useAutosave({ value: payload, ready: loaded, save });
 
   const handleDragEnd = (event: DragEndEvent, party: 'bride' | 'groom' | 'somethingBlueCrew') => {
     const { active, over } = event;
@@ -193,7 +208,6 @@ export default function AdminWeddingPartyPage() {
         weddingParty: { ...config.weddingParty, [partyKey]: arrayMove(members, oldIndex, newIndex) },
       };
       setConfig(next);
-      persistConfig(next).catch((e) => console.error('Error saving order:', e));
     }
   };
 
@@ -214,19 +228,6 @@ export default function AdminWeddingPartyPage() {
     });
     if (!response.ok) {
       throw new Error('Save failed');
-    }
-  };
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      await persistConfig(config);
-      alert('Wedding party updated successfully!');
-    } catch (error) {
-      console.error('Error saving config:', error);
-      alert('Failed to save changes');
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -352,9 +353,8 @@ export default function AdminWeddingPartyPage() {
         }
       }
 
-      // Persist immediately so the change sticks without a separate "Save All Changes" step
-      await persistConfig(config);
-
+      // Autosave picks this up; writing here as well would send the same
+      // change twice.
       setConfig({ ...config });
       setEditingParty(null);
       setEditingIndex(null);
@@ -373,7 +373,6 @@ export default function AdminWeddingPartyPage() {
     if (config.weddingParty) {
       delete config.weddingParty.officiant;
       setConfig({ ...config });
-      persistConfig(config).catch((e) => console.error('Error saving:', e));
     }
   };
 
@@ -383,7 +382,6 @@ export default function AdminWeddingPartyPage() {
     const partyKey = party === 'bride' ? 'brideParty' : party === 'groom' ? 'groomParty' : 'somethingBlueCrew';
     config.weddingParty[partyKey].splice(index, 1);
     setConfig({ ...config });
-    persistConfig(config).catch((e) => console.error('Error saving:', e));
   };
 
   if (loading) {
@@ -396,12 +394,12 @@ export default function AdminWeddingPartyPage() {
 
   return (
     <div className="max-w-6xl">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Wedding Party Management</h1>
-        <p className="text-gray-600">
-          Add and manage your wedding party members
-        </p>
-      </div>
+      <AutosaveHeader
+        title="Wedding Party Management"
+        subtitle="Add and manage your wedding party members. Changes save themselves."
+        state={state}
+        onRetry={retry}
+      />
 
       {/* Page Subtitle Section */}
       <div className="mb-8 bg-white rounded-lg shadow p-6">
@@ -683,16 +681,6 @@ export default function AdminWeddingPartyPage() {
       </div>
 
       {/* Save Button */}
-      <div className="flex justify-end">
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700 disabled:opacity-50"
-        >
-          {saving ? 'Saving...' : 'Save All Changes'}
-        </button>
-      </div>
-
       {/* Edit Modal */}
       {editingParty && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">

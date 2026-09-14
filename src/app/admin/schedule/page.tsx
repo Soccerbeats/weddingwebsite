@@ -7,6 +7,7 @@ import {
 } from '@/lib/schedule';
 import { toCsv } from '@/lib/mailing';
 import { ColumnResizer, useColumnWidths } from '@/components/admin/useColumnWidths';
+import { SaveStatus, useAutosave } from '@/components/admin/useAutosave';
 
 /**
  * The run of the day, as a table.
@@ -72,15 +73,6 @@ export default function AdminSchedule() {
     const [scheduleSubtitle, setScheduleSubtitle] = useState('');
     const [shuttleText, setShuttleText] = useState('');
     const [dressCode, setDressCode] = useState('');
-    /**
-     * Where the last change has got to.
-     *
-     * `pending` is the debounce window — a change made but not yet sent. It is a
-     * state of its own rather than folded into `saving` because "we have your
-     * change and have not written it yet" and "we are writing it" fail
-     * differently, and closing the tab in the first one loses the edit.
-     */
-    const [saveState, setSaveState] = useState<'clean' | 'pending' | 'saving' | 'saved' | 'error'>('clean');
     const [loaded, setLoaded] = useState(false);
 
     useEffect(() => {
@@ -99,17 +91,20 @@ export default function AdminSchedule() {
                 setScheduleSubtitle(subtitle);
                 setShuttleText(shuttle);
                 setDressCode(dress);
-                // What was loaded *is* what is stored, so autosave has nothing to
-                // do until something differs from it. Recorded from the sorted
-                // day, which is what is now on screen: opening the page and
-                // reading it must not write the file back.
-                stored.current = JSON.stringify(buildPayload(day, subtitle, shuttle, dress));
+                // `loaded` last: the hook takes what is on screen at that point
+                // as its baseline, and the day has just been sorted, so opening
+                // the page and reading it must not count as a change.
                 setLoaded(true);
             })
-            .catch(() => setSaveState('error'));
+            .catch(err => console.error('Failed to load the schedule:', err));
     }, []);
 
     const publicCount = useMemo(() => events.filter(isPublicEvent).length, [events]);
+
+    const payload = useMemo(
+        () => buildPayload(events, scheduleSubtitle, shuttleText, dressCode),
+        [events, scheduleSubtitle, shuttleText, dressCode],
+    );
 
     const { widths, startResize, resetColumn, resetAll, changed: resized } =
         useColumnWidths('schedule.columnWidths.v1', DEFAULT_WIDTHS);
@@ -165,106 +160,16 @@ export default function AdminSchedule() {
         commitRow(index, e.target as HTMLElement);
     };
 
-    /**
-     * The form as the API takes it. One place, so what is compared against
-     * storage is exactly what would be written.
-     */
-    const payload = useMemo(
-        () => buildPayload(events, scheduleSubtitle, shuttleText, dressCode),
-        [events, scheduleSubtitle, shuttleText, dressCode],
-    );
-
-    /** The payload, in a ref, so the saver sends what is on screen rather than
-     *  whatever was current when its timer was set. */
-    const latest = useRef(payload);
-    latest.current = payload;
-
-    /**
-     * The last payload known to match what is stored.
-     *
-     * Autosave fires on a *difference* from this rather than on "the state
-     * changed", which is the only version that holds up: React invokes effects
-     * twice in development, so a "skip the first run" flag lets the second run
-     * through and merely opening the page writes the file back. It also means
-     * typing something and undoing it costs no request.
-     */
-    const stored = useRef<string | null>(null);
-
-    /** True while a request is in flight, and true again if one is queued. */
-    const inFlight = useRef(false);
-    const queued = useRef(false);
-
-    /**
-     * Write the whole form.
-     *
-     * Never two at once: a second change during a request is queued and sent
-     * after, so the last thing typed is the last thing written. Overlapping
-     * requests could otherwise land out of order and leave the file holding an
-     * older version of the day than the screen shows.
-     */
-    const save = useCallback(async () => {
-        if (inFlight.current) { queued.current = true; return; }
-        inFlight.current = true;
-        setSaveState('saving');
-        try {
-            const sent = JSON.stringify(latest.current);
-            const res = await fetch('/api/admin/site-config', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: sent,
-            });
-            if (!res.ok) throw new Error(String(res.status));
-            stored.current = sent;
-            setSaveState(queued.current ? 'pending' : 'saved');
-        } catch (err) {
-            console.error('Schedule autosave failed:', err);
-            setSaveState('error');
-            queued.current = false;
-        } finally {
-            inFlight.current = false;
-            if (queued.current) { queued.current = false; void save(); }
-        }
+    const save = useCallback(async (body: ReturnType<typeof buildPayload>) => {
+        const res = await fetch('/api/admin/site-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error(String(res.status));
     }, []);
 
-    /*
-     * Autosave, debounced.
-     *
-     * Debounced rather than per keystroke: a location typed out is sixteen
-     * changes and should be one request. The saver reads the form when the timer
-     * fires, so the last keystroke is the one that gets written.
-     */
-    useEffect(() => {
-        if (!loaded || stored.current === null) return;
-        if (JSON.stringify(payload) === stored.current) return;
-        setSaveState('pending');
-        const timer = setTimeout(() => { void save(); }, 700);
-        return () => clearTimeout(timer);
-    }, [payload, loaded, save]);
-
-    /* A change still in the debounce window, or mid-flight, is a change that
-       closing the tab would lose. */
-    const unsaved = saveState === 'pending' || saveState === 'saving' || saveState === 'error';
-    useEffect(() => {
-        if (!unsaved) return;
-        const warn = (e: BeforeUnloadEvent) => e.preventDefault();
-        window.addEventListener('beforeunload', warn);
-        return () => window.removeEventListener('beforeunload', warn);
-    }, [unsaved]);
-
-    /** The row controls, identical in the table and in the phone cards. There is
-     *  no reordering here on purpose: the times are the order. */
-    const rowActions = (index: number) => (
-        <button
-            type="button"
-            onClick={() => removeEvent(index)}
-            className="p-1.5 rounded-full text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
-            title="Remove this row"
-        >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-        </button>
-    );
+    const { state: saveState, retry } = useAutosave({ value: payload, ready: loaded, save });
 
     /**
      * The day as a spreadsheet — every row, in the order shown, with a Public
@@ -283,36 +188,19 @@ export default function AdminSchedule() {
         URL.revokeObjectURL(url);
     };
 
-    /**
-     * Where the last change got to, in words.
-     *
-     * With no save button this is the only thing on screen that answers "is what
-     * I typed safe?", so a failure says so plainly and offers the retry rather
-     * than sitting quiet and losing the day's edits.
-     */
-    const status = saveState === 'error' ? (
+    /** The row controls, identical in the table and in the phone cards. There is
+     *  no reordering here on purpose: the times are the order. */
+    const rowActions = (index: number) => (
         <button
             type="button"
-            onClick={() => void save()}
-            className="flex items-center gap-1.5 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 px-3 py-1 rounded-full transition-colors"
+            onClick={() => removeEvent(index)}
+            className="p-1.5 rounded-full text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+            title="Remove this row"
         >
-            <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-            Not saved — retry
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
         </button>
-    ) : (
-        <span
-            className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full ${
-                saveState === 'saved' ? 'text-green-700 bg-green-50' : 'text-gray-500 bg-gray-100'
-            }`}
-        >
-            <span className={`h-1.5 w-1.5 rounded-full ${
-                saveState === 'saved' ? 'bg-green-500'
-                    : saveState === 'clean' ? 'bg-gray-300' : 'bg-amber-400 animate-pulse'
-            }`} />
-            {/* `clean` also reads "Saved": nothing on screen differs from what
-                is stored, which is the question being asked. */}
-            {saveState === 'saving' || saveState === 'pending' ? 'Saving…' : 'Saved'}
-        </span>
     );
 
     /** The Public tick, which is the whole point of the table. */
@@ -366,7 +254,7 @@ export default function AdminSchedule() {
                             >
                                 ⬇ Export CSV
                             </button>
-                            {status}
+                            <SaveStatus state={saveState} onRetry={retry} />
                         </div>
                     </div>
 

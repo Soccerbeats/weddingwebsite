@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { SaveStatus, useAutosave } from '@/components/admin/useAutosave';
 import Image from 'next/image';
 import {
     DndContext,
@@ -174,7 +175,7 @@ export default function AdminPhotos() {
     const [editingPhoto, setEditingPhoto] = useState<Photo | null>(null);
     const [editForm, setEditForm] = useState({ title: '', description: '' });
     const [photosSubtitle, setPhotosSubtitle] = useState('Moments from our journey together.');
-    const [subtitleSaving, setSubtitleSaving] = useState(false);
+    const [subtitleLoaded, setSubtitleLoaded] = useState(false);
     // The lightbox tracks the open photo by id (not index) so that hearting —
     // which re-sorts the grid — keeps the same photo in view.
     const [viewerPhotoId, setViewerPhotoId] = useState<number | null>(null);
@@ -190,11 +191,6 @@ export default function AdminPhotos() {
             coordinateGetter: sortableKeyboardCoordinates,
         })
     );
-
-    useEffect(() => {
-        fetchPhotos();
-        fetchConfig();
-    }, []);
 
     const fetchPhotos = async () => {
         const res = await fetch('/api/admin/photos');
@@ -215,22 +211,32 @@ export default function AdminPhotos() {
         const data = await res.json();
         setSiteConfig(data);
         if (data.photosSubtitle) setPhotosSubtitle(data.photosSubtitle);
+        setSubtitleLoaded(true);
     };
 
-    const handleSaveSubtitle = async () => {
-        setSubtitleSaving(true);
-        try {
-            await fetch('/api/admin/site-config', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ photosSubtitle }),
-            });
-        } catch (err) {
-            console.error('Failed to save subtitle:', err);
-        } finally {
-            setSubtitleSaving(false);
-        }
-    };
+    // Placed after both fetchers on purpose: referencing a `const` arrow
+    // function from an effect above its declaration is a use-before-declare the
+    // hooks lint rules reject. Both are async, so the state they set lands in a
+    // promise rather than synchronously in the effect body — which the rule
+    // below cannot see from the call site.
+    useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        fetchPhotos();
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        fetchConfig();
+    }, []);
+
+    const saveSubtitle = useCallback(async (value: string) => {
+        const res = await fetch('/api/admin/site-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ photosSubtitle: value }),
+        });
+        if (!res.ok) throw new Error(String(res.status));
+    }, []);
+
+    const { state: subtitleState, retry: retrySubtitle } =
+        useAutosave({ value: photosSubtitle, ready: subtitleLoaded, save: saveSubtitle });
 
     const handleDragEnd = async (event: DragEndEvent) => {
         const { active, over } = event;
@@ -520,13 +526,7 @@ export default function AdminPhotos() {
                         className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent text-gray-900"
                         placeholder="e.g. Moments from our journey together."
                     />
-                    <button
-                        onClick={handleSaveSubtitle}
-                        disabled={subtitleSaving}
-                        className="px-5 py-2 bg-accent text-white rounded-xl hover:bg-accent-dark disabled:opacity-50 transition-all duration-300 shadow-md hover:shadow-lg font-medium"
-                    >
-                        {subtitleSaving ? 'Saving...' : 'Save'}
-                    </button>
+                    <SaveStatus state={subtitleState} onRetry={retrySubtitle} />
                 </div>
             </div>
 

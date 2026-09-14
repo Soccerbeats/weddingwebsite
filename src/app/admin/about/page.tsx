@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { AutosaveHeader, useAutosave } from '@/components/admin/useAutosave';
 
 export default function AdminAbout() {
     const [config, setConfig] = useState({
@@ -13,60 +14,46 @@ export default function AdminAbout() {
         receptionText: '',
         aboutSubtitle: '',
     });
-    const [loading, setLoading] = useState(false);
-    const [message, setMessage] = useState('');
+    const [loaded, setLoaded] = useState(false);
 
     useEffect(() => {
         fetch('/api/admin/site-config')
             .then(res => res.json())
             // Only this page's keys — see Settings for why the whole config is
             // never spread into state and posted back.
-            .then(data => setConfig(prev => {
-                const next = { ...prev };
-                for (const key of Object.keys(prev) as (keyof typeof prev)[]) {
-                    if (typeof data[key] === 'string') next[key] = data[key];
-                }
-                return next;
-            }));
+            .then(data => {
+                setConfig(prev => {
+                    const next = { ...prev };
+                    for (const key of Object.keys(prev) as (keyof typeof prev)[]) {
+                        if (typeof data[key] === 'string') next[key] = data[key];
+                    }
+                    return next;
+                });
+                setLoaded(true);
+            });
     }, []);
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setLoading(true);
-        setMessage('');
+    const save = useCallback(async (body: typeof config) => {
+        const res = await fetch('/api/admin/site-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error(String(res.status));
+    }, []);
 
-        try {
-            const res = await fetch('/api/admin/site-config', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(config),
-            });
-
-            if (res.ok) {
-                setMessage('About Page updated successfully!');
-            } else {
-                setMessage('Failed to update.');
-            }
-        } catch (err) {
-            console.error(err);
-            setMessage('An error occurred.');
-        } finally {
-            setLoading(false);
-        }
-    };
+    const { state, retry } = useAutosave({ value: config, ready: loaded, save });
 
     return (
         <div className="max-w-4xl">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">About Page Content</h1>
-            <p className="text-gray-600 mb-8">Customize your story and venue information</p>
+            <AutosaveHeader
+                title="About Page Content"
+                subtitle="Customize your story and venue information. Changes save themselves."
+                state={state}
+                onRetry={retry}
+            />
 
-            {message && (
-                <div className={`p-4 rounded-xl mb-6 ${message.includes('success') ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
-                    {message}
-                </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-8 bg-white p-8 rounded-2xl border border-gray-200 shadow-lg">
+            <div className="space-y-8 bg-white p-8 rounded-2xl border border-gray-200 shadow-lg">
 
                 {/* Story Section */}
                 <div className="space-y-6 bg-gradient-to-br from-accent/5 to-accent-light/10 rounded-xl p-6 border border-accent/10">
@@ -172,17 +159,7 @@ export default function AdminAbout() {
                         placeholder="e.g. Where it all began"
                     />
                 </div>
-
-                <div className="pt-4">
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-lg text-sm font-medium text-white bg-accent hover:bg-accent-dark hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 transition-all duration-300"
-                    >
-                        {loading ? 'Saving...' : 'Save Changes'}
-                    </button>
-                </div>
-            </form>
+            </div>
         </div>
     );
 }
