@@ -15,6 +15,11 @@ import {
     planAutoSeat, planGatherParty, planMove, planSeatSelection, planSwap, planUnseat,
     planUnseatSelection, seatIndexer, seatingIssues, splitPartyGroupIds,
 } from '../src/lib/seating';
+import {
+    DEFAULT_EXPORT_OPTIONS, alphabetical, csvHeaders, csvRows, dietCodes, dietNote,
+    exportFilename, freeSeats, surname, tally, tallyParts,
+    type ExportOptions, type ExportPerson, type SeatingExportData,
+} from '../src/lib/seatingExport';
 
 let failures = 0;
 let checks = 0;
@@ -412,6 +417,122 @@ console.log('\nWhat is wrong with the plan');
     check('and names them', offList.label.includes('Greg') && offList.label.includes('Olive'));
     check('no off-list RSVPs, no line',
         seatingIssues([table(1, 'Table 1', 8, [])], []).every(i => i.kind !== 'rsvp-off-list'));
+}
+
+/* ---- the export ---- */
+
+console.log('\nExporting the chart');
+{
+    const person = (
+        name: string,
+        diet: ExportPerson['diet'] = [],
+        extra: Partial<ExportPerson> = {},
+    ): ExportPerson => ({
+        name,
+        seat: 1,
+        table_name: 'Table 1',
+        household: name,
+        side: null,
+        rsvp_status: 'attending',
+        diet,
+        note: '',
+        ...extra,
+    });
+
+    /* dietary answers → codes */
+    check('an empty answer carries no codes', dietCodes(null).length === 0);
+    check('every checkbox maps to its code',
+        dietCodes({ vegetarian: true, vegan: true, gluten_free: true, nut_allergy: true, other: true })
+            .join(',') === 'VEG,VGN,GF,NUT,OTH');
+    check('free text counts as "other" even without the checkbox',
+        dietCodes({ other_text: 'No shellfish' }).join(',') === 'OTH');
+    check('the pre-JSONB `note` field is read too',
+        dietCodes({ note: 'No shellfish' }).join(',') === 'OTH'
+        && dietNote({ note: ' No shellfish ' }) === 'No shellfish');
+    check('an empty "other" text is not a restriction', dietCodes({ other_text: '   ' }).length === 0);
+
+    /* counting */
+    const table1 = [
+        person('Ada', ['VEG']),
+        person('Bo', ['VEG', 'GF']),
+        person('Cy'),
+        person('Di', ['NUT']),
+        person('Ed'),
+    ];
+    const t = tally(table1);
+    check('restrictions are counted per person', t.VEG === 2 && t.GF === 1 && t.NUT === 1);
+    check('someone with two restrictions is counted in both', t.VEG + t.GF >= 3);
+    check('people who reported nothing are counted apart', t.none === 2);
+    check('the total is the headcount, not the restriction count', t.total === 5);
+
+    const parts = tallyParts(t, 8);
+    check('the tally leads with seats of capacity', parts[0] === '5 seated of 8', parts[0]);
+    check('a restriction nobody has is left out', parts.every(p => !p.startsWith('0 ')), parts.join(' · '));
+    check('the tally ends with the people who reported nothing',
+        parts[parts.length - 1] === '2 no restrictions', parts[parts.length - 1]);
+    check('with no capacity it just says seated',
+        tallyParts(tally(table1))[0] === '5 seated');
+    check('an empty table still reads as zero',
+        tallyParts(tally([]), 10)[0] === '0 seated of 10');
+
+    /* free chairs */
+    const exTable = (seat_count: number, people: ExportPerson[]) => ({
+        id: 1, name: 'Table 1', table_type: 'round', seat_count, people,
+    });
+    check('free chairs are capacity less the people', freeSeats(exTable(8, table1)) === 3);
+    check('an over-full table reports no free chairs, never a negative',
+        freeSeats(exTable(3, table1)) === 0);
+
+    /* sorting */
+    check('a name sorts under its surname', surname('Nora Whitfield') === 'Whitfield');
+    check('a suffix is not the surname', surname('Nick Lucas Jr.') === 'Lucas');
+    check('a parenthetical note is not the surname',
+        surname("Natalie Williams (Zack's Girlfriend)") === 'Williams');
+    check('a one-word name sorts under itself', surname('Cher') === 'Cher');
+    check('an unnamed companion still sorts', surname("Anna's guest 1") === '1');
+
+    const data: SeatingExportData = {
+        title: 'Nora & Elliot',
+        date: null,
+        venue: null,
+        tables: [
+            exTable(8, [person('Bo Zeller'), person('Ada Marsh', ['VGN'])]),
+            { id: 2, name: 'Table 2', table_type: 'round', seat_count: 4, people: [person('Cy Abbott', [], { table_name: 'Table 2', seat: 1 })] },
+        ],
+        unseated: [person('Di Nolan', ['GF'], { seat: null, table_name: null })],
+    };
+
+    const az = alphabetical(data, true);
+    check('the A–Z list is sorted by surname',
+        az.map(p => p.name).join(', ') === 'Cy Abbott, Ada Marsh, Di Nolan, Bo Zeller',
+        az.map(p => p.name).join(', '));
+    check('leaving out the unseated leaves them out of the list',
+        alphabetical(data, false).every(p => p.name !== 'Di Nolan'));
+
+    /* the spreadsheet */
+    const opts: ExportOptions = { ...DEFAULT_EXPORT_OPTIONS, format: 'csv' };
+    const rows = csvRows(data, opts);
+    check('the spreadsheet is one row per person, not per party', rows.length === 4, String(rows.length));
+    check('every row has a cell for every column',
+        rows.every(r => r.length === csvHeaders(opts).length));
+    check('each restriction is its own yes/blank column, for pivoting',
+        csvHeaders(opts).includes('Vegan')
+        && rows.find(r => r[2] === 'Ada Marsh')?.[csvHeaders(opts).indexOf('Vegan')] === 'yes');
+    check('someone with no restriction leaves those columns blank',
+        rows.find(r => r[2] === 'Bo Zeller')?.[csvHeaders(opts).indexOf('Vegan')] === '');
+    check('an unseated person says so rather than claiming a table',
+        rows.find(r => r[2] === 'Di Nolan')?.[0] === 'Not seated');
+    check('turning the unseated off drops their rows',
+        csvRows(data, { ...opts, unseated: false }).length === 3);
+    check('household and side are columns only when asked for',
+        !csvHeaders(opts).includes('Household')
+        && csvHeaders({ ...opts, household: true, side: true }).includes('Side'));
+
+    check('the filename carries the date, so a folder of them sorts',
+        exportFilename('csv', new Date(2026, 8, 19)) === 'seating-chart-2026-09-19.csv',
+        exportFilename('csv', new Date(2026, 8, 19)));
+    check('a single-digit month and day are padded',
+        exportFilename('pdf', new Date(2027, 0, 5)) === 'seating-chart-2027-01-05.pdf');
 }
 
 console.log(`\n${failures === 0 ? 'PASS' : 'FAIL'} — ${checks - failures}/${checks} checks passed.\n`);

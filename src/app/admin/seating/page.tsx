@@ -16,6 +16,7 @@ import '@xyflow/react/dist/style.css';
 import TableNode from '@/components/seating/TableNode';
 import GuestSidebar from '@/components/seating/GuestSidebar';
 import AddTableModal from '@/components/seating/AddTableModal';
+import SeatingExportModal from '@/components/seating/SeatingExportModal';
 import RoomEditor, { RoomShape, Vertex } from '@/components/seating/RoomEditor';
 import SeatingListView from '@/components/seating/SeatingListView';
 import { SeatingTableData, GuestListEntry, FloorPlan, OffListRsvp, SeatTransferPayload, ColorMode } from '@/components/seating/types';
@@ -616,6 +617,7 @@ export default function SeatingPage() {
   // the switch lives here and the modal that adds a table is shared.
   const [view, setView] = useState<'canvas' | 'list'>('canvas');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showExport, setShowExport] = useState(false);
   // Full screen hands back the site nav and the admin sidebar by way of a class
   // on <html> — the same mechanism the honeymoon map uses, and the reason it is
   // a class and not an overlay: the site nav is `position: fixed` outside the
@@ -766,7 +768,15 @@ export default function SeatingPage() {
           </p>
         </div>
 
-        <div className="ml-auto flex bg-gray-100 rounded-full p-0.5 text-xs font-medium">
+        <button
+          onClick={() => setShowExport(true)}
+          className="ml-auto px-4 py-1.5 rounded-full bg-gray-50 text-xs font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-800 transition-colors"
+          title="Print the chart, or download it as a spreadsheet"
+        >
+          Export
+        </button>
+
+        <div className="flex bg-gray-100 rounded-full p-0.5 text-xs font-medium">
           {(['canvas', 'list'] as const).map(v => (
             <button
               key={v}
@@ -806,6 +816,8 @@ export default function SeatingPage() {
           />
         )}
       </div>
+
+      {showExport && <SeatingExportModal onClose={() => setShowExport(false)} />}
 
       {showAddModal && (
         <AddTableModal

@@ -28,10 +28,35 @@ and are not repeated here.
 | OPS-1 | Deploy | `JWT_SECRET` not set in the Portainer stack | Needs Austin at Portainer | XS |
 | OPS-2 | Deploy | `GEOCODER_USER_AGENT` not set, so OpenStreetMap can block the server | Needs Austin at Portainer | XS |
 | HM-1 | Honeymoon / Finance | The honeymoon total is not a line in the wedding budget | Design call — which side owns the number | S |
+| SEAT-1 | RSVP / Seating | No entrée choice, so the export cannot count "7 chicken, 3 fish" | Needs a new RSVP question and re-asking everyone who already answered | M |
+| SEAT-2 | Seating | The export prints rosters, never the room | The floor plan is a React Flow canvas; printing it is a different job | M |
 
 Effort: XS = minutes, S = under an hour, M = an afternoon.
 
 ## Details
+
+### SEAT-1 — An entrée choice the kitchen can count
+The seating export (v0.9.87) totals dietary *restrictions* — vegetarian, vegan,
+gluten free, nut allergy, other — because that is all the RSVP form has ever
+asked. A caterer usually wants the other number too: how many chicken, how many
+fish, how many of the vegetarian plate. **Do:** add a meal question to the RSVP
+form per attending person, stored alongside the restriction flags in
+`rsvps.dietary_restrictions`; add the options to the admin's settings so the
+couple names their own menu; surface it as a column in the admin's RSVP table;
+then add a `meal` field to `ExportPerson` and a second row of tiles to the
+kitchen summary. The export panel already carries the option, disabled, with the
+reason — enabling it is the last step. **Parked because:** roughly a third of the
+guest list has already answered, so shipping it means chasing those households
+for one more answer, which is Austin's call and not a code decision.
+
+### SEAT-2 — Print the room, not just the roster
+The export prints the chart as lists. The other thing people print is the *room*
+— tables where they actually sit, for a place-card table or a planner's walk
+through. **Do:** render the floor plan to SVG from `seating_tables` x/y/rotation
+plus `floor_plan_walls` (the canvas already has all of it) and add it as a third
+"What to include" option. **Parked because:** it is a separate renderer, not a
+variant of the sheet — React Flow's DOM does not print, so the SVG has to be
+drawn from the data rather than captured from the canvas.
 
 ### B-17 — Verification returns contact details
 `POST /api/guest-verification` answers a matching name with the guest's email and

@@ -11,6 +11,23 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.87 — [Released] The seating chart, on paper (`main`, 2026-09-19 00:52)
+
+The chart has always been a thing you look at. Now it is a thing you can hand to a caterer — with a preview, so you see the thirty pages before you print them.
+
+### Added
+- **Export on the seating chart**, next to the Canvas / List switch. It opens a dialog with the options on the left and the actual sheet on the right, live: the preview is the same component the printer gets, shrunk to fit, so "both sections, counts only, a new page per table" is something you look at rather than guess at.
+- **Two ways to read it, or both.** *By table* is the seating order, each table with its own block. *Alphabetical* is every guest by surname with the table they are at — the list you want at the door when someone asks where they are sitting.
+- **Two levels of detail, or both.** *Every name* is the roster with each person's dietary restrictions beside them. *Counts only* is the line the kitchen reads: "10 seated of 10 · 2 vegetarian · 1 gluten free · 7 no restrictions".
+- **A kitchen summary on page one** — the whole wedding's totals as figures, so the number of vegan plates is not something anyone has to add up off a roster.
+- **Restrictions print as letter codes** — VEG, VGN, GF, NUT, OTH, with a legend — so the sheet still reads on the black-and-white printer at a venue. A free-text answer ("Allergic to balsamic vinegar") prints in full under the name.
+- **Optional extras:** the household each person came in on, their side, how many chairs at a table are still free, everyone who is coming with nowhere to sit yet, and a page break per table.
+- **Or a spreadsheet** — one row per person, never one per party, with each restriction as its own yes/blank column so a pivot table gives the same counts the printed sheet shows.
+- **41 more assertions in `npm run check:seating`** (110 in total), covering the codes, the counting, the surname sort, the free-chair arithmetic and every column of the spreadsheet.
+
+### Changed
+- **Seat numbers print as their position at the table**, 1 upward. The stored index only has to be unique, so a table people have been moved around holds 0, 1, 4, 7 — which is what the sheet used to have to show.
+
 ## v0.9.86 — [Released] The admin panel saves itself (`main`, 2026-09-14 04:43)
 
 Every editor had the same Save button, and behind it the same three bugs waiting to be written eleven times. So it is one hook, applied everywhere.
