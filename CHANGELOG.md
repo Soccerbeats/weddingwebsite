@@ -11,6 +11,16 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.91 — [Released] The editor is the one that decides (`main`, 2026-09-22 23:05)
+
+v0.9.90 fixed the wrong half. Renaming someone still did nothing to the chart, because the chart was not reading the field the editor writes.
+
+### Fixed
+- **A named party member now beats the plus-one.** Working out who a companion is, the chart read `plus_one_name` first and only fell back to the party. The guest editor has no plus-one field — that name arrives by CSV import — so it writes the party, and the chart ignored it: Robert Lucas's plus-one could be corrected from *Jessica* to *Jessica Bigari* as often as you liked and every chair, old or newly filled, still said *Jessica*. The party decides now; the plus-one fills a slot nobody has been named for.
+- **Chairs filled under the old rule are corrected on the next boot.** A narrow, idempotent backfill: only a companion chair whose name is exactly its household's plus-one, where a different name has since been written into the first party slot. Three on the current chart — including *Natashia Keil* → *Natashia Kiel*, which nobody had spotted.
+- **The seating sidebar shows the names the chart will actually use.** It printed `plus_one_name` raw, so it could read "+1 Jessica" beside a chair saying "Jessica Bigari" — the guest list disagreeing with itself.
+- **Four more assertions in `npm run check:seating`** (157 in total) pinning the precedence: a named member wins, the plus-one still fills an unnamed first slot, an unnamed slot marked not coming takes no chair, and a plus-one never reaches past the first slot.
+
 ## v0.9.90 — [Released] A rename reaches the chart (`main`, 2026-09-22 21:40)
 
 The name on a chair was a copy, taken the day the chair was filled, and nothing ever went back to correct it. Rename someone in the guest list and the chart went on calling them by the old name — Robert Lucas's plus-one seated as *Jessica* long after she became *Jessica Bigari*.

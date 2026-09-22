@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { GuestListEntry } from './types';
+import { partyAttendees } from '@/lib/seating';
 
 interface GuestSidebarProps {
   guests: GuestListEntry[];
@@ -284,11 +285,15 @@ export default function GuestSidebar({
                 </div>
               </div>
 
-              {/* Only when the party is actually big enough to hold one — a plus-one
-                  recorded against a party of one is a leftover, and seating does
-                  not seat them either. */}
-              {guest.plus_one_name && guest.party_size > 1 && (
-                <div className={`text-xs pl-4 truncate ${isDeclined ? 'text-red-400' : isLikely ? 'text-orange-400' : 'text-gray-500'}`}>+1 {guest.plus_one_name}</div>
+              {/* Who else the party is, named exactly as the chart will seat
+                  them — `plus_one_name` on its own said "+1 Jessica" beside a
+                  chair reading "Jessica Bigari", which is the guest list
+                  disagreeing with itself. A plus-one recorded against a party of
+                  one is a leftover and appears here no more than it is seated. */}
+              {partyAttendees(guest).length > 1 && (
+                <div className={`text-xs pl-4 truncate ${isDeclined ? 'text-red-400' : isLikely ? 'text-orange-400' : 'text-gray-500'}`}>
+                  +{partyAttendees(guest).slice(1).map(p => p.name).join(', ')}
+                </div>
               )}
 
               {isLikely && (

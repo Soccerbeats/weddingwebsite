@@ -275,6 +275,38 @@ UPDATE seat_assignments
  WHERE display_name LIKE '%(%'
    AND BTRIM(REGEXP_REPLACE(REGEXP_REPLACE(display_name, '\([^)]*\)', '', 'g'), '\s+', ' ', 'g')) <> '';
 
+-- ---------------------------------------------------------------------------
+-- Backfill: a chair still named after the plus-one it was filled from.
+--
+-- `plus_one_name` used to beat `party_members` when the chart worked out who a
+-- companion was, and the guest editor has no plus-one field — it writes
+-- `party_members`. So renaming Robert Lucas's plus-one from "Jessica" to
+-- "Jessica Bigari" corrected a field the chart ignored, and the chair kept the
+-- old name however often it was fixed. The rule is the other way round now;
+-- these are the chairs filled before it changed.
+--
+-- Deliberately narrow: only a companion chair (no guest_list row of its own)
+-- whose name is exactly the household's plus-one, where a *different*, non-empty
+-- name has since been written into the first party slot. Nothing is guessed —
+-- the two names are both right there on the household.
+--
+-- Idempotent: once the chair carries the member's name it no longer equals the
+-- plus-one, so it stops matching.
+-- ---------------------------------------------------------------------------
+UPDATE seat_assignments sa
+   SET display_name = BTRIM(REGEXP_REPLACE(REGEXP_REPLACE(g.party_members->0->>'name', '\([^)]*\)', '', 'g'), '\s+', ' ', 'g'))
+  FROM guest_list g
+ WHERE sa.party_group_id = g.id
+   AND sa.guest_list_id IS NULL
+   AND jsonb_typeof(g.party_members) = 'array'
+   AND jsonb_array_length(g.party_members) > 0
+   AND g.plus_one_name IS NOT NULL
+   AND LOWER(BTRIM(REGEXP_REPLACE(REGEXP_REPLACE(sa.display_name, '\([^)]*\)', '', 'g'), '\s+', ' ', 'g')))
+     = LOWER(BTRIM(REGEXP_REPLACE(REGEXP_REPLACE(g.plus_one_name, '\([^)]*\)', '', 'g'), '\s+', ' ', 'g')))
+   AND BTRIM(REGEXP_REPLACE(REGEXP_REPLACE(COALESCE(g.party_members->0->>'name', ''), '\([^)]*\)', '', 'g'), '\s+', ' ', 'g')) <> ''
+   AND LOWER(BTRIM(REGEXP_REPLACE(REGEXP_REPLACE(g.party_members->0->>'name', '\([^)]*\)', '', 'g'), '\s+', ' ', 'g')))
+    <> LOWER(BTRIM(REGEXP_REPLACE(REGEXP_REPLACE(sa.display_name, '\([^)]*\)', '', 'g'), '\s+', ' ', 'g')));
+
 CREATE TABLE IF NOT EXISTS floor_plan_room (
   id SERIAL PRIMARY KEY,
   floor_plan_id INTEGER REFERENCES floor_plans(id) ON DELETE CASCADE,

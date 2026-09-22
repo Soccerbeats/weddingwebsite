@@ -146,6 +146,32 @@ console.log('\nWho takes a chair');
         partyAttendees(onlyNote).map(p => p.name).join(', ') === "Collin Woldt, Collin's guest 1",
         partyAttendees(onlyNote).map(p => p.name).join(', '));
 
+    // The guest editor writes `party_members` and has no plus-one field — that
+    // name only ever arrives by CSV import. So a named member has to beat the
+    // plus-one, or renaming someone in the only editor there is changes nothing
+    // the chart can see.
+    const renamedMember = guest(13, 'Robert Lucas', 2, [{ name: 'Jessica Bigari', attending: true }], {
+        plus_one_name: 'Jessica',
+    });
+    check('a named party member beats a stale plus-one',
+        partyAttendees(renamedMember).map(p => p.name).join(', ') === 'Robert Lucas, Jessica Bigari',
+        partyAttendees(renamedMember).map(p => p.name).join(', '));
+
+    const stillPlusOne = guest(14, 'Alan Turing', 2, [{ name: null, attending: null }], { plus_one_name: 'Joan Clarke' });
+    check('the plus-one still fills a slot nobody has been named for',
+        partyAttendees(stillPlusOne).map(p => p.name).join(', ') === 'Alan Turing, Joan Clarke',
+        partyAttendees(stillPlusOne).map(p => p.name).join(', '));
+
+    const unnamedDeclined = guest(15, 'Alan Turing', 2, [{ name: null, attending: false }], { plus_one_name: 'Joan Clarke' });
+    check('an unnamed slot marked not coming takes no chair, plus-one or not',
+        partyAttendees(unnamedDeclined).length === 1,
+        partyAttendees(unnamedDeclined).map(p => p.name).join(', '));
+
+    const laterSlot = guest(16, 'Mabel Grey', 3, [{ name: null }, { name: 'Bea Frost' }], { plus_one_name: 'Ann Frost' });
+    check('a plus-one never reaches past the first slot',
+        partyAttendees(laterSlot).map(p => p.name).join(', ') === 'Mabel Grey, Ann Frost, Bea Frost',
+        partyAttendees(laterSlot).map(p => p.name).join(', '));
+
     const notedMember = guest(12, 'Zack Novak', 2, [{ name: 'Natalie Williams (Zack\'s Girlfriend)', attending: true }]);
     check('a note on a party member is taken off too',
         partyAttendees(notedMember).map(p => p.name).join(', ') === 'Zack Novak, Natalie Williams',

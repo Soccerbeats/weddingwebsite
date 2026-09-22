@@ -62,11 +62,15 @@ export function seatIndexer(used: Iterable<number>): () => number {
  *
  * Names are the guest list's, with their parenthetical notes taken off: a
  * plus-one is written "Steve Reesman (Lauren's Boyfriend)" so the couple knows
- * who they are, and the chart used to seat exactly that string. Two things went
- * wrong with it. The chart disagreed with the guest list about a person's name,
- * and — because the note made the plus-one look like a different person from the
- * `party_members` entry of the same name — that entry's own RSVP answer was
- * dropped, so a plus-one who had declined still took a chair.
+ * who they are, and the chart used to seat exactly that string.
+ *
+ * **`party_members` decides who a companion is; `plus_one_name` is only a
+ * fallback for a slot that has no name of its own.** It used to be the other way
+ * round, and it made the guest editor powerless: that editor writes
+ * `party_members` and has no plus-one field at all — the plus-one arrives by CSV
+ * import — so renaming Robert Lucas's plus-one from "Jessica" to "Jessica
+ * Bigari" changed a field the chart then ignored, and the chair went on saying
+ * Jessica no matter how many times it was corrected or re-seated.
  */
 export function partyAttendees(guest: GuestListEntry): { name: string; guestListId: number | null }[] {
     const primary = cleanName(guest.guest_name) || guest.guest_name;
@@ -76,23 +80,19 @@ export function partyAttendees(guest: GuestListEntry): { name: string; guestList
 
     const plusOne = (guest.plus_one_name ?? '').trim();
     const members = guest.party_members ?? [];
-    // The member entry that *is* the plus-one, once the note is off both names.
-    // It carries their answer, which the plus-one string never does.
-    const plusOneMember = plusOne ? members.find(m => sameName(m?.name, plusOne)) : undefined;
-    const rest = members.filter(m => m !== plusOneMember);
-    // The plus-one is the first companion when there is room for one.
-    const companions: { name: string | null; attending?: boolean | null }[] = plusOne
-        ? [{ name: plusOne, attending: plusOneMember?.attending ?? null }, ...rest]
-        : rest;
 
     const slots = Math.max(0, (guest.party_size ?? 1) - 1);
     for (let i = 0; i < slots; i += 1) {
-        const companion = companions[i];
-        if (companion?.attending === false) continue;
+        const member = members[i];
+        // The first slot is where a plus-one goes — but only if nobody has since
+        // been named for it. A named member always wins, and always brings their
+        // own answer with them.
+        const name = cleanName(member?.name) || (i === 0 ? cleanName(plusOne) : '');
+        if (member?.attending === false) continue;
         people.push({
             // A name that was only a note — "(Collin's Date)" — cleans to nothing,
             // which is the same as never having been given one.
-            name: cleanName(companion?.name) || `${primary.split(' ')[0]}'s guest ${i + 1}`,
+            name: name || `${primary.split(' ')[0]}'s guest ${i + 1}`,
             guestListId: null,
         });
     }
