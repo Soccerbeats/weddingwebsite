@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { getSiteConfig } from '@/lib/config';
 import { partyAttendees } from '@/lib/seating';
+import { cleanName, cleanNameSql } from '@/lib/names';
 import { dietCodes, dietNote, type DietaryEntry, type ExportPerson, type ExportTable, type SeatingExportData } from '@/lib/seatingExport';
 
 export const dynamic = 'force-dynamic';
@@ -42,9 +43,11 @@ function personFrom(
 /** The entry in an RSVP's dietary array that belongs to one person, by name. */
 function entryFor(entries: unknown, name: string): DietaryEntry | null {
     if (!Array.isArray(entries)) return null;
-    const wanted = name.trim().toLowerCase();
+    // Notes off both sides: the name on an answer and the name on the guest list
+    // are both hand-entered, and either can carry "(Lauren's Boyfriend)".
+    const wanted = cleanName(name).toLowerCase();
     const found = (entries as DietaryEntry[]).find(
-        e => (e?.name ?? '').trim().toLowerCase() === wanted,
+        e => cleanName(e?.name).toLowerCase() === wanted,
     );
     return found ?? null;
 }
@@ -101,7 +104,7 @@ export async function GET() {
                           THEN party_leader.party_members ELSE '[]'::jsonb END
                    ) AS m
                   WHERE m->>'name' IS NOT NULL
-                    AND LOWER(TRIM(m->>'name')) = LOWER(TRIM(sa.display_name))
+                    AND ${cleanNameSql("m->>'name'")} = ${cleanNameSql('sa.display_name')}
                   LIMIT 1
                ) member ON TRUE
                LEFT JOIN LATERAL (
@@ -117,7 +120,7 @@ export async function GET() {
                      CASE WHEN jsonb_typeof(r.dietary_restrictions) = 'array'
                           THEN r.dietary_restrictions ELSE '[]'::jsonb END
                    ) AS d
-                  WHERE LOWER(TRIM(d->>'name')) = LOWER(TRIM(sa.display_name))
+                  WHERE ${cleanNameSql("d->>'name'")} = ${cleanNameSql('sa.display_name')}
                   LIMIT 1
                ) diet ON TRUE
               WHERE sa.seating_table_id IN (

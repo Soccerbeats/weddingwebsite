@@ -255,6 +255,26 @@ CREATE TABLE IF NOT EXISTS seat_assignments (
   UNIQUE(seating_table_id, seat_index)
 );
 
+-- ---------------------------------------------------------------------------
+-- Backfill: take the notes off the names on the seating chart.
+--
+-- The guest list writes a plus-one as "Steve Reesman (Lauren's Boyfriend)", so
+-- the couple knows who they are. A seat copies the name it was created with, and
+-- it used to copy that whole string — so the chart called someone by a different
+-- name than the guest list did, and anything matching on the name (the export's
+-- dietary lookup, most of all) found nothing and printed no restrictions for
+-- them. `partyAttendees` now takes the note off before it seats anyone; seats
+-- created before that still carry it.
+--
+-- Idempotent: once a name has no bracket left, it no longer matches. A name that
+-- is *only* a note ("(Collin's Date)") is left alone, because there is no name
+-- underneath to recover — renaming that seat is a person's job.
+-- ---------------------------------------------------------------------------
+UPDATE seat_assignments
+   SET display_name = BTRIM(REGEXP_REPLACE(REGEXP_REPLACE(display_name, '\([^)]*\)', '', 'g'), '\s+', ' ', 'g'))
+ WHERE display_name LIKE '%(%'
+   AND BTRIM(REGEXP_REPLACE(REGEXP_REPLACE(display_name, '\([^)]*\)', '', 'g'), '\s+', ' ', 'g')) <> '';
+
 CREATE TABLE IF NOT EXISTS floor_plan_room (
   id SERIAL PRIMARY KEY,
   floor_plan_id INTEGER REFERENCES floor_plans(id) ON DELETE CASCADE,

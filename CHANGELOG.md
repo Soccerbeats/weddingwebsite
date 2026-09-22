@@ -11,6 +11,20 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.88 — [Released] The chart calls people by their name (`main`, 2026-09-22 18:05)
+
+A plus-one is written on the guest list with a note saying who they are — "Steve Reesman (Lauren's Boyfriend)". The seating chart was seating that whole string.
+
+### Fixed
+- **The chart and the guest list agree about a person's name.** A seat is created under the name, without the note about them. Four people on the current chart were affected; the note stays on the guest list, where it is useful, and the seating sidebar still shows it under the household.
+- **Their dietary restrictions come back.** Nothing could match a name that carried a note, so the export printed no restrictions at all for exactly those four people — a caterer would have been told they eat anything. Both halves are fixed: the names, and the matching itself, which now takes notes off both sides before comparing.
+- **A plus-one who declined no longer takes a chair.** The note made the plus-one look like a different person from their own entry in the party, so the entry's "not coming" answer was dropped and they were seated anyway.
+- **Existing seats are corrected on the next boot** — an idempotent backfill in `database/init.sql`. A seat whose name is *only* a note ("(Collin's Date)") is left alone; there is no name underneath, and naming that person is a person's job.
+
+### Changed
+- **`cleanName` moved to `src/lib/names.ts`**, with `sameName` and the same rule expressed once for SQL. It was in the mailing-list module, which is why the mailing list had the right names and the chart did not.
+- **Five more assertions in `npm run check:seating`** (115 in total), covering a noted plus-one, one who declined, a plus-one that is nothing but a note, and a note on an ordinary party member.
+
 ## v0.9.87 — [Released] The seating chart, on paper (`main`, 2026-09-19 00:52)
 
 The chart has always been a thing you look at. Now it is a thing you can hand to a caterer — with a preview, so you see the thirty pages before you print them.

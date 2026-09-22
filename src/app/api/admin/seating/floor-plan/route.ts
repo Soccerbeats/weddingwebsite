@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { cleanNameSql } from '@/lib/names';
 
 export const dynamic = 'force-dynamic';
 
@@ -74,7 +75,7 @@ export async function GET() {
                 THEN party_leader.party_members ELSE '[]'::jsonb END
          ) AS m
          WHERE m->>'name' IS NOT NULL
-           AND LOWER(TRIM(m->>'name')) = LOWER(TRIM(sa.display_name))
+           AND ${cleanNameSql("m->>'name'")} = ${cleanNameSql('sa.display_name')}
          LIMIT 1
        ) member ON TRUE
        WHERE sa.seating_table_id IN (

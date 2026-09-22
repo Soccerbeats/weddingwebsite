@@ -7,6 +7,7 @@
  * than each keeping their own. Covered by `npm run check:seating`.
  */
 import type { GuestListEntry, OffListRsvp, SeatData, SeatingTableData } from '@/components/seating/types';
+import { cleanName, sameName } from './names';
 
 /** One row of `seat_assignments`, as the assign endpoint wants it. */
 export interface SeatPayload {
@@ -58,26 +59,40 @@ export function seatIndexer(used: Iterable<number>): () => number {
  * Someone who answered "not attending" is skipped — a party of three where one
  * declined takes two chairs. Someone who has not answered is still seated;
  * nothing is assumed on their behalf.
+ *
+ * Names are the guest list's, with their parenthetical notes taken off: a
+ * plus-one is written "Steve Reesman (Lauren's Boyfriend)" so the couple knows
+ * who they are, and the chart used to seat exactly that string. Two things went
+ * wrong with it. The chart disagreed with the guest list about a person's name,
+ * and — because the note made the plus-one look like a different person from the
+ * `party_members` entry of the same name — that entry's own RSVP answer was
+ * dropped, so a plus-one who had declined still took a chair.
  */
 export function partyAttendees(guest: GuestListEntry): { name: string; guestListId: number | null }[] {
+    const primary = cleanName(guest.guest_name) || guest.guest_name;
     const people: { name: string; guestListId: number | null }[] = [
-        { name: guest.guest_name, guestListId: guest.id },
+        { name: primary, guestListId: guest.id },
     ];
 
     const plusOne = (guest.plus_one_name ?? '').trim();
-    const members = (guest.party_members ?? [])
-        .filter(m => (m?.name ?? '').trim().toLowerCase() !== plusOne.toLowerCase());
+    const members = guest.party_members ?? [];
+    // The member entry that *is* the plus-one, once the note is off both names.
+    // It carries their answer, which the plus-one string never does.
+    const plusOneMember = plusOne ? members.find(m => sameName(m?.name, plusOne)) : undefined;
+    const rest = members.filter(m => m !== plusOneMember);
     // The plus-one is the first companion when there is room for one.
     const companions: { name: string | null; attending?: boolean | null }[] = plusOne
-        ? [{ name: plusOne, attending: null }, ...members]
-        : members;
+        ? [{ name: plusOne, attending: plusOneMember?.attending ?? null }, ...rest]
+        : rest;
 
     const slots = Math.max(0, (guest.party_size ?? 1) - 1);
     for (let i = 0; i < slots; i += 1) {
         const companion = companions[i];
         if (companion?.attending === false) continue;
         people.push({
-            name: (companion?.name ?? '').trim() || `${guest.guest_name.split(' ')[0]}'s guest ${i + 1}`,
+            // A name that was only a note — "(Collin's Date)" — cleans to nothing,
+            // which is the same as never having been given one.
+            name: cleanName(companion?.name) || `${primary.split(' ')[0]}'s guest ${i + 1}`,
             guestListId: null,
         });
     }

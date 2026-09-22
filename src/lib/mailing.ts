@@ -7,6 +7,10 @@
 // "(Collin's Date)" as a plus-one, "Nick Lucas Jr.", an apartment that got
 // glued onto the city, a missing state.
 
+import { cleanName } from './names';
+
+export { cleanName };
+
 export interface MailGuest {
     guest_name: string;
     party_size: number;
@@ -18,14 +22,6 @@ export interface MailGuest {
 // Suffixes that aren't the surname — "Nick Lucas Jr." is a Lucas.
 const SUFFIXES = new Set(['jr', 'jr.', 'sr', 'sr.', 'ii', 'iii', 'iv', 'v', 'md', 'phd']);
 
-/**
- * Clean a hand-entered name: drop parenthetical notes like
- * "Natalie Williams (Zack's Girlfriend)". Returns '' for a name that was
- * nothing but an annotation, e.g. "(Collin's Date)".
- */
-export function cleanName(raw: string | null | undefined): string {
-    return (raw || '').replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim();
-}
 
 /** Name split into given name(s) and surname, with any suffix dropped. */
 function splitName(fullName: string): { given: string; last: string } {

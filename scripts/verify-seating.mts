@@ -112,6 +112,40 @@ console.log('\nWho takes a chair');
 
     check('only the guest carries a guest_list_id',
         partyAttendees(three).filter(p => p.guestListId !== null).length === 1);
+
+    // A plus-one is written with a note saying who they are — the guest list has
+    // always done it. The chart seated the whole string, so it disagreed with the
+    // guest list about the person's name, and nothing matching on that name (the
+    // export's dietary lookup, for one) could find them.
+    const noted = guest(9, 'Lauren Stanfield', 2, [{ name: 'Steve Reesman', attending: true }], {
+        plus_one_name: "Steve Reesman (Lauren's Boyfriend)",
+    });
+    check('a plus-one is seated under their name, not the note about them',
+        partyAttendees(noted).map(p => p.name).join(', ') === 'Lauren Stanfield, Steve Reesman',
+        partyAttendees(noted).map(p => p.name).join(', '));
+    check('the note does not make them a second person',
+        partyAttendees(noted).length === 2);
+
+    // And the answer that lives on the member entry has to survive the match, or
+    // the note is enough to seat someone who said no.
+    const notedDeclined = guest(10, 'Lauren Stanfield', 2, [{ name: 'Steve Reesman', attending: false }], {
+        plus_one_name: "Steve Reesman (Lauren's Boyfriend)",
+    });
+    check('a noted plus-one who declined takes no chair',
+        partyAttendees(notedDeclined).map(p => p.name).join(', ') === 'Lauren Stanfield',
+        partyAttendees(notedDeclined).map(p => p.name).join(', '));
+
+    // Where the note *is* the whole entry there is no name to recover, so it is
+    // an unnamed slot like any other — not a person called "(Collin's Date)".
+    const onlyNote = guest(11, 'Collin Woldt', 2, [], { plus_one_name: "(Collin's Date)" });
+    check('a plus-one that is only a note is an unnamed slot',
+        partyAttendees(onlyNote).map(p => p.name).join(', ') === "Collin Woldt, Collin's guest 1",
+        partyAttendees(onlyNote).map(p => p.name).join(', '));
+
+    const notedMember = guest(12, 'Zack Novak', 2, [{ name: 'Natalie Williams (Zack\'s Girlfriend)', attending: true }]);
+    check('a note on a party member is taken off too',
+        partyAttendees(notedMember).map(p => p.name).join(', ') === 'Zack Novak, Natalie Williams',
+        partyAttendees(notedMember).map(p => p.name).join(', '));
 }
 
 /* ---- chairs ---- */
