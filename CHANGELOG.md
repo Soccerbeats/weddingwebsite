@@ -11,6 +11,20 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.89 — [Released] Type in what they cannot eat (`main`, 2026-09-22 19:20)
+
+People tell you they are gluten free at a shower, not on a form. Now you can write it down.
+
+### Added
+- **Dietary restrictions in the guest editor**, a row of pills per person — the guest and everyone in their party — with a free-text box behind *Other* for the ones that need words. Someone marked Not coming has no row; they need no plate.
+- **It saves onto their RSVP**, which is where every other part of the app reads restrictions from, so the seating export picks the answer up with no second place to look.
+- **A household that never sent an RSVP gets one created** — that is the only way to record an answer for them. The editor says so before you save it: they then start counting as having answered, on the dashboard, in the budget headcount, and on the RSVP page if they visit it. Whether they are counted as coming is taken from the status the guest list already carries, never invented. Four households on the current list are in that position.
+- **21 more assertions in `npm run check:seating`** (136 in total): toggling, lining answers up with people whose names have changed, what is stored back, and whether anything changed at all.
+
+### Changed
+- **Restrictions are their own module**, `src/lib/dietary.ts` — the shape, the labels, and the rules for reading and writing an answer. Three places needed them; the seating export re-exports what it always did, so nothing else moves.
+- **Saving a guest with no restrictions changes nothing.** The write is skipped unless an answer actually differs, so opening a guest and pressing Update never creates an RSVP out of an empty form.
+
 ## v0.9.88 — [Released] The chart calls people by their name (`main`, 2026-09-22 18:05)
 
 A plus-one is written on the guest list with a note saying who they are — "Steve Reesman (Lauren's Boyfriend)". The seating chart was seating that whole string.

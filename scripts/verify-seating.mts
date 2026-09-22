@@ -20,6 +20,9 @@ import {
     exportFilename, freeSeats, surname, tally, tallyParts,
     type ExportOptions, type ExportPerson, type SeatingExportData,
 } from '../src/lib/seatingExport';
+import {
+    alignEntries, entriesToStore, isEmptyEntry, isOn, setNote, signature, toggleRestriction,
+} from '../src/lib/dietary';
 
 let failures = 0;
 let checks = 0;
@@ -567,6 +570,75 @@ console.log('\nExporting the chart');
         exportFilename('csv', new Date(2026, 8, 19)));
     check('a single-digit month and day are padded',
         exportFilename('pdf', new Date(2027, 0, 5)) === 'seating-chart-2027-01-05.pdf');
+}
+
+/* ---- recording what people cannot eat ---- */
+
+console.log('\nRecording restrictions');
+{
+    /* toggling */
+    const off = {};
+    check('an empty answer has nothing on', isEmptyEntry(off) && !isOn(off, 'GF'));
+    const gf = toggleRestriction(off, 'GF');
+    check('toggling sets one restriction', isOn(gf, 'GF') && !isOn(gf, 'VEG'));
+    check('toggling again clears it', !isOn(toggleRestriction(gf, 'GF'), 'GF'));
+    check('the original answer is not mutated', isEmptyEntry(off));
+
+    const noted = setNote(toggleRestriction(off, 'OTH'), 'No shellfish');
+    check('a note turns "other" on and is kept', isOn(noted, 'OTH') && noted.other_text === 'No shellfish');
+    check('turning "other" off clears the note with it',
+        !isOn(toggleRestriction(noted, 'OTH'), 'OTH'),
+        JSON.stringify(toggleRestriction(noted, 'OTH')));
+
+    /* lining answers up with the people */
+    const stored = [
+        { name: 'Lauren Stanfield', vegetarian: true },
+        { name: "Steve Reesman (Lauren's Boyfriend)", gluten_free: true },
+        { name: 'Someone Renamed', nut_allergy: true },
+    ];
+    const aligned = alignEntries(['Lauren Stanfield', 'Steve Reesman'], stored);
+    check('there is a row per person, in order',
+        aligned[0].name === 'Lauren Stanfield' && aligned[1].name === 'Steve Reesman');
+    check('an answer filed under a noted name still finds its person',
+        isOn(aligned[1], 'GF'), JSON.stringify(aligned[1]));
+    check('an answer matching nobody is kept, not silently dropped',
+        aligned.length === 3 && isOn(aligned[2], 'NUT'), String(aligned.length));
+    const blank = alignEntries(['Ada', 'Bo'], null);
+    check('a household with no answers still gets a row each',
+        blank.length === 2 && blank.every(isEmptyEntry));
+
+    /* what gets stored back */
+    const rows = [
+        { entry: { vegetarian: true }, name: 'Lauren Stanfield', attending: null },
+        { entry: { gluten_free: true }, name: "Steve Reesman (Lauren's Boyfriend)", attending: true },
+        { entry: { vegan: true }, name: 'Declined Person', attending: false },
+        { entry: { nut_allergy: true }, name: '   ', attending: null },
+    ];
+    const toStore = entriesToStore(rows);
+    check('only the people who are coming are stored', toStore.length === 2, String(toStore.length));
+    check('someone who declined is left out', toStore.every(e => e.name !== 'Declined Person'));
+    check('an unnamed slot is left out — nothing could match it later',
+        toStore.every(e => (e.name ?? '').trim() !== ''));
+    check('names are stored without their note',
+        toStore[1].name === 'Steve Reesman', String(toStore[1].name));
+    check('every restriction is written explicitly, not left undefined',
+        toStore.every(e => typeof e.vegan === 'boolean' && typeof e.other === 'boolean'));
+    check('"other" text is dropped when "other" is off', toStore.every(e => e.other_text === ''));
+
+    /* has anything actually changed? */
+    check('the same answers written two ways compare equal',
+        signature([{ name: 'Ada', gluten_free: true }])
+        === signature([{ name: 'ada ', gluten_free: true, vegan: false, other_text: '' }]));
+    check('order does not count as a change',
+        signature([{ name: 'Ada', vegan: true }, { name: 'Bo', gluten_free: true }])
+        === signature([{ name: 'Bo', gluten_free: true }, { name: 'Ada', vegan: true }]));
+    check('an empty answer is not a change',
+        signature([{ name: 'Ada' }, { name: 'Bo', vegan: true }]) === signature([{ name: 'Bo', vegan: true }]));
+    check('a different restriction is a change',
+        signature([{ name: 'Ada', vegan: true }]) !== signature([{ name: 'Ada', gluten_free: true }]));
+    check('a changed note is a change',
+        signature([{ name: 'Ada', other: true, other_text: 'No shellfish' }])
+        !== signature([{ name: 'Ada', other: true, other_text: 'No pork' }]));
 }
 
 console.log(`\n${failures === 0 ? 'PASS' : 'FAIL'} — ${checks - failures}/${checks} checks passed.\n`);

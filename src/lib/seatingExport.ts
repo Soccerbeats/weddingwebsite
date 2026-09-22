@@ -8,53 +8,14 @@
  * the same people again, one per row. Covered by `npm run check:seating`.
  */
 
-/** The restrictions the RSVP form collects, in the order they read best. */
-export const DIET_CODES = ['VEG', 'VGN', 'GF', 'NUT', 'OTH'] as const;
-export type DietCode = (typeof DIET_CODES)[number];
+import {
+    DIET_CODES, DIET_LABELS, dietCodes, dietNote, type DietCode, type DietaryEntry,
+} from './dietary';
 
-export const DIET_LABELS: Record<DietCode, string> = {
-    VEG: 'Vegetarian',
-    VGN: 'Vegan',
-    GF: 'Gluten free',
-    NUT: 'Nut allergy',
-    OTH: 'Other',
-};
-
-/** One person's answer, as `rsvps.dietary_restrictions` stores it. */
-export interface DietaryEntry {
-    name?: string | null;
-    vegetarian?: boolean;
-    vegan?: boolean;
-    gluten_free?: boolean;
-    nut_allergy?: boolean;
-    other?: boolean;
-    /** The form's own field. `note` is the pre-JSONB migration's name for it. */
-    other_text?: string | null;
-    note?: string | null;
-}
-
-/**
- * The codes a dietary answer carries.
- *
- * "Other" counts on the strength of its text as well as its checkbox: an entry
- * migrated from the old free-text column has the words and no boolean, and a
- * caterer reading "no shellfish" does not care which release wrote it.
- */
-export function dietCodes(entry: DietaryEntry | null | undefined): DietCode[] {
-    if (!entry) return [];
-    const codes: DietCode[] = [];
-    if (entry.vegetarian) codes.push('VEG');
-    if (entry.vegan) codes.push('VGN');
-    if (entry.gluten_free) codes.push('GF');
-    if (entry.nut_allergy) codes.push('NUT');
-    if (entry.other || dietNote(entry)) codes.push('OTH');
-    return codes;
-}
-
-/** The free text behind an "other", from either of the two fields that hold it. */
-export function dietNote(entry: DietaryEntry | null | undefined): string {
-    return (entry?.other_text ?? entry?.note ?? '').trim();
-}
+// The sheet and the spreadsheet both name and count these, so they are part of
+// this module's surface even though the answers themselves belong to `dietary`.
+export { DIET_CODES, DIET_LABELS, dietCodes, dietNote };
+export type { DietCode, DietaryEntry };
 
 /** A person as they appear on the sheet. */
 export interface ExportPerson {

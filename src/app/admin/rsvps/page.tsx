@@ -5,6 +5,55 @@ import type { FundItem, SiteConfig } from '@/lib/config';
 import AddressReconcileModal from '@/components/admin/AddressReconcileModal';
 import { MAILING_HEADERS, mailingRows, toCsv } from '@/lib/mailing';
 import { SaveStatus, useAutosave } from '@/components/admin/useAutosave';
+import {
+    DIET_CODES, DIET_LABELS, alignEntries, dietNote, entriesToStore, isOn, setNote,
+    isEmptyEntry, signature, toggleRestriction, type DietaryEntry,
+} from '@/lib/dietary';
+import { cleanName } from '@/lib/names';
+
+/**
+ * One person's dietary restrictions, as a row of pills.
+ *
+ * In the guest editor rather than on the RSVP itself, because the answers that
+ * need typing in are the ones given in person — and those people often never
+ * filled the form at all.
+ */
+function DietaryPills({ entry, onChange }: {
+    entry: DietaryEntry;
+    onChange: (entry: DietaryEntry) => void;
+}) {
+    return (
+        <div className="flex flex-wrap items-center gap-1.5 mt-2">
+            {DIET_CODES.map(code => {
+                const on = isOn(entry, code);
+                return (
+                    <button
+                        key={code}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => onChange(toggleRestriction(entry, code))}
+                        className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                            on
+                                ? 'bg-gray-900 text-white'
+                                : 'bg-gray-50 text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+                        }`}
+                    >
+                        {DIET_LABELS[code]}
+                    </button>
+                );
+            })}
+            {isOn(entry, 'OTH') && (
+                <input
+                    type="text"
+                    value={dietNote(entry)}
+                    onChange={e => onChange(setNote(entry, e.target.value))}
+                    placeholder="What should the kitchen know?"
+                    className="flex-1 min-w-[12rem] px-3 py-1.5 border border-gray-200 rounded-full bg-gray-50 text-xs text-gray-900 placeholder-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
+                />
+            )}
+        </div>
+    );
+}
 
 // Guest-table columns to drop as horizontal space runs out, in order (first dropped → last).
 // Name + Party/Invited/RSVP/Actions are never in this list, so they always stay.
@@ -12,16 +61,7 @@ const GUEST_COL_HIDE_ORDER = ['contact', 'notes', 'address', 'donated', 'relatio
 // Use layout effect on the client (avoids a flash) but fall back to useEffect during SSR.
 const useIsoEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
-interface DietaryEntry {
-    name: string;
-    vegetarian?: boolean;
-    vegan?: boolean;
-    gluten_free?: boolean;
-    nut_allergy?: boolean;
-    other?: boolean;
-    other_text?: string;
-    note?: string;
-}
+
 
 interface RSVP {
     id: number;
@@ -144,6 +184,7 @@ export default function RSVPDashboard() {
         address: '',
         flag: '',
         relationship: '',
+        dietary: [] as DietaryEntry[],
     });
 
     // --- Responsive guest table: measure real widths and drop the lowest-priority
@@ -525,6 +566,9 @@ export default function RSVPDashboard() {
             });
 
             if (response.ok) {
+                // The guest list holds the people; their restrictions live on the
+                // RSVP, which is the only place anything reads them from.
+                await saveDietary();
                 setEditingGuest(null);
                 setIsAddingGuest(false);
                 setGuestForm({
@@ -540,6 +584,7 @@ export default function RSVPDashboard() {
                     address: '',
                     flag: '',
                     relationship: '',
+                    dietary: [],
                 });
                 fetchGuests();
             }
@@ -566,6 +611,45 @@ export default function RSVPDashboard() {
         }
     };
 
+    /** The household's most recent RSVP, matched the way everything else does. */
+    const rsvpFor = (name: string): RSVP | undefined => {
+        const wanted = cleanName(name).toLowerCase();
+        return rsvps.find(r => cleanName(r.guest_name).toLowerCase() === wanted);
+    };
+
+    /** Its dietary answers — the column also holds pre-JSONB free text. */
+    const dietaryOf = (rsvp: RSVP | undefined): DietaryEntry[] =>
+        (Array.isArray(rsvp?.dietary_restrictions) ? rsvp.dietary_restrictions : []);
+
+    /**
+     * Store the household's restrictions on its RSVP.
+     *
+     * Skipped when nothing changed, and — when the household has no RSVP at all —
+     * when there is nothing to record either, so opening a guest and saving them
+     * never conjures an RSVP out of an empty form.
+     */
+    const saveDietary = async () => {
+        const rows = [
+            { entry: guestForm.dietary[0] ?? {}, name: guestForm.guest_name, attending: null as boolean | null },
+            ...guestForm.party_members.map((member, i) => ({
+                entry: guestForm.dietary[i + 1] ?? {},
+                name: member.name ?? '',
+                attending: member.attending ?? null,
+            })),
+        ];
+        const entries = entriesToStore(rows);
+        const existing = rsvpFor(guestForm.guest_name);
+        if (!existing && signature(entries) === signature([])) return;
+        if (signature(entries) === signature(dietaryOf(existing))) return;
+
+        await fetch('/api/admin/rsvps', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ guest_name: guestForm.guest_name, dietary_restrictions: entries }),
+        });
+        fetchRsvps();
+    };
+
     const openEditGuest = (guest: Guest) => {
         setEditingGuest(guest);
         // Build party_members slots to match party_size - 1
@@ -587,6 +671,12 @@ export default function RSVPDashboard() {
             address: guest.address || '',
             flag: guest.flag || '',
             relationship: guest.relationship || '',
+            // One row per person, in the order the editor draws them, whether or
+            // not the RSVP has an answer for that person.
+            dietary: alignEntries(
+                [guest.guest_name, ...slots.map(m => m.name ?? '')],
+                dietaryOf(rsvpFor(guest.guest_name)),
+            ),
         });
     };
 
@@ -1440,6 +1530,7 @@ export default function RSVPDashboard() {
                                         address: '',
                                         flag: '',
                                         relationship: '',
+                                        dietary: [],
                                     });
                                 }}
                                 className="bg-accent text-white px-4 py-2 rounded-full hover:bg-accent/90 transition-all duration-300 shadow-md hover:shadow-lg"
@@ -2049,6 +2140,14 @@ export default function RSVPDashboard() {
                                         placeholder="First Last"
                                         required
                                     />
+                                    <DietaryPills
+                                        entry={guestForm.dietary[0] ?? {}}
+                                        onChange={entry => {
+                                            const dietary = [...guestForm.dietary];
+                                            dietary[0] = entry;
+                                            setGuestForm({ ...guestForm, dietary });
+                                        }}
+                                    />
                                 </div>
 
                                 {Array.from({ length: Math.max(0, guestForm.party_size - 1) }, (_, i) => (
@@ -2091,8 +2190,30 @@ export default function RSVPDashboard() {
                                                 <option value="no">Not coming</option>
                                             </select>
                                         </div>
+                                        {guestForm.party_members[i]?.attending !== false && (
+                                            <DietaryPills
+                                                entry={guestForm.dietary[i + 1] ?? {}}
+                                                onChange={entry => {
+                                                    const dietary = [...guestForm.dietary];
+                                                    while (dietary.length <= i + 1) dietary.push({});
+                                                    dietary[i + 1] = entry;
+                                                    setGuestForm({ ...guestForm, dietary });
+                                                }}
+                                            />
+                                        )}
                                     </div>
                                 ))}
+
+                                {/* Saving a restriction for a household that never
+                                    answered has to create their RSVP — say so before
+                                    it happens, not after. */}
+                                {!rsvpFor(guestForm.guest_name) && guestForm.dietary.some(e => !isEmptyEntry(e)) && (
+                                    <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-2xl px-4 py-3">
+                                        No RSVP on file for this household. Saving a restriction creates one, so they
+                                        start counting as having answered — on the dashboard, in the budget headcount,
+                                        and on the RSVP page if they visit it.
+                                    </p>
+                                )}
                             </div>
 
                             {/* Contact + details */}
