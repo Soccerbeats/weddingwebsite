@@ -14,6 +14,7 @@ import {
     allSeats, buildPartySeats, expectedSeats, headcount, occupancy, partyAttendees,
     planAutoSeat, planGatherParty, planMove, planSeatSelection, planSwap, planUnseat,
     planUnseatSelection, seatIndexer, seatingIssues, splitPartyGroupIds,
+    planRenameSeats, renamesBetween, staleSeatNames,
 } from '../src/lib/seating';
 import {
     DEFAULT_EXPORT_OPTIONS, alphabetical, csvHeaders, csvRows, dietCodes, dietNote,
@@ -351,7 +352,7 @@ console.log('\nWhat is wrong with the plan');
     check('that line still points at every chair to free', familyIssues[0].seats.length === 5);
 
     const clean = seatingIssues(
-        [table(1, 'Table 1', 8, [seat(0, 'Ada', 1, 1)])],
+        [table(1, 'Table 1', 8, [seat(0, 'Ada Byron', 1, 1)])],
         [guest(1, 'Ada Byron', 1)],
     );
     check('a plan with nothing wrong reports nothing', clean.length === 0, JSON.stringify(clean.map(i => i.kind)));
@@ -639,6 +640,87 @@ console.log('\nRecording restrictions');
     check('a changed note is a change',
         signature([{ name: 'Ada', other: true, other_text: 'No shellfish' }])
         !== signature([{ name: 'Ada', other: true, other_text: 'No pork' }]));
+}
+
+/* ---- a name changed in the guest list ---- */
+
+console.log('\nCarrying a rename');
+{
+    /* what one edit changed */
+    const before = { guest_name: 'Robert Lucas', plus_one_name: 'Jessica', party_members: [{ name: 'Jessica' }] };
+    const after = { guest_name: 'Robert Lucas', plus_one_name: 'Jessica', party_members: [{ name: 'Jessica Bigari' }] };
+    const renames = renamesBetween(before, after);
+    check('a renamed party member is one rename',
+        renames.length === 1 && renames[0].from === 'Jessica' && renames[0].to === 'Jessica Bigari',
+        JSON.stringify(renames));
+    check('nothing changed, nothing to carry', renamesBetween(before, before).length === 0);
+    check('a name that only gained a note is not a rename',
+        renamesBetween(
+            { guest_name: 'Steve Reesman' },
+            { guest_name: "Steve Reesman (Lauren's Boyfriend)" },
+        ).length === 0);
+    check('a name appearing is not a rename',
+        renamesBetween({ party_members: [{ name: null }] }, { party_members: [{ name: 'Jessica' }] }).length === 0);
+    check('a name being cleared is not a rename',
+        renamesBetween({ party_members: [{ name: 'Jessica' }] }, { party_members: [{ name: '' }] }).length === 0);
+    check('the household itself can be renamed',
+        renamesBetween({ guest_name: 'Rob Lucas' }, { guest_name: 'Robert Lucas' })[0]?.to === 'Robert Lucas');
+    check('members are matched by row, not by guesswork',
+        renamesBetween(
+            { party_members: [{ name: 'Ada' }, { name: 'Bo' }] },
+            { party_members: [{ name: 'Ada Byron' }, { name: 'Bo Zeller' }] },
+        ).length === 2);
+
+    /* drift that arrived some other way */
+    const drifted = table(1, 'Table 1', 8, [
+        seat(0, 'Robert Lucas', 10, 10),
+        seat(1, 'Jessica', 10),
+    ]);
+    const household = guest(10, 'Robert Lucas', 2, [{ name: 'Jessica Bigari', attending: true }]);
+    const stale = staleSeatNames([drifted], [household]);
+    check('a seat the guest list no longer agrees with is found',
+        stale.length === 1 && stale[0].from === 'Jessica' && stale[0].to === 'Jessica Bigari',
+        JSON.stringify(stale));
+    check('the seat that is already right is left alone',
+        stale.every(r => r.from !== 'Robert Lucas'));
+    check('a chart that agrees with the guest list reports nothing',
+        staleSeatNames([table(1, 'Table 1', 8, [
+            seat(0, 'Robert Lucas', 10, 10),
+            seat(1, 'Jessica Bigari', 10),
+        ])], [household]).length === 0);
+    check('a note on the seat is not a disagreement',
+        staleSeatNames([table(1, 'Table 1', 8, [
+            seat(0, 'Robert Lucas', 10, 10),
+            seat(1, "Jessica Bigari (Rob's Girlfriend)", 10),
+        ])], [household]).length === 0);
+
+    // Two unnamed slots and two new names could pair up either way round, and
+    // putting the wrong name on a chair is worse than leaving it alone.
+    const ambiguous = staleSeatNames(
+        [table(1, 'Table 1', 8, [
+            seat(0, 'Mabel Grey', 11, 11),
+            seat(1, "Mabel's guest 1", 11),
+            seat(2, "Mabel's guest 2", 11),
+        ])],
+        [guest(11, 'Mabel Grey', 3, [{ name: 'Ann Frost' }, { name: 'Bea Frost' }])],
+    );
+    check('ambiguous drift is left alone rather than guessed at',
+        ambiguous.length === 2, JSON.stringify(ambiguous));
+
+    /* and the fix */
+    const change = planRenameSeats(stale, [drifted]);
+    check('the fix re-labels the chair without moving anyone',
+        change.deletes.length === 0 && change.seats.length === 1
+        && change.seats[0].seat_index === 1 && change.seats[0].display_name === 'Jessica Bigari',
+        JSON.stringify(change));
+    check('it keeps the seat filed under its party',
+        change.seats[0].party_group_id === 10 && change.seats[0].guest_list_id === null);
+
+    const issue = seatingIssues([drifted], [household]).find(i => i.kind === 'stale-name');
+    check('the chart says so', issue !== undefined);
+    check('and names both spellings',
+        !!issue && issue.label.includes('Jessica') && issue.label.includes('Jessica Bigari'), issue?.label);
+    check('and points at the chair to fix', issue?.seats.length === 1);
 }
 
 console.log(`\n${failures === 0 ? 'PASS' : 'FAIL'} — ${checks - failures}/${checks} checks passed.\n`);

@@ -32,6 +32,8 @@ import {
     planSeatSelection,
     planUnseatSelection,
     applySeatChange,
+    planRenameSeats,
+    staleSeatNames,
     SeatChange,
     Selection,
 } from '@/lib/seating';
@@ -380,6 +382,11 @@ export default function SeatingListView({
 
     // ── Acting ───────────────────────────────────────────────────────────────
 
+    // Seats still carrying a name the guest list has since changed. Renames made
+    // in the guest editor arrive on their own; this is for the ones that came by
+    // another road — a CSV import, a bulk edit, a chart filled before either.
+    const stale = useMemo(() => staleSeatNames(tables, guests), [tables, guests]);
+
     const run = useCallback(async (change: SeatChange, message?: string) => {
         if (change.deletes.length === 0 && change.seats.length === 0) {
             setNote(message ?? 'Nothing to do.');
@@ -624,6 +631,21 @@ export default function SeatingListView({
                                     >
                                         {issue.label}
                                     </button>
+                                    {/* The one issue with a right answer already
+                                        worked out, so it is one press rather than
+                                        a hunt through the chart. */}
+                                    {issue.kind === 'stale-name' && (
+                                        <button
+                                            disabled={busy}
+                                            onClick={() => run(
+                                                planRenameSeats(stale, tables),
+                                                `Renamed ${stale.length} seat${stale.length === 1 ? '' : 's'} to match the guest list.`,
+                                            )}
+                                            className="ml-2 px-2.5 py-0.5 rounded-full bg-amber-800 text-white text-[11px] font-medium hover:bg-amber-900 disabled:opacity-40"
+                                        >
+                                            Use the guest list&rsquo;s names
+                                        </button>
+                                    )}
                                 </li>
                             ))}
                             {issues.length > 6 && (

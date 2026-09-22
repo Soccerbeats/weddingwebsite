@@ -11,6 +11,20 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.90 — [Released] A rename reaches the chart (`main`, 2026-09-22 21:40)
+
+The name on a chair was a copy, taken the day the chair was filled, and nothing ever went back to correct it. Rename someone in the guest list and the chart went on calling them by the old name — Robert Lucas's plus-one seated as *Jessica* long after she became *Jessica Bigari*.
+
+### Fixed
+- **Renaming someone in the guest list now reaches their seat.** The edit carries to the chart in the same save.
+- **And to their dietary answer.** An RSVP files a restriction under the name that answered, so a rename that reached only the chart would have quietly disconnected the two — the same silent gap that hid four people's restrictions in v0.9.88, arriving by a different road. Both copies move together, or neither does: it is one transaction.
+- **Renaming a household keeps its RSVP.** The form is tied to the household by name and nothing else, so the submitted RSVP used to be orphaned by a rename.
+
+### Added
+- **The chart says when a name is out of date** — "2 seats have names the guest list has changed — Jessica → Jessica Bigari" — with **Use the guest list's names** beside it, which fixes every one of them in a press. That covers renames arriving by a road the editor does not own: a CSV import, a bulk edit, a chart filled before any of this existed.
+- **Only unambiguous drift is offered.** Seats and people are matched by name first, and a rename is proposed only where what is left over on each side pairs one-to-one — a party with two unnamed slots and two newly named people is left alone rather than guessed at. Putting the wrong name on a chair is worse than leaving a visible mismatch.
+- **17 more assertions in `npm run check:seating`** (153 in total).
+
 ## v0.9.89 — [Released] Type in what they cannot eat (`main`, 2026-09-22 19:20)
 
 People tell you they are gluten free at a shower, not on a form. Now you can write it down.

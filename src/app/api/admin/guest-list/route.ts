@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { cleanNameSql } from '@/lib/names';
+import { renamesBetween } from '@/lib/seating';
 
 export async function GET() {
   try {
@@ -71,13 +73,81 @@ export async function POST(request: Request) {
   }
 }
 
+/**
+ * Carry a rename to the two other places a person's name is written down.
+ *
+ * The guest list decides names, but a seat copies the one it was created with
+ * and an RSVP files a dietary answer under the name that answered — so renaming
+ * someone used to leave the chart calling them by the old name for good, and, if
+ * the new name reached the chart some other way, silently disconnected their
+ * restrictions from them. Both copies move with the edit now.
+ *
+ * Scoped to this household, so renaming one Jessica never touches another.
+ */
+async function carryRenames(
+  client: import('pg').PoolClient,
+  guestId: number,
+  oldHouseholdName: string,
+  renames: { from: string; to: string }[],
+) {
+  for (const { from, to } of renames) {
+    await client.query(
+      `UPDATE seat_assignments
+          SET display_name = $1
+        WHERE (party_group_id = $2 OR guest_list_id = $2)
+          AND ${cleanNameSql('display_name')} = ${cleanNameSql('$3::text')}`,
+      [to, guestId, from],
+    );
+
+    // The answer keeps its place in the array; only the name on it changes.
+    await client.query(
+      `UPDATE rsvps r
+          SET dietary_restrictions = (
+                SELECT jsonb_agg(
+                         CASE WHEN ${cleanNameSql("d->>'name'")} = ${cleanNameSql('$1::text')}
+                              THEN jsonb_set(d, '{name}', to_jsonb($2::text))
+                              ELSE d END
+                         ORDER BY ord)
+                  FROM jsonb_array_elements(r.dietary_restrictions) WITH ORDINALITY AS t(d, ord)
+              ),
+              updated_at = NOW()
+        WHERE ${cleanNameSql('r.guest_name')} = ${cleanNameSql('$3::text')}
+          AND jsonb_typeof(r.dietary_restrictions) = 'array'
+          AND jsonb_array_length(r.dietary_restrictions) > 0`,
+      [from, to, oldHouseholdName],
+    );
+  }
+
+  // Renaming the household itself also moves its RSVP, which is matched to it by
+  // name and nothing else — without this the form they submitted is orphaned.
+  const household = renames.find(r => r.from.toLowerCase() === oldHouseholdName.trim().toLowerCase());
+  if (household) {
+    await client.query(
+      `UPDATE rsvps SET guest_name = $1, updated_at = NOW()
+        WHERE ${cleanNameSql('guest_name')} = ${cleanNameSql('$2::text')}`,
+      [household.to, oldHouseholdName],
+    );
+  }
+}
+
 export async function PUT(request: Request) {
+  const client = await pool.connect();
   try {
     const { id, guest_name, email, phone, party_size, notes, invited, party_members, address, rsvp_status, flag, relationship, side } = await request.json();
 
     const membersJson = party_members ? JSON.stringify(party_members) : null;
 
-    const result = await pool.query(
+    await client.query('BEGIN');
+
+    // Read the names as they stand, before the update overwrites them — the only
+    // moment the edit's renames can be worked out.
+    const beforeRes = await client.query(
+      'SELECT guest_name, plus_one_name, party_members FROM guest_list WHERE id = $1',
+      [id],
+    );
+    const before = beforeRes.rows[0];
+
+    const result = await client.query(
       // A party of one cannot have a plus-one. The edit form has no plus-one
       // field (that name arrives by CSV import), so without this a guest shrunk
       // to a party of one kept a plus-one the guest list no longer showed — and
@@ -93,10 +163,31 @@ export async function PUT(request: Request) {
       [guest_name, email, phone, party_size, notes, invited, membersJson, address, rsvp_status || null, flag ?? null, relationship ?? null, side ?? null, id]
     );
 
+    if (before) {
+      const renames = renamesBetween(
+        {
+          guest_name: before.guest_name,
+          plus_one_name: before.plus_one_name,
+          party_members: Array.isArray(before.party_members) ? before.party_members : [],
+        },
+        {
+          guest_name,
+          // The edit form has no plus-one field, so it cannot rename one.
+          plus_one_name: before.plus_one_name,
+          party_members: Array.isArray(party_members) ? party_members : [],
+        },
+      );
+      if (renames.length > 0) await carryRenames(client, id, before.guest_name, renames);
+    }
+
+    await client.query('COMMIT');
     return NextResponse.json(result.rows[0]);
   } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error('Error updating guest:', error);
     return NextResponse.json({ error: 'Failed to update guest' }, { status: 500 });
+  } finally {
+    client.release();
   }
 }
 

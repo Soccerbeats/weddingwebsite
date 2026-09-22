@@ -372,9 +372,125 @@ export function planUnseatSelection(selection: Selection, tables: SeatingTableDa
     return change;
 }
 
+/** A person's name before and after an edit to the guest list. */
+export interface Rename {
+    from: string;
+    to: string;
+}
+
+/**
+ * The renames one edit to a household made.
+ *
+ * The guest list is the only place a person's name is decided, but it is not the
+ * only place it is *written*: a seat copies the name it was created with, and an
+ * RSVP files a dietary answer under the name that answered. Neither notices an
+ * edit, so a rename has to be carried to them — and to carry it you first have
+ * to know what it was.
+ *
+ * Party members are matched by position, which is what the editor edits: row
+ * three is row three before and after. A name appearing or disappearing is not a
+ * rename — there is nothing to carry from, or nowhere to carry it to.
+ */
+export function renamesBetween(
+    before: { guest_name?: string | null; plus_one_name?: string | null; party_members?: { name?: string | null }[] | null },
+    after: { guest_name?: string | null; plus_one_name?: string | null; party_members?: { name?: string | null }[] | null },
+): Rename[] {
+    const renames: Rename[] = [];
+    const add = (from: string | null | undefined, to: string | null | undefined) => {
+        const a = cleanName(from);
+        const b = cleanName(to);
+        if (!a || !b || sameName(a, b)) return;
+        if (renames.some(r => sameName(r.from, a))) return;
+        renames.push({ from: a, to: b });
+    };
+
+    add(before.guest_name, after.guest_name);
+    add(before.plus_one_name, after.plus_one_name);
+
+    const oldMembers = before.party_members ?? [];
+    const newMembers = after.party_members ?? [];
+    for (let i = 0; i < Math.max(oldMembers.length, newMembers.length); i += 1) {
+        add(oldMembers[i]?.name, newMembers[i]?.name);
+    }
+    return renames;
+}
+
+/** A seat that is to be re-labelled, and what it should say. */
+export interface SeatRename extends SeatRef {
+    from: string;
+    to: string;
+}
+
+/**
+ * Seats whose name the guest list no longer agrees with.
+ *
+ * Renames carried through the guest list editor reach the chart on their own;
+ * this catches the ones that arrive by another road — a CSV import, a bulk edit,
+ * a seat filled before any of that existed — so drift is something you can see
+ * and fix rather than something that just sits there.
+ *
+ * Only *unambiguous* drift is reported. Within a household, the seats and the
+ * people are matched by name first; a rename is proposed only when what is left
+ * over on each side is one-to-one, so a party with two unnamed slots and two
+ * newly named people is left alone rather than guessed at.
+ */
+export function staleSeatNames(
+    tables: SeatingTableData[],
+    guests: GuestListEntry[],
+): SeatRename[] {
+    const stale: SeatRename[] = [];
+    const seats = allSeats(tables);
+
+    for (const guest of guests) {
+        const partySeats = seats.filter(s => s.seat.party_group_id === guest.id);
+        if (partySeats.length === 0) continue;
+
+        const people = partyAttendees(guest).map(person => person.name);
+        const takenPeople = new Set<number>();
+        const unmatchedSeats: typeof partySeats = [];
+
+        for (const entry of partySeats) {
+            const index = people.findIndex((name, i) => !takenPeople.has(i) && sameName(name, entry.seat.display_name));
+            if (index === -1) unmatchedSeats.push(entry);
+            else takenPeople.add(index);
+        }
+
+        const unmatchedPeople = people.filter((_, i) => !takenPeople.has(i));
+        if (unmatchedSeats.length === 0 || unmatchedSeats.length !== unmatchedPeople.length) continue;
+
+        unmatchedSeats.forEach(({ table, seat }, i) => {
+            stale.push({
+                seating_table_id: table.id,
+                seat_index: seat.seat_index,
+                from: seat.display_name,
+                to: unmatchedPeople[i],
+            });
+        });
+    }
+    return stale;
+}
+
+/** Re-label seats in place — same chairs, same people, the guest list's names. */
+export function planRenameSeats(renames: SeatRename[], tables: SeatingTableData[]): SeatChange {
+    const seats: SeatPayload[] = [];
+    for (const rename of renames) {
+        const table = tables.find(t => t.id === rename.seating_table_id);
+        const seat = table?.seats.find(s => s.seat_index === rename.seat_index);
+        if (!table || !seat) continue;
+        seats.push({
+            seating_table_id: table.id,
+            seat_index: seat.seat_index,
+            guest_list_id: seat.guest_list_id,
+            display_name: rename.to,
+            party_group_id: seat.party_group_id,
+        });
+    }
+    return { deletes: [], seats };
+}
+
 export type IssueKind =
     | 'split-party' | 'declined-seated' | 'over-capacity' | 'unseated-guest'
-    | 'rsvp-mismatch' | 'rsvp-off-list';
+    | 'rsvp-mismatch' | 'rsvp-off-list' | 'stale-name';
 
 export interface SeatingIssue {
     kind: IssueKind;
@@ -489,6 +605,23 @@ export function seatingIssues(
             kind: 'rsvp-off-list',
             label: `${people} ${people === 1 ? 'person' : 'people'} RSVP'd but ${offList.length === 1 ? 'is' : 'are'} not on the guest list — ${shown}${rest > 0 ? ` and ${rest} more` : ''}`,
             seats: [],
+            guestIds: [],
+        });
+    }
+
+    // A seat still carrying a name the guest list has since changed. Renaming
+    // someone used to leave the chart saying the old name for good, with nothing
+    // on screen admitting the two disagreed.
+    const stale = staleSeatNames(tables, guests);
+    if (stale.length > 0) {
+        const shown = stale.slice(0, 2).map(r => `${r.from} → ${r.to}`).join(', ');
+        const rest = stale.length - 2;
+        issues.push({
+            kind: 'stale-name',
+            label: stale.length === 1
+                ? `A seat still says ${stale[0].from}; the guest list says ${stale[0].to}`
+                : `${stale.length} seats have names the guest list has changed — ${shown}${rest > 0 ? ` and ${rest} more` : ''}`,
+            seats: stale.map(r => ({ seating_table_id: r.seating_table_id, seat_index: r.seat_index })),
             guestIds: [],
         });
     }
