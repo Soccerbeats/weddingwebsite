@@ -11,6 +11,21 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.92 — [Released] Seat the rest of the party (`main`, 2026-09-23 18:30)
+
+Seating the guest took their whole household with them — and if anyone was left over, there was no way to place them short of unseating the party and starting again.
+
+### Fixed
+- **A party member with no chair now appears in the guest list on their own**, under their household, as a dashed chip you drag onto a table like anything else. One person, one chair; the people already sitting down are not touched.
+- **A household stops counting as seated just because its guest is.** The list decided that from the guest's chair alone, so a party of four with three still standing simply left the list.
+- **The badge counts people, not households** — "6 to seat" is six chairs to find, which is the number you are actually working through.
+- **Searching finds anyone in a party**, not only the name the invitation is addressed to. Searching for the person you are about to seat is the point of searching here.
+
+### Changed
+- **A part-seated household is no longer draggable as a whole** — that would have seated the seated ones a second time. Its people are the things you drag; a household with nobody seated still goes over in one piece, as before.
+- **A chair whose name the guest list has since changed still counts as taken.** People are matched to chairs by name, so a drifted name could have made someone look unseated and earned them a second chair. Leftover chairs take people in order instead: a party is never offered more chairs than it has people, whatever the names say.
+- **12 more assertions in `npm run check:seating`** (169 in total).
+
 ## v0.9.91 — [Released] The editor is the one that decides (`main`, 2026-09-22 23:05)
 
 v0.9.90 fixed the wrong half. Renaming someone still did nothing to the chart, because the chart was not reading the field the editor writes.

@@ -17,6 +17,7 @@ import TableNode from '@/components/seating/TableNode';
 import GuestSidebar from '@/components/seating/GuestSidebar';
 import AddTableModal from '@/components/seating/AddTableModal';
 import SeatingExportModal from '@/components/seating/SeatingExportModal';
+import { buildPersonSeat, partySeatingState } from '@/lib/seating';
 import RoomEditor, { RoomShape, Vertex } from '@/components/seating/RoomEditor';
 import SeatingListView from '@/components/seating/SeatingListView';
 import { SeatingTableData, GuestListEntry, FloorPlan, OffListRsvp, SeatTransferPayload, ColorMode } from '@/components/seating/types';
@@ -125,6 +126,35 @@ function SeatingCanvas({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
+    });
+    onRefresh();
+  }, [guests, tables, onRefresh]);
+
+  // Drop one person of a party onto a table.
+  //
+  // Seating the guest used to take their whole household with them, and there
+  // was no way to place anyone who was left over — the household had left the
+  // guest list the moment the guest had a chair. Their own chair is one drag now.
+  const handleDropPerson = useCallback(async (tableId: number, raw: string) => {
+    let payload: { partyGroupId: number; index: number };
+    try {
+      payload = JSON.parse(raw);
+    } catch {
+      return;
+    }
+    const guest = guests.find(g => g.id === payload.partyGroupId);
+    const table = tables.find(t => t.id === tableId);
+    if (!guest || !table) return;
+
+    // Re-derive rather than trusting the dragged copy: the chart may have moved
+    // under the drag, and seating someone twice is the one outcome to avoid.
+    const person = partySeatingState(guest, tables).unseated.find(p => p.index === payload.index);
+    if (!person) return;
+
+    await fetch('/api/admin/seating/assign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify([buildPersonSeat(guest, person, tableId, table.seats.map(s => s.seat_index))]),
     });
     onRefresh();
   }, [guests, tables, onRefresh]);
@@ -260,6 +290,7 @@ function SeatingCanvas({
         table,
         colorMode,
         onDropGuest: handleDropGuest,
+        onDropPerson: handleDropPerson,
         onMoveSeat: handleMoveSeat,
         onReorderSeats: handleReorderSeats,
         onUnassignParty: handleUnassignParty,
@@ -294,6 +325,7 @@ function SeatingCanvas({
       {showGuests && (
         <GuestSidebar
           guests={guestsWithAssignment()}
+          tables={tables}
           onDragGuest={g => { dragGuestRef.current = g; }}
           onAssignGuest={() => {}}
           splitPartyGuestIds={splitPartyGroupIds()}

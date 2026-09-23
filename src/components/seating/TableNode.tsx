@@ -25,6 +25,7 @@ interface TableNodeProps {
     table: SeatingTableData;
     colorMode: ColorMode;
     onDropGuest: (tableId: number, guestId: string) => void;
+    onDropPerson: (tableId: number, payload: string) => void;
     onMoveSeat: (payload: SeatTransferPayload, toTableId: number) => void;
     onUnassignParty: (tableId: number, partyGroupId: number) => void;
     onUnassignSeat: (tableId: number, seatIndex: number) => void;
@@ -361,6 +362,7 @@ function TableBody({
   table,
   splitPartyGroupIds,
   onDropGuest,
+  onDropPerson,
   onMoveSeat,
   onUnassignParty,
   onDeleteTable,
@@ -370,6 +372,7 @@ function TableBody({
   table: SeatingTableData;
   splitPartyGroupIds: Set<number>;
   onDropGuest: (tableId: number, guestId: string) => void;
+  onDropPerson: (tableId: number, payload: string) => void;
   onMoveSeat: (payload: SeatTransferPayload, toTableId: number) => void;
   onUnassignParty: (tableId: number, partyGroupId: number) => void;
   onDeleteTable: (tableId: number) => void;
@@ -395,6 +398,10 @@ function TableBody({
       }
       return;
     }
+
+    // One person of a party, dragged on their own from the guest list.
+    const partyPerson = e.dataTransfer.getData('partyPerson');
+    if (partyPerson) { onDropPerson(table.id, partyPerson); return; }
 
     const guestId = e.dataTransfer.getData('guestId');
     if (guestId) onDropGuest(table.id, guestId);
@@ -542,7 +549,7 @@ function SeatsDisplay({
 // ── Main node export ───────────────────────────────────────────────────────
 
 export default function TableNode({ data }: TableNodeProps) {
-  const { table, colorMode, onDropGuest, onMoveSeat, onUnassignParty, onUnassignSeat, onReorderSeats, onDeleteTable, onRenameTable, splitPartyGroupIds } = data;
+  const { table, colorMode, onDropGuest, onDropPerson, onMoveSeat, onUnassignParty, onUnassignSeat, onReorderSeats, onDeleteTable, onRenameTable, splitPartyGroupIds } = data;
 
   const isRound = table.table_type === 'round';
   const tableW = isRound ? 160 : table.table_type === 'head' ? Math.max(240, table.seats.length * 48) : 200;
@@ -574,6 +581,7 @@ export default function TableNode({ data }: TableNodeProps) {
           table={table}
           splitPartyGroupIds={splitPartyGroupIds}
           onDropGuest={onDropGuest}
+          onDropPerson={onDropPerson}
           onMoveSeat={onMoveSeat}
           onUnassignParty={onUnassignParty}
           onDeleteTable={onDeleteTable}

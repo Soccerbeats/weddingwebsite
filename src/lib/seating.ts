@@ -99,6 +99,74 @@ export function partyAttendees(guest: GuestListEntry): { name: string; guestList
     return people;
 }
 
+/** One person of a party, and where they sit in its order. */
+export interface PartyPerson {
+    name: string;
+    guestListId: number | null;
+    /** Their position in `partyAttendees` — 0 is the guest themself. */
+    index: number;
+}
+
+/**
+ * Which of a party already have chairs, and which do not.
+ *
+ * A household was treated as seated the moment its *guest* had a chair, so a
+ * party of three with one person still standing vanished from the guest list
+ * with no way to place the other two — the only route back was to unseat the
+ * whole party and drop it again.
+ *
+ * People are matched to chairs by name. A chair matching nobody still belongs to
+ * somebody — a name the guest list has since changed, most likely — so leftover
+ * chairs consume people in order rather than leaving them looking unseated. That
+ * keeps the one invariant worth having here: a party can never be offered more
+ * chairs than it has people, whatever the names say.
+ */
+export function partySeatingState(
+    guest: GuestListEntry,
+    tables: SeatingTableData[],
+): { seated: PartyPerson[]; unseated: PartyPerson[] } {
+    const people: PartyPerson[] = partyAttendees(guest).map((person, index) => ({
+        name: person.name,
+        guestListId: person.guestListId,
+        index,
+    }));
+    const seats = allSeats(tables).filter(s => s.seat.party_group_id === guest.id);
+
+    const matched = new Set<number>();
+    for (const { seat } of seats) {
+        const person = people.find(p => !matched.has(p.index) && sameName(p.name, seat.display_name));
+        if (person) matched.add(person.index);
+    }
+    let spare = seats.length - matched.size;
+    for (const person of people) {
+        if (spare <= 0) break;
+        if (matched.has(person.index)) continue;
+        matched.add(person.index);
+        spare -= 1;
+    }
+
+    return {
+        seated: people.filter(p => matched.has(p.index)),
+        unseated: people.filter(p => !matched.has(p.index)),
+    };
+}
+
+/** Seat one person of a party, on their own, at a table. */
+export function buildPersonSeat(
+    guest: GuestListEntry,
+    person: PartyPerson,
+    tableId: number,
+    usedIndices: Iterable<number>,
+): SeatPayload {
+    return {
+        seating_table_id: tableId,
+        seat_index: seatIndexer(usedIndices)(),
+        guest_list_id: person.guestListId,
+        display_name: person.name,
+        party_group_id: guest.id,
+    };
+}
+
 /** Seat a whole party at a table, filling the free indices in order. */
 export function buildPartySeats(
     guest: GuestListEntry,

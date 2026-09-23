@@ -14,7 +14,7 @@ import {
     allSeats, buildPartySeats, expectedSeats, headcount, occupancy, partyAttendees,
     planAutoSeat, planGatherParty, planMove, planSeatSelection, planSwap, planUnseat,
     planUnseatSelection, seatIndexer, seatingIssues, splitPartyGroupIds,
-    planRenameSeats, renamesBetween, staleSeatNames,
+    planRenameSeats, renamesBetween, staleSeatNames, partySeatingState, buildPersonSeat,
 } from '../src/lib/seating';
 import {
     DEFAULT_EXPORT_OPTIONS, alphabetical, csvHeaders, csvRows, dietCodes, dietNote,
@@ -747,6 +747,76 @@ console.log('\nCarrying a rename');
     check('and names both spellings',
         !!issue && issue.label.includes('Jessica') && issue.label.includes('Jessica Bigari'), issue?.label);
     check('and points at the chair to fix', issue?.seats.length === 1);
+}
+
+/* ---- half a party in chairs ---- */
+
+console.log('\nSeating the rest of a party');
+{
+    const household = guest(20, 'Anna Mathy', 3, [
+        { name: 'Greg Mathy', attending: true },
+        { name: 'Ashley Mathy', attending: true },
+    ]);
+
+    const nobody = partySeatingState(household, [table(1, 'Table 1', 8, [])]);
+    check('with nobody seated, everyone is waiting',
+        nobody.unseated.length === 3 && nobody.seated.length === 0);
+
+    const justTheGuest = partySeatingState(household, [table(1, 'Table 1', 8, [
+        seat(0, 'Anna Mathy', 20, 20),
+    ])]);
+    check('seating the guest does not seat their party',
+        justTheGuest.unseated.map(p => p.name).join(', ') === 'Greg Mathy, Ashley Mathy',
+        justTheGuest.unseated.map(p => p.name).join(', '));
+    check('the guest is not offered a second chair',
+        justTheGuest.seated.map(p => p.name).join(', ') === 'Anna Mathy');
+
+    const split = partySeatingState(household, [
+        table(1, 'Table 1', 8, [seat(0, 'Anna Mathy', 20, 20)]),
+        table(2, 'Table 2', 8, [seat(0, 'Ashley Mathy', 20)]),
+    ]);
+    check('chairs at different tables all count',
+        split.unseated.map(p => p.name).join(', ') === 'Greg Mathy',
+        split.unseated.map(p => p.name).join(', '));
+
+    const whole = partySeatingState(household, [table(1, 'Table 1', 8, [
+        seat(0, 'Anna Mathy', 20, 20), seat(1, 'Greg Mathy', 20), seat(2, 'Ashley Mathy', 20),
+    ])]);
+    check('a party fully seated has nobody waiting', whole.unseated.length === 0);
+
+    // A chair whose name the guest list has since changed still holds a person.
+    // Counting them as unseated would offer a second chair to someone already
+    // sitting down, which is the one mistake worth engineering against.
+    const drifted = partySeatingState(household, [table(1, 'Table 1', 8, [
+        seat(0, 'Anna Mathy', 20, 20), seat(1, 'Greg M', 20),
+    ])]);
+    check('a chair with an out-of-date name still counts as taken',
+        drifted.unseated.length === 1, drifted.unseated.map(p => p.name).join(', '));
+    check('and never offers more chairs than the party has people',
+        drifted.seated.length + drifted.unseated.length === 3);
+
+    const declined = partySeatingState(
+        guest(21, 'Anna Mathy', 3, [
+            { name: 'Greg Mathy', attending: false },
+            { name: 'Ashley Mathy', attending: true },
+        ]),
+        [table(1, 'Table 1', 8, [seat(0, 'Anna Mathy', 21, 21)])],
+    );
+    check('someone who declined is never waiting for a chair',
+        declined.unseated.map(p => p.name).join(', ') === 'Ashley Mathy',
+        declined.unseated.map(p => p.name).join(', '));
+
+    /* seating one of them */
+    const person = justTheGuest.unseated[0];
+    const built = buildPersonSeat(household, person, 5, [0, 1]);
+    check('one person takes one free chair',
+        built.seat_index === 2 && built.seating_table_id === 5, JSON.stringify(built));
+    check('and is filed under their party, so it stays one household',
+        built.party_group_id === 20 && built.display_name === 'Greg Mathy');
+    check('a companion carries no guest_list_id of their own', built.guest_list_id === null);
+
+    const guestSeat = buildPersonSeat(household, nobody.unseated[0], 5, []);
+    check('the guest themself keeps theirs', guestSeat.guest_list_id === 20);
 }
 
 console.log(`\n${failures === 0 ? 'PASS' : 'FAIL'} — ${checks - failures}/${checks} checks passed.\n`);

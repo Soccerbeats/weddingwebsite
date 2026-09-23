@@ -1,11 +1,13 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { GuestListEntry } from './types';
-import { partyAttendees } from '@/lib/seating';
+import { GuestListEntry, SeatingTableData } from './types';
+import { partySeatingState } from '@/lib/seating';
 
 interface GuestSidebarProps {
   guests: GuestListEntry[];
+  /** The plan, so the list can tell who of a party still has no chair. */
+  tables: SeatingTableData[];
   onDragGuest: (guest: GuestListEntry) => void;
   onAssignGuest: (guestId: number, tableId: number, seatIndex: number) => void;
   splitPartyGuestIds: Set<number>;
@@ -13,6 +15,7 @@ interface GuestSidebarProps {
 
 export default function GuestSidebar({
   guests,
+  tables,
   onDragGuest,
   splitPartyGuestIds,
 }: GuestSidebarProps) {
@@ -25,6 +28,16 @@ export default function GuestSidebar({
   const [filterRsvp, setFilterRsvp] = useState<string>('all');
   const [filterInvited, setFilterInvited] = useState<string>('all');
   const [filterPartySize, setFilterPartySize] = useState<string>('all');
+
+  // Who of each party still has no chair. A household used to leave this list
+  // the moment its *guest* was seated, which left anyone else in the party with
+  // no way onto the chart at all — the only route was to unseat the whole party
+  // and drop it again.
+  const seatingByGuest = useMemo(
+    () => new Map(guests.map(g => [g.id, partySeatingState(g, tables)])),
+    [guests, tables],
+  );
+  const waiting = (guest: GuestListEntry) => seatingByGuest.get(guest.id)?.unseated ?? [];
 
   // Collect unique rsvp statuses
   const rsvpStatuses = useMemo(() => {
@@ -42,12 +55,20 @@ export default function GuestSidebar({
 
   const filtered = useMemo(() => {
     let list = guests;
-    if (tab === 'unassigned') list = list.filter(g => !g.assigned_seat);
+    if (tab === 'unassigned') list = list.filter(g => (seatingByGuest.get(g.id)?.unseated.length ?? 0) > 0);
     if (search.trim()) {
       const q = search.toLowerCase();
-      list = list.filter(
-        g => g.guest_name.toLowerCase().includes(q) || g.plus_one_name?.toLowerCase().includes(q)
-      );
+      // Everyone in the party, not just whoever the invitation is addressed to —
+      // searching for the person you are about to seat is the whole point.
+      list = list.filter(g => {
+        const state = seatingByGuest.get(g.id);
+        const names = [
+          g.guest_name,
+          g.plus_one_name ?? '',
+          ...(state ? [...state.seated, ...state.unseated].map(p => p.name) : []),
+        ];
+        return names.some(name => name.toLowerCase().includes(q));
+      });
     }
     if (filterSide !== 'all') list = list.filter(g => (g.side ?? 'unspecified') === filterSide);
     if (filterRsvp !== 'all') {
@@ -61,9 +82,13 @@ export default function GuestSidebar({
       else if (filterPartySize === '3+') list = list.filter(g => g.party_size >= 3);
     }
     return list;
-  }, [guests, tab, search, filterSide, filterRsvp, filterInvited, filterPartySize]);
+  }, [guests, seatingByGuest, tab, search, filterSide, filterRsvp, filterInvited, filterPartySize]);
 
-  const unassignedCount = guests.filter(g => !g.assigned_seat).length;
+  // People, not households: half a party still standing is what you are here to
+  // fix, and a household that is "assigned" can still have three of them.
+  const unassignedCount = guests.reduce(
+    (n, g) => n + (seatingByGuest.get(g.id)?.unseated.length ?? 0), 0,
+  );
   const totalCount = guests.length;
 
   const clearFilters = () => {
@@ -83,7 +108,7 @@ export default function GuestSidebar({
           <h2 className="text-sm font-semibold text-gray-800">Guests</h2>
           <div className="flex gap-1.5 text-xs">
             <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
-              {unassignedCount} unassigned
+              {unassignedCount} to seat
             </span>
             <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-medium">
               {totalCount} total
@@ -234,6 +259,12 @@ export default function GuestSidebar({
         {filtered.map(guest => {
           const isSplit = splitPartyGuestIds.has(guest.id);
           const isAssigned = !!guest.assigned_seat;
+          const stillWaiting = waiting(guest);
+          // Some of the party sitting down and some not: the household itself is
+          // no longer a thing to drag — that would seat the seated ones twice —
+          // so each person still standing becomes their own.
+          const partlySeated = stillWaiting.length > 0
+            && (seatingByGuest.get(guest.id)?.seated.length ?? 0) > 0;
           const isLikely = guest.rsvp_status === 'likely_not_coming';
           const isDeclined = guest.rsvp_status === 'declined';
           // Colour follows the answer, not the seat: coming green, declined red,
@@ -243,8 +274,9 @@ export default function GuestSidebar({
           return (
             <div
               key={guest.id}
-              draggable
+              draggable={!partlySeated}
               onDragStart={e => {
+                if (partlySeated) return;
                 e.dataTransfer.setData('guestId', String(guest.id));
                 onDragGuest(guest);
               }}
@@ -289,10 +321,41 @@ export default function GuestSidebar({
                   them — `plus_one_name` on its own said "+1 Jessica" beside a
                   chair reading "Jessica Bigari", which is the guest list
                   disagreeing with itself. A plus-one recorded against a party of
-                  one is a leftover and appears here no more than it is seated. */}
-              {partyAttendees(guest).length > 1 && (
+                  one is a leftover and appears here no more than it is seated.
+                  Once some of them are sitting down the summary gives way to the
+                  list below, which you can actually act on. */}
+              {!partlySeated && stillWaiting.length > 1 && (
                 <div className={`text-xs pl-4 truncate ${isDeclined ? 'text-red-400' : isLikely ? 'text-orange-400' : 'text-gray-500'}`}>
-                  +{partyAttendees(guest).slice(1).map(p => p.name).join(', ')}
+                  +{stillWaiting.slice(1).map(p => p.name).join(', ')}
+                </div>
+              )}
+
+              {partlySeated && (
+                <div className="mt-1 flex flex-col gap-1">
+                  <div className="text-[10px] uppercase tracking-wide text-gray-400 pl-4">
+                    Still to seat
+                  </div>
+                  {stillWaiting.map(person => (
+                    <div
+                      key={person.index}
+                      draggable
+                      onDragStart={e => {
+                        e.stopPropagation();
+                        e.dataTransfer.setData(
+                          'partyPerson',
+                          JSON.stringify({ partyGroupId: guest.id, index: person.index }),
+                        );
+                      }}
+                      className="ml-4 flex items-center gap-1.5 px-2 py-1 rounded-md border border-dashed border-amber-300 bg-amber-50/70 text-xs text-amber-900 cursor-grab active:cursor-grabbing hover:border-amber-400 hover:bg-amber-50"
+                      title="Drag onto a table to seat just this person"
+                    >
+                      <svg className="text-amber-400 shrink-0" width="10" height="14" viewBox="0 0 10 14" fill="currentColor">
+                        <circle cx="3" cy="2" r="1.5" /><circle cx="3" cy="7" r="1.5" /><circle cx="3" cy="12" r="1.5" />
+                        <circle cx="7" cy="2" r="1.5" /><circle cx="7" cy="7" r="1.5" /><circle cx="7" cy="12" r="1.5" />
+                      </svg>
+                      <span className="truncate">{person.name}</span>
+                    </div>
+                  ))}
                 </div>
               )}
 
