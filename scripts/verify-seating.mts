@@ -18,7 +18,7 @@ import {
 } from '../src/lib/seating';
 import {
     DEFAULT_EXPORT_OPTIONS, alphabetical, csvHeaders, csvRows, dietCodes, dietNote,
-    exportFilename, freeSeats, surname, tally, tallyParts,
+    exportFilename, freeSeats, surname, tally, tallyParts, tallyPartsShort,
     type ExportOptions, type ExportPerson, type SeatingExportData,
 } from '../src/lib/seatingExport';
 import {
@@ -538,6 +538,21 @@ console.log('\nExporting the chart');
         tallyParts(tally(table1))[0] === '5 seated');
     check('an empty table still reads as zero',
         tallyParts(tally([]), 10)[0] === '0 seated of 10');
+
+    // The two-column counts sheet gets half a page per table, and its heading
+    // already says "5/8" — so the short form drops the headcount and uses the
+    // codes the legend above the tables explains.
+    const short = tallyPartsShort(t);
+    check('the short tally uses codes, not words',
+        short.includes('2 VEG') && short.every(p => !p.includes('vegetarian')), short.join(' · '));
+    check('it leaves the headcount to the heading',
+        short.every(p => !p.includes('seated')), short.join(' · '));
+    check('a restriction nobody has is still left out',
+        short.every(p => !p.startsWith('0 ')), short.join(' · '));
+    check('and it still ends with the people who reported nothing',
+        short[short.length - 1] === '2 none', short[short.length - 1]);
+    check('no restrictions at all is just the none',
+        tallyPartsShort(tally([])).join(' · ') === '0 none', tallyPartsShort(tally([])).join(' · '));
 
     /* free chairs */
     const exTable = (seat_count: number, people: ExportPerson[]) => ({

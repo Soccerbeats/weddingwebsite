@@ -1,7 +1,7 @@
 'use client';
 
 import {
-    DIET_CODES, DIET_LABELS, alphabetical, freeSeats, seatedPeople, tally, tallyParts,
+    DIET_CODES, DIET_LABELS, alphabetical, freeSeats, seatedPeople, tally, tallyParts, tallyPartsShort,
     type DietCode, type ExportOptions, type ExportPerson, type ExportTable, type SeatingExportData,
 } from '@/lib/seatingExport';
 
@@ -46,10 +46,15 @@ function Diet({ person }: { person: ExportPerson }) {
     );
 }
 
-function TallyLine({ people, seatCount }: { people: ExportPerson[]; seatCount?: number | null }) {
-    const parts = tallyParts(tally(people), seatCount ?? null);
+function TallyLine({ people, seatCount, compact = false }: {
+    people: ExportPerson[];
+    seatCount?: number | null;
+    compact?: boolean;
+}) {
+    const t = tally(people);
+    const parts = compact ? tallyPartsShort(t) : tallyParts(t, seatCount ?? null);
     return (
-        <p className="mt-1.5 px-3 py-1.5 bg-gray-50 rounded text-[11px] text-gray-700 flex flex-wrap gap-x-4 gap-y-0.5 tabular-nums">
+        <p className={`${compact ? 'mt-1 px-2 py-1 gap-x-3' : 'mt-1.5 px-3 py-1.5 gap-x-4'} bg-gray-50 rounded text-[11px] text-gray-700 flex flex-wrap gap-y-0.5 tabular-nums`}>
             {parts.map((part, i) => {
                 const [n, ...rest] = part.split(' ');
                 const last = i === parts.length - 1;
@@ -108,10 +113,18 @@ function Roster({ people, options, withSeat }: {
     );
 }
 
-function TableBlock({ table, options }: { table: ExportTable; options: ExportOptions }) {
+function TableBlock({ table, options, compact = false }: {
+    table: ExportTable;
+    options: ExportOptions;
+    /** The two-column counts sheet, where every line has to earn its width. */
+    compact?: boolean;
+}) {
     const free = freeSeats(table);
+    // Counts only is a heading and one line of numbers, so it does not need the
+    // breathing room a roster does — and the point of that mode is fitting.
+    const spacing = compact ? 'mb-3' : options.detail === 'counts' ? 'mb-4' : 'mb-7';
     return (
-        <section className={`mb-7 break-inside-avoid ${options.pageBreak ? 'break-after-page last:break-after-auto' : ''}`}>
+        <section className={`${spacing} break-inside-avoid ${options.pageBreak ? 'break-after-page last:break-after-auto' : ''}`}>
             <div className="flex items-baseline gap-2 border-b border-gray-300 pb-1">
                 <h3 className="font-serif text-base font-semibold text-gray-900">{table.name}</h3>
                 <span className="text-[10px] uppercase tracking-widest text-gray-400">{table.table_type}</span>
@@ -119,7 +132,9 @@ function TableBlock({ table, options }: { table: ExportTable; options: ExportOpt
                     {table.people.length}/{table.seat_count}
                 </span>
             </div>
-            {options.detail !== 'names' && <TallyLine people={table.people} seatCount={table.seat_count} />}
+            {options.detail !== 'names' && (
+                <TallyLine people={table.people} seatCount={table.seat_count} compact={compact} />
+            )}
             {options.detail !== 'counts' && table.people.length > 0 && (
                 <Roster people={table.people} options={options} withSeat />
             )}
@@ -210,6 +225,11 @@ export default function SeatingExportSheet({ data, options, preview = false }: {
     const showNames = options.detail !== 'counts';
     const showTables = options.sections === 'table' || options.sections === 'both';
     const showList = options.sections === 'list' || options.sections === 'both';
+    // Counts only is a narrow column of headings and numbers — a page of it is
+    // mostly margin, and thirteen tables run onto a second sheet for no reason.
+    // Two columns puts a normal wedding on one page. Not when every table is
+    // meant to start its own page, where columns would be arguing with that.
+    const twoColumn = options.detail === 'counts' && !options.pageBreak;
 
     return (
         <div className="bg-white text-gray-900 p-8 text-[12px] leading-relaxed">
@@ -217,28 +237,30 @@ export default function SeatingExportSheet({ data, options, preview = false }: {
                 <>
                     <SheetHeader data={data} subtitle="Seating chart · by table" />
                     {options.kitchen && <Kitchen people={seated} />}
-                    {showNames && <Legend />}
+                    {(showNames || twoColumn) && <Legend />}
                     {data.tables.length === 0 && (
                         <p className="text-[11px] italic text-gray-400">No tables on the plan yet.</p>
                     )}
+                    <div className={twoColumn ? 'columns-2 gap-x-8' : undefined}>
                     {data.tables.map((table, i) => (
-                        <div key={table.id}>
+                        <div key={table.id} className={twoColumn ? 'break-inside-avoid' : undefined}>
                             {preview && options.pageBreak && i > 0 && <PageBreak />}
-                            <TableBlock table={table} options={options} />
+                            <TableBlock table={table} options={options} compact={twoColumn} />
                         </div>
                     ))}
                     {options.unseated && data.unseated.length > 0 && (
-                        <section className="mb-7 break-inside-avoid">
+                        <section className={`${twoColumn ? 'mb-4' : 'mb-7'} break-inside-avoid`}>
                             <div className="flex items-baseline gap-2 border-b border-gray-300 pb-1">
                                 <h3 className="font-serif text-base font-semibold text-gray-900">Not seated yet</h3>
                                 <span className="ml-auto font-mono text-[11px] text-gray-500 tabular-nums">
                                     {data.unseated.length}
                                 </span>
                             </div>
-                            {options.detail !== 'names' && <TallyLine people={data.unseated} />}
+                            {options.detail !== 'names' && <TallyLine people={data.unseated} compact={twoColumn} />}
                             {showNames && <Roster people={data.unseated} options={options} withSeat={false} />}
                         </section>
                     )}
+                    </div>
                 </>
             )}
 

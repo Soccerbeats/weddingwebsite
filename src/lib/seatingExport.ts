@@ -112,6 +112,20 @@ export function tallyParts(t: Tally, seatCount: number | null = null): string[] 
     return parts;
 }
 
+/**
+ * The same tally, as short as it goes: codes instead of words, and no headcount.
+ *
+ * For the two-column counts sheet, where a column is half a page wide and the
+ * heading is already carrying "9/10" — so spelling "9 seated of 10" out again
+ * underneath it costs a line and says nothing. The codes are the ones the legend
+ * above the tables explains.
+ */
+export function tallyPartsShort(t: Tally): string[] {
+    const parts = DIET_CODES.filter(code => t[code] > 0).map(code => `${t[code]} ${code}`);
+    parts.push(`${t.none} none`);
+    return parts;
+}
+
 /** Chairs at a table with nobody in them. Never negative — a table can be over. */
 export function freeSeats(table: ExportTable): number {
     return Math.max(0, (Number(table.seat_count) || 0) - table.people.length);

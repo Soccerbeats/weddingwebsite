@@ -11,6 +11,16 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.93 — [Released] Counts on one page (`main`, 2026-09-24 21:20)
+
+Counts only was a narrow strip of headings down the left of a page that was mostly margin, and it ran onto a second sheet for no reason.
+
+### Changed
+- **Counts only prints in two columns.** Twelve tables come to 0.89 of a page where one column took 1.59 — measured in a browser at A4 width, on the worst data the sheet can be handed (every restriction present at every table). Not when *New page per table* is on, where columns would be arguing with it.
+- **The tally under each table loses what the heading already says.** The heading carries "9/10", so the line beneath it no longer repeats "9 seated of 10", and restrictions read as the codes — `1 VEG · 1 GF · 4 none` — which is half the width of the words at half the page.
+- **The legend now prints in counts-only mode too**, since that is what explains the codes. It was already there whenever names were shown.
+- **Five more assertions in `npm run check:seating`** (174 in total) covering the short tally.
+
 ## v0.9.92 — [Released] Seat the rest of the party (`main`, 2026-09-23 18:30)
 
 Seating the guest took their whole household with them — and if anyone was left over, there was no way to place them short of unseating the party and starting again.
