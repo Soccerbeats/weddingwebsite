@@ -252,9 +252,39 @@ function Kitchen({ people, vendors, showVendors }: {
  * listed, greyed, because "the DJ is not eating" is exactly the thing somebody
  * asks at six o'clock.
  */
-function Vendors({ vendors }: { vendors: ExportVendor[] }) {
+function Vendors({ vendors, compact = false }: {
+    vendors: ExportVendor[];
+    /** Counts only: the tally, and the names of whoever is *not* being fed. */
+    compact?: boolean;
+}) {
     const list = sortedVendors(vendors);
     const fed = vendorMeals(list);
+    const unfed = list.filter(v => !v.needs_meal);
+
+    // Counts only suppresses guest names, so printing a full vendor roster in
+    // the same document would be the sheet disagreeing with itself — and it is
+    // the single tallest block on a page that is meant to be one page. What
+    // survives is the part a count cannot carry: who is *not* getting a plate.
+    if (compact) {
+        return (
+            <section className="mb-4 break-inside-avoid">
+                <div className="flex items-baseline gap-2 border-b border-gray-300 pb-1">
+                    <h3 className="font-serif text-base font-semibold text-gray-900">Vendors</h3>
+                    <span className="text-[10px] uppercase tracking-widest text-gray-400">not seated</span>
+                    <span className="ml-auto font-mono text-[11px] text-gray-500 tabular-nums">
+                        {fed.length}/{list.length} eating
+                    </span>
+                </div>
+                {fed.length > 0 && <TallyLine people={fed} compact />}
+                {unfed.length > 0 && (
+                    <p className="mt-1 text-[10px] text-gray-500">
+                        No meal: {unfed.map(v => v.name).join(', ')}
+                    </p>
+                )}
+            </section>
+        );
+    }
+
     return (
         <section className="mb-7 break-inside-avoid">
             <div className="flex items-baseline gap-2 border-b border-gray-300 pb-1">
@@ -357,7 +387,13 @@ export default function SeatingExportSheet({ data, options, preview = false }: {
     // mostly margin, and thirteen tables run onto a second sheet for no reason.
     // Two columns puts a normal wedding on one page. Not when every table is
     // meant to start its own page, where columns would be arguing with that.
-    const twoColumn = options.detail === 'counts' && !options.pageBreak;
+    // Counts only is a heading and one line of numbers per table. Two columns put
+    // a normal wedding on one page; thirteen tables plus the kitchen summary and
+    // the vendors no longer did, and a third column is free width rather than a
+    // compromise — at 703px a column is still 215px, which the chips fit in.
+    const countsMode = options.detail === 'counts' && !options.pageBreak;
+    const columns = countsMode ? (data.tables.length > 8 ? 3 : 2) : 1;
+    const twoColumn = countsMode;
 
     return (
         <div className="bg-white text-gray-900 p-8 text-[12px] leading-relaxed">
@@ -371,7 +407,7 @@ export default function SeatingExportSheet({ data, options, preview = false }: {
                     {data.tables.length === 0 && (
                         <p className="text-[11px] italic text-gray-400">No tables on the plan yet.</p>
                     )}
-                    <div className={twoColumn ? 'columns-2 gap-x-8' : undefined}>
+                    <div className={countsMode ? `${columns === 3 ? 'columns-3 gap-x-5' : 'columns-2 gap-x-8'}` : undefined}>
                     {data.tables.map((table, i) => (
                         <div key={table.id} className={twoColumn ? 'break-inside-avoid' : undefined}>
                             {preview && options.pageBreak && i > 0 && <PageBreak />}
@@ -423,8 +459,8 @@ export default function SeatingExportSheet({ data, options, preview = false }: {
                 no table and sorts under no surname, so there is nowhere else for
                 the block to sit and no reason to print it twice. */}
             {options.vendors && (
-                <div className={showTables || showList ? 'mt-8 pt-2' : ''}>
-                    <Vendors vendors={data.vendors} />
+                <div className={(showTables || showList) ? (countsMode ? 'mt-4' : 'mt-8 pt-2') : ''}>
+                    <Vendors vendors={data.vendors} compact={countsMode} />
                 </div>
             )}
 

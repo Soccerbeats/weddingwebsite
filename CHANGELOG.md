@@ -11,6 +11,21 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.96 — [Released] Counts only, on one page (`main`, 2026-09-26 16:48)
+
+Counts only was printing on two pages. Measured on the demo wedding — thirteen tables, ninety guests, eight vendors — the sheet came to 1428px against the 1032px A4 gives you inside its margins: 38% too tall.
+
+### Fixed
+- **The preview was never the printed page.** It laid out at 794px — A4 *including* its 12mm margins — while the printer gave the sheet 703px. So a preview that looked like one page could print as two, and every measurement taken from it was of a document nobody was going to get. The page geometry is now two named constants and the preview lays out at the real printable width.
+
+### Changed
+- **Counts only now means counts only for the vendors too.** The vendor block was printing a full roster — role, name, meal, restrictions, one row each — in the mode whose entire purpose is suppressing names. It collapses to the tally plus the one thing a count cannot carry: who is *not* getting a plate. 285px to 79px, the single biggest saving on the page.
+- **Three columns once there are more than eight tables.** At 703px a third column is still 215px, which the counts line fits in.
+- **The sheet is fitted to one page.** After the layout work the demo wedding comes to 997px and prints at full size with room to spare. Past that the sheet is measured and shrunk by exactly the amount it is over — 31 tables print on one page at 61% — so "fits on one page" is true at thirteen tables and at thirty, not just at yours today. `zoom`, not `transform`, because a transform leaves the flow height alone and the page would break in the very place the scaling was meant to prevent.
+- **It will not shrink below 60%**, and says so instead: 51 tables reports "2 pages — too much for one, even shrunk". A sheet nobody can read across a kitchen has not fitted on one page in any sense worth having.
+- **The dialog says which it is** — "fits one page", "fits one page, shrunk to 61%", or the page count — so it is answered before the printer dialog rather than after.
+- **Eight more assertions in `npm run check:seating`** (199 in total) over the fit maths. Verified end to end by printing the real dialog to PDF and counting pages: 1 at thirteen tables, 1 at thirty-one, 2 at fifty-one.
+
 ## v0.9.95 — [Released] The codes look like the key (`main`, 2026-09-26 16:27)
 
 ### Changed

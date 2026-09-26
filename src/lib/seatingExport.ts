@@ -153,6 +153,48 @@ export function tallyParts(t: Tally, seatCount: number | null = null, lead = 'se
     return parts;
 }
 
+/**
+ * A4 at 96dpi, inside the 12mm margins `@page` sets.
+ *
+ * 210mm × 297mm is 794 × 1123 CSS pixels; the margins take 45px off each edge.
+ * These are the *content* numbers — what a sheet actually gets — and the print
+ * preview lays out at exactly this width so that what is on screen is the page.
+ * (It used to lay out at 794, the paper including its margins, which is why a
+ * preview that looked like one page could print as two.)
+ */
+export const A4_CONTENT_WIDTH = 703;
+export const A4_CONTENT_HEIGHT = 1032;
+
+/**
+ * How far a sheet has to shrink to fit in `pages` pages.
+ *
+ * 1 when it already fits — scaling up a short sheet would be a different and
+ * unasked-for feature. Never below `floor`: past that the numbers stop being
+ * readable across a kitchen, and a sheet nobody can read has not fitted on one
+ * page in any sense that matters. A caller that hits the floor is expected to
+ * say so rather than pretend.
+ */
+export function fitScale(
+    contentHeight: number,
+    pages = 1,
+    floor = 0.6,
+    pageHeight = A4_CONTENT_HEIGHT,
+): number {
+    const available = pageHeight * pages;
+    if (!(contentHeight > 0) || contentHeight <= available) return 1;
+    return Math.max(floor, available / contentHeight);
+}
+
+/** How many pages a sheet of this height takes at this scale. */
+export function pageCount(
+    contentHeight: number,
+    scale = 1,
+    pageHeight = A4_CONTENT_HEIGHT,
+): number {
+    if (!(contentHeight > 0)) return 1;
+    return Math.max(1, Math.ceil((contentHeight * scale) / pageHeight));
+}
+
 /** One entry of the short tally. A null code is the no-restriction bucket. */
 export interface TallyChip {
     code: DietCode | null;

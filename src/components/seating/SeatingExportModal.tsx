@@ -4,7 +4,8 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { createPortal } from 'react-dom';
 import { toCsv } from '@/lib/mailing';
 import {
-    DEFAULT_EXPORT_OPTIONS, csvHeaders, csvRows, exportFilename, seatedPeople,
+    A4_CONTENT_WIDTH, DEFAULT_EXPORT_OPTIONS, csvHeaders, csvRows,
+    exportFilename, fitScale, pageCount, seatedPeople,
     type ExportOptions, type SeatingExportData,
 } from '@/lib/seatingExport';
 import SeatingExportSheet from './SeatingExportSheet';
@@ -18,8 +19,8 @@ import SeatingExportSheet from './SeatingExportSheet';
  * a thing you guess at and then print thirty pages to find out.
  */
 
-/** A4 at 96dpi, less the 12mm margins `@page` sets. */
-const PAGE_WIDTH = 794;
+/** The printable width of A4, which is what the sheet lays out at. */
+const PAGE_WIDTH = A4_CONTENT_WIDTH;
 
 function Segment<T extends string>({ label, value, options, onChange }: {
     label: string;
@@ -149,6 +150,27 @@ export default function SeatingExportModal({ onClose }: { onClose: () => void })
 
     const people = data ? seatedPeople(data).length + data.unseated.length : 0;
 
+    /*
+     * Counts only is meant to be the one sheet you pin up in the kitchen, so it
+     * is fitted to a single page: measured at the real printable width, then
+     * shrunk by however much it is over. The layout does most of the work (three
+     * columns, no vendor roster) and this is the guarantee behind it — "fits on
+     * one page" should be true at thirteen tables and at thirty.
+     *
+     * Not when a new page per table is asked for, which is a request for many
+     * pages, and not in the other detail modes, where a hundred names cannot
+     * become one page at any readable size.
+     */
+    const fitsOnePage = options.format === 'print'
+        && options.detail === 'counts'
+        && !options.pageBreak;
+    const printScale = fitsOnePage ? fitScale(sheetHeight) : 1;
+    const printPages = pageCount(sheetHeight, printScale);
+    const shrunk = printScale < 1;
+    // The floor in `fitScale` is a refusal to print something unreadable, so a
+    // sheet that hits it still runs to more than one page and has to say so.
+    const overflows = fitsOnePage && printPages > 1;
+
     return (
         <>
             <div
@@ -164,6 +186,18 @@ export default function SeatingExportModal({ onClose }: { onClose: () => void })
                             <h2 className="font-serif text-lg font-bold text-gray-800">Export seating chart</h2>
                             <p className="text-xs text-gray-500">
                                 {data ? `${data.tables.length} tables · ${people} people` : 'Loading…'}
+                                {data && options.format === 'print' && sheetHeight > 0 && (
+                                    <span className={overflows ? 'text-amber-700' : 'text-gray-400'}>
+                                        {' · '}
+                                        {overflows
+                                            ? `${printPages} pages — too much for one, even shrunk`
+                                            : printPages === 1
+                                                ? shrunk
+                                                    ? `fits one page, shrunk to ${Math.round(printScale * 100)}%`
+                                                    : 'fits one page'
+                                                : `${printPages} pages`}
+                                    </span>
+                                )}
                             </p>
                         </div>
                         <button
@@ -296,7 +330,13 @@ export default function SeatingExportModal({ onClose }: { onClose: () => void })
                 admin shell is a fixed, overflow-hidden box that would clip it to one
                 page. `.print-sheet` is the existing rule that hides everything else. */}
             {data && options.format === 'print' && typeof document !== 'undefined' && createPortal(
-                <div className="print-sheet hidden print:block">
+                <div
+                    className="print-sheet hidden print:block"
+                    // `zoom`, not `transform: scale()` — a transform leaves the
+                    // element's flow height untouched, so the page would break in
+                    // exactly the place the scaling was meant to prevent.
+                    style={printScale < 1 ? { zoom: printScale } : undefined}
+                >
                     <SeatingExportSheet data={data} options={options} />
                 </div>,
                 document.body,

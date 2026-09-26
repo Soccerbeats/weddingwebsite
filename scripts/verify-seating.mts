@@ -18,7 +18,8 @@ import {
 } from '../src/lib/seating';
 import {
     DEFAULT_EXPORT_OPTIONS, NO_RESTRICTION_LABEL, alphabetical, csvHeaders, csvRows,
-    dietCodes, dietNote, exportFilename, freeSeats, grandTotal, seatedPeople, sortedVendors, surname,
+    A4_CONTENT_HEIGHT, dietCodes, dietNote, exportFilename, fitScale, freeSeats, grandTotal,
+    pageCount, seatedPeople, sortedVendors, surname,
     tally, tallyChips, tallyParts, vendorMeals,
     type ExportOptions, type ExportPerson, type ExportVendor, type SeatingExportData,
 } from '../src/lib/seatingExport';
@@ -673,6 +674,26 @@ console.log('\nExporting the chart');
         vendorRows.find(r => r[2] === 'Wes Okafor')?.[csvHeaders(withVendors).indexOf('Nut allergy')] === 'yes');
     check('a vendor is filed as a vendor, not as an unseated guest',
         vendorRows.find(r => r[2] === 'Ivy Lund')?.[0] === 'Vendor');
+
+    /* fitting on one page */
+    check('a sheet that already fits is left alone',
+        fitScale(800) === 1 && fitScale(A4_CONTENT_HEIGHT) === 1);
+    check('a sheet half again too tall shrinks to fit exactly',
+        Math.abs(fitScale(A4_CONTENT_HEIGHT * 1.5) - 1 / 1.5) < 1e-9,
+        String(fitScale(A4_CONTENT_HEIGHT * 1.5)));
+    check('shrinking stops at the floor rather than becoming unreadable',
+        fitScale(A4_CONTENT_HEIGHT * 10) === 0.6, String(fitScale(A4_CONTENT_HEIGHT * 10)));
+    check('a sheet with no measured height is not scaled',
+        fitScale(0) === 1 && fitScale(-5) === 1);
+    check('asking for two pages doubles the room',
+        fitScale(A4_CONTENT_HEIGHT * 2, 2) === 1);
+    check('a fitted sheet really is one page',
+        pageCount(A4_CONTENT_HEIGHT * 1.5, fitScale(A4_CONTENT_HEIGHT * 1.5)) === 1);
+    check('and one that hit the floor still says how many pages it is',
+        pageCount(A4_CONTENT_HEIGHT * 10, fitScale(A4_CONTENT_HEIGHT * 10)) === 6,
+        String(pageCount(A4_CONTENT_HEIGHT * 10, fitScale(A4_CONTENT_HEIGHT * 10))));
+    check('an unmeasured sheet counts as one page, not zero',
+        pageCount(0) === 1);
 
     check('the filename carries the date, so a folder of them sorts',
         exportFilename('csv', new Date(2026, 8, 19)) === 'seating-chart-2026-09-19.csv',
