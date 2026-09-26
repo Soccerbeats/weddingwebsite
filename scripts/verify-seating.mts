@@ -19,7 +19,7 @@ import {
 import {
     DEFAULT_EXPORT_OPTIONS, NO_RESTRICTION_LABEL, alphabetical, csvHeaders, csvRows,
     dietCodes, dietNote, exportFilename, freeSeats, grandTotal, seatedPeople, sortedVendors, surname,
-    tally, tallyParts, tallyPartsShort, vendorMeals,
+    tally, tallyChips, tallyParts, vendorMeals,
     type ExportOptions, type ExportPerson, type ExportVendor, type SeatingExportData,
 } from '../src/lib/seatingExport';
 import {
@@ -548,21 +548,28 @@ console.log('\nExporting the chart');
         tallyParts(tally(table1))[0] === '5 seated');
     check('an empty table still reads as zero',
         tallyParts(tally([]), 10)[0] === '0 seated of 10');
+    check('a block with no chairs names its own leading number',
+        tallyParts(t, null, 'plates')[0] === '5 plates', tallyParts(t, null, 'plates')[0]);
 
     // The two-column counts sheet gets half a page per table, and its heading
     // already says "5/8" — so the short form drops the headcount and uses the
     // codes the legend above the tables explains.
-    const short = tallyPartsShort(t);
-    check('the short tally uses codes, not words',
-        short.includes('2 VEG') && short.every(p => !p.includes('vegetarian')), short.join(' · '));
+    const short = tallyChips(t);
+    const shortText = short.map(c => `${c.count} ${c.code ?? 'chicken'}`).join(' · ');
+    check('the short tally carries codes as data, so the sheet can draw the legend chip',
+        short.some(c => c.code === 'VEG' && c.count === 2), shortText);
     check('it leaves the headcount to the heading',
-        short.every(p => !p.includes('seated')), short.join(' · '));
+        short.every(c => c.code !== null || c.count === t.none), shortText);
     check('a restriction nobody has is still left out',
-        short.every(p => !p.startsWith('0 ')), short.join(' · '));
-    check('and it still ends with the chicken, not with the word "none"',
-        short[short.length - 1] === '2 chicken', short[short.length - 1]);
+        short.every(c => c.count > 0 || c.code === null), shortText);
+    check('and it still ends with the chicken — the one entry carrying no code',
+        short[short.length - 1].code === null && short[short.length - 1].count === 2, shortText);
     check('no restrictions at all is just the chicken',
-        tallyPartsShort(tally([])).join(' · ') === '0 chicken', tallyPartsShort(tally([])).join(' · '));
+        tallyChips(tally([])).length === 1 && tallyChips(tally([]))[0].code === null);
+    check('the chips are in the order the legend lists them',
+        tallyChips({ ...t, VGN: 1, GF: 1, NUT: 1, OTH: 1 })
+            .map(c => c.code).join(',') === 'VEG,VGN,GF,NUT,OTH,',
+        tallyChips({ ...t, VGN: 1, GF: 1, NUT: 1, OTH: 1 }).map(c => c.code).join(','));
     check('the two sheets name the bucket from one place',
         NO_RESTRICTION_LABEL === 'Chicken', NO_RESTRICTION_LABEL);
 

@@ -137,11 +137,15 @@ export function tally(people: { diet: DietCode[] }[]): Tally {
  * The tally as the phrases that go under a table heading, e.g.
  * `["10 seated of 10", "3 vegetarian", "1 nut allergy", "6 chicken"]`.
  *
+ * `lead` names what the first number counts. Vendors hold no chairs, so their
+ * block says "5 plates" — calling it "5 seated" on a block headed *not seated*
+ * is the sheet contradicting itself in two lines.
+ *
  * A restriction nobody has is left out rather than printed as a zero — a line of
  * zeroes is the thing a caterer skims past.
  */
-export function tallyParts(t: Tally, seatCount: number | null = null): string[] {
-    const parts = [seatCount && seatCount > 0 ? `${t.total} seated of ${seatCount}` : `${t.total} seated`];
+export function tallyParts(t: Tally, seatCount: number | null = null, lead = 'seated'): string[] {
+    const parts = [seatCount && seatCount > 0 ? `${t.total} ${lead} of ${seatCount}` : `${t.total} ${lead}`];
     for (const code of DIET_CODES) {
         if (t[code] > 0) parts.push(`${t[code]} ${DIET_LABELS[code].toLowerCase()}`);
     }
@@ -149,18 +153,30 @@ export function tallyParts(t: Tally, seatCount: number | null = null): string[] 
     return parts;
 }
 
+/** One entry of the short tally. A null code is the no-restriction bucket. */
+export interface TallyChip {
+    code: DietCode | null;
+    count: number;
+}
+
 /**
  * The same tally, as short as it goes: codes instead of words, and no headcount.
  *
  * For the two-column counts sheet, where a column is half a page wide and the
  * heading is already carrying "9/10" — so spelling "9 seated of 10" out again
- * underneath it costs a line and says nothing. The codes are the ones the legend
- * above the tables explains.
+ * underneath it costs a line and says nothing.
+ *
+ * Returned as data rather than as strings so the sheet can draw each code as the
+ * *same* bordered, coloured chip the legend defines. Formatting it here would
+ * mean the counts line spelled `VGN` in grey text while the legend above it
+ * showed a green box, and a reader would have no reason to believe those were
+ * the same thing.
  */
-export function tallyPartsShort(t: Tally): string[] {
-    const parts = DIET_CODES.filter(code => t[code] > 0).map(code => `${t[code]} ${code}`);
-    parts.push(`${t.none} ${NO_RESTRICTION_LABEL.toLowerCase()}`);
-    return parts;
+export function tallyChips(t: Tally): TallyChip[] {
+    return [
+        ...DIET_CODES.filter(code => t[code] > 0).map(code => ({ code, count: t[code] })),
+        { code: null, count: t.none },
+    ];
 }
 
 /** Chairs at a table with nobody in them. Never negative — a table can be over. */

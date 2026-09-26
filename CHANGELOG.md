@@ -11,6 +11,14 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.95 — [Released] The codes look like the key (`main`, 2026-09-26 16:27)
+
+### Changed
+- **The counts-only tally draws the real chips.** Under each table the restriction codes are now the same bordered, coloured marks the legend defines — a green boxed `VGN`, not the letters `VGN` in grey text. They were spelled as plain text, which gave a reader no reason to believe the two were the same thing. The short tally is returned as data (`tallyChips`) rather than as pre-formatted strings, which is what lets the sheet draw them.
+- **The kitchen's second row is the vendors', and mirrors the guests' exactly.** The same seven columns — plates, then each restriction, then chicken — so "how many vegetarian" is one column read straight down rather than two differently-shaped summaries. It replaces the guest/vendor/total strip, and the grand total moves to a line beneath both rows, which also says how many vendors are not eating.
+- **The vendor block no longer claims its people are seated.** Its tally reads "5 plates", not "5 seated", on a block headed *not seated* — `tallyParts` now takes the noun for its leading number.
+- **Two more assertions in `npm run check:seating`** (191 in total).
+
 ## v0.9.94 — [Released] The couple, the vendors, and the chicken (`main`, 2026-09-26 03:01)
 
 Three gaps in the seating export, all of them about people the chart could not name. The two getting married were not on the guest list, so there was no way to give them a table. The photographer and the DJ were nowhere at all, so the kitchen count left them out. And a plate with no restriction on it printed as "no restrictions", when what the kitchen actually serves it is chicken.

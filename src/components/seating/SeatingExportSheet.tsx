@@ -2,7 +2,7 @@
 
 import {
     DIET_CODES, DIET_LABELS, NO_RESTRICTION_LABEL, alphabetical, freeSeats, grandTotal,
-    seatedPeople, sortedVendors, tally, tallyParts, tallyPartsShort, vendorMeals,
+    seatedPeople, sortedVendors, tally, tallyChips, tallyParts, vendorMeals,
     type DietCode, type ExportOptions, type ExportPerson, type ExportTable, type ExportVendor,
     type SeatingExportData,
 } from '@/lib/seatingExport';
@@ -49,15 +49,36 @@ function Diet({ diet }: { diet: DietCode[] }) {
     );
 }
 
-function TallyLine({ people, seatCount, compact = false }: {
+function TallyLine({ people, seatCount, compact = false, lead }: {
     people: { diet: DietCode[] }[];
     seatCount?: number | null;
     compact?: boolean;
+    /** What the leading number counts. "seated" unless told otherwise. */
+    lead?: string;
 }) {
     const t = tally(people);
-    const parts = compact ? tallyPartsShort(t) : tallyParts(t, seatCount ?? null);
+
+    // Counts only: the codes are drawn as the very chips the legend defines, so
+    // the green box beside "3" and the green box in the legend are visibly the
+    // same mark. Spelled in plain grey text they were not.
+    if (compact) {
+        return (
+            <p className="mt-1 px-2 py-1 bg-gray-50 rounded text-[11px] text-gray-700 flex flex-wrap items-center gap-x-2.5 gap-y-1 tabular-nums">
+                {tallyChips(t).map(({ code, count }) => (
+                    <span key={code ?? 'none'} className="inline-flex items-center gap-1">
+                        <span className={code ? 'font-semibold text-gray-900' : 'text-gray-400'}>{count}</span>
+                        {code
+                            ? <Chip code={code} />
+                            : <span className="text-gray-400">{NO_RESTRICTION_LABEL.toLowerCase()}</span>}
+                    </span>
+                ))}
+            </p>
+        );
+    }
+
+    const parts = tallyParts(t, seatCount ?? null, lead);
     return (
-        <p className={`${compact ? 'mt-1 px-2 py-1 gap-x-3' : 'mt-1.5 px-3 py-1.5 gap-x-4'} bg-gray-50 rounded text-[11px] text-gray-700 flex flex-wrap gap-y-0.5 tabular-nums`}>
+        <p className="mt-1.5 px-3 py-1.5 gap-x-4 bg-gray-50 rounded text-[11px] text-gray-700 flex flex-wrap gap-y-0.5 tabular-nums">
             {parts.map((part, i) => {
                 const [n, ...rest] = part.split(' ');
                 const last = i === parts.length - 1;
@@ -178,21 +199,45 @@ function Kitchen({ people, vendors, showVendors }: {
 }) {
     const t = tally(people);
     const fed = vendorMeals(vendors);
+    const vt = tally(fed);
     const withVendors = showVendors && vendors.length > 0;
+    const GRID = 'grid grid-cols-4 sm:grid-cols-7 gap-px bg-gray-200 border border-gray-200 rounded overflow-hidden';
+    const ROW_LABEL = 'text-[9px] uppercase tracking-widest text-gray-400 mb-1.5';
     return (
         <section className="mb-6 break-inside-avoid">
             <h3 className="text-[9px] uppercase tracking-widest text-gray-400 mb-2">For the kitchen</h3>
-            <div className="grid grid-cols-4 sm:grid-cols-7 gap-px bg-gray-200 border border-gray-200 rounded overflow-hidden">
+            {withVendors && <p className={ROW_LABEL}>Guests</p>}
+            <div className={GRID}>
                 <Tile label="Seated" value={t.total} lead />
                 {DIET_CODES.map(code => <Tile key={code} label={DIET_LABELS[code]} value={t[code]} />)}
                 <Tile label={NO_RESTRICTION_LABEL} value={t.none} />
             </div>
             {withVendors && (
-                <div className="mt-2 grid grid-cols-3 gap-px bg-gray-200 border border-gray-200 rounded overflow-hidden">
-                    <Tile label="Guest plates" value={t.total} />
-                    <Tile label="Vendor plates" value={fed.length} />
-                    <Tile label="Plates in total" value={grandTotal(people, vendors)} lead />
-                </div>
+                <>
+                    {/* The same seven columns as the guests above, so the two
+                        rows read straight down: a caterer comparing "how many
+                        vegetarian" across them is looking at one column, not
+                        hunting two differently-shaped summaries. */}
+                    <p className={`${ROW_LABEL} mt-3`}>Vendors</p>
+                    <div className={GRID}>
+                        <Tile label="Vendor plates" value={fed.length} lead />
+                        {DIET_CODES.map(code => <Tile key={code} label={DIET_LABELS[code]} value={vt[code]} />)}
+                        <Tile label={NO_RESTRICTION_LABEL} value={vt.none} />
+                    </div>
+                    <p className="mt-2 text-[10px] text-gray-500 tabular-nums">
+                        <span className="font-semibold text-gray-800">
+                            {grandTotal(people, vendors)} plates in total
+                        </span>
+                        {' — '}{t.total} guest{t.total === 1 ? '' : 's'}
+                        {' and '}{fed.length} vendor{fed.length === 1 ? '' : 's'}
+                        {vendors.length > fed.length && (
+                            <span className="text-gray-400">
+                                {' '}({vendors.length - fed.length} vendor
+                                {vendors.length - fed.length === 1 ? '' : 's'} not eating)
+                            </span>
+                        )}
+                    </p>
+                </>
             )}
         </section>
     );
@@ -219,7 +264,7 @@ function Vendors({ vendors }: { vendors: ExportVendor[] }) {
                     {fed.length}/{list.length} eating
                 </span>
             </div>
-            {fed.length > 0 && <TallyLine people={fed} />}
+            {fed.length > 0 && <TallyLine people={fed} lead="plates" />}
             {list.length === 0 ? (
                 <p className="mt-2 text-[11px] italic text-gray-400">No vendors added yet.</p>
             ) : (
