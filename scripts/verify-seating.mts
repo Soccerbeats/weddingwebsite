@@ -17,9 +17,10 @@ import {
     planRenameSeats, renamesBetween, staleSeatNames, partySeatingState, buildPersonSeat,
 } from '../src/lib/seating';
 import {
-    DEFAULT_EXPORT_OPTIONS, alphabetical, csvHeaders, csvRows, dietCodes, dietNote,
-    exportFilename, freeSeats, surname, tally, tallyParts, tallyPartsShort,
-    type ExportOptions, type ExportPerson, type SeatingExportData,
+    DEFAULT_EXPORT_OPTIONS, NO_RESTRICTION_LABEL, alphabetical, csvHeaders, csvRows,
+    dietCodes, dietNote, exportFilename, freeSeats, grandTotal, seatedPeople, sortedVendors, surname,
+    tally, tallyParts, tallyPartsShort, vendorMeals,
+    type ExportOptions, type ExportPerson, type ExportVendor, type SeatingExportData,
 } from '../src/lib/seatingExport';
 import {
     alignEntries, entriesToStore, isEmptyEntry, isOn, setNote, signature, toggleRestriction,
@@ -503,6 +504,15 @@ console.log('\nExporting the chart');
         ...extra,
     });
 
+    /** A vendor as the sheet receives them. Eating, unless told otherwise. */
+    const vendor = (
+        id: number,
+        name: string,
+        role: string | null = null,
+        diet: ExportVendor['diet'] = [],
+        needs_meal = true,
+    ): ExportVendor => ({ id, name, role, company: null, needs_meal, diet, note: '' });
+
     /* dietary answers → codes */
     check('an empty answer carries no codes', dietCodes(null).length === 0);
     check('every checkbox maps to its code',
@@ -532,8 +542,8 @@ console.log('\nExporting the chart');
     const parts = tallyParts(t, 8);
     check('the tally leads with seats of capacity', parts[0] === '5 seated of 8', parts[0]);
     check('a restriction nobody has is left out', parts.every(p => !p.startsWith('0 ')), parts.join(' · '));
-    check('the tally ends with the people who reported nothing',
-        parts[parts.length - 1] === '2 no restrictions', parts[parts.length - 1]);
+    check('the tally ends with the plates that carry no restriction — the chicken',
+        parts[parts.length - 1] === '2 chicken', parts[parts.length - 1]);
     check('with no capacity it just says seated',
         tallyParts(tally(table1))[0] === '5 seated');
     check('an empty table still reads as zero',
@@ -549,10 +559,12 @@ console.log('\nExporting the chart');
         short.every(p => !p.includes('seated')), short.join(' · '));
     check('a restriction nobody has is still left out',
         short.every(p => !p.startsWith('0 ')), short.join(' · '));
-    check('and it still ends with the people who reported nothing',
-        short[short.length - 1] === '2 none', short[short.length - 1]);
-    check('no restrictions at all is just the none',
-        tallyPartsShort(tally([])).join(' · ') === '0 none', tallyPartsShort(tally([])).join(' · '));
+    check('and it still ends with the chicken, not with the word "none"',
+        short[short.length - 1] === '2 chicken', short[short.length - 1]);
+    check('no restrictions at all is just the chicken',
+        tallyPartsShort(tally([])).join(' · ') === '0 chicken', tallyPartsShort(tally([])).join(' · '));
+    check('the two sheets name the bucket from one place',
+        NO_RESTRICTION_LABEL === 'Chicken', NO_RESTRICTION_LABEL);
 
     /* free chairs */
     const exTable = (seat_count: number, people: ExportPerson[]) => ({
@@ -579,6 +591,12 @@ console.log('\nExporting the chart');
             { id: 2, name: 'Table 2', table_type: 'round', seat_count: 4, people: [person('Cy Abbott', [], { table_name: 'Table 2', seat: 1 })] },
         ],
         unseated: [person('Di Nolan', ['GF'], { seat: null, table_name: null })],
+        vendors: [
+            vendor(3, 'Wes Okafor', 'Photographer', ['NUT']),
+            vendor(1, 'Ivy Lund', 'DJ'),
+            vendor(2, 'Sam Deane', null, ['VGN']),
+            vendor(4, 'Rory Vance', 'Planner', [], false),
+        ],
     };
 
     const az = alphabetical(data, true);
@@ -606,6 +624,48 @@ console.log('\nExporting the chart');
     check('household and side are columns only when asked for',
         !csvHeaders(opts).includes('Household')
         && csvHeaders({ ...opts, household: true, side: true }).includes('Side'));
+
+    /* vendors */
+    check('vendors sort by role, then by name',
+        sortedVendors(data.vendors).map(v => v.name).join(', ') === 'Ivy Lund, Wes Okafor, Rory Vance, Sam Deane',
+        sortedVendors(data.vendors).map(v => v.name).join(', '));
+    check('a vendor with no role sorts to the end, not the top',
+        sortedVendors(data.vendors)[sortedVendors(data.vendors).length - 1].name === 'Sam Deane');
+    check('only the vendors being fed are plates',
+        vendorMeals(data.vendors).length === 3, String(vendorMeals(data.vendors).length));
+    check('the grand total is guests plus fed vendors',
+        grandTotal(seatedPeople(data), data.vendors) === 6,
+        String(grandTotal(seatedPeople(data), data.vendors)));
+    check('a vendor with no meal is not counted, however hungry',
+        grandTotal([], [vendor(9, 'Nobody', 'Security', [], false)]) === 0);
+    check('vendors are counted by the same tally the guests are',
+        tally(vendorMeals(data.vendors)).NUT === 1 && tally(vendorMeals(data.vendors)).none === 1);
+
+    const withVendors: ExportOptions = { ...opts, vendors: true };
+    const vendorRows = csvRows(data, withVendors);
+    check('vendors are off the spreadsheet until asked for',
+        csvRows(data, opts).every(r => r[0] !== 'Vendor'));
+    check('asking for them adds one row per vendor',
+        vendorRows.length === rows.length + data.vendors.length, String(vendorRows.length));
+    check('a vendor row still has a cell for every column',
+        vendorRows.every(r => r.length === csvHeaders(withVendors).length));
+    check('a vendor brings a Role and a Meal column rather than borrowing guest ones',
+        csvHeaders(withVendors).includes('Role') && csvHeaders(withVendors).includes('Meal')
+        && !csvHeaders(opts).includes('Role'));
+    // Every guest row is a plate, so the column totals every plate the *file*
+    // lists — which is the printed grand total plus anyone not seated yet, since
+    // the sheet counts chairs and the spreadsheet counts people.
+    check('every guest counts as a meal, so the Meal column totals the plates in the file',
+        vendorRows.filter(r => r[csvHeaders(withVendors).indexOf('Meal')] === 'yes').length === 7,
+        String(vendorRows.filter(r => r[csvHeaders(withVendors).indexOf('Meal')] === 'yes').length));
+    check('and dropping the unseated brings it back to the printed grand total',
+        csvRows(data, { ...withVendors, unseated: false })
+            .filter(r => r[csvHeaders(withVendors).indexOf('Meal')] === 'yes').length
+            === grandTotal(seatedPeople(data), data.vendors));
+    check("a vendor's restriction reaches the spreadsheet",
+        vendorRows.find(r => r[2] === 'Wes Okafor')?.[csvHeaders(withVendors).indexOf('Nut allergy')] === 'yes');
+    check('a vendor is filed as a vendor, not as an unseated guest',
+        vendorRows.find(r => r[2] === 'Ivy Lund')?.[0] === 'Vendor');
 
     check('the filename carries the date, so a folder of them sorts',
         exportFilename('csv', new Date(2026, 8, 19)) === 'seating-chart-2026-09-19.csv',

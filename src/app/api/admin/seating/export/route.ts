@@ -3,7 +3,7 @@ import pool from '@/lib/db';
 import { getSiteConfig } from '@/lib/config';
 import { partyAttendees } from '@/lib/seating';
 import { cleanName, cleanNameSql } from '@/lib/names';
-import { dietCodes, dietNote, type DietaryEntry, type ExportPerson, type ExportTable, type SeatingExportData } from '@/lib/seatingExport';
+import { dietCodes, dietNote, type DietaryEntry, type ExportPerson, type ExportTable, type ExportVendor, type SeatingExportData } from '@/lib/seatingExport';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,6 +52,31 @@ function entryFor(entries: unknown, name: string): DietaryEntry | null {
     return found ?? null;
 }
 
+/**
+ * The vendors, as the sheet wants them.
+ *
+ * Read whether or not there is a floor plan: a vendor has no chair, so the
+ * question "who is being fed" has an answer before a single table is drawn.
+ */
+async function loadVendors(client: import('pg').PoolClient): Promise<ExportVendor[]> {
+    const result = await client.query(
+        `SELECT id, name, role, company, needs_meal, dietary
+           FROM vendors ORDER BY role ASC NULLS LAST, name ASC`,
+    );
+    return result.rows.map(row => {
+        const entry = (row.dietary ?? null) as DietaryEntry | null;
+        return {
+            id: row.id,
+            name: row.name,
+            role: row.role ?? null,
+            company: row.company ?? null,
+            needs_meal: row.needs_meal !== false,
+            diet: dietCodes(entry),
+            note: dietNote(entry),
+        };
+    });
+}
+
 export async function GET() {
     const client = await pool.connect();
     try {
@@ -65,8 +90,10 @@ export async function GET() {
             venue: config.weddingVenue || config.weddingLocation || null,
         };
 
+        const vendors = await loadVendors(client);
+
         if (!floorPlan) {
-            return NextResponse.json({ ...header, tables: [], unseated: [] } satisfies SeatingExportData);
+            return NextResponse.json({ ...header, tables: [], unseated: [], vendors } satisfies SeatingExportData);
         }
 
         const tablesResult = await client.query(
@@ -205,7 +232,7 @@ export async function GET() {
             ))
         ));
 
-        return NextResponse.json({ ...header, tables, unseated } satisfies SeatingExportData);
+        return NextResponse.json({ ...header, tables, unseated, vendors } satisfies SeatingExportData);
     } catch (error) {
         console.error('Error building seating export:', error);
         return NextResponse.json({ error: 'Failed to build seating export' }, { status: 500 });

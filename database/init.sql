@@ -45,6 +45,14 @@ ALTER TABLE guest_list ADD COLUMN IF NOT EXISTS party_members JSONB;
 -- the two must stay in step so a fresh database is not a column behind.
 ALTER TABLE guest_list ADD COLUMN IF NOT EXISTS flag VARCHAR(20);
 ALTER TABLE guest_list ADD COLUMN IF NOT EXISTS relationship VARCHAR(255);
+-- What this row *is*. 'guest' is every row that existed before this column and
+-- the only kind an invitation is ever posted to; 'couple' is the two people
+-- getting married, who take chairs on the seating chart and eat a plate, but are
+-- not invited to their own wedding — so the guest-list statistics and the
+-- mailing exports count 'guest' and nothing else. Vendors are not here at all;
+-- they have their own table below, because nothing about a vendor is a party.
+ALTER TABLE guest_list ADD COLUMN IF NOT EXISTS kind VARCHAR(20) DEFAULT 'guest';
+UPDATE guest_list SET kind = 'guest' WHERE kind IS NULL;
 ALTER TABLE rsvps ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
 -- Per-page "hidden from the nav" flag, added with the WIP controls. Created at
 -- runtime by /api/wip-status too; both must stay in step.
@@ -222,6 +230,33 @@ UPDATE guest_list g
      GROUP BY g2.id
   ) sub
  WHERE g.id = sub.id;
+
+-- ---------------------------------------------------------------------------
+-- Vendors — the photographer, the DJ, the planner.
+--
+-- Deliberately not guest_list rows: a vendor is never invited, never RSVPs,
+-- never takes a chair on the floor plan, and never belongs to a party. The one
+-- thing they share with a guest is a plate, which is why `dietary` holds the
+-- same DietaryEntry shape the RSVPs store — one entry, because a vendor row is
+-- one person. A DJ who brings an assistant is two rows sharing a `company`, so
+-- that one of them can be the one who is gluten free.
+--
+-- `needs_meal` is what decides the vendor plate count: not every contract
+-- includes feeding them.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS vendors (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  role VARCHAR(255),
+  company VARCHAR(255),
+  email VARCHAR(255),
+  phone VARCHAR(50),
+  needs_meal BOOLEAN DEFAULT true,
+  dietary JSONB,
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
 
 -- Seating chart tables
 CREATE TABLE IF NOT EXISTS floor_plans (

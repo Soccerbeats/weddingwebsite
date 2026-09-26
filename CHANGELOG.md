@@ -11,6 +11,24 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.94 — [Released] The couple, the vendors, and the chicken (`main`, 2026-09-26 03:01)
+
+Three gaps in the seating export, all of them about people the chart could not name. The two getting married were not on the guest list, so there was no way to give them a table. The photographer and the DJ were nowhere at all, so the kitchen count left them out. And a plate with no restriction on it printed as "no restrictions", when what the kitchen actually serves it is chicken.
+
+### Added
+- **The couple go on the guest list.** A banner on the Guest List tab offers to add them, prefilled from the bride and groom names in site settings, and creates one row holding both people. They are then draggable onto a table like any other party, and their card edits each of their dietary restrictions exactly like a guest's — because under the hood they *are* a household of two, which is why the seating chart needed no changes at all to seat them.
+- **A Vendors tab**, beside RSVPs, Guest List and Donations. Name, role, company, email, phone, whether their contract includes a meal, their food preference and a note. One row is one person: a DJ who brings an assistant is two rows sharing a company, because one row with a headcount of two cannot say which of them eats no gluten.
+- **Vendors on the seating export**, behind a new *Also show → Vendors* checkbox. They take no chairs and never appear in a table roster — they print as their own block at the end, listing who is in the building, who is being fed, and what they cannot eat. A vendor with no meal in their contract is still listed, greyed, because "the DJ is not eating" is exactly the thing somebody asks at six o'clock.
+- **Guest plates, vendor plates and a grand total**, as their own row of tiles under the kitchen summary. Counted apart because a vendor meal is usually its own line on its own contract and often a cheaper plate, then added up so that nobody has to.
+- **Vendors in the spreadsheet too**, bringing a `Role` and a `Meal` column rather than borrowing the guest ones. Every guest row is a meal, so totalling that one column counts every plate in the file.
+- **29 more assertions in `npm run check:seating`** (189 in total) covering vendor sorting, the plate counts, the grand total and the vendor half of the CSV.
+
+### Changed
+- **A plate with no restriction now prints as "chicken", not "none".** On the table tallies, on the two-column counts sheet and on the kitchen tile — all three read the name from one constant, so they cannot drift apart. The RSVP form still never asks for an entrée, so this says only what can honestly be said: the standard plate is the chicken.
+- **The couple are counted as the couple, not as guests.** Total Invited, missing RSVPs and the other four statistics count guests only, the mailing export leaves them out (nobody posts themselves an invitation), and their card's dietary answers no longer surface as a reply on the RSVPs tab. They pin to the top of the guest list with a badge rather than filing under their surname.
+- **`DietaryPills` moved to `src/components/admin/`** so the guest card and the vendor card share one editor instead of two that could drift.
+- **The guest list's tab bar wraps** rather than squeezing four tabs onto one phone row.
+
 ## v0.9.93 — [Released] Counts on one page (`main`, 2026-09-24 21:20)
 
 Counts only was a narrow strip of headings down the left of a page that was mostly margin, and it ran onto a second sheet for no reason.

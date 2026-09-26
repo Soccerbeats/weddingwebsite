@@ -205,6 +205,16 @@ export default function SeatingExportModal({ onClose }: { onClose: () => void })
                                 <Check checked={options.side} onChange={v => set('side', v)} label="Side" />
                                 <Check checked={options.empty} onChange={v => set('empty', v)} label="Empty seats" />
                                 <Check checked={options.unseated} onChange={v => set('unseated', v)} label="Not seated yet" />
+                                <Check
+                                    checked={options.vendors}
+                                    onChange={v => set('vendors', v)}
+                                    label="Vendors"
+                                    hint={
+                                        data && data.vendors.length === 0
+                                            ? 'None added yet — the Vendors tab on the guest list'
+                                            : 'Who is in the building, and who is being fed'
+                                    }
+                                />
                                 <Check checked={options.pageBreak} onChange={v => set('pageBreak', v)} label="New page per table" />
                                 <Check
                                     checked={false}

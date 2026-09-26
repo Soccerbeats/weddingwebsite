@@ -32,7 +32,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const { guest_name, email, phone, party_size, notes, invited, party_members, address, flag, relationship, plus_one_name, upsert } = await request.json();
+    const { guest_name, email, phone, party_size, notes, invited, party_members, address, flag, relationship, plus_one_name, upsert, kind, rsvp_status } = await request.json();
 
     if (typeof guest_name !== 'string' || !guest_name.trim()) {
       return NextResponse.json({ error: 'guest_name is required' }, { status: 400 });
@@ -42,6 +42,10 @@ export async function POST(request: Request) {
     // upsert relies on); nothing is created per request any more.
     const membersJson = party_members ? JSON.stringify(party_members) : null;
     const plusOne = typeof plus_one_name === 'string' && plus_one_name.trim() ? plus_one_name.trim() : null;
+    // Only the couple row is ever created as anything but a guest, and only by
+    // the "Add the couple" button. An unrecognised value would quietly drop a
+    // row out of the statistics, so anything else lands as a plain guest.
+    const rowKind = kind === 'couple' ? 'couple' : 'guest';
 
     let result;
     if (upsert) {
@@ -59,10 +63,10 @@ export async function POST(request: Request) {
       );
     } else {
       result = await pool.query(
-        `INSERT INTO guest_list (guest_name, email, phone, party_size, notes, invited, party_members, address, flag, relationship, plus_one_name, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+        `INSERT INTO guest_list (guest_name, email, phone, party_size, notes, invited, party_members, address, flag, relationship, plus_one_name, kind, rsvp_status, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
          RETURNING *`,
-        [guest_name.trim(), email, phone, party_size, notes, invited ?? true, membersJson, address ?? '', flag ?? null, relationship ?? null, plusOne]
+        [guest_name.trim(), email, phone, party_size, notes, invited ?? true, membersJson, address ?? '', flag ?? null, relationship ?? null, plusOne, rowKind, rsvp_status || null]
       );
     }
 

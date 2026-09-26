@@ -6,54 +6,11 @@ import AddressReconcileModal from '@/components/admin/AddressReconcileModal';
 import { MAILING_HEADERS, mailingRows, toCsv } from '@/lib/mailing';
 import { SaveStatus, useAutosave } from '@/components/admin/useAutosave';
 import {
-    DIET_CODES, DIET_LABELS, alignEntries, dietNote, entriesToStore, isOn, setNote,
-    isEmptyEntry, signature, toggleRestriction, type DietaryEntry,
+    alignEntries, entriesToStore, isEmptyEntry, signature, type DietaryEntry,
 } from '@/lib/dietary';
 import { cleanName } from '@/lib/names';
-
-/**
- * One person's dietary restrictions, as a row of pills.
- *
- * In the guest editor rather than on the RSVP itself, because the answers that
- * need typing in are the ones given in person — and those people often never
- * filled the form at all.
- */
-function DietaryPills({ entry, onChange }: {
-    entry: DietaryEntry;
-    onChange: (entry: DietaryEntry) => void;
-}) {
-    return (
-        <div className="flex flex-wrap items-center gap-1.5 mt-2">
-            {DIET_CODES.map(code => {
-                const on = isOn(entry, code);
-                return (
-                    <button
-                        key={code}
-                        type="button"
-                        aria-pressed={on}
-                        onClick={() => onChange(toggleRestriction(entry, code))}
-                        className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                            on
-                                ? 'bg-gray-900 text-white'
-                                : 'bg-gray-50 text-gray-500 hover:bg-gray-100 hover:text-gray-700'
-                        }`}
-                    >
-                        {DIET_LABELS[code]}
-                    </button>
-                );
-            })}
-            {isOn(entry, 'OTH') && (
-                <input
-                    type="text"
-                    value={dietNote(entry)}
-                    onChange={e => onChange(setNote(entry, e.target.value))}
-                    placeholder="What should the kitchen know?"
-                    className="flex-1 min-w-[12rem] px-3 py-1.5 border border-gray-200 rounded-full bg-gray-50 text-xs text-gray-900 placeholder-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
-                />
-            )}
-        </div>
-    );
-}
+import DietaryPills from '@/components/admin/DietaryPills';
+import VendorsTab from './VendorsTab';
 
 // Guest-table columns to drop as horizontal space runs out, in order (first dropped → last).
 // Name + Party/Invited/RSVP/Actions are never in this list, so they always stay.
@@ -98,7 +55,24 @@ interface Guest {
     address?: string;
     flag?: string | null;
     relationship?: string;
+    /** 'guest' for everyone invited; 'couple' for the two getting married. */
+    kind?: string | null;
     created_at: string;
+}
+
+/**
+ * Is this row an actual guest?
+ *
+ * Rows written before the `kind` column exists carry null, and those are all
+ * guests — so the absence of an answer means guest, never "unknown".
+ */
+function isGuestRow(guest: { kind?: string | null }): boolean {
+    return (guest.kind ?? 'guest') === 'guest';
+}
+
+/** The row for the two people getting married, if it has been created yet. */
+function coupleRow<T extends { kind?: string | null }>(guests: T[]): T | undefined {
+    return guests.find(g => g.kind === 'couple');
 }
 
 interface Donation {
@@ -116,7 +90,7 @@ interface Donation {
     co_donors?: { id: number | null; name: string }[];
 }
 
-type Tab = 'rsvps' | 'guestlist' | 'donations';
+type Tab = 'rsvps' | 'guestlist' | 'vendors' | 'donations';
 type GuestFilter = 'all' | 'no_response' | 'attending' | 'declined' | 'likely_not_coming' | 'invited' | 'not_invited' | 'bride' | 'groom' | 'noted' | 'issue' | 'need';
 
 export default function RSVPDashboard() {
@@ -152,6 +126,7 @@ export default function RSVPDashboard() {
     const guestSearchRef = useRef<HTMLInputElement | null>(null);
     const [quickPick, setQuickPick] = useState<{ text: string; ok: boolean } | null>(null);
     const [config, setConfig] = useState<Partial<SiteConfig> | null>(null);
+    const [addingCouple, setAddingCouple] = useState(false);
     const [rsvpSubtitle, setRsvpSubtitle] = useState('');
     const [subtitleLoaded, setSubtitleLoaded] = useState(false);
     const [showImportModal, setShowImportModal] = useState(false);
@@ -214,7 +189,7 @@ export default function RSVPDashboard() {
         fetchDonations();
         const params = new URLSearchParams(window.location.search);
         const tab = params.get('tab');
-        if (tab === 'donations' || tab === 'guestlist' || tab === 'rsvps') {
+        if (tab === 'donations' || tab === 'guestlist' || tab === 'rsvps' || tab === 'vendors') {
             setActiveTab(tab as Tab);
         }
     }, []);
@@ -963,18 +938,33 @@ export default function RSVPDashboard() {
 
     if (loading) return <div className="p-8">Loading...</div>;
 
-    const totalGuests = rsvps.reduce((acc, curr) => acc + (curr.attending ? curr.number_of_guests : 0), 0);
+    // The couple's card writes their dietary answers the way every card does —
+    // onto an RSVP — so giving the bride a nut allergy creates an RSVP row in
+    // their name. It is storage, not a reply: this tab counts and lists the
+    // replies, so it leaves that row out. Their restrictions are still read from
+    // it by name, which is why it is filtered here rather than never fetched.
+    const coupleNames = new Set(
+        guests.filter(g => !isGuestRow(g)).map(g => cleanName(g.guest_name).toLowerCase()),
+    );
+    const guestRsvps = rsvps.filter(r => !coupleNames.has(cleanName(r.guest_name).toLowerCase()));
+
+    const totalGuests = guestRsvps.reduce((acc, curr) => acc + (curr.attending ? curr.number_of_guests : 0), 0);
     // A declined RSVP is stored with number_of_guests = 0, so count the household
     // from the guest list (falling back to 1 when the name isn't on it).
     const partySizeByName = new Map(guests.map(g => [g.guest_name.trim().toLowerCase(), g.party_size || 1]));
-    const totalDeclinedGuests = rsvps
+    const totalDeclinedGuests = guestRsvps
         .filter(r => !r.attending)
         .reduce((acc, curr) => acc + (partySizeByName.get(curr.guest_name.trim().toLowerCase()) ?? 1), 0);
-    const totalInvited = guests.filter(g => g.invited).reduce((acc, curr) => acc + curr.party_size, 0);
-    const totalNotInvited = guests.filter(g => !g.invited).reduce((acc, curr) => acc + curr.party_size, 0);
-    const likelyNotComingCount = guests.filter(g => g.rsvp_status === 'likely_not_coming').reduce((acc, curr) => acc + curr.party_size, 0);
-    const totalGuestListSize = guests.filter(g => g.rsvp_status !== 'likely_not_coming' && g.rsvp_status !== 'declined').reduce((acc, curr) => acc + curr.party_size, 0);
-    const missingRsvps = guests.filter(g => g.invited && !g.rsvp_status).reduce((acc, curr) => acc + curr.party_size, 0);
+    // Every statistic counts guests and only guests. The couple are on this list
+    // so they can be seated and fed, but they were not invited to their own
+    // wedding and will never RSVP to it — counting them would put "Total
+    // Invited" two over, and that is a number that ends up in a contract.
+    const guestRows = guests.filter(isGuestRow);
+    const totalInvited = guestRows.filter(g => g.invited).reduce((acc, curr) => acc + curr.party_size, 0);
+    const totalNotInvited = guestRows.filter(g => !g.invited).reduce((acc, curr) => acc + curr.party_size, 0);
+    const likelyNotComingCount = guestRows.filter(g => g.rsvp_status === 'likely_not_coming').reduce((acc, curr) => acc + curr.party_size, 0);
+    const totalGuestListSize = guestRows.filter(g => g.rsvp_status !== 'likely_not_coming' && g.rsvp_status !== 'declined').reduce((acc, curr) => acc + curr.party_size, 0);
+    const missingRsvps = guestRows.filter(g => g.invited && !g.rsvp_status).reduce((acc, curr) => acc + curr.party_size, 0);
 
     const filteredGuests = guests.filter(g => {
         const memberNames = (g.party_members || []).map(m => m.name || '').join(' ');
@@ -994,14 +984,65 @@ export default function RSVPDashboard() {
             case 'need': return g.flag === 'need';
             default: return true;
         }
-    });
+    })
+        // The couple first, wherever the alphabet would otherwise put them —
+        // they are the one row on this page that is looked for rather than
+        // scrolled past.
+        .sort((a, b) => Number(isGuestRow(a)) - Number(isGuestRow(b)));
+
+    /**
+     * Put the two people getting married on the guest list.
+     *
+     * One row, not two: the app already represents two people on one invitation
+     * as a household with a party member, which is what makes both of them
+     * draggable on the seating chart and gives each of them their own row of
+     * dietary pills on the card — with no seating code changed at all.
+     *
+     * Names are seeded from the site settings and are yours to edit afterwards:
+     * settings say "Heaven", and a place card says "Heaven Lucas".
+     */
+    const handleAddCouple = async () => {
+        if (addingCouple || coupleRow(guests)) return;
+        setAddingCouple(true);
+        try {
+            const bride = (config?.brideName || '').trim() || 'Bride';
+            const groom = (config?.groomName || '').trim() || 'Groom';
+            const res = await fetch('/api/admin/guest-list', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    guest_name: bride,
+                    email: '',
+                    phone: '',
+                    party_size: 2,
+                    notes: '',
+                    // Attending and "invited" so the seating chart offers them
+                    // chairs on exactly the path every other attending household
+                    // takes. `kind` is what keeps them out of the totals.
+                    invited: true,
+                    rsvp_status: 'attending',
+                    party_members: [{ name: groom, attending: true }],
+                    kind: 'couple',
+                }),
+            });
+            if (!res.ok) throw new Error('Failed to add the couple');
+            await fetchGuests();
+        } catch (error) {
+            console.error('Error adding the couple:', error);
+            alert('Could not add the couple to the guest list.');
+        } finally {
+            setAddingCouple(false);
+        }
+    };
 
     // Export exactly what's on screen (current filter + search) as a mail-merge
     // ready CSV: envelope name, address split into label lines, and the rest of
-    // the guest record for reference.
+    // the guest record for reference. Minus the couple: this file addresses
+    // envelopes, and nobody posts themselves an invitation.
+    const mailableGuests = filteredGuests.filter(isGuestRow);
     const handleExportGuests = () => {
-        if (!filteredGuests.length) return;
-        const csv = toCsv(MAILING_HEADERS, mailingRows(filteredGuests));
+        if (!mailableGuests.length) return;
+        const csv = toCsv(MAILING_HEADERS, mailingRows(mailableGuests));
         const stamp = new Date().toISOString().slice(0, 10);
         const scope = guestSearch.trim() ? 'search' : guestFilter;
         const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
@@ -1184,8 +1225,10 @@ export default function RSVPDashboard() {
                     <p className="text-gray-600">Track RSVPs and manage your guest list</p>
                 </div>
 
-                {/* Tab Buttons — full width, equal columns on mobile so all three fit without horizontal scroll */}
-                <div className="flex gap-2 w-full sm:w-auto">
+                {/* Tab Buttons — equal columns on mobile. Four of them no longer fit
+                    on one phone row, so they wrap to two rather than shrink to
+                    illegibility or scroll sideways. */}
+                <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                     <button
                         onClick={() => setActiveTab('rsvps')}
                         className={`flex-1 sm:flex-none min-w-0 px-3 sm:px-4 py-2 rounded-full text-sm sm:text-base font-medium text-center whitespace-nowrap transition-colors duration-300 shadow-md ${
@@ -1209,6 +1252,16 @@ export default function RSVPDashboard() {
                         <span className="hidden sm:inline">Guest List</span>
                     </button>
                     <button
+                        onClick={() => setActiveTab('vendors')}
+                        className={`flex-1 sm:flex-none min-w-0 px-3 sm:px-4 py-2 rounded-full text-sm sm:text-base font-medium text-center whitespace-nowrap transition-colors duration-300 shadow-md ${
+                            activeTab === 'vendors'
+                                ? 'bg-accent text-white shadow-lg'
+                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300 hover:shadow-lg'
+                        }`}
+                    >
+                        Vendors
+                    </button>
+                    <button
                         onClick={() => setActiveTab('donations')}
                         className={`flex-1 sm:flex-none min-w-0 px-3 sm:px-4 py-2 rounded-full text-sm sm:text-base font-medium text-center whitespace-nowrap transition-colors duration-300 shadow-md ${
                             activeTab === 'donations'
@@ -1228,7 +1281,7 @@ export default function RSVPDashboard() {
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
                         <div className="bg-white p-6 rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 border border-gray-200">
                             <p className="text-sm font-medium text-gray-500">Total RSVPs</p>
-                            <p className="text-3xl font-bold text-gray-900">{rsvps.length}</p>
+                            <p className="text-3xl font-bold text-gray-900">{guestRsvps.length}</p>
                         </div>
                         <div className="bg-white p-6 rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 border border-green-200">
                             <p className="text-sm font-medium text-green-600">Total Attending</p>
@@ -1283,7 +1336,7 @@ export default function RSVPDashboard() {
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
-                                    {rsvps.map((rsvp) => {
+                                    {guestRsvps.map((rsvp) => {
                                         const members = Array.isArray(rsvp.dietary_restrictions)
                                             ? rsvp.dietary_restrictions.slice(1)
                                             : [];
@@ -1496,14 +1549,14 @@ export default function RSVPDashboard() {
                             </button>
                             <button
                                 onClick={handleExportGuests}
-                                disabled={filteredGuests.length === 0}
-                                title={`Download the ${filteredGuests.length} guest${filteredGuests.length === 1 ? '' : 's'} currently shown as a mailing-list CSV`}
+                                disabled={mailableGuests.length === 0}
+                                title={`Download the ${mailableGuests.length} guest${mailableGuests.length === 1 ? '' : 's'} currently shown as a mailing-list CSV`}
                                 className="bg-blue-600 text-white px-4 py-2 rounded-full hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 transition-all duration-300 shadow-md hover:shadow-lg"
                             >
                                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 9l-3 3m0 0l-3-3m3 3V3" />
                                 </svg>
-                                Export CSV ({filteredGuests.length})
+                                Export CSV ({mailableGuests.length})
                             </button>
                             <button
                                 onClick={() => setShowReconcileModal(true)}
@@ -1539,6 +1592,33 @@ export default function RSVPDashboard() {
                             </button>
                         </div>
                     </div>
+
+                    {/* The couple are on the guest list so the seating chart can
+                        give them chairs and the kitchen can count their plates —
+                        but they are not guests, so nothing here counts them as
+                        invited. Offered only while the row does not exist; a page
+                        that writes to the database because you looked at it is
+                        not a page anyone can trust. */}
+                    {!coupleRow(guests) && (
+                        <div className="mb-4 px-5 py-4 rounded-2xl bg-gray-50 border border-gray-100 flex flex-wrap items-center gap-3">
+                            <div className="min-w-0">
+                                <p className="text-sm font-medium text-gray-800">
+                                    {config?.brideName || 'The bride'} and {config?.groomName || 'the groom'} are not on the list
+                                </p>
+                                <p className="text-xs text-gray-500 mt-0.5">
+                                    Add them and they can be seated at a table and counted for the
+                                    kitchen. They stay out of the invitation totals and the mailing export.
+                                </p>
+                            </div>
+                            <button
+                                onClick={handleAddCouple}
+                                disabled={addingCouple}
+                                className="ml-auto shrink-0 px-5 py-2.5 rounded-full bg-gray-900 text-white text-sm font-medium hover:bg-gray-800 disabled:opacity-40 transition-colors"
+                            >
+                                {addingCouple ? 'Adding…' : 'Add the couple'}
+                            </button>
+                        </div>
+                    )}
 
                     {/* Filters & Search */}
                     <div className="mb-4 flex flex-col sm:flex-row gap-3">
@@ -1659,6 +1739,17 @@ export default function RSVPDashboard() {
                                             </td>
                                             <td data-col="name" className="w-full max-w-0 px-2 sm:px-4 lg:px-6 py-4 overflow-hidden">
                                                 <div className={`text-sm font-semibold truncate ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-900'}`} title={guest.guest_name}>{guest.guest_name}</div>
+                                                {!isGuestRow(guest) && (
+                                                    <div className="flex flex-nowrap items-center gap-1 mt-1 overflow-hidden">
+                                                        <span
+                                                            className="inline-flex shrink-0 whitespace-nowrap items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold"
+                                                            style={{ backgroundColor: 'var(--accent-light)', color: 'var(--accent-dark)' }}
+                                                            title="Not invited, never counted — here so they can be seated and fed"
+                                                        >
+                                                            💍 The couple
+                                                        </span>
+                                                    </div>
+                                                )}
                                                 {(guest.flag || (guest.notes && guest.notes.trim())) && (
                                                     // nowrap + clip: when Name is squeezed these badges would otherwise
                                                     // wrap one-per-line and balloon the row height.
@@ -1783,6 +1874,12 @@ export default function RSVPDashboard() {
                         </div>
                     </div>
                 </>
+            )}
+
+            {activeTab === 'vendors' && (
+                <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6">
+                    <VendorsTab />
+                </div>
             )}
 
             {activeTab === 'donations' && (

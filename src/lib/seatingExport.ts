@@ -39,6 +39,24 @@ export interface ExportTable {
     people: ExportPerson[];
 }
 
+/**
+ * A vendor on the sheet.
+ *
+ * Never seated — a vendor has no chair, no household and no RSVP — so this is
+ * not an `ExportPerson` with empty fields. What it shares is `diet`, which is
+ * the whole reason they are on a kitchen document at all.
+ */
+export interface ExportVendor {
+    id: number;
+    name: string;
+    role: string | null;
+    company: string | null;
+    /** Whether their contract includes a plate. Only these are counted. */
+    needs_meal: boolean;
+    diet: DietCode[];
+    note: string;
+}
+
 /** Everything the sheet draws, as the export endpoint returns it. */
 export interface SeatingExportData {
     title: string;
@@ -47,6 +65,7 @@ export interface SeatingExportData {
     tables: ExportTable[];
     /** Attending households holding no chairs, flattened to people. */
     unseated: ExportPerson[];
+    vendors: ExportVendor[];
 }
 
 export interface ExportOptions {
@@ -61,6 +80,8 @@ export interface ExportOptions {
     /** Say how many chairs at a table are still free. */
     empty: boolean;
     unseated: boolean;
+    /** The vendor block, and the vendor half of the plate count. */
+    vendors: boolean;
     /** Start each table on a fresh page. */
     pageBreak: boolean;
     format: 'print' | 'csv';
@@ -74,6 +95,7 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
     side: false,
     empty: true,
     unseated: true,
+    vendors: false,
     pageBreak: false,
     format: 'print',
 };
@@ -81,13 +103,28 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
 export type Tally = Record<DietCode, number> & { total: number; none: number };
 
 /**
+ * What a plate with no restriction on it actually is.
+ *
+ * The RSVP form has never asked for an entrée, so the export cannot say "7
+ * chicken, 3 fish" — but it can say this much, because a guest who reported
+ * nothing gets the standard plate and the standard plate is the chicken. The
+ * sheet, the counts line and the kitchen tile all name the bucket from here, so
+ * they cannot drift apart. (When the entrée question lands — SEAT-1 in the
+ * parking lot — this is the constant that stops being a constant.)
+ */
+export const NO_RESTRICTION_LABEL = 'Chicken';
+
+/**
  * Count a group of people by restriction.
  *
  * Restrictions are not exclusive — someone vegan *and* gluten free is counted in
  * both — so the codes do not sum to the headcount. `none` is the people who
  * reported nothing, and total + the codes is what the kitchen actually asks for.
+ *
+ * Takes anything carrying a `diet`, because vendors are counted the same way
+ * and are deliberately not `ExportPerson`s.
  */
-export function tally(people: ExportPerson[]): Tally {
+export function tally(people: { diet: DietCode[] }[]): Tally {
     const t = { VEG: 0, VGN: 0, GF: 0, NUT: 0, OTH: 0, none: 0, total: people.length } as Tally;
     for (const person of people) {
         if (person.diet.length === 0) { t.none += 1; continue; }
@@ -98,7 +135,7 @@ export function tally(people: ExportPerson[]): Tally {
 
 /**
  * The tally as the phrases that go under a table heading, e.g.
- * `["10 seated of 10", "3 vegetarian", "1 nut allergy", "6 no restrictions"]`.
+ * `["10 seated of 10", "3 vegetarian", "1 nut allergy", "6 chicken"]`.
  *
  * A restriction nobody has is left out rather than printed as a zero — a line of
  * zeroes is the thing a caterer skims past.
@@ -108,7 +145,7 @@ export function tallyParts(t: Tally, seatCount: number | null = null): string[] 
     for (const code of DIET_CODES) {
         if (t[code] > 0) parts.push(`${t[code]} ${DIET_LABELS[code].toLowerCase()}`);
     }
-    parts.push(`${t.none} no restrictions`);
+    parts.push(`${t.none} ${NO_RESTRICTION_LABEL.toLowerCase()}`);
     return parts;
 }
 
@@ -122,7 +159,7 @@ export function tallyParts(t: Tally, seatCount: number | null = null): string[] 
  */
 export function tallyPartsShort(t: Tally): string[] {
     const parts = DIET_CODES.filter(code => t[code] > 0).map(code => `${t[code]} ${code}`);
-    parts.push(`${t.none} none`);
+    parts.push(`${t.none} ${NO_RESTRICTION_LABEL.toLowerCase()}`);
     return parts;
 }
 
@@ -134,6 +171,45 @@ export function freeSeats(table: ExportTable): number {
 /** Everyone seated, in table order then seat order. */
 export function seatedPeople(data: SeatingExportData): ExportPerson[] {
     return data.tables.flatMap(t => t.people);
+}
+
+/**
+ * The vendors who are actually being fed.
+ *
+ * A vendor whose contract does not include a meal is still on the sheet — the
+ * planner wants to know who is in the building — but they are not a plate, and
+ * the number handed to a caterer has to be plates.
+ */
+export function vendorMeals(vendors: ExportVendor[]): ExportVendor[] {
+    return vendors.filter(v => v.needs_meal);
+}
+
+/**
+ * Vendors in the order they read on paper: by role, then by name.
+ *
+ * Grouped by role rather than by company, because the question a planner asks
+ * the sheet is "is the photographer eating", not "who did we book from Lumen".
+ * A vendor with no role sorts to the end rather than to the top, where an empty
+ * string would otherwise put them.
+ */
+export function sortedVendors(vendors: ExportVendor[]): ExportVendor[] {
+    return [...vendors].sort((a, b) => {
+        const roleA = (a.role ?? '').trim();
+        const roleB = (b.role ?? '').trim();
+        if (!roleA !== !roleB) return roleA ? -1 : 1;
+        return roleA.localeCompare(roleB) || a.name.localeCompare(b.name);
+    });
+}
+
+/**
+ * Every plate the kitchen is asked for: seated guests plus fed vendors.
+ *
+ * The two are counted apart everywhere else on the sheet — vendor meals are
+ * usually a different line on a different contract — so this is the one number
+ * that adds them up, and it exists so that nobody has to.
+ */
+export function grandTotal(seated: ExportPerson[], vendors: ExportVendor[]): number {
+    return seated.length + vendorMeals(vendors).length;
 }
 
 /** The surname a name sorts under, with a suffix dropped: "Nick Lucas Jr." → Lucas. */
@@ -158,7 +234,16 @@ export function alphabetical(data: SeatingExportData, includeUnseated: boolean):
     ));
 }
 
-/** The spreadsheet's columns, for the options in force. */
+/**
+ * The spreadsheet's columns, for the options in force.
+ *
+ * Vendors bring two columns with them rather than borrowing the guest ones: a
+ * vendor's role is not a household, and "is this one eating" is a question no
+ * guest column asks. `Meal` is `yes` for every guest, so totalling that one
+ * column counts every plate the file lists — the printed sheet's grand total
+ * plus anyone not seated yet, because the sheet counts chairs and the
+ * spreadsheet counts people.
+ */
 export function csvHeaders(opts: ExportOptions): string[] {
     return [
         'Table',
@@ -166,6 +251,7 @@ export function csvHeaders(opts: ExportOptions): string[] {
         'Name',
         ...(opts.household ? ['Household'] : []),
         ...(opts.side ? ['Side'] : []),
+        ...(opts.vendors ? ['Role', 'Meal'] : []),
         'RSVP',
         ...DIET_CODES.map(code => DIET_LABELS[code]),
         'Note',
@@ -187,13 +273,27 @@ export function csvRows(data: SeatingExportData, opts: ExportOptions): unknown[]
         person.name,
         ...(opts.household ? [person.household] : []),
         ...(opts.side ? [person.side ?? ''] : []),
+        ...(opts.vendors ? ['', 'yes'] : []),
         person.rsvp_status ?? 'no answer',
         ...DIET_CODES.map(code => (person.diet.includes(code) ? 'yes' : '')),
         person.note,
     ]);
+    const vendorRows = (vendors: ExportVendor[]) => vendors.map(vendor => [
+        'Vendor',
+        '',
+        vendor.name,
+        ...(opts.household ? [vendor.company ?? ''] : []),
+        ...(opts.side ? [''] : []),
+        vendor.role ?? '',
+        vendor.needs_meal ? 'yes' : 'no',
+        'vendor',
+        ...DIET_CODES.map(code => (vendor.diet.includes(code) ? 'yes' : '')),
+        vendor.note,
+    ]);
     return [
         ...rows(seatedPeople(data)),
         ...(opts.unseated ? rows(data.unseated) : []),
+        ...(opts.vendors ? vendorRows(sortedVendors(data.vendors)) : []),
     ];
 }
 
