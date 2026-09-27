@@ -18,7 +18,7 @@ import {
 } from '../src/lib/seating';
 import {
     DEFAULT_EXPORT_OPTIONS, NO_RESTRICTION_LABEL, alphabetical, csvHeaders, csvRows,
-    A4_CONTENT_HEIGHT, dietCodes, dietNote, exportFilename, fitScale, freeSeats, grandTotal,
+    A4_CONTENT_HEIGHT, ALL_DIET_CODES, dietCodes, dietNote, exportFilename, fitScale, freeSeats, grandTotal,
     pageCount, seatedPeople, sortedVendors, surname,
     tally, tallyChips, tallyParts, vendorMeals,
     type ExportOptions, type ExportPerson, type ExportVendor, type SeatingExportData,
@@ -539,6 +539,35 @@ console.log('\nExporting the chart');
     check('someone with two restrictions is counted in both', t.VEG + t.GF >= 3);
     check('people who reported nothing are counted apart', t.none === 2);
     check('the total is the headcount, not the restriction count', t.total === 5);
+    check('with nobody sitting the meal out, plates are the headcount', t.plates === 5);
+
+    /* a chair is not a plate */
+    const withBaby = [
+        person('Ada', ['VEG']),
+        person('Bo'),
+        person('Baby Cy', ['NOM']),
+        person('Di', ['KID']),
+    ];
+    const bt = tally(withBaby);
+    check('someone not eating still takes a chair', bt.total === 4);
+    check('but is not a plate', bt.plates === 3, String(bt.plates));
+    check('and is not counted as the standard plate either', bt.none === 1, String(bt.none));
+    check('a kids meal is a plate, just a different one',
+        bt.KID === 1 && bt.plates === 3);
+    check('a kids meal is not the chicken', bt.none === 1);
+    check('the not-eating count is its own number', bt.NOM === 1);
+    check('a table where nobody eats asks for no plates',
+        tally([person('A', ['NOM']), person('B', ['NOM'])]).plates === 0);
+
+    /* not eating is the whole answer */
+    check('not eating overrides the restrictions stored beside it',
+        dietCodes({ no_meal: true, vegetarian: true, other_text: 'x' }).join(',') === 'NOM',
+        dietCodes({ no_meal: true, vegetarian: true }).join(','));
+    check('a kids meal sits alongside a restriction rather than replacing it',
+        dietCodes({ kids_meal: true, gluten_free: true }).join(',') === 'GF,KID',
+        dietCodes({ kids_meal: true, gluten_free: true }).join(','));
+    check('both new answers are real codes on the sheet',
+        ALL_DIET_CODES.includes('KID') && ALL_DIET_CODES.includes('NOM'));
 
     const parts = tallyParts(t, 8);
     check('the tally leads with seats of capacity', parts[0] === '5 seated of 8', parts[0]);
@@ -641,9 +670,12 @@ console.log('\nExporting the chart');
         sortedVendors(data.vendors)[sortedVendors(data.vendors).length - 1].name === 'Sam Deane');
     check('only the vendors being fed are plates',
         vendorMeals(data.vendors).length === 3, String(vendorMeals(data.vendors).length));
-    check('the grand total is guests plus fed vendors',
+    check('the grand total is guest plates plus fed vendors',
         grandTotal(seatedPeople(data), data.vendors) === 6,
         String(grandTotal(seatedPeople(data), data.vendors)));
+    check('a guest not eating comes off the grand total, but keeps their chair',
+        grandTotal([...seatedPeople(data), person('Baby', ['NOM'])], data.vendors) === 6,
+        String(grandTotal([...seatedPeople(data), person('Baby', ['NOM'])], data.vendors)));
     check('a vendor with no meal is not counted, however hungry',
         grandTotal([], [vendor(9, 'Nobody', 'Security', [], false)]) === 0);
     check('vendors are counted by the same tally the guests are',

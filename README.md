@@ -163,8 +163,12 @@ has no drag-and-drop). Then **Export**, for the people who need it on paper:
    go below 60% and tells you instead). The spreadsheet is one row per person,
    with each restriction its own column so a pivot totals them.
 
-A plate with no restriction on it prints as **chicken** — the RSVP form has never
-asked for an entrée, so that is the whole of what can honestly be said.
+Guests answer with five restrictions plus **Kids' Meal** and **Not Eating** — the
+latter being a seat with no plate against it, for the baby whose food comes with
+their mother. So the kitchen total counts *plates*, which stops being the
+headcount the moment anyone is not eating. A plate with no answer on it prints as
+**chicken**: the RSVP form has never asked for an entrée, so that is the whole of
+what can honestly be said.
 
 Full details in
 [Seating and the Export](https://github.com/Soccerbeats/weddingwebsite/wiki/Seating-and-the-Export).

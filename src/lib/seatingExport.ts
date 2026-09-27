@@ -9,12 +9,13 @@
  */
 
 import {
-    DIET_CODES, DIET_LABELS, dietCodes, dietNote, type DietCode, type DietaryEntry,
+    ALL_DIET_CODES, DIET_CODES, DIET_LABELS, MEAL_CODES, dietCodes, dietNote,
+    type DietCode, type DietaryEntry,
 } from './dietary';
 
 // The sheet and the spreadsheet both name and count these, so they are part of
 // this module's surface even though the answers themselves belong to `dietary`.
-export { DIET_CODES, DIET_LABELS, dietCodes, dietNote };
+export { ALL_DIET_CODES, DIET_CODES, DIET_LABELS, MEAL_CODES, dietCodes, dietNote };
 export type { DietCode, DietaryEntry };
 
 /** A person as they appear on the sheet. */
@@ -100,7 +101,14 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
     format: 'print',
 };
 
-export type Tally = Record<DietCode, number> & { total: number; none: number };
+export type Tally = Record<DietCode, number> & {
+    /** People — chairs, in a table's tally. Not the same as plates. */
+    total: number;
+    /** People carrying no answer at all: the standard plate. */
+    none: number;
+    /** Meals the kitchen is asked for: everyone except the ones not eating. */
+    plates: number;
+};
 
 /**
  * What a plate with no restriction on it actually is.
@@ -125,11 +133,19 @@ export const NO_RESTRICTION_LABEL = 'Chicken';
  * and are deliberately not `ExportPerson`s.
  */
 export function tally(people: { diet: DietCode[] }[]): Tally {
-    const t = { VEG: 0, VGN: 0, GF: 0, NUT: 0, OTH: 0, none: 0, total: people.length } as Tally;
+    const t = {
+        VEG: 0, VGN: 0, GF: 0, NUT: 0, OTH: 0, KID: 0, NOM: 0,
+        none: 0, total: people.length, plates: 0,
+    } as Tally;
     for (const person of people) {
         if (person.diet.length === 0) { t.none += 1; continue; }
         for (const code of person.diet) t[code] += 1;
     }
+    // A chair is not a plate. Someone not eating still sits down, still appears
+    // on the roster and still counts toward "seated" — they are simply not a
+    // meal, and a caterer handed the headcount would cook one too many.
+    // A kids' meal *is* a plate, just a different one.
+    t.plates = t.total - t.NOM;
     return t;
 }
 
@@ -146,7 +162,7 @@ export function tally(people: { diet: DietCode[] }[]): Tally {
  */
 export function tallyParts(t: Tally, seatCount: number | null = null, lead = 'seated'): string[] {
     const parts = [seatCount && seatCount > 0 ? `${t.total} ${lead} of ${seatCount}` : `${t.total} ${lead}`];
-    for (const code of DIET_CODES) {
+    for (const code of ALL_DIET_CODES) {
         if (t[code] > 0) parts.push(`${t[code]} ${DIET_LABELS[code].toLowerCase()}`);
     }
     parts.push(`${t.none} ${NO_RESTRICTION_LABEL.toLowerCase()}`);
@@ -216,7 +232,7 @@ export interface TallyChip {
  */
 export function tallyChips(t: Tally): TallyChip[] {
     return [
-        ...DIET_CODES.filter(code => t[code] > 0).map(code => ({ code, count: t[code] })),
+        ...ALL_DIET_CODES.filter(code => t[code] > 0).map(code => ({ code, count: t[code] })),
         { code: null, count: t.none },
     ];
 }
@@ -265,9 +281,11 @@ export function sortedVendors(vendors: ExportVendor[]): ExportVendor[] {
  * The two are counted apart everywhere else on the sheet — vendor meals are
  * usually a different line on a different contract — so this is the one number
  * that adds them up, and it exists so that nobody has to.
+ *
+ * Plates, not chairs: a guest marked *not eating* is seated and is not a meal.
  */
 export function grandTotal(seated: ExportPerson[], vendors: ExportVendor[]): number {
-    return seated.length + vendorMeals(vendors).length;
+    return tally(seated).plates + vendorMeals(vendors).length;
 }
 
 /** The surname a name sorts under, with a suffix dropped: "Nick Lucas Jr." → Lucas. */
@@ -311,7 +329,7 @@ export function csvHeaders(opts: ExportOptions): string[] {
         ...(opts.side ? ['Side'] : []),
         ...(opts.vendors ? ['Role', 'Meal'] : []),
         'RSVP',
-        ...DIET_CODES.map(code => DIET_LABELS[code]),
+        ...ALL_DIET_CODES.map(code => DIET_LABELS[code]),
         'Note',
     ];
 }
@@ -331,9 +349,10 @@ export function csvRows(data: SeatingExportData, opts: ExportOptions): unknown[]
         person.name,
         ...(opts.household ? [person.household] : []),
         ...(opts.side ? [person.side ?? ''] : []),
-        ...(opts.vendors ? ['', 'yes'] : []),
+        // Not eating is the one guest row that is not a meal.
+        ...(opts.vendors ? ['', person.diet.includes('NOM') ? 'no' : 'yes'] : []),
         person.rsvp_status ?? 'no answer',
-        ...DIET_CODES.map(code => (person.diet.includes(code) ? 'yes' : '')),
+        ...ALL_DIET_CODES.map(code => (person.diet.includes(code) ? 'yes' : '')),
         person.note,
     ]);
     const vendorRows = (vendors: ExportVendor[]) => vendors.map(vendor => [
@@ -345,7 +364,7 @@ export function csvRows(data: SeatingExportData, opts: ExportOptions): unknown[]
         vendor.role ?? '',
         vendor.needs_meal ? 'yes' : 'no',
         'vendor',
-        ...DIET_CODES.map(code => (vendor.diet.includes(code) ? 'yes' : '')),
+        ...ALL_DIET_CODES.map(code => (vendor.diet.includes(code) ? 'yes' : '')),
         vendor.note,
     ]);
     return [

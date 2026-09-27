@@ -17,6 +17,8 @@ interface DietaryEntry {
     gluten_free?: boolean;
     nut_allergy?: boolean;
     other?: boolean;
+    kids_meal?: boolean;
+    no_meal?: boolean;
     other_text?: string;
 }
 
@@ -60,6 +62,8 @@ interface MemberCard {
     gluten_free: boolean;
     nut_allergy: boolean;
     other: boolean;
+    kids_meal: boolean;
+    no_meal: boolean;
     other_text: string;
 }
 
@@ -94,6 +98,8 @@ function buildCards(primaryName: string, partyMembers: PartyMember[], existingDi
             vegan: existing?.vegan ?? false,
             gluten_free: existing?.gluten_free ?? false,
             nut_allergy: existing?.nut_allergy ?? false,
+            kids_meal: existing?.kids_meal ?? false,
+            no_meal: existing?.no_meal ?? false,
             other: existing?.other ?? false,
             other_text: existing?.other_text ?? '',
         };
@@ -255,6 +261,8 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
             vegan: c.vegan,
             gluten_free: c.gluten_free,
             nut_allergy: c.nut_allergy,
+            kids_meal: c.kids_meal,
+            no_meal: c.no_meal,
             other: c.other,
             other_text: c.other ? c.other_text : '',
         }));
@@ -594,18 +602,48 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
                                                     { field: 'gluten_free', label: 'Gluten Free' },
                                                     { field: 'nut_allergy', label: 'Nut Allergy' },
                                                     { field: 'other', label: 'Other' },
-                                                ] as { field: keyof Pick<MemberCard, 'vegetarian' | 'vegan' | 'gluten_free' | 'nut_allergy' | 'other'>; label: string }[]).map(({ field, label }) => (
-                                                    <label key={field} className="flex items-center gap-2 cursor-pointer">
+                                                    { field: 'kids_meal', label: "Kids' Meal" },
+                                                    { field: 'no_meal', label: 'Not Eating' },
+                                                ] as { field: keyof Pick<MemberCard, 'vegetarian' | 'vegan' | 'gluten_free' | 'nut_allergy' | 'other' | 'kids_meal' | 'no_meal'>; label: string }[]).map(({ field, label }) => (
+                                                    <label key={field} className={`flex items-center gap-2 ${
+                                                        card.no_meal && field !== 'no_meal'
+                                                            ? 'cursor-not-allowed opacity-40'
+                                                            : 'cursor-pointer'
+                                                    }`}>
                                                         <input
                                                             type="checkbox"
                                                             checked={card[field]}
-                                                            onChange={(e) => updateCard(i, { [field]: e.target.checked })}
-                                                            className="h-4 w-4 rounded border-gray-300 text-accent focus:ring-accent"
+                                                            disabled={card.no_meal && field !== 'no_meal'}
+                                                            onChange={(e) => updateCard(i, (
+                                                                // Not eating is the whole answer: ticking it
+                                                                // clears the rest rather than leaving "not
+                                                                // eating, vegetarian" for the kitchen to
+                                                                // puzzle over.
+                                                                field === 'no_meal' && e.target.checked
+                                                                    ? {
+                                                                        no_meal: true,
+                                                                        vegetarian: false,
+                                                                        vegan: false,
+                                                                        gluten_free: false,
+                                                                        nut_allergy: false,
+                                                                        other: false,
+                                                                        kids_meal: false,
+                                                                        other_text: '',
+                                                                    }
+                                                                    : { [field]: e.target.checked }
+                                                            ))}
+                                                            className="h-4 w-4 rounded border-gray-300 text-accent focus:ring-accent disabled:opacity-50"
                                                         />
                                                         <span className="text-sm text-gray-700">{label}</span>
                                                     </label>
                                                 ))}
                                             </div>
+                                            {card.no_meal && (
+                                                <p className="mt-2 text-xs text-gray-500">
+                                                    They will still have a seat — we just will not order them a
+                                                    meal. For a baby whose food comes with you.
+                                                </p>
+                                            )}
                                             {card.other && (
                                                 <input
                                                     type="text"

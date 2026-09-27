@@ -1352,6 +1352,8 @@ export default function RSVPDashboard() {
                                                 entry.gluten_free && 'Gluten Free',
                                                 entry.nut_allergy && 'Nut Allergy',
                                                 entry.other && (entry.other_text || 'Other'),
+                                                entry.kids_meal && 'Kids meal',
+                                                entry.no_meal && 'Not eating',
                                             ].filter(Boolean);
                                             return flags.length ? flags.join(', ') : '-';
                                         };
@@ -1723,6 +1725,8 @@ export default function RSVPDashboard() {
                                                 entry.gluten_free && 'Gluten Free',
                                                 entry.nut_allergy && 'Nut Allergy',
                                                 entry.other && (entry.other_text || 'Other'),
+                                                entry.kids_meal && 'Kids meal',
+                                                entry.no_meal && 'Not eating',
                                             ].filter(Boolean);
                                             return flags.length ? flags.join(', ') : null;
                                         };

@@ -11,6 +11,22 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.98 — [Released] A kids' meal, and a baby who eats nothing (`main`, 2026-09-27 17:55)
+
+Austin has a baby coming whose mother brings their food. They need a chair and no plate — which the export had no way to say, because it counted seats and called the answer a meal count.
+
+### Added
+- **Two more dietary answers, on the RSVP form and the admin card**: **Kids' Meal** and **Not Eating**. They decide the plate rather than modify it, which is why they are not simply two more restrictions — a kids' meal is a different plate, and not eating is no plate at all.
+- **Both reach the seating export**: their own kitchen tiles, their own chips in the legend and under every table (a blue boxed `KID`, a filled `NOM`), their own columns in the spreadsheet, and their own line in the grand total — "114 plates in total — 110 guests and 4 vendors (not eating: 1 guest, 1 vendor)".
+- **Twelve more assertions in `npm run check:seating`** (211 in total) over the plate-versus-chair arithmetic.
+
+### Changed
+- **A chair is no longer a plate.** Everything before this counted seats, which is right only while everybody eats. The kitchen row now leads with **Plates** rather than the headcount — the chairs are already on every table heading — and the grand total counts plates too. Handing a caterer the headcount when somebody is not eating orders one plate too many.
+- **A kids' meal is not the chicken.** Neither is a not-eating. Both are answers, so neither falls into the no-answer bucket the chicken count is made of.
+- **Not eating is the whole answer.** Ticking it clears and greys out every other box, in both the RSVP form and the admin card — and `dietCodes()` enforces it at the data level too, so a row written by an older release still reads sensibly. Restrictions on a plate that is not being served say nothing, and "not eating, vegetarian" leaves the kitchen to guess which half was meant.
+- **A vendor's "not eating" is still their *Needs a meal* checkbox**, not a new pill: two controls for one fact is how the two come to disagree. Their pills offer the restrictions alone.
+- **The kitchen tiles dropped "Seated"** — on the vendor row it was a permanent zero, and nine tiles fit the row that ten did not.
+
 ## v0.9.97 — [Released] Documented (`main`, 2026-09-27 17:09)
 
 The seating export had shipped in v0.9.87 and never been written up anywhere. Three releases later it had grown vendors, the couple and a one-page fit, so this is the whole feature documented at once.

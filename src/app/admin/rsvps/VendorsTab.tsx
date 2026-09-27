@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import DietaryPills from '@/components/admin/DietaryPills';
-import { dietCodes, dietNote, isEmptyEntry, type DietaryEntry } from '@/lib/dietary';
+import { DIET_CODES, dietCodes, dietNote, isEmptyEntry, type DietaryEntry } from '@/lib/dietary';
 import { DIET_LABELS } from '@/lib/dietary';
 
 /**
@@ -358,6 +358,7 @@ export default function VendorsTab() {
                                     <label className={LABEL}>Food preference</label>
                                     <DietaryPills
                                         entry={form.dietary}
+                                        codes={DIET_CODES}
                                         onChange={entry => setForm({ ...form, dietary: entry })}
                                     />
                                     {isEmptyEntry(form.dietary) && (

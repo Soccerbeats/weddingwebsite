@@ -18,14 +18,39 @@ export interface DietaryEntry {
     gluten_free?: boolean;
     nut_allergy?: boolean;
     other?: boolean;
+    /** A child's plate rather than the adult one. A meal, not a restriction. */
+    kids_meal?: boolean;
+    /** No plate at all — they still take a chair. A baby whose food comes with them. */
+    no_meal?: boolean;
     /** The form's own field. `note` is the pre-JSONB migration's name for it. */
     other_text?: string | null;
     note?: string | null;
 }
 
-/** The restrictions the form collects, in the order they read best. */
+/**
+ * The restrictions — things that change what is *on* a plate.
+ *
+ * Not the whole list of answers: see `MEAL_CODES` for the two that change
+ * whether there is a plate, and what kind.
+ */
 export const DIET_CODES = ['VEG', 'VGN', 'GF', 'NUT', 'OTH'] as const;
-export type DietCode = (typeof DIET_CODES)[number];
+
+/**
+ * Which plate, or none at all.
+ *
+ * Kept apart from the restrictions because they are counted differently and the
+ * difference is the whole point: a restriction modifies a plate, `KID` *is* a
+ * different plate, and `NOM` is a chair with no plate against it — the baby
+ * whose mother brings their food. A caterer asked for "111 meals" when one of
+ * them eats nothing has been told the wrong number.
+ */
+export const MEAL_CODES = ['KID', 'NOM'] as const;
+
+/** Everything one person's answer can say, in the order it reads best. */
+export const ALL_DIET_CODES = [...DIET_CODES, ...MEAL_CODES] as const;
+
+export type RestrictionCode = (typeof DIET_CODES)[number];
+export type DietCode = (typeof ALL_DIET_CODES)[number];
 
 export const DIET_LABELS: Record<DietCode, string> = {
     VEG: 'Vegetarian',
@@ -33,6 +58,8 @@ export const DIET_LABELS: Record<DietCode, string> = {
     GF: 'Gluten free',
     NUT: 'Nut allergy',
     OTH: 'Other',
+    KID: 'Kids meal',
+    NOM: 'Not eating',
 };
 
 /** The entry field each code is stored in — the editor toggles these by name. */
@@ -42,7 +69,14 @@ export const DIET_FIELDS: Record<DietCode, keyof DietaryEntry> = {
     GF: 'gluten_free',
     NUT: 'nut_allergy',
     OTH: 'other',
+    KID: 'kids_meal',
+    NOM: 'no_meal',
 };
+
+/** Is this code one of the two that decide the plate rather than modify it? */
+export function isMealCode(code: DietCode): boolean {
+    return (MEAL_CODES as readonly string[]).includes(code);
+}
 
 /**
  * The codes an answer carries.
@@ -53,12 +87,19 @@ export const DIET_FIELDS: Record<DietCode, keyof DietaryEntry> = {
  */
 export function dietCodes(entry: DietaryEntry | null | undefined): DietCode[] {
     if (!entry) return [];
+    // Not eating is the whole answer. Restrictions on a plate that is not being
+    // served say nothing, and printing "no meal · gluten free" beside a name
+    // invites someone to make the gluten-free plate anyway. Enforced here rather
+    // than only in the editor, so a row written by an older release — or by
+    // hand — still reads sensibly.
+    if (entry.no_meal) return ['NOM'];
     const codes: DietCode[] = [];
     if (entry.vegetarian) codes.push('VEG');
     if (entry.vegan) codes.push('VGN');
     if (entry.gluten_free) codes.push('GF');
     if (entry.nut_allergy) codes.push('NUT');
     if (entry.other || dietNote(entry)) codes.push('OTH');
+    if (entry.kids_meal) codes.push('KID');
     return codes;
 }
 
@@ -127,6 +168,8 @@ export function entriesToStore(
             gluten_free: !!row.entry.gluten_free,
             nut_allergy: !!row.entry.nut_allergy,
             other: !!row.entry.other,
+            kids_meal: !!row.entry.kids_meal,
+            no_meal: !!row.entry.no_meal,
             other_text: row.entry.other ? dietNote(row.entry) : '',
         }));
 }
@@ -143,12 +186,22 @@ export function isOn(entry: DietaryEntry | null | undefined, code: DietCode): bo
  * the restriction on, because `dietCodes` counts the words as the answer.
  */
 export function toggleRestriction(entry: DietaryEntry, code: DietCode): DietaryEntry {
-    const next: DietaryEntry = { ...entry };
+    // "Not eating" and everything else are mutually exclusive, in both
+    // directions: turning it on clears the rest, and answering anything else
+    // turns it off. Otherwise a form can hold "not eating, vegetarian" and
+    // whoever reads the sheet has to decide which of the two the kitchen meant.
+    if (code === 'NOM') {
+        if (entry.no_meal) return { ...entry, no_meal: false };
+        return { name: entry.name, no_meal: true, other_text: '', note: null };
+    }
+
+    const next: DietaryEntry = { ...entry, no_meal: false };
     switch (code) {
         case 'VEG': next.vegetarian = !next.vegetarian; break;
         case 'VGN': next.vegan = !next.vegan; break;
         case 'GF': next.gluten_free = !next.gluten_free; break;
         case 'NUT': next.nut_allergy = !next.nut_allergy; break;
+        case 'KID': next.kids_meal = !next.kids_meal; break;
         case 'OTH':
             next.other = !isOn(entry, 'OTH');
             if (!next.other) { next.other_text = ''; next.note = null; }

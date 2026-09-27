@@ -1,7 +1,7 @@
 'use client';
 
 import {
-    DIET_CODES, DIET_LABELS, NO_RESTRICTION_LABEL, alphabetical, freeSeats, grandTotal,
+    ALL_DIET_CODES, DIET_LABELS, NO_RESTRICTION_LABEL, alphabetical, freeSeats, grandTotal,
     seatedPeople, sortedVendors, tally, tallyChips, tallyParts, vendorMeals,
     type DietCode, type ExportOptions, type ExportPerson, type ExportTable, type ExportVendor,
     type SeatingExportData,
@@ -26,6 +26,10 @@ const CODE_CLASS: Record<DietCode, string> = {
     GF: 'text-amber-700 border-amber-700',
     NUT: 'text-red-700 border-red-700',
     OTH: 'text-slate-600 border-slate-600',
+    KID: 'text-blue-700 border-blue-700',
+    // Filled rather than outlined: "no plate here" is the one mark a kitchen
+    // must not skim past, and it has to survive a black-and-white printer.
+    NOM: 'text-white bg-slate-700 border-slate-700',
 };
 
 function Chip({ code }: { code: DietCode }) {
@@ -201,43 +205,67 @@ function Kitchen({ people, vendors, showVendors }: {
     const fed = vendorMeals(vendors);
     const vt = tally(fed);
     const withVendors = showVendors && vendors.length > 0;
-    const GRID = 'grid grid-cols-4 sm:grid-cols-7 gap-px bg-gray-200 border border-gray-200 rounded overflow-hidden';
+    const unfed = vendors.length - fed.length;
+    const GRID = 'grid grid-cols-3 sm:grid-cols-9 gap-px bg-gray-200 border border-gray-200 rounded overflow-hidden';
     const ROW_LABEL = 'text-[9px] uppercase tracking-widest text-gray-400 mb-1.5';
     return (
         <section className="mb-6 break-inside-avoid">
             <h3 className="text-[9px] uppercase tracking-widest text-gray-400 mb-2">For the kitchen</h3>
             {withVendors && <p className={ROW_LABEL}>Guests</p>}
+            {/* Plates, not the headcount: it is the number a caterer is being
+                asked for, and once anybody is marked "not eating" the two stop
+                being the same. The chairs are not a kitchen number — each table
+                heading already carries them — so the gap is explained by the
+                *Not eating* tile and the total line rather than by a tile that
+                would read 0 for every vendor. */}
             <div className={GRID}>
-                <Tile label="Seated" value={t.total} lead />
-                {DIET_CODES.map(code => <Tile key={code} label={DIET_LABELS[code]} value={t[code]} />)}
+                <Tile label="Plates" value={t.plates} lead />
+                {ALL_DIET_CODES.map(code => <Tile key={code} label={DIET_LABELS[code]} value={t[code]} />)}
                 <Tile label={NO_RESTRICTION_LABEL} value={t.none} />
             </div>
             {withVendors && (
                 <>
-                    {/* The same seven columns as the guests above, so the two
-                        rows read straight down: a caterer comparing "how many
-                        vegetarian" across them is looking at one column, not
-                        hunting two differently-shaped summaries. */}
+                    {/* The same columns as the guests above, so the two rows read
+                        straight down: a caterer comparing "how many vegetarian"
+                        across them is looking at one column, not hunting two
+                        differently-shaped summaries. A vendor's "not eating" is
+                        their contract (`needs_meal`), not a dietary answer, so
+                        that tile is counted from the vendors rather than from
+                        their tally. */}
                     <p className={`${ROW_LABEL} mt-3`}>Vendors</p>
                     <div className={GRID}>
-                        <Tile label="Vendor plates" value={fed.length} lead />
-                        {DIET_CODES.map(code => <Tile key={code} label={DIET_LABELS[code]} value={vt[code]} />)}
+                        <Tile label="Plates" value={fed.length} lead />
+                        {ALL_DIET_CODES.map(code => (
+                            <Tile
+                                key={code}
+                                label={DIET_LABELS[code]}
+                                value={code === 'NOM' ? unfed : vt[code]}
+                            />
+                        ))}
                         <Tile label={NO_RESTRICTION_LABEL} value={vt.none} />
                     </div>
                     <p className="mt-2 text-[10px] text-gray-500 tabular-nums">
                         <span className="font-semibold text-gray-800">
                             {grandTotal(people, vendors)} plates in total
                         </span>
-                        {' — '}{t.total} guest{t.total === 1 ? '' : 's'}
+                        {' — '}{t.plates} guest{t.plates === 1 ? '' : 's'}
                         {' and '}{fed.length} vendor{fed.length === 1 ? '' : 's'}
-                        {vendors.length > fed.length && (
+                        {(t.NOM > 0 || unfed > 0) && (
                             <span className="text-gray-400">
-                                {' '}({vendors.length - fed.length} vendor
-                                {vendors.length - fed.length === 1 ? '' : 's'} not eating)
+                                {' '}(not eating: {[
+                                    t.NOM > 0 ? `${t.NOM} guest${t.NOM === 1 ? '' : 's'}` : null,
+                                    unfed > 0 ? `${unfed} vendor${unfed === 1 ? '' : 's'}` : null,
+                                ].filter(Boolean).join(', ')})
                             </span>
                         )}
                     </p>
                 </>
+            )}
+            {!withVendors && t.NOM > 0 && (
+                <p className="mt-2 text-[10px] text-gray-500 tabular-nums">
+                    <span className="font-semibold text-gray-800">{t.plates} plates</span>
+                    {' — '}{t.NOM} of the {t.total} seated {t.NOM === 1 ? 'is' : 'are'} not eating
+                </p>
             )}
         </section>
     );
@@ -334,7 +362,7 @@ function Vendors({ vendors, compact = false }: {
 function Legend() {
     return (
         <div className="mb-5 px-3 py-2 bg-gray-50 rounded flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-gray-600">
-            {DIET_CODES.map(code => (
+            {ALL_DIET_CODES.map(code => (
                 <span key={code} className="inline-flex items-center gap-1.5">
                     <Chip code={code} />{DIET_LABELS[code]}
                 </span>
