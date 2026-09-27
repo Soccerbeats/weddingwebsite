@@ -11,6 +11,13 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.99 — [Released] Find the kids' meals (`main`, 2026-09-27 18:09)
+
+### Added
+- **A 🧒 Kids Meal filter on the guest list**, beside the RSVP and side filters. It narrows the table — and the mailing export, which follows the active filter — to households with anyone on a child's plate.
+- **It matches the household, not the person**, because the row is the household: a family of four with one child on a kids' meal is one row you want to see, with its party sub-rows under it.
+- **Read through `dietCodes()`, not off the boolean**, so someone marked *Not eating* does not match even if a kids' meal was ticked before that — not eating overrides the rest, and the filter honours the same rule the sheet does. Verified against a seeded database: of three households carrying `kids_meal`, the filter returns the two it should and leaves out the one whose child is also marked not eating.
+
 ## v0.9.98 — [Released] A kids' meal, and a baby who eats nothing (`main`, 2026-09-27 17:55)
 
 Austin has a baby coming whose mother brings their food. They need a chair and no plate — which the export had no way to say, because it counted seats and called the answer a meal count.

@@ -6,7 +6,8 @@ import AddressReconcileModal from '@/components/admin/AddressReconcileModal';
 import { MAILING_HEADERS, mailingRows, toCsv } from '@/lib/mailing';
 import { SaveStatus, useAutosave } from '@/components/admin/useAutosave';
 import {
-    alignEntries, entriesToStore, isEmptyEntry, signature, type DietaryEntry,
+    alignEntries, dietCodes, entriesToStore, isEmptyEntry, signature,
+    type DietCode, type DietaryEntry,
 } from '@/lib/dietary';
 import { cleanName } from '@/lib/names';
 import DietaryPills from '@/components/admin/DietaryPills';
@@ -91,7 +92,7 @@ interface Donation {
 }
 
 type Tab = 'rsvps' | 'guestlist' | 'vendors' | 'donations';
-type GuestFilter = 'all' | 'no_response' | 'attending' | 'declined' | 'likely_not_coming' | 'invited' | 'not_invited' | 'bride' | 'groom' | 'noted' | 'issue' | 'need';
+type GuestFilter = 'all' | 'no_response' | 'attending' | 'declined' | 'likely_not_coming' | 'invited' | 'not_invited' | 'bride' | 'groom' | 'noted' | 'issue' | 'need' | 'kids_meal';
 
 export default function RSVPDashboard() {
     const [activeTab, setActiveTab] = useState<Tab>('rsvps');
@@ -966,11 +967,26 @@ export default function RSVPDashboard() {
     const totalGuestListSize = guestRows.filter(g => g.rsvp_status !== 'likely_not_coming' && g.rsvp_status !== 'declined').reduce((acc, curr) => acc + curr.party_size, 0);
     const missingRsvps = guestRows.filter(g => g.invited && !g.rsvp_status).reduce((acc, curr) => acc + curr.party_size, 0);
 
+    /**
+     * Does anyone on this invitation carry this dietary answer?
+     *
+     * The answers live on the household's RSVP, not on the guest row, so this
+     * is a lookup by name rather than a column — and it is the household that
+     * matches, because the row is the household: a family of four with one
+     * child on a kids' meal is one row you want to see.
+     *
+     * Read through `dietCodes()` rather than off the boolean, so an entry that
+     * also says "not eating" is not counted — that answer overrides the rest.
+     */
+    const householdHas = (guest: Guest, code: DietCode): boolean =>
+        dietaryOf(rsvpFor(guest.guest_name)).some(entry => dietCodes(entry).includes(code));
+
     const filteredGuests = guests.filter(g => {
         const memberNames = (g.party_members || []).map(m => m.name || '').join(' ');
         const matchesSearch = !guestSearch || g.guest_name.toLowerCase().includes(guestSearch.toLowerCase()) || memberNames.toLowerCase().includes(guestSearch.toLowerCase());
         if (!matchesSearch) return false;
         switch (guestFilter) {
+            case 'kids_meal': return householdHas(g, 'KID');
             case 'no_response': return g.invited && !g.rsvp_status;
             case 'attending': return g.rsvp_status === 'attending';
             case 'declined': return g.rsvp_status === 'declined';
@@ -1644,6 +1660,7 @@ export default function RSVPDashboard() {
                                 { key: 'not_invited', label: 'Not Invited', color: 'gray' },
                                 { key: 'bride', label: `${config?.brideName || 'Bride'}'s Side`, color: 'pink' },
                                 { key: 'groom', label: `${config?.groomName || 'Groom'}'s Side`, color: 'blue' },
+                                { key: 'kids_meal', label: '🧒 Kids Meal', color: 'blue' },
                                 { key: 'noted', label: '📝 Noted', color: 'indigo' },
                                 { key: 'issue', label: '⚠️ Issue', color: 'red' },
                                 { key: 'need', label: '📌 Need', color: 'amber' },
