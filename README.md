@@ -132,12 +132,42 @@ optional and each feature says so in the UI when its variable is missing:
 | Finances | Seating chart |
 |---|---|
 | <img src="docs/images/admin-finances.jpg" alt="The finance suite: budget lines grouped by category with paid and remaining totals"> | <img src="docs/images/admin-seating.jpg" alt="The seating chart builder with round tables on a floor plan and guests assigned to seats"> |
-| A real budget: lines, payers, contributors, what is left | Drag guests onto tables on a floor plan |
+| A real budget: lines, payers, contributors, what is left | Drag guests onto tables — or work the same plan as a list |
 
 | Photos | Changelog |
 |---|---|
 | <img src="docs/images/admin-photos.jpg" alt="Photo management with drag-to-reorder, heart-to-publish and inline editing"> | <img src="docs/images/changelog.jpg" alt="The changelog viewer: a version nav on the left beside a reading pane of release cards"> |
 | Drag to reorder, heart to publish | Every release, read in the panel — see [Versions and the changelog](https://github.com/Soccerbeats/weddingwebsite/wiki/Versions-and-the-Changelog) |
+
+### Seating, and the sheet for the caterer
+
+One plan, two views — a floor plan you drag people onto, or the same plan as a
+list with multi-select and bulk moves (which is what a phone opens, since touch
+has no drag-and-drop). Then **Export**, for the people who need it on paper:
+
+1. **Put yourselves on the guest list.** On *RSVPs & Guests → Guest List* a
+   banner offers **Add the couple** — one row holding both of you, named from
+   your settings. You can then be seated like any party, and your plates are
+   counted, without being counted as invited to your own wedding.
+2. **Add the vendors.** The *Vendors* tab: the photographer, the DJ, the
+   planner — name, role, company, contact, whether their contract includes a
+   meal, and what they cannot eat. One row is one person. They never take a
+   chair.
+3. **Export.** Options on the left, a live preview of the real sheet on the
+   right. Choose *By table* / *A–Z* / both, and *Every name* / *Counts only* /
+   both. Turn on **Vendors** to include them.
+4. **Print or download.** Paper gives you a kitchen summary — guest plates,
+   vendor plates and a grand total — a block per table, and the vendors.
+   *Counts only* fits on one page: three columns, no vendor roster, and if it is
+   still over, the sheet is shrunk by exactly the amount it needs (it refuses to
+   go below 60% and tells you instead). The spreadsheet is one row per person,
+   with each restriction its own column so a pivot totals them.
+
+A plate with no restriction on it prints as **chicken** — the RSVP form has never
+asked for an entrée, so that is the whole of what can honestly be said.
+
+Full details in
+[Seating and the Export](https://github.com/Soccerbeats/weddingwebsite/wiki/Seating-and-the-Export).
 
 ### The honeymoon portal
 

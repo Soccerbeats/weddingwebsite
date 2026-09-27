@@ -59,7 +59,7 @@ image:
 | `npm run check:finance:db` | The same against a live database |
 | `npm run check:finance:ui` | The finance UI's contracts (needs a browser; fetches Playwright on demand) |
 | `npm run audit:finance` | A deeper sweep over the finance logic |
-| `npm run check:seating` | 50+ assertions with no database or browser: who takes a chair (a party member who declined takes none), seat-index allocation, moves, swaps, gathering a split party, auto-seating, and the plan's own warnings |
+| `npm run check:seating` | 199 assertions with no database or browser: who takes a chair (a party member who declined takes none), seat-index allocation, moves, swaps, gathering a split party, auto-seating, the plan's own warnings, and the export — tallies, vendor plates, the grand total, the spreadsheet's columns and the one-page fit maths |
 | `npm run check:honeymoon` | 550+ assertions with no database or network: distances, date maths, URL parsing, the calendar grid, `.ics` output, search ranking, seed integrity, the trip-mode day resolution, sunrise/sunset, OSM opening hours, the day timeline, time zones on legs, the budget, conflicts, imports/exports, markdown, the flight parser, and journeys (layovers, day placement, door-to-door time) |
 
 Seeds: `npm run seed:honeymoon` (bundles the Bali/Singapore travel guide,
@@ -239,7 +239,10 @@ order, before the commit:
   runtime schema owners), `changelog.ts` (parses CHANGELOG.md for the in-app
   viewer), `demoSeed.ts` (the fictional-wedding generator), `seating.ts` (the
   seating chart's pure logic, shared by the canvas and the list view and covered
-  by `check:seating`), and the honeymoon portal's pure logic, all covered by
+  by `check:seating`), `seatingExport.ts` (the export as a document — what is on
+  the page, the tallies, the CSV and the one-page fit maths — also covered by
+  `check:seating`), `dietary.ts` (what people cannot eat, and where that answer
+  lives), and the honeymoon portal's pure logic, all covered by
   `check:honeymoon`:
 
   | Module | Owns |
@@ -269,10 +272,10 @@ order, before the commit:
 - **File-based (`public/config/`)** — content that is easily editable and
   portable: site settings, colours, dates, photo metadata, timeline.
 - **PostgreSQL** — relational data and forms: `rsvps`, `guest_list`,
-  `wip_toggles`, `donations`, the `finance_*` suite (settings, categories,
-  items, subitems, payers, purchases, contributors, receipts), seating
-  (`floor_plans`, `floor_plan_room`, `floor_plan_walls`, `seating_tables`,
-  `seat_assignments`), and the `honeymoon_*` suite:
+  `wip_toggles`, `donations`, `vendors`, the `finance_*` suite (settings,
+  categories, items, subitems, payers, purchases, contributors, receipts),
+  seating (`floor_plans`, `floor_plan_room`, `floor_plan_walls`,
+  `seating_tables`, `seat_assignments`), and the `honeymoon_*` suite:
   - the plan — `trip`, `regions`, `places`, `days`, `stops`, `travel`,
     `journeys`, `todos`, `notes`, `categories`
   - the paperwork — `bookings` (polymorphic over place / leg / stop / journey),
@@ -380,6 +383,38 @@ order, before the commit:
   drift apart, and `check:seating` covers it. Every change goes through
   `POST /api/admin/seating/assign`, whose `{ deletes, seats }` shape applies a
   bulk move in one transaction.
+- **Who can be seated** — `guest_list` rows, and only those. `guest_list.kind`
+  is `guest` for everyone invited and `couple` for the two getting married: the
+  couple are one ordinary household of two (bride as `guest_name`, groom in
+  `party_members`), which is why seating them needed no seating code at all. The
+  `kind` filter is what keeps them out of the invitation statistics, the mailing
+  export and the RSVPs tab — **add it to any new count over `guest_list`**, or
+  the couple silently inflate it. A row with `kind IS NULL` predates the column
+  and is a guest.
+  **Vendors are not in `guest_list`** and never take a chair: their own `vendors`
+  table, their own tab, one row per person, with a `dietary` JSONB in the same
+  `DietaryEntry` shape an RSVP stores so the same editor and the same counting
+  code work on both.
+- **The seating export** (`src/lib/seatingExport.ts`, `SeatingExportModal`,
+  `SeatingExportSheet`) — one pure module, one dialog, one sheet component drawn
+  twice: shrunk as the dialog's preview and portalled to `<body>` as the thing
+  that prints. A preview rendered by different code from the printout is a
+  preview you cannot trust, so **do not fork them**.
+  - The preview lays out at `A4_CONTENT_WIDTH` (703px — A4 *inside* its 12mm
+    margins), not at 794px. It laid out at 794 until v0.9.96, which is why a
+    preview that looked like one page could print as two.
+  - **Counts-only is fitted to one page**: `fitScale()` measures the sheet and
+    shrinks it, floored at 60% — below that it reports the page count instead of
+    pretending. The scaling uses `zoom`, **not `transform: scale()`**: a
+    transform leaves the element's flow height untouched, so the page breaks in
+    the very place the scaling was meant to prevent.
+  - `NO_RESTRICTION_LABEL` names the no-restriction bucket ("Chicken") in one
+    place, so the table lines, the counts sheet and the kitchen tile cannot
+    drift. It is the constant to change when an entrée question lands (SEAT-1 in
+    `docs/parkinglot.md`).
+  - Dietary answers reach a chair **by name** and nothing sturdier — a seat
+    stores `display_name`, an RSVP files an answer under the name that answered.
+    That is why a rename in the guest list carries to both.
 - **Honeymoon portal** (`/admin/honeymoon`) — a private planner *and* a trip
   companion: map (Leaflet, four base layers), day-by-day itinerary with a
   timeline, **journeys** (a whole ticket with its legs, layovers and one booking),

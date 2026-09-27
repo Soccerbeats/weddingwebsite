@@ -11,6 +11,17 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.97 — [Released] Documented (`main`, 2026-09-27 17:09)
+
+The seating export had shipped in v0.9.87 and never been written up anywhere. Three releases later it had grown vendors, the couple and a one-page fit, so this is the whole feature documented at once.
+
+### Changed
+- **A wiki page of its own, "Seating and the Export"**: both chart views, who can be seated and who cannot, adding the couple, adding vendors, every export option, what actually prints, the chicken, the one-page fit and the spreadsheet's columns. Linked from the sidebar and the wiki home.
+- **The wiki pages this work made wrong**: *Features* described the seating chart as the canvas builder alone, with no list view and no export at all; *Guests and RSVPs* gained step-by-step sections for the couple and the vendors, and a note that dietary answers can be typed in from the admin side; *Architecture* gained the `vendors` table and `guest_list.kind`.
+- **Two stale things fixed while passing**: *Development* never listed `npm run check:seating` at all, and put `check:honeymoon` at 257 assertions when it is 659.
+- **`README.md`** — a *Seating, and the sheet for the caterer* section with the four steps, and a seating screenshot caption that no longer implies the canvas is the only view.
+- **`AGENTS.md`** — the `vendors` table in the storage list, `seatingExport.ts` and `dietary.ts` in the module list, the real `check:seating` count, and the conventions an agent can break: apply the `kind` filter to any new count over `guest_list`, do not fork the preview from the print sheet, and use `zoom` rather than `transform` when scaling something that has to paginate.
+
 ## v0.9.96 — [Released] Counts only, on one page (`main`, 2026-09-26 16:48)
 
 Counts only was printing on two pages. Measured on the demo wedding — thirteen tables, ninety guests, eight vendors — the sheet came to 1428px against the 1032px A4 gives you inside its margins: 38% too tall.
