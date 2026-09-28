@@ -218,6 +218,7 @@ function resolve(resource: string): ResourceDef | null {
 const SETTINGS_FIELDS: Record<string, Field> = {
     adult_count: { kind: 'int' },
     minor_count: { kind: 'int' },
+    drinking_count: { kind: 'int' },
     plan_horizon_months: { kind: 'ref' }, // nullable positive int, or null to auto-derive
     paycheck_interval_days: { kind: 'int' },
 };

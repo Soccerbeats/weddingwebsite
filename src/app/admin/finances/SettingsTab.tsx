@@ -33,8 +33,8 @@ export default function SettingsTab({ data, api }: { data: FinancePayload; api: 
             <Card className="p-5">
                 <h3 className="font-semibold text-gray-900 mb-1">Headcount</h3>
                 <p className="text-xs text-gray-400 mb-4">
-                    Drives any line whose quantity is set to Adults, Minors, or All guests — dinner, kids&apos;
-                    meals, the bar.
+                    Drives any line whose quantity is set to Adults, Minors, Drinkers or All guests —
+                    dinner, kids&apos; meals, the bar.
                 </p>
 
                 <div className="grid grid-cols-2 gap-4 max-w-sm">
@@ -58,8 +58,27 @@ export default function SettingsTab({ data, api }: { data: FinancePayload; api: 
                     </div>
                 </div>
 
+                <div className="mt-4 max-w-sm">
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">
+                        Drinkers <span className="font-normal text-gray-400">(21 and over)</span>
+                    </label>
+                    <div className="bg-gray-50 border border-gray-200 rounded-2xl px-2">
+                        <InlineNumber
+                            value={settings.drinking_count}
+                            onCommit={(drinking_count) => api.update('settings', { drinking_count })}
+                        />
+                    </div>
+                    <p className="mt-1 text-xs text-gray-400">
+                        Some of your adults, not extra guests — an under-21 still eats the adult dinner.
+                        Only lines set to Drinkers use this.
+                    </p>
+                </div>
+
                 <div className="text-xs text-gray-500 mt-3">
                     Total: <strong>{settings.adult_count + settings.minor_count} guests</strong>
+                    {settings.drinking_count > 0 && (
+                        <>, <strong>{settings.drinking_count}</strong> of them drinking</>
+                    )}
                 </div>
 
                 {headcount && (
@@ -70,8 +89,15 @@ export default function SettingsTab({ data, api }: { data: FinancePayload; api: 
                             {headcount.attending.toLocaleString()} confirmed attending.
                             These are only a reference — your budget stays on the numbers you set above, so a
                             late RSVP can&apos;t quietly move your total. Your guest list has no adult/minor
-                            marker, so the split is yours to make.
+                            marker, so that split is yours to make.
                         </p>
+                        {headcount.under21 > 0 && (
+                            <p className="text-xs text-gray-500 mb-3">
+                                {headcount.under21.toLocaleString()} of the{' '}
+                                {headcount.expected.toLocaleString()} people you expect are marked under
+                                21, leaving <strong>{headcount.drinking.toLocaleString()}</strong> at the bar.
+                            </p>
+                        )}
                         <div className="flex flex-wrap gap-2">
                             <PillButton
                                 onClick={() => api.update('settings', { adult_count: headcount.invited, minor_count: 0 })}
@@ -83,6 +109,13 @@ export default function SettingsTab({ data, api }: { data: FinancePayload; api: 
                                     onClick={() => api.update('settings', { adult_count: headcount.attending, minor_count: 0 })}
                                 >
                                     Use {headcount.attending} attending as adults
+                                </PillButton>
+                            )}
+                            {headcount.expected > 0 && (
+                                <PillButton
+                                    onClick={() => api.update('settings', { drinking_count: headcount.drinking })}
+                                >
+                                    Use {headcount.drinking} drinking
                                 </PillButton>
                             )}
                         </div>

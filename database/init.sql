@@ -53,6 +53,11 @@ ALTER TABLE guest_list ADD COLUMN IF NOT EXISTS relationship VARCHAR(255);
 -- they have their own table below, because nothing about a vendor is a party.
 ALTER TABLE guest_list ADD COLUMN IF NOT EXISTS kind VARCHAR(20) DEFAULT 'guest';
 UPDATE guest_list SET kind = 'guest' WHERE kind IS NULL;
+-- Too young to drink. This is the household themself; their companions carry
+-- their own `under21` inside `party_members`, the same way `attending` does.
+-- It changes nothing about a plate — an under-21 eats the adult dinner — only
+-- the bar line on the budget, which counts drinkers rather than adults.
+ALTER TABLE guest_list ADD COLUMN IF NOT EXISTS under_21 BOOLEAN DEFAULT false;
 ALTER TABLE rsvps ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
 -- Per-page "hidden from the nav" flag, added with the WIP controls. Created at
 -- runtime by /api/wip-status too; both must stay in step.
@@ -515,10 +520,15 @@ CREATE TABLE IF NOT EXISTS finance_settings (
   id INTEGER PRIMARY KEY DEFAULT 1,
   adult_count INTEGER NOT NULL DEFAULT 0,
   minor_count INTEGER NOT NULL DEFAULT 0,
+  -- The adults old enough to drink: a subset of adult_count, not another slice
+  -- of the party. Only a 'drinkers' budget line reads it.
+  drinking_count INTEGER NOT NULL DEFAULT 0,
   plan_horizon_months INTEGER,
   paycheck_interval_days INTEGER NOT NULL DEFAULT 14,
   CONSTRAINT finance_settings_singleton CHECK (id = 1)
 );
+-- src/lib/financeDb.ts adds this at runtime too; the two must stay in step.
+ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS drinking_count INTEGER NOT NULL DEFAULT 0;
 
 CREATE TABLE IF NOT EXISTS finance_categories (
   id SERIAL PRIMARY KEY,

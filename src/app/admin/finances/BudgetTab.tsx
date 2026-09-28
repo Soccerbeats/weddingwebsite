@@ -13,6 +13,9 @@ const QTY_LABELS: Record<string, string> = {
     manual: 'Fixed',
     adults: 'Adults',
     minors: 'Minors',
+    // The bar's own count. Adults and drinkers are different questions: an
+    // under-21 guest eats the adult dinner and costs the bar nothing.
+    drinkers: 'Drinkers (21+)',
     total: 'All guests',
 };
 
@@ -54,6 +57,7 @@ export default function BudgetTab({ data, api }: { data: FinancePayload; api: Fi
                         {summary.items.filter((i) => i.state === 'paid').length} fully paid
                         <div className="mt-0.5">
                             Headcount: {settings.adult_count} adults + {settings.minor_count} minors
+                            {settings.drinking_count > 0 && ` · ${settings.drinking_count} drinking`}
                         </div>
                         {summary.items.some((i) => i.stateConflict) && (
                             <div className="mt-1 text-amber-600">

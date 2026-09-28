@@ -11,7 +11,7 @@
  */
 import type { GuestListEntry, SeatData, SeatingTableData } from '../src/components/seating/types';
 import {
-    allSeats, buildPartySeats, expectedSeats, headcount, occupancy, partyAttendees,
+    allSeats, buildPartySeats, drinkingHeadcount, expectedSeats, headcount, occupancy, partyAttendees,
     planAutoSeat, planGatherParty, planMove, planSeatSelection, planSwap, planUnseat,
     planUnseatSelection, seatIndexer, seatingIssues, splitPartyGroupIds,
     planRenameSeats, renamesBetween, staleSeatNames, partySeatingState, buildPersonSeat,
@@ -42,7 +42,7 @@ function check(label: string, condition: boolean, detail = '') {
 
 /* ---- fixtures ---- */
 
-function guest(id: number, name: string, partySize: number, members: { name: string | null; attending?: boolean | null }[] = [], extra: Partial<GuestListEntry> = {}): GuestListEntry {
+function guest(id: number, name: string, partySize: number, members: { name: string | null; attending?: boolean | null; under21?: boolean | null }[] = [], extra: Partial<GuestListEntry> = {}): GuestListEntry {
     return {
         id,
         guest_name: name,
@@ -178,6 +178,72 @@ console.log('\nWho takes a chair');
     check('a note on a party member is taken off too',
         partyAttendees(notedMember).map(p => p.name).join(', ') === 'Zack Novak, Natalie Williams',
         partyAttendees(notedMember).map(p => p.name).join(', '));
+}
+
+/* ---- who is old enough to drink ---- */
+
+console.log('\nWho can drink');
+{
+    // The flag is a property of a person, so it lives in two places for the same
+    // reason `attending` does: the household's own row is the first person, and
+    // every companion carries their own.
+    const primaryYoung = guest(40, 'Ellie Vance', 1, [], { under_21: true });
+    check('the household themself can be under 21',
+        partyAttendees(primaryYoung)[0].under21 === true);
+    check('and is 21+ by default when nothing says otherwise',
+        partyAttendees(guest(41, 'Ada Byron', 1))[0].under21 === false);
+
+    const family = guest(42, 'Marcus Vance', 3, [
+        { name: 'Jo Vance' },
+        { name: 'Theo Vance', under21: true },
+    ]);
+    const people = partyAttendees(family);
+    check('a companion carries their own answer',
+        people.map(p => `${p.name}:${p.under21}`).join(', ')
+            === 'Marcus Vance:false, Jo Vance:false, Theo Vance:true',
+        people.map(p => `${p.name}:${p.under21}`).join(', '));
+
+    // The trap: `partyAttendees` drops anyone who declined, so the flags cannot
+    // be read back off the returned array by index — they have to travel with
+    // the person. A party whose *first* companion declines is where an
+    // index-aligned implementation hands the wrong person's age to the next one.
+    const oneDeclined = guest(43, 'Nina Ross', 3, [
+        { name: 'Paul Ross', attending: false },
+        { name: 'Sam Ross', under21: true },
+    ]);
+    check('a declined member does not shift the ages along',
+        partyAttendees(oneDeclined).map(p => `${p.name}:${p.under21}`).join(', ')
+            === 'Nina Ross:false, Sam Ross:true',
+        partyAttendees(oneDeclined).map(p => `${p.name}:${p.under21}`).join(', '));
+
+    // An unnamed slot is nobody yet, so nothing is assumed about their age.
+    check('an unnamed slot is not assumed to be under 21',
+        partyAttendees(guest(44, 'Mabel Grey', 2))[1].under21 === false);
+
+    const roll = [
+        guest(45, 'Ellie Vance', 1, [], { under_21: true }),
+        family,
+        oneDeclined,
+        guest(46, 'Not Invited', 4, [], { invited: false, under_21: true }),
+        guest(47, 'Declined House', 2, [{ name: 'Someone' }], { rsvp_status: 'declined' }),
+    ];
+    const bar = drinkingHeadcount(roll);
+    // Ellie (1) + Marcus's three + Nina's two = 6 people expected.
+    check('the roll counts the people who take a chair', bar.people === 6, String(bar.people));
+    check('three of them are under 21', bar.under21 === 3, String(bar.under21));
+    check('so the bar is charged for three', bar.drinking === 3, String(bar.drinking));
+    check('an uninvited household adds nobody', drinkingHeadcount([roll[3]]).people === 0);
+    check('nor does one that declined', drinkingHeadcount([roll[4]]).people === 0);
+    // A bar is booked months before the last RSVP lands, so silence counts as
+    // coming — the same assumption the seating chart makes when it still draws
+    // them a chair. Anything that says otherwise does not.
+    const silent = guest(48, 'Quiet House', 2, [{ name: 'Pat Quiet' }], { rsvp_status: null });
+    check('nobody has answered yet, so both still count',
+        drinkingHeadcount([silent]).drinking === 2, String(drinkingHeadcount([silent]).drinking));
+    const unlikely = guest(49, 'Maybe House', 2, [{ name: 'Lee Maybe' }], { rsvp_status: 'likely_not_coming' });
+    check('a household likely not coming drinks nothing',
+        drinkingHeadcount([unlikely]).people === 0);
+    check('an empty guest list charges no bar', drinkingHeadcount([]).drinking === 0);
 }
 
 /* ---- chairs ---- */

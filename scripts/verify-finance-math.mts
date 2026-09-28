@@ -3,7 +3,7 @@
  * exactly. Run: npx tsx scripts/verify-finance-math.mts
  */
 import {
-    buildSummary, budgetTotal, itemTotal, DEFAULT_SETTINGS,
+    buildSummary, budgetTotal, effectiveQuantity, itemTotal, DEFAULT_SETTINGS,
     type Category, type BudgetItem, type Contributor, type Payer, type Purchase, type FinanceSettings,
 } from '../src/lib/finance';
 import {
@@ -194,6 +194,68 @@ check('other section has no installments', other.directSpent, 0);
 check('other section gift money (dress)', other.giftApplied, 1200);
 check('other section paid total', other.paid, 3613);
 check('unlinked spend (AirBnb)', s.unlinkedSpend, 1957);
+
+console.log('\n--- Under-21 guests and the bar line ---');
+// "Under 21" says nothing about a plate — an 18-year-old eats the adult dinner.
+// It says only that the bar is not being drunk, so the bar line tracks its own
+// count and every other per-head line goes on tracking the adults.
+const drinkSettings: FinanceSettings = {
+    ...DEFAULT_SETTINGS, adult_count: 100, minor_count: 10, drinking_count: 84,
+};
+const barLine: BudgetItem = {
+    id: 9001, category_id: 1, name: 'Bar', unit_cost: 25, quantity: 1,
+    qty_source: 'drinkers', use_subitems: false, is_paid: false, notes: null,
+    sort_order: 0, subitems: [],
+};
+check('bar line counts drinkers', effectiveQuantity(barLine, drinkSettings), 84);
+check('bar charge skips the 16 under-21s', itemTotal(barLine, drinkSettings), 2100);
+check('a dinner line still counts every adult',
+    effectiveQuantity({ ...barLine, qty_source: 'adults' }, drinkSettings), 100);
+// The drinkers are a subset of the adults, never another slice of the party:
+// adding them into the headcount would invent 84 guests who do not exist.
+check('all-guests total ignores the drinkers count',
+    effectiveQuantity({ ...barLine, qty_source: 'total' }, drinkSettings), 110);
+
+const barSummary = buildSummary({
+    categories: [{ id: 1, name: 'Reception', sort_order: 0, items: [barLine] }],
+    payers: [], purchases: [], contributors: [], settings: drinkSettings,
+});
+check('per-head cost still divides by every guest', barSummary.guestCost.guests, 110);
+// One more adult guest is one more drinker, so the bar belongs in the marginal
+// cost — it dropped out of it the moment the line stopped tracking adults.
+check('one more guest adds the bar', barSummary.guestCost.marginalPerAdult, 25);
+
+// Switching a line to Drinkers before anybody has counted them takes the bar to
+// $0 without saying so — the budget quietly loses a few thousand dollars and
+// every total below it still looks right. Say it out loud.
+const unset = buildSummary({
+    categories: [{ id: 1, name: 'Reception', sort_order: 0, items: [barLine] }],
+    payers: [], purchases: [], contributors: [],
+    settings: { ...drinkSettings, drinking_count: 0 },
+});
+check('a drinkers line with nobody counted is flagged',
+    unset.warnings.filter(w => w.kind === 'no-drinkers').length, 1);
+check('and the flag names the line, once, however many lines there are',
+    buildSummary({
+        categories: [{
+            id: 1, name: 'Reception', sort_order: 0,
+            items: [barLine, { ...barLine, id: 9002, name: 'Beer' }],
+        }],
+        payers: [], purchases: [], contributors: [],
+        settings: { ...drinkSettings, drinking_count: 0 },
+    }).warnings.filter(w => w.kind === 'no-drinkers').length, 1);
+check('counted drinkers raise nothing',
+    barSummary.warnings.filter(w => w.kind === 'no-drinkers').length, 0);
+check('and a budget with no bar at all raises nothing',
+    buildSummary({
+        categories: [{
+            id: 1, name: 'Reception', sort_order: 0,
+            items: [{ ...barLine, qty_source: 'adults' }],
+        }],
+        payers: [], purchases: [], contributors: [],
+        settings: { ...drinkSettings, drinking_count: 0 },
+    }).warnings.filter(w => w.kind === 'no-drinkers').length, 0);
+
 
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);

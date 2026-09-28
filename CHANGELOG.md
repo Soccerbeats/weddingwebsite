@@ -11,6 +11,27 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.101 — [Released] Under 21 (`main`, 2026-09-28 22:40)
+
+Austin: mark someone as under 21, and keep them out of the bar charge.
+
+### Added
+- **An *Under 21* toggle on every person in the guest editor** — the household themself and each companion, beside their dietary pills but deliberately not among them. It says nothing about a plate: an under-21 guest eats the same adult dinner as everybody else. It says only that the bar is not being drunk.
+- **A *Drinkers (21+)* quantity source on budget lines**, and a matching **Drinkers** count under Finances → Settings. The Bar line in the category templates now uses it instead of Adults, so the bar is charged for the people who can actually drink. Adults, minors and all-guests lines are untouched.
+- **The guest list counts the drinkers for you.** Finances → Settings shows how many of the people you expect are marked under 21 and offers a *Use N drinking* button, alongside the invited and attending buttons that were already there. Silence counts as coming, the same assumption the seating chart makes when it still draws an unanswered household its chairs; a household that declined, is likely not coming, or was never invited counts nobody.
+
+### Changed
+- **The drinkers count is a subset of the adults, never another slice of the party.** All guests stays adults + minors and does not touch it, or the headcount would invent guests who do not exist. The per-head cost still divides by every guest.
+- **One more guest now costs the bar again.** The *what one more guest adds* figure sums every line tracking adults or all guests; moving the bar off Adults would have quietly dropped it, understating an extra guest by the whole bar rate, so drinker lines count toward it too.
+
+### Fixed
+- **A line switched to Drinkers before anyone is counted no longer goes to $0 in silence.** It raises a *Possible mistakes* warning naming the line, placed first so the twelve-warning cap cannot hide it. Everything else on the page looks right in that state — the category rolls up, the totals agree with themselves, and the bar has simply vanished.
+
+### Tested
+- **13 assertions in `npm run check:seating`** (224 total, from 211) covering the flag on the household and on a companion, and the trap underneath it: `partyAttendees` skips anyone who declined, so the ages cannot be read back by index — a party whose first companion declines is where an index-aligned version hands one person's age to the next one along. Plus the roll-up: who counts, who does not, and an empty list.
+- **11 assertions in `npm run check:finance`** covering the new quantity source, the subset rule, the marginal cost, and the zero-count warning. Confirmed failing first — a `drinkers` line fell through to a quantity of 1.
+- **5 assertions in `npm run check:finance:db`** against a real Postgres, and an end-to-end pass through the real route handlers: the flag saves for the household and per companion, survives an edit that omits it, and a party of three with two under 21 reports one drinker to the budget page.
+
 ## v0.9.100 — [Released] The Settings tab could not save (`main`, 2026-09-28 06:20)
 
 Austin: changing the guest headcount under Finances → Settings said **"unknown resource"** and did nothing.

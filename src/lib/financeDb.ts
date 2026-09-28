@@ -137,6 +137,9 @@ async function createTables() {
     for (const table of ['finance_categories', 'finance_items', 'finance_purchases', 'finance_contributors']) {
         await pool.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT FALSE`);
     }
+    // The bar counts drinkers, not adults: an under-21 guest eats the adult
+    // dinner and costs the bar nothing. A subset of adult_count, never added to it.
+    await pool.query(`ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS drinking_count INTEGER NOT NULL DEFAULT 0`);
     await pool.query(`ALTER TABLE finance_purchases ADD COLUMN IF NOT EXISTS receipt_path TEXT`);
     await pool.query(`ALTER TABLE finance_contributors ADD COLUMN IF NOT EXISTS thank_you_sent BOOLEAN NOT NULL DEFAULT FALSE`);
     await pool.query(`ALTER TABLE finance_contributors ADD COLUMN IF NOT EXISTS thank_you_sent_at TIMESTAMP`);
@@ -305,7 +308,8 @@ async function queryFinanceData(): Promise<FinanceData> {
     const [settingsRes, catRes, itemRes, subRes, payerRes, purchaseRes, contribRes, receiptRes,
            scheduleRes, snapshotRes, archivedRes] =
         await Promise.all([
-            pool.query(`SELECT adult_count, minor_count, plan_horizon_months, paycheck_interval_days
+            pool.query(`SELECT adult_count, minor_count, drinking_count,
+                               plan_horizon_months, paycheck_interval_days
                           FROM finance_settings WHERE id = 1`),
             pool.query(`SELECT id, name, sort_order, archived FROM finance_categories
                          WHERE NOT archived ORDER BY sort_order, id`),

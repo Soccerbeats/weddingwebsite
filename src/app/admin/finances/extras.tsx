@@ -268,12 +268,12 @@ export function TrendCard({ snapshots }: { snapshots: Snapshot[] }) {
 
 /* ------------------------------------------------------------ templates ---- */
 
-const TEMPLATES: Record<string, { name: string; unit_cost: number; qty_source: 'manual' | 'adults' | 'minors' | 'total' }[]> = {
+const TEMPLATES: Record<string, { name: string; unit_cost: number; qty_source: 'manual' | 'adults' | 'minors' | 'total' | 'drinkers' }[]> = {
     'Venue & catering': [
         { name: 'Venue hire', unit_cost: 0, qty_source: 'manual' },
         { name: 'Dinner', unit_cost: 0, qty_source: 'adults' },
         { name: 'Kids meals', unit_cost: 0, qty_source: 'minors' },
-        { name: 'Bar', unit_cost: 0, qty_source: 'adults' },
+        { name: 'Bar', unit_cost: 0, qty_source: 'drinkers' },
         { name: 'Cake / dessert', unit_cost: 0, qty_source: 'manual' },
         { name: 'Service charge', unit_cost: 0, qty_source: 'manual' },
         { name: 'Taxes', unit_cost: 0, qty_source: 'manual' },
@@ -384,7 +384,8 @@ export function TemplatePicker({ data, api, onClose }: {
                             <span className="flex-1">{line.name}</span>
                             {line.qty_source !== 'manual' && (
                                 <span className="text-[10px] uppercase tracking-wide text-gray-400">
-                                    per {line.qty_source === 'minors' ? 'child' : 'guest'}
+                                    per {line.qty_source === 'minors' ? 'child'
+                                        : line.qty_source === 'drinkers' ? 'drinker' : 'guest'}
                                 </span>
                             )}
                         </label>

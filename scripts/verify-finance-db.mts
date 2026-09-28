@@ -283,6 +283,11 @@ const headcountRow = await (headcount as Response).json();
 check('headcount actually changed',
     headcountRow.adult_count === 150 && headcountRow.minor_count === 9,
     JSON.stringify(headcountRow));
+const drinkers = await PATCH(req({ drinking_count: 118 }), params('settings'));
+check('PATCH settings takes the drinkers count', drinkers.status === 200, `got ${drinkers.status}`);
+const drinkersRow = await (drinkers as Response).json();
+check('the drinkers count persists', drinkersRow.drinking_count === 118, JSON.stringify(drinkersRow));
+check('and it did not touch the adults it is a subset of', drinkersRow.adult_count === 150);
 const horizon = await PATCH(req({ plan_horizon_months: 24 }), params('settings'));
 check('PATCH settings takes the planning horizon too', horizon.status === 200);
 check('and leaves the fields it was not given alone',

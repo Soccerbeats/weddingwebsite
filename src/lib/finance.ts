@@ -10,11 +10,18 @@
  * These are pure functions: no HTTP, no React, no database.
  */
 
-export type QtySource = 'manual' | 'adults' | 'minors' | 'total';
+export type QtySource = 'manual' | 'adults' | 'minors' | 'total' | 'drinkers';
 
 export interface FinanceSettings {
     adult_count: number;
     minor_count: number;
+    /**
+     * The adults old enough to drink — a *subset* of `adult_count`, never
+     * another slice of the party. Adding it to the headcount would invent
+     * guests, so `'total'` stays adults + minors and only a `'drinkers'` line
+     * reads it.
+     */
+    drinking_count: number;
     /** null → derive the horizon from the wedding date */
     plan_horizon_months: number | null;
     paycheck_interval_days: number;
@@ -126,6 +133,7 @@ export interface Snapshot {
 export const DEFAULT_SETTINGS: FinanceSettings = {
     adult_count: 0,
     minor_count: 0,
+    drinking_count: 0,
     plan_horizon_months: null,
     paycheck_interval_days: 14,
 };
@@ -145,11 +153,17 @@ export function money(value: number): number {
 /**
  * Resolve a line's quantity. `qty_source` lets Dinner track the adult count and
  * Dinner Kids track the minor count, the way the spreadsheet's formulas did.
+ *
+ * `drinkers` is the bar's own count, because being an adult and being able to
+ * drink are not the same question: someone under 21 eats the adult dinner and
+ * costs the bar nothing. It is a subset of the adults, so `total` deliberately
+ * does not touch it.
  */
 export function effectiveQuantity(item: BudgetItem, settings: FinanceSettings): number {
     switch (item.qty_source) {
         case 'adults': return num(settings.adult_count);
         case 'minors': return num(settings.minor_count);
+        case 'drinkers': return num(settings.drinking_count);
         case 'total': return num(settings.adult_count) + num(settings.minor_count);
         default: return num(item.quantity);
     }
@@ -407,7 +421,7 @@ export interface ScheduleStatus extends ScheduledPayment {
 }
 
 export interface DuplicateWarning {
-    kind: 'same-amount' | 'similar-name' | 'over-line';
+    kind: 'same-amount' | 'similar-name' | 'over-line' | 'no-drinkers';
     message: string;
     detail: string;
     amount: number;
@@ -419,7 +433,10 @@ export interface GuestCost {
     perGuest: number;
     /**
      * What one more adult actually adds: every line whose quantity tracks the
-     * adult or total headcount, at its unit cost.
+     * adult, drinker or total headcount, at its unit cost. Drinker lines count
+     * because one more adult guest is normally one more person at the bar — the
+     * figure is a rule of thumb, and leaving the bar out of it understated the
+     * cost of an extra guest by the whole bar rate.
      */
     marginalPerAdult: number;
     marginalLines: { name: string; unitCost: number }[];
@@ -633,7 +650,8 @@ export function buildSummary(input: SummaryInput): FinanceSummary {
     for (const category of categories) {
         for (const item of category.items || []) {
             if (item.use_subitems) continue;
-            if (item.qty_source === 'adults' || item.qty_source === 'total') {
+            if (item.qty_source === 'adults' || item.qty_source === 'total'
+                || item.qty_source === 'drinkers') {
                 marginalLines.push({ name: item.name, unitCost: money(num(item.unit_cost)) });
             }
         }
@@ -641,6 +659,24 @@ export function buildSummary(input: SummaryInput): FinanceSummary {
 
     // ---- likely data-entry mistakes ----
     const warnings: DuplicateWarning[] = [];
+
+    // A line switched to Drinkers before anyone has counted them costs $0, and
+    // nothing else on the page looks wrong: the category rolls up, the totals
+    // agree with themselves, and the bar has simply vanished. First in the list
+    // so the twelve-warning cap can never be what hides it.
+    const drinkerLines = categories.flatMap((c) => (c.items || [])
+        .filter((i) => !i.use_subitems && i.qty_source === 'drinkers'));
+    if (drinkerLines.length > 0 && num(settings.drinking_count) <= 0) {
+        warnings.push({
+            kind: 'no-drinkers',
+            message: drinkerLines.length === 1
+                ? `${drinkerLines[0].name} is charged per drinker, but nobody is counted as drinking.`
+                : `${drinkerLines.length} lines are charged per drinker, but nobody is counted as drinking.`,
+            detail: 'Set the Drinkers count in Settings — until you do, these lines total $0.',
+            amount: 0,
+        });
+    }
+
     const normalise = (text: string) =>
         text.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
     for (let i = 0; i < purchases.length; i += 1) {

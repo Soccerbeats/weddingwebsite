@@ -2,24 +2,39 @@ import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { loadFinanceData, recordSnapshot } from '@/lib/financeDb';
 import { buildSummary } from '@/lib/finance';
+import { drinkingHeadcount } from '@/lib/seating';
 import { getSiteConfig } from '@/lib/config';
+import type { GuestListEntry } from '@/components/seating/types';
 
 /**
  * Live headcount from the guest list, offered as a *suggestion* next to the
  * manual counts. The budget deliberately does not read these directly — a $33k
  * total that re-totals itself whenever an RSVP lands is worse than one updated
- * on purpose. There's also no adult/minor marker on guests, so the split the
- * budget needs can't be derived anyway.
+ * on purpose.
+ *
+ * There is still no adult/minor marker, so that split stays hand-typed. The
+ * under-21 flag *is* recorded per person, so the drinkers the bar is charged for
+ * can be counted — see `drinkingHeadcount`, which decides who is expected.
  */
 async function guestHeadcount() {
     try {
-        const [invited, attending] = await Promise.all([
+        const [invited, attending, roll] = await Promise.all([
             pool.query(`SELECT COALESCE(SUM(party_size), 0)::int AS n
                           FROM guest_list WHERE invited IS NOT FALSE`),
             pool.query(`SELECT COALESCE(SUM(number_of_guests), 0)::int AS n
                           FROM rsvps WHERE attending = TRUE`),
+            pool.query(`SELECT id, guest_name, plus_one_name, party_size, side, rsvp_status,
+                               invited, party_members, under_21
+                          FROM guest_list`),
         ]);
-        return { invited: invited.rows[0]?.n ?? 0, attending: attending.rows[0]?.n ?? 0 };
+        const bar = drinkingHeadcount(roll.rows as GuestListEntry[]);
+        return {
+            invited: invited.rows[0]?.n ?? 0,
+            attending: attending.rows[0]?.n ?? 0,
+            expected: bar.people,
+            under21: bar.under21,
+            drinking: bar.drinking,
+        };
     } catch {
         // Guest list / RSVP tables may not exist yet on a fresh install.
         return null;

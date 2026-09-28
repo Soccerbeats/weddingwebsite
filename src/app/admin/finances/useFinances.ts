@@ -22,7 +22,15 @@ export interface FinancePayload {
     summary: FinanceSummary;
     weddingDate: string | null;
     today: string;
-    headcount: { invited: number; attending: number } | null;
+    headcount: {
+        invited: number;
+        attending: number;
+        /** People expected to take a chair, from the guest list. */
+        expected: number;
+        under21: number;
+        /** expected − under21: who the bar is actually charged for. */
+        drinking: number;
+    } | null;
 }
 
 /** What was just deleted, so it can be put straight back. */

@@ -47,6 +47,15 @@ export function seatIndexer(used: Iterable<number>): () => number {
     };
 }
 
+/** One person of a household, as `partyAttendees` reports them. */
+export interface PartyAttendee {
+    name: string;
+    /** Set only for the household themself; a companion has no row of their own. */
+    guestListId: number | null;
+    /** Too young to drink. Says nothing about their plate — they eat the adult meal. */
+    under21: boolean;
+}
+
 /**
  * The people of a party who need a chair, in order, starting with the guest.
  *
@@ -72,10 +81,10 @@ export function seatIndexer(used: Iterable<number>): () => number {
  * Bigari" changed a field the chart then ignored, and the chair went on saying
  * Jessica no matter how many times it was corrected or re-seated.
  */
-export function partyAttendees(guest: GuestListEntry): { name: string; guestListId: number | null }[] {
+export function partyAttendees(guest: GuestListEntry): PartyAttendee[] {
     const primary = cleanName(guest.guest_name) || guest.guest_name;
-    const people: { name: string; guestListId: number | null }[] = [
-        { name: primary, guestListId: guest.id },
+    const people: PartyAttendee[] = [
+        { name: primary, guestListId: guest.id, under21: !!guest.under_21 },
     ];
 
     const plusOne = (guest.plus_one_name ?? '').trim();
@@ -94,6 +103,11 @@ export function partyAttendees(guest: GuestListEntry): { name: string; guestList
             // which is the same as never having been given one.
             name: name || `${primary.split(' ')[0]}'s guest ${i + 1}`,
             guestListId: null,
+            // Carried on the person rather than read back by index afterwards:
+            // this loop skips anyone who declined, so the returned array no
+            // longer lines up with `party_members`, and an index lookup would
+            // hand one person's age to the next one along.
+            under21: !!member?.under21,
         });
     }
     return people;
@@ -222,6 +236,36 @@ export function headcount(
         expected: guests.reduce((n, g) => n + expectedSeats(g), 0),
         offList: offList.reduce((n, r) => n + (Number(r.number_of_guests) || 0), 0),
     };
+}
+
+/**
+ * How many of the expected people are old enough to drink.
+ *
+ * The bar is the one line on the budget a guest can be on the invitation for and
+ * still cost nothing, so it needs its own count: "adults" is the wrong one, an
+ * eighteen-year-old being an adult at dinner and not at the bar.
+ *
+ * Silence counts as coming. A bar is booked months before the last RSVP lands,
+ * and this is the same assumption the chart makes when it still draws an
+ * unanswered household its chairs; a household that has declined or is likely
+ * not coming, and one never invited, count nobody. The number is a *suggestion*
+ * beside the budget's own field, never the budget's input — see
+ * `/api/admin/finances`.
+ */
+export function drinkingHeadcount(
+    guests: GuestListEntry[],
+): { people: number; under21: number; drinking: number } {
+    let people = 0;
+    let under21 = 0;
+    for (const guest of guests) {
+        if (guest.invited === false) continue;
+        if (guest.rsvp_status === 'declined' || guest.rsvp_status === 'likely_not_coming') continue;
+        for (const person of partyAttendees(guest)) {
+            people += 1;
+            if (person.under21) under21 += 1;
+        }
+    }
+    return { people, under21, drinking: people - under21 };
 }
 
 /** Every seat at every table, flattened, with the table it belongs to. */

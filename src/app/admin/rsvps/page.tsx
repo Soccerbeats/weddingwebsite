@@ -11,6 +11,7 @@ import {
 } from '@/lib/dietary';
 import { cleanName } from '@/lib/names';
 import DietaryPills from '@/components/admin/DietaryPills';
+import Under21Pill from '@/components/admin/Under21Pill';
 import VendorsTab from './VendorsTab';
 
 // Guest-table columns to drop as horizontal space runs out, in order (first dropped → last).
@@ -39,6 +40,9 @@ interface PartyMember {
     // The person's own RSVP answer. null = not answered. The seating chart reads
     // this, so an edit here must never drop it.
     attending?: boolean | null;
+    // Too young to drink. Nothing to do with their plate — they eat the adult
+    // meal; it keeps them out of the bar charge on the budget.
+    under21?: boolean | null;
 }
 
 interface Guest {
@@ -53,6 +57,7 @@ interface Guest {
     rsvp_status?: string;
     party_members?: PartyMember[];
     plus_one_name?: string | null;
+    under_21?: boolean | null;
     address?: string;
     flag?: string | null;
     relationship?: string;
@@ -160,6 +165,7 @@ export default function RSVPDashboard() {
         address: '',
         flag: '',
         relationship: '',
+        under_21: false,
         dietary: [] as DietaryEntry[],
     });
 
@@ -560,6 +566,7 @@ export default function RSVPDashboard() {
                     address: '',
                     flag: '',
                     relationship: '',
+                    under_21: false,
                     dietary: [],
                 });
                 fetchGuests();
@@ -633,6 +640,7 @@ export default function RSVPDashboard() {
         const slots: PartyMember[] = Array.from({ length: Math.max(0, guest.party_size - 1) }, (_, i) => ({
             name: existing[i]?.name ?? null,
             attending: existing[i]?.attending ?? null,
+            under21: existing[i]?.under21 ?? false,
         }));
         setGuestForm({
             guest_name: guest.guest_name,
@@ -647,6 +655,7 @@ export default function RSVPDashboard() {
             address: guest.address || '',
             flag: guest.flag || '',
             relationship: guest.relationship || '',
+            under_21: !!guest.under_21,
             // One row per person, in the order the editor draws them, whether or
             // not the RSVP has an answer for that person.
             dietary: alignEntries(
@@ -1601,6 +1610,7 @@ export default function RSVPDashboard() {
                                         address: '',
                                         flag: '',
                                         relationship: '',
+                                        under_21: false,
                                         dietary: [],
                                     });
                                 }}
@@ -2266,6 +2276,14 @@ export default function RSVPDashboard() {
                                             setGuestForm({ ...guestForm, dietary });
                                         }}
                                     />
+                                    {/* Its own row, below the restrictions, because it is not one:
+                                        it changes the bar charge on the budget, never the plate. */}
+                                    <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                                        <Under21Pill
+                                            on={guestForm.under_21}
+                                            onChange={under_21 => setGuestForm({ ...guestForm, under_21 })}
+                                        />
+                                    </div>
                                 </div>
 
                                 {Array.from({ length: Math.max(0, guestForm.party_size - 1) }, (_, i) => (
@@ -2279,7 +2297,7 @@ export default function RSVPDashboard() {
                                                 value={guestForm.party_members[i]?.name ?? ''}
                                                 onChange={(e) => {
                                                     const updated = [...guestForm.party_members];
-                                                    while (updated.length <= i) updated.push({ name: null, attending: null });
+                                                    while (updated.length <= i) updated.push({ name: null, attending: null, under21: false });
                                                     updated[i] = { ...updated[i], name: e.target.value || null };
                                                     setGuestForm({ ...guestForm, party_members: updated });
                                                 }}
@@ -2293,7 +2311,7 @@ export default function RSVPDashboard() {
                                                 value={guestForm.party_members[i]?.attending === true ? 'yes' : guestForm.party_members[i]?.attending === false ? 'no' : ''}
                                                 onChange={(e) => {
                                                     const updated = [...guestForm.party_members];
-                                                    while (updated.length <= i) updated.push({ name: null, attending: null });
+                                                    while (updated.length <= i) updated.push({ name: null, attending: null, under21: false });
                                                     updated[i] = {
                                                         ...updated[i],
                                                         attending: e.target.value === 'yes' ? true : e.target.value === 'no' ? false : null,
@@ -2309,15 +2327,28 @@ export default function RSVPDashboard() {
                                             </select>
                                         </div>
                                         {guestForm.party_members[i]?.attending !== false && (
-                                            <DietaryPills
-                                                entry={guestForm.dietary[i + 1] ?? {}}
-                                                onChange={entry => {
-                                                    const dietary = [...guestForm.dietary];
-                                                    while (dietary.length <= i + 1) dietary.push({});
-                                                    dietary[i + 1] = entry;
-                                                    setGuestForm({ ...guestForm, dietary });
-                                                }}
-                                            />
+                                            <>
+                                                <DietaryPills
+                                                    entry={guestForm.dietary[i + 1] ?? {}}
+                                                    onChange={entry => {
+                                                        const dietary = [...guestForm.dietary];
+                                                        while (dietary.length <= i + 1) dietary.push({});
+                                                        dietary[i + 1] = entry;
+                                                        setGuestForm({ ...guestForm, dietary });
+                                                    }}
+                                                />
+                                                <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                                                    <Under21Pill
+                                                        on={!!guestForm.party_members[i]?.under21}
+                                                        onChange={under21 => {
+                                                            const updated = [...guestForm.party_members];
+                                                            while (updated.length <= i) updated.push({ name: null, attending: null, under21: false });
+                                                            updated[i] = { ...updated[i], under21 };
+                                                            setGuestForm({ ...guestForm, party_members: updated });
+                                                        }}
+                                                    />
+                                                </div>
+                                            </>
                                         )}
                                     </div>
                                 ))}

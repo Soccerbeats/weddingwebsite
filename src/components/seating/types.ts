@@ -50,7 +50,11 @@ export interface GuestListEntry {
   invited: boolean;
   assigned_seat?: { table_name: string; seat_index: number } | null;
   // `attending` is the person's own RSVP answer (null when they have not answered).
-  party_members?: { name: string | null; attending?: boolean | null }[];
+  // `under21` is their age bracket, which says nothing about their plate — they
+  // eat the adult dinner — only that the bar is not being drunk.
+  party_members?: { name: string | null; attending?: boolean | null; under21?: boolean | null }[];
+  /** The household themself, under 21. Their companions carry their own. */
+  under_21?: boolean | null;
   /**
    * How many people this household actually answered for, from the RSVP form —
    * null when they have not submitted one. `party_size` is what they were

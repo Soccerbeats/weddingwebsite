@@ -137,7 +137,7 @@ async function carryRenames(
 export async function PUT(request: Request) {
   const client = await pool.connect();
   try {
-    const { id, guest_name, email, phone, party_size, notes, invited, party_members, address, rsvp_status, flag, relationship, side } = await request.json();
+    const { id, guest_name, email, phone, party_size, notes, invited, party_members, address, rsvp_status, flag, relationship, side, under_21 } = await request.json();
 
     const membersJson = party_members ? JSON.stringify(party_members) : null;
 
@@ -160,11 +160,15 @@ export async function PUT(request: Request) {
        SET guest_name = $1, email = $2, phone = $3, party_size = $4, notes = $5, invited = $6,
            party_members = $7, address = COALESCE($8, address), rsvp_status = $9, flag = $10,
            relationship = $11, side = $12,
+           -- The household themself; their companions' ages ride along inside
+           -- party_members. COALESCE so an older client that does not send the
+           -- field cannot silently age everyone back to 21.
+           under_21 = COALESCE($13, under_21),
            plus_one_name = CASE WHEN COALESCE($4, 1) < 2 THEN NULL ELSE plus_one_name END,
            updated_at = NOW()
-       WHERE id = $13
+       WHERE id = $14
        RETURNING *`,
-      [guest_name, email, phone, party_size, notes, invited, membersJson, address, rsvp_status || null, flag ?? null, relationship ?? null, side ?? null, id]
+      [guest_name, email, phone, party_size, notes, invited, membersJson, address, rsvp_status || null, flag ?? null, relationship ?? null, side ?? null, typeof under_21 === 'boolean' ? under_21 : null, id]
     );
 
     if (before) {
