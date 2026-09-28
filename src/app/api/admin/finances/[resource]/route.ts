@@ -222,6 +222,31 @@ const SETTINGS_FIELDS: Record<string, Field> = {
     paycheck_interval_days: { kind: 'int' },
 };
 
+/**
+ * Settings is a singleton: there is one row and it is row 1, so a write updates
+ * it rather than inserting.
+ *
+ * It is not in `RESOURCES` because it has no id, no create and no delete — which
+ * is exactly why it needs handling in **every** verb that can reach it. This
+ * lived inline in POST alone until v0.9.100, so the Settings tab, which sends a
+ * PATCH like every other editor, answered "Unknown resource" for the headcount,
+ * the planning horizon and the paycheck interval alike. One function, called
+ * from both, so the two cannot drift again.
+ */
+async function updateSettings(body: Record<string, unknown>) {
+    const columns: string[] = [];
+    const values: unknown[] = [];
+    for (const [key, field] of Object.entries(SETTINGS_FIELDS)) {
+        if (key in body) { columns.push(key); values.push(coerce(field, body[key], key)); }
+    }
+    if (!columns.length) return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
+    const sets = columns.map((c, i) => `${c} = $${i + 1}`).join(', ');
+    const result = await pool.query(
+        `UPDATE finance_settings SET ${sets} WHERE id = 1 RETURNING *`, values,
+    );
+    return NextResponse.json(result.rows[0]);
+}
+
 type Params = { params: Promise<{ resource: string }> };
 
 export async function POST(request: Request, { params }: Params) {
@@ -230,20 +255,7 @@ export async function POST(request: Request, { params }: Params) {
         await ensureFinanceTables();
         const body = await request.json();
 
-        // Settings is a singleton: POST updates row 1 rather than inserting.
-        if (resource === 'settings') {
-            const columns: string[] = [];
-            const values: unknown[] = [];
-            for (const [key, field] of Object.entries(SETTINGS_FIELDS)) {
-                if (key in body) { columns.push(key); values.push(coerce(field, body[key], key)); }
-            }
-            if (!columns.length) return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
-            const sets = columns.map((c, i) => `${c} = $${i + 1}`).join(', ');
-            const result = await pool.query(
-                `UPDATE finance_settings SET ${sets} WHERE id = 1 RETURNING *`, values,
-            );
-            return NextResponse.json(result.rows[0]);
-        }
+        if (resource === 'settings') return await updateSettings(body);
 
         const def = resolve(resource);
         if (!def) return NextResponse.json({ error: 'Unknown resource' }, { status: 404 });
@@ -278,6 +290,12 @@ export async function PATCH(request: Request, { params }: Params) {
     const { resource } = await params;
     try {
         await ensureFinanceTables();
+
+        // Before the resource lookup: settings is a singleton with no row in
+        // `RESOURCES` to find, and this is the verb every editor on the Settings
+        // tab sends.
+        if (resource === 'settings') return await updateSettings(await request.json());
+
         const def = resolve(resource);
         if (!def) return NextResponse.json({ error: 'Unknown resource' }, { status: 404 });
 

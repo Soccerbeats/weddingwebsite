@@ -11,6 +11,15 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.100 — [Released] The Settings tab could not save (`main`, 2026-09-28 06:20)
+
+Austin: changing the guest headcount under Finances → Settings said **"unknown resource"** and did nothing.
+
+### Fixed
+- **The whole Settings tab was failing to save, not just the headcount.** `settings` is a singleton with no id, no create and no delete, so it is not in the finance route's resource table and is special-cased instead — but only inside `POST`. Every editor on that tab saves through a `PATCH`, like every other editor in the suite, and `PATCH` went straight to the resource lookup, found nothing and answered `404 Unknown resource`. Adults, minors, both *Use N as adults* buttons, the planning horizon and the paycheck interval were all affected; the headcount is simply the one that got tried.
+- **One implementation, called from both verbs**, so the two cannot drift apart again. A `POST` to the same path had always worked, which is what made this invisible: the endpoint was fine, the verb the UI sends was not.
+- **Six assertions added to `npm run check:finance:db`**, which drives the real route handlers against a real Postgres. They assert the verb the UI actually sends — the missing coverage is exactly why a whole tab could stop saving unnoticed. Confirmed failing before the fix (`404`) and passing after, then confirmed end to end in a browser: the PATCH returns 200 and the value survives a reload.
+
 ## v0.9.99 — [Released] Find the kids' meals (`main`, 2026-09-27 18:09)
 
 ### Added

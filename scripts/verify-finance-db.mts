@@ -272,6 +272,25 @@ near('18-month horizon in days', sSet.horizon.days, Math.ceil(18 * 30.4375));
 const rows = await sql.query('SELECT COUNT(*)::int AS n FROM finance_settings');
 check('settings stayed a singleton', rows.rows[0].n === 1);
 
+// Every editor on the Settings tab writes through `api.update` — a PATCH. The
+// singleton branch lived in POST alone until v0.9.100, so the whole tab answered
+// "Unknown resource": the headcount, the planning horizon and the paycheck
+// interval alike. These assert the verb the UI actually sends.
+const headcount = await PATCH(req({ adult_count: 150, minor_count: 9 }), params('settings'));
+check('PATCH settings 200 (the verb the UI sends)', headcount.status === 200,
+    `got ${headcount.status}`);
+const headcountRow = await (headcount as Response).json();
+check('headcount actually changed',
+    headcountRow.adult_count === 150 && headcountRow.minor_count === 9,
+    JSON.stringify(headcountRow));
+const horizon = await PATCH(req({ plan_horizon_months: 24 }), params('settings'));
+check('PATCH settings takes the planning horizon too', horizon.status === 200);
+check('and leaves the fields it was not given alone',
+    (await (horizon as Response).json()).adult_count === 150);
+const emptySettings = await PATCH(req({ nothing_here: 1 }), params('settings'));
+check('a settings patch with no known field is a 400, not a silent no-op',
+    emptySettings.status === 400, `got ${emptySettings.status}`);
+
 console.log(`\n${failures === 0 ? 'ALL DB CHECKS PASSED' : `${failures} CHECK(S) FAILED`}\n`);
 await sql.end();
 process.exit(failures === 0 ? 0 : 1);
