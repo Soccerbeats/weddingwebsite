@@ -72,6 +72,16 @@ export default function SettingsTab({ data, api }: { data: FinancePayload; api: 
                         Some of your adults, not extra guests — an under-21 still eats the adult dinner.
                         Only lines set to Drinkers use this.
                     </p>
+                    {/* Said here, beside the field, and not only on the Overview: a
+                        number typed in with nothing reading it looks exactly like a
+                        number that worked. */}
+                    {summary.warnings.some((w) => w.kind === 'drinkers-unused') && (
+                        <p className="mt-2 rounded-2xl bg-amber-50 border border-amber-100 px-3 py-2 text-xs text-amber-800">
+                            No budget line is charged per drinker yet, so this number changes nothing.
+                            Open <strong>Budget</strong>, find your bar line and set its{' '}
+                            <strong>Qty from</strong> to <strong>Drinkers (21+)</strong>.
+                        </p>
+                    )}
                 </div>
 
                 <div className="text-xs text-gray-500 mt-3">

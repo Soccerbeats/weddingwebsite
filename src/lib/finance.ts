@@ -421,7 +421,7 @@ export interface ScheduleStatus extends ScheduledPayment {
 }
 
 export interface DuplicateWarning {
-    kind: 'same-amount' | 'similar-name' | 'over-line' | 'no-drinkers';
+    kind: 'same-amount' | 'similar-name' | 'over-line' | 'no-drinkers' | 'drinkers-unused';
     message: string;
     detail: string;
     amount: number;
@@ -673,6 +673,19 @@ export function buildSummary(input: SummaryInput): FinanceSummary {
                 ? `${drinkerLines[0].name} is charged per drinker, but nobody is counted as drinking.`
                 : `${drinkerLines.length} lines are charged per drinker, but nobody is counted as drinking.`,
             detail: 'Set the Drinkers count in Settings — until you do, these lines total $0.',
+            amount: 0,
+        });
+    }
+
+    // And the mirror: a count is set and no line reads it. A budget written
+    // before the Drinkers source existed still charges its bar per adult, so
+    // typing a number into Settings does nothing whatsoever — and nothing on the
+    // screen says so, which is worse than the number being wrong.
+    if (drinkerLines.length === 0 && num(settings.drinking_count) > 0) {
+        warnings.push({
+            kind: 'drinkers-unused',
+            message: `${num(settings.drinking_count)} people are counted as drinking, but no budget line is charged per drinker.`,
+            detail: 'Set a line\u2019s Qty from to Drinkers (21+) \u2014 usually the bar \u2014 or the count changes nothing.',
             amount: 0,
         });
     }

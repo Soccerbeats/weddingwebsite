@@ -246,6 +246,37 @@ check('and the flag names the line, once, however many lines there are',
     }).warnings.filter(w => w.kind === 'no-drinkers').length, 1);
 check('counted drinkers raise nothing',
     barSummary.warnings.filter(w => w.kind === 'no-drinkers').length, 0);
+
+// The mirror image, and the one that actually happened: the count is set and
+// nothing reads it, because the Bar line predates the Drinkers source and is
+// still charged per adult. Silence here means a number typed into Settings does
+// nothing at all, with no way to tell from the screen.
+const countedButUnused = buildSummary({
+    categories: [{
+        id: 1, name: 'Reception', sort_order: 0,
+        items: [{ ...barLine, qty_source: 'adults' }],
+    }],
+    payers: [], purchases: [], contributors: [], settings: drinkSettings,
+});
+check('a drinkers count nothing reads is flagged',
+    countedButUnused.warnings.filter(w => w.kind === 'drinkers-unused').length, 1);
+check('but not once a line reads it',
+    barSummary.warnings.filter(w => w.kind === 'drinkers-unused').length, 0);
+check('and not when no drinkers are counted either',
+    unset.warnings.filter(w => w.kind === 'drinkers-unused').length, 0);
+// A line built from sub-items carries its own quantities, so its qty_source is
+// not in play — it cannot be what reads the count.
+check('a sub-item line does not count as reading it',
+    buildSummary({
+        categories: [{
+            id: 1, name: 'Reception', sort_order: 0,
+            items: [{
+                ...barLine, use_subitems: true,
+                subitems: [{ id: 1, item_id: 9001, name: 'Beer', unit_cost: 5, quantity: 2, sort_order: 0 }],
+            }],
+        }],
+        payers: [], purchases: [], contributors: [], settings: drinkSettings,
+    }).warnings.filter(w => w.kind === 'drinkers-unused').length, 1);
 check('and a budget with no bar at all raises nothing',
     buildSummary({
         categories: [{

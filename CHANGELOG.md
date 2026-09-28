@@ -11,6 +11,16 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.102 — [Released] A drinkers count nothing was reading (`main`, 2026-09-28 23:05)
+
+Austin: set the Drinkers number under Finances → Settings, and the budget did not move.
+
+### Fixed
+- **A Drinkers count with no line reading it now says so.** v0.9.101 changed the Bar line in the *category templates* to charge per drinker — but a budget written before that still has its own Bar line set to **Adults**, and existing lines keep their quantity source. So the count saved correctly, nothing read it, the total stayed put, and no screen said why. Confirmed against the live budget: `drinking_count` was stored as typed while the only Bar line was still `adults`.
+- **Said twice, deliberately.** A warning under *Possible mistakes* on the Overview, and a note beside the field itself in Settings — a number typed in with nothing reading it looks exactly like a number that worked, and the Overview is not where you were standing when you typed it.
+- **The fix is one click** and it is yours to make, not the app's: Budget → the bar line → **Qty from** → *Drinkers (21+)*. Nothing rewrites a budget line on its own.
+- **5 assertions in `npm run check:finance`**, confirmed failing first, covering the count nothing reads, the count something does read, no count at all, and a sub-item line — which carries its own quantities and so cannot be what reads it.
+
 ## v0.9.101 — [Released] Under 21 (`main`, 2026-09-28 22:40)
 
 Austin: mark someone as under 21, and keep them out of the bar charge.
