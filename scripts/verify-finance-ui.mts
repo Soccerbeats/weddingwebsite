@@ -103,6 +103,79 @@ check('gift payment listed in section', values.includes('Venue 1/4'));
 check('payments subtotal', text.includes('Payments subtotal'));
 check('log installment control', text.includes('Log an installment'));
 
+// --- drag and drop: the only way to reorder a line ---
+// Driven through real pointer events rather than a synthetic drop, because what
+// is being tested is the sensor wiring: a handle that does not respond to a
+// press-move-release is a handle that does not work, however correct the
+// arithmetic behind it.
+{
+    const handles = page.locator('button[aria-label^="Reorder "]');
+    check('every line has a drag handle', (await handles.count()) >= 27,
+        `${await handles.count()} handles`);
+
+    /** The line names of the first section, in the order they are drawn. */
+    const firstSectionNames = async () =>
+        (await page.locator('button[aria-label^="Reorder "]').evaluateAll(
+            (els) => els.map((e) => (e.getAttribute('aria-label') ?? '').replace('Reorder ', '')),
+        )).slice(0, 7);
+
+    const before = await firstSectionNames();
+    const from = handles.nth(0);
+    const to = handles.nth(2);
+    const a = await from.boundingBox();
+    const b = await to.boundingBox();
+    if (!a || !b) {
+        check('drag handles are on screen', false, 'no bounding box');
+    } else {
+        await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+        await page.mouse.down();
+        // Past the 6px activation threshold first, then to the target in steps —
+        // dnd-kit tracks movement, so a single jump registers as no drag at all.
+        await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2 + 10, { steps: 4 });
+        await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2 + 4, { steps: 12 });
+        await page.mouse.up();
+        await page.waitForTimeout(1200);
+
+        const after = await firstSectionNames();
+        check('dragging a line changes the order', after.join() !== before.join(),
+            `before ${before.slice(0, 3).join(', ')} / after ${after.slice(0, 3).join(', ')}`);
+        check('the dragged line moved down the section',
+            after.indexOf(before[0]) > 0,
+            `${before[0]} is now at ${after.indexOf(before[0])}`);
+        check('no line was lost or duplicated',
+            new Set(after).size === new Set(before).size && after.length === before.length,
+            `${before.length} -> ${after.length}`);
+
+        // And it must survive a reload, or the optimistic redraw is lying.
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        await page.click('button:has-text("Budget")');
+        await page.waitForSelector('text=Add line item', { timeout: 20_000 });
+        const reloaded = await firstSectionNames();
+        check('the new order was actually saved', reloaded.join() === after.join(),
+            `after ${after.slice(0, 3).join(', ')} / reloaded ${reloaded.slice(0, 3).join(', ')}`);
+
+        // Put the section back the way it was found. Everything below this reads
+        // rows by position, and a suite whose later checks depend on which test
+        // ran first is a suite that reports the wrong thing.
+        const back = page.locator('button[aria-label^="Reorder "]');
+        const c = await back.nth(2).boundingBox();
+        const d = await back.nth(0).boundingBox();
+        if (c && d) {
+            await page.mouse.move(c.x + c.width / 2, c.y + c.height / 2);
+            await page.mouse.down();
+            await page.mouse.move(c.x + c.width / 2, c.y + c.height / 2 - 10, { steps: 4 });
+            await page.mouse.move(d.x + d.width / 2, d.y + d.height / 2 - 4, { steps: 12 });
+            await page.mouse.up();
+            await page.waitForTimeout(1200);
+        }
+        check('the section was restored for the checks below',
+            (await firstSectionNames()).join() === before.join(),
+            `wanted ${before.slice(0, 3).join(', ')} / got ${(await firstSectionNames()).slice(0, 3).join(', ')}`);
+    }
+    text = await body();
+    values = await inputValues();
+}
+
 // A new installment must move the section's paid total.
 const beforeInstall = await page.locator('button:has-text("+ Log an installment")').count();
 check('an installment control per section', beforeInstall === 3, `${beforeInstall} controls`);

@@ -111,6 +111,17 @@ const badResource = await POST(req({ name: 'x' }), params('finance_items; DROP T
 check('unknown resource rejected', badResource.status === 404);
 const missingRequired = await POST(req({ unit_cost: 5 }), params('items'));
 check('missing required field rejected', missingRequired.status === 400);
+// Every value the Budget tab's "Qty from" dropdown offers must be one the route
+// accepts. It offered Drinkers (21+) for a whole release while the whitelist
+// still listed four values, so choosing it answered 400 and the only control
+// that makes the under-21 feature do anything was unusable.
+for (const source of ['manual', 'adults', 'minors', 'drinkers', 'total']) {
+    const res = await PATCH(req({ id: item.id, qty_source: source }), params('items'));
+    const row = res.status === 200 ? await (res as Response).json() : null;
+    check(`qty_source '${source}' is accepted and stored`,
+        res.status === 200 && row?.qty_source === source,
+        `status ${res.status}${row ? `, stored ${row.qty_source}` : ''}`);
+}
 const badEnum = await PATCH(req({ id: item.id, qty_source: 'evil' }), params('items'));
 check('bad enum coerced not injected', badEnum.status === 200);
 const enumRow = await (badEnum as Response).json();
@@ -140,6 +151,35 @@ check('bulk reorder 200', reordered.status === 200);
 const afterReorder = await loadFinanceData();
 check('reorder applied', afterReorder.categories[0].id === first.categories[2].id,
     `first is now ${afterReorder.categories[0].name}`);
+
+// Dragging a line into another section is one write, not two: the row carries
+// its new category_id in the same transaction that sets the order. Two calls
+// would leave a moment where the line is ordered against a section it is not in.
+{
+    const before = await loadFinanceData();
+    const [sourceCat, destCat] = before.categories;
+    const moving = sourceCat.items[0];
+    const rows = [
+        ...sourceCat.items.filter((i) => i.id !== moving.id).map((i) => ({ id: i.id, category_id: sourceCat.id })),
+        ...destCat.items.map((i) => ({ id: i.id, category_id: destCat.id })),
+        { id: moving.id, category_id: destCat.id },
+    ];
+    const moved = await PATCH(req(rows), params('items'));
+    check('reorder carrying a new section 200', moved.status === 200, `got ${moved.status}`);
+    const afterMove = await loadFinanceData();
+    const dest = afterMove.categories.find((c) => c.id === destCat.id)!;
+    const source = afterMove.categories.find((c) => c.id === sourceCat.id)!;
+    check('the line is in its new section', dest.items.some((i) => i.id === moving.id),
+        dest.items.map((i) => i.name).join(', '));
+    check('and gone from the old one', !source.items.some((i) => i.id === moving.id));
+    check('and landed last, where it was dropped',
+        dest.items.at(-1)?.id === moving.id, dest.items.map((i) => i.name).join(', '));
+    // Put it back so the totals below still reconcile against the spreadsheet.
+    await PATCH(req([
+        ...sourceCat.items.map((i) => ({ id: i.id, category_id: sourceCat.id })),
+        ...destCat.items.map((i) => ({ id: i.id, category_id: destCat.id })),
+    ]), params('items'));
+}
 
 const del = await DELETE(new Request(`http://x/?id=${item.id}`, { method: 'DELETE' }), params('items'));
 check('DELETE 200', del.status === 200);

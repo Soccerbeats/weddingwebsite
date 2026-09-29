@@ -11,6 +11,25 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.103 — [Released] Drag a budget line where you want it (`main`, 2026-09-29 05:27)
+
+### Added
+- **Budget lines drag to reorder**, by a handle at the left of each row — within a section, or **into another section**, which is also how a line reaches a section that is still empty.
+- **Keyboard and touch, not just a mouse.** Tab to a handle, Space to lift, arrows to move, Space to drop, Escape to cancel, with spoken announcements that name the line and the section rather than "item 3". Touch needs a short hold before a drag starts, so the list still scrolls under a finger, and the handle is a 32px target on a phone.
+- **The row you are carrying is drawn above the page**, not inside its section. A section is a clipping container, so a row dragged toward a neighbour would otherwise be sliced off at the card's edge.
+
+### Changed
+- **The list redraws the instant you let go.** Every other edit in the finance suite waits for the refetch — right for a typed number, wrong for a dragged row, which would snap back for a beat and then jump. The section totals are recomputed locally from the same engine the server runs, so a line moved between sections takes its money with it immediately. The refetch still decides: a failed write puts everything back.
+
+### Fixed
+- **Choosing *Drinkers (21+)* in the Qty from dropdown answered 400.** The list of values the API accepts was never given `drinkers` when the source was added in v0.9.101, so the one control the under-21 feature depends on rejected the only value that switches it on. The advice in v0.9.102 — set your bar line to Drinkers — could not have worked. The check now walks every value the dropdown offers and asserts the route stores it.
+- **A line moved between sections is one write, not two.** The reorder call carries the new section alongside the new order, in the same transaction, so a line is never briefly ordered against a section it is not in.
+
+### Tested
+- **17 assertions in `npm run check:finance`** over `src/lib/budgetOrder.ts`, which owns the arithmetic: drops up, down, across, onto an empty section, onto itself, and onto nothing — plus that the optimistic redraw produces exactly the arrangement the rows will store. The first version failed one of these, dropping a downward drag a row short of where it was let go; the answer is `arrayMove`, which is what every other sortable list in this admin already does.
+- **9 assertions in `check:finance:db`**, including the cross-section move and every `qty_source` value.
+- **6 assertions in `check:finance:ui`**, driving real pointer events — press, move, release — because what is being tested is the sensor wiring, not the arithmetic. The drag is confirmed to survive a reload, and the test puts the section back as it found it so the checks below it still mean something. Against a clean database the suite reports the same 3 pre-existing failures before and after this change.
+
 ## v0.9.102 — [Released] A drinkers count nothing was reading (`main`, 2026-09-28 23:05)
 
 Austin: set the Drinkers number under Finances → Settings, and the budget did not move.

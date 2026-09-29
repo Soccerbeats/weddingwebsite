@@ -1,7 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import {
+    DndContext, DragOverlay, KeyboardSensor, PointerSensor, TouchSensor,
+    closestCenter, useDroppable, useSensor, useSensors,
+    type DragEndEvent, type DragStartEvent,
+} from '@dnd-kit/core';
+import {
+    SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { itemTotal, subItemTotal, effectiveQuantity, type BudgetItem, type Category } from '@/lib/finance';
+import { planLineMove, sectionsOf, type DropTarget } from '@/lib/budgetOrder';
 import type { FinanceApi, FinancePayload } from './useFinances';
 import { StateBadge, TemplatePicker } from './extras';
 import {
@@ -19,11 +29,83 @@ const QTY_LABELS: Record<string, string> = {
     total: 'All guests',
 };
 
+/**
+ * Sections and lines share one drag context, so a line can be dropped on either.
+ * A line's droppable id is its own number; a section's is prefixed, because the
+ * two id spaces would otherwise collide the moment a section and a line shared a
+ * number — which they do, constantly.
+ */
+const SECTION_DROP = 'section:';
+
 export default function BudgetTab({ data, api }: { data: FinancePayload; api: FinanceApi }) {
     const { settings, categories, summary } = data;
     const [expanded, setExpanded] = useState<Set<number>>(new Set());
     const [newCategory, setNewCategory] = useState('');
     const [templating, setTemplating] = useState(false);
+    /** The line currently in the air, drawn in the overlay. */
+    const [lifted, setLifted] = useState<BudgetItem | null>(null);
+
+    const linesById = useMemo(() => {
+        const map = new Map<number, { item: BudgetItem; section: string }>();
+        for (const category of categories) {
+            for (const item of category.items) map.set(item.id, { item, section: category.name });
+        }
+        return map;
+    }, [categories]);
+
+    // Pointer needs a few pixels of travel before it counts as a drag, or every
+    // click into an inline field would start one. Touch needs a short hold, or
+    // the list could not be scrolled with a finger. Keyboard is the whole reason
+    // the section ⌃ ⌄ buttons are not the only way to reorder anything.
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+        useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 6 } }),
+        useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    );
+
+    const onDragEnd = ({ active, over }: DragEndEvent) => {
+        setLifted(null);
+        if (!over) return;
+        const overId = String(over.id);
+        const target: DropTarget = overId.startsWith(SECTION_DROP)
+            ? { kind: 'section', id: Number(overId.slice(SECTION_DROP.length)) }
+            : { kind: 'item', id: Number(overId) };
+        const plan = planLineMove(sectionsOf(categories), Number(active.id), target);
+        // A drop that changes nothing is not a write: every budget mutation
+        // refetches the whole payload, so a no-op would cost a round trip and a
+        // full redraw to arrive back where it started.
+        if (plan) api.moveLines(plan);
+    };
+
+    const onDragStart = ({ active }: DragStartEvent) =>
+        setLifted(linesById.get(Number(active.id))?.item ?? null);
+
+    /** Spoken for screen readers; dnd-kit's defaults say "item 3", which is nobody. */
+    const announcements = {
+        onDragStart: ({ active }: { active: { id: string | number } }) => {
+            const found = linesById.get(Number(active.id));
+            return found ? `Picked up ${found.item.name}, in ${found.section}.` : undefined;
+        },
+        onDragOver: ({ over }: { over: { id: string | number } | null }) => {
+            if (!over) return undefined;
+            const overId = String(over.id);
+            if (overId.startsWith(SECTION_DROP)) {
+                const section = categories.find((c) => c.id === Number(overId.slice(SECTION_DROP.length)));
+                return section ? `Over the end of ${section.name}.` : undefined;
+            }
+            const found = linesById.get(Number(over.id));
+            return found ? `Over ${found.item.name}, in ${found.section}.` : undefined;
+        },
+        onDragEnd: ({ active, over }: { active: { id: string | number }; over: { id: string | number } | null }) => {
+            const found = linesById.get(Number(active.id));
+            if (!found) return undefined;
+            return over ? `Dropped ${found.item.name}.` : `${found.item.name} returned to where it was.`;
+        },
+        onDragCancel: ({ active }: { active: { id: string | number } }) => {
+            const found = linesById.get(Number(active.id));
+            return found ? `Cancelled. ${found.item.name} stayed put.` : undefined;
+        },
+    };
 
     const toggleExpanded = (id: number) => {
         setExpanded((prev) => {
@@ -70,16 +152,47 @@ export default function BudgetTab({ data, api }: { data: FinancePayload; api: Fi
                 </div>
             </Card>
 
-            {categories.map((category) => (
-                <CategoryBlock
-                    key={category.id}
-                    category={category}
-                    data={data}
-                    api={api}
-                    expanded={expanded}
-                    onToggleExpanded={toggleExpanded}
-                />
-            ))}
+            <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragStart={onDragStart}
+                onDragEnd={onDragEnd}
+                onDragCancel={() => setLifted(null)}
+                accessibility={{ announcements }}
+            >
+                {categories.map((category) => (
+                    <CategoryBlock
+                        key={category.id}
+                        category={category}
+                        data={data}
+                        api={api}
+                        expanded={expanded}
+                        onToggleExpanded={toggleExpanded}
+                        dragging={lifted !== null}
+                    />
+                ))}
+
+                {/*
+                  The dragged row is drawn here rather than in place, and it has
+                  to be: a section is an `overflow-hidden` Card, so a row carried
+                  toward another section would be sliced off at the card's edge.
+                  The overlay is portalled above everything instead.
+                */}
+                <DragOverlay dropAnimation={{ duration: 180, easing: 'cubic-bezier(0.2, 0, 0, 1)' }}>
+                    {lifted && (
+                        <div className="flex items-center gap-3 rounded-2xl border border-accent/30 bg-white/95
+                            px-4 py-2.5 shadow-2xl shadow-gray-900/10 backdrop-blur cursor-grabbing">
+                            <span className="text-gray-300 leading-none">⠿</span>
+                            <span className="min-w-0 truncate text-sm font-medium text-gray-900">
+                                {lifted.name}
+                            </span>
+                            <span className="ml-auto shrink-0 text-sm font-semibold tabular-nums text-gray-500">
+                                {formatMoney(itemTotal(lifted, settings))}
+                            </span>
+                        </div>
+                    )}
+                </DragOverlay>
+            </DndContext>
 
             {!categories.length && (
                 <Card className="p-6">
@@ -122,14 +235,19 @@ export default function BudgetTab({ data, api }: { data: FinancePayload; api: Fi
     );
 }
 
-function CategoryBlock({ category, data, api, expanded, onToggleExpanded }: {
+function CategoryBlock({ category, data, api, expanded, onToggleExpanded, dragging }: {
     category: Category;
     data: FinancePayload;
     api: FinanceApi;
     expanded: Set<number>;
     onToggleExpanded: (id: number) => void;
+    /** Something is in the air somewhere on the page. */
+    dragging: boolean;
 }) {
     const stats = data.summary.categories.find((c) => c.id === category.id);
+    // The section itself takes a drop, which is how a line reaches a section with
+    // nothing in it — there is no row there to aim at.
+    const { setNodeRef: setDropRef, isOver } = useDroppable({ id: `${SECTION_DROP}${category.id}` });
 
     const addItem = () =>
         api.create('items', {
@@ -202,18 +320,36 @@ function CategoryBlock({ category, data, api, expanded, onToggleExpanded }: {
                 <div />
             </div>
 
-            {category.items.map((item) => (
-                <ItemRow
-                    key={item.id}
-                    item={item}
-                    data={data}
-                    api={api}
-                    expanded={expanded.has(item.id)}
-                    onToggleExpanded={() => onToggleExpanded(item.id)}
-                />
-            ))}
+            <div
+                ref={setDropRef}
+                className={`transition-colors duration-200 ${
+                    isOver ? 'bg-accent/[0.04] ring-1 ring-inset ring-accent/30' : ''
+                }`}
+            >
+                <SortableContext
+                    items={category.items.map((item) => item.id)}
+                    strategy={verticalListSortingStrategy}
+                >
+                    {category.items.map((item) => (
+                        <ItemRow
+                            key={item.id}
+                            item={item}
+                            data={data}
+                            api={api}
+                            expanded={expanded.has(item.id)}
+                            onToggleExpanded={() => onToggleExpanded(item.id)}
+                        />
+                    ))}
+                </SortableContext>
 
-            {!category.items.length && <EmptyState>No line items in this section yet.</EmptyState>}
+                {!category.items.length && (
+                    <EmptyState>
+                        {dragging
+                            ? 'Drop a line here to move it into this section.'
+                            : 'No line items in this section yet.'}
+                    </EmptyState>
+                )}
+            </div>
 
             <div className="px-4 py-3 border-t border-gray-50">
                 <button
@@ -438,11 +574,42 @@ function ItemRow({ item, data, api, expanded, onToggleExpanded }: {
 
     const patch = (fields: Record<string, unknown>) => api.update('items', { id: item.id, ...fields });
 
+    const {
+        attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging,
+    } = useSortable({ id: item.id });
+
     return (
-        <div className={`border-b border-gray-100 last:border-0 ${item.is_paid ? 'bg-emerald-50/30' : ''}`}>
+        <div
+            ref={setNodeRef}
+            style={{ transform: CSS.Transform.toString(transform), transition }}
+            className={`border-b border-gray-100 last:border-0 ${item.is_paid ? 'bg-emerald-50/30' : ''} ${
+                // Left in place as a gap, because the row itself is being drawn
+                // in the overlay. Hidden outright would collapse the list under
+                // the cursor and make the drop target jump.
+                isDragging ? 'opacity-30' : ''
+            }`}
+        >
             <div className="grid grid-cols-1 gap-2 px-4 py-2
                 md:grid-cols-[minmax(0,1.7fr)_6rem_4.5rem_7rem_7rem_5rem_1.75rem] md:items-center">
                 <div className="flex items-center gap-1 min-w-0">
+                    <button
+                        ref={setActivatorNodeRef}
+                        {...attributes}
+                        {...listeners}
+                        aria-label={`Reorder ${item.name}`}
+                        title="Drag to reorder, or move to another section"
+                        // 32px square on touch, where a 20px glyph is a miss more
+                        // often than a hit; trimmed on desktop, where the pointer
+                        // is exact and the row wants to stay compact.
+                        className="flex h-8 w-8 shrink-0 -ml-1.5 items-center justify-center leading-none
+                            text-gray-200 rounded-lg md:h-6 md:w-6
+                            transition-colors duration-200 cursor-grab touch-none
+                            hover:text-gray-400 active:cursor-grabbing
+                            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40
+                            focus-visible:text-gray-400"
+                    >
+                        ⠿
+                    </button>
                     <GlyphButton
                         onClick={onToggleExpanded}
                         label={`${expanded ? 'Collapse' : 'Expand'} ${item.name}`}

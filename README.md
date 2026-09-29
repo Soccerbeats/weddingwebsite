@@ -56,9 +56,10 @@ a honeymoon fund, and an RSVP form that recognises them by name.
   work the same plan as a list, grouped by table or by guest, with multi-select
   and bulk moves; then **export it** for the caterer, as paper or a spreadsheet,
   with guest plates, vendor plates and a grand total for the kitchen
-- **Money** — a real budget: lines, quantities, who is paying, who has
-  contributed, what is still owed and when it is due — including a bar charged
-  per **drinker**, so the under-21s on your guest list stay out of it
+- **Money** — a real budget: lines you drag into the order and the section you
+  want them in, quantities, who is paying, who has contributed, what is still
+  owed and when it is due — including a bar charged per **drinker**, so the
+  under-21s on your guest list stay out of it
 - **Photos** — upload, drag to reorder, heart the ones that go public
 - **Content** — every page's text, colours, and a work-in-progress toggle per page
 - **Honeymoon** — a private planner *and* a trip companion: a map of everywhere

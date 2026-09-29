@@ -38,7 +38,10 @@ const RESOURCES: Record<string, ResourceDef> = {
             name: { kind: 'text' },
             unit_cost: { kind: 'number' },
             quantity: { kind: 'number' },
-            qty_source: { kind: 'enum', values: ['manual', 'adults', 'minors', 'total'] },
+            // Must list every value the Budget tab's dropdown offers — see
+            // QTY_LABELS in BudgetTab.tsx. 'drinkers' was missing for a release,
+            // which 400'd the one control the under-21 feature depends on.
+            qty_source: { kind: 'enum', values: ['manual', 'adults', 'minors', 'drinkers', 'total'] },
             use_subitems: { kind: 'bool' },
             is_paid: { kind: 'bool' },
             notes: { kind: 'text' },
@@ -302,17 +305,34 @@ export async function PATCH(request: Request, { params }: Params) {
 
         const body = await request.json();
 
-        // A bare array of {id, sort_order} reorders in one transaction.
+        // A bare array of {id} reorders in one transaction — index becomes
+        // sort_order. A row may also carry `category_id`, which is how a budget
+        // line dragged into another section moves: the reparenting and the
+        // ordering are one write, so the line is never ordered for a moment
+        // against a section it does not belong to. Only honoured where the table
+        // actually has the column, so a reorder cannot invent one.
         if (Array.isArray(body)) {
+            const reparents = Object.prototype.hasOwnProperty.call(def.fields, 'category_id');
             const client = await pool.connect();
             try {
                 await client.query('BEGIN');
                 for (const [index, row] of body.entries()) {
                     const id = Math.trunc(Number((row as { id: unknown }).id));
                     if (!Number.isFinite(id) || id <= 0) continue;
-                    await client.query(
-                        `UPDATE ${def.table} SET sort_order = $1 WHERE id = $2`, [index, id],
-                    );
+                    const rawParent = (row as { category_id?: unknown }).category_id;
+                    const parent = reparents && rawParent != null
+                        ? Math.trunc(Number(rawParent))
+                        : null;
+                    if (parent != null && Number.isFinite(parent) && parent > 0) {
+                        await client.query(
+                            `UPDATE ${def.table} SET sort_order = $1, category_id = $2 WHERE id = $3`,
+                            [index, parent, id],
+                        );
+                    } else {
+                        await client.query(
+                            `UPDATE ${def.table} SET sort_order = $1 WHERE id = $2`, [index, id],
+                        );
+                    }
                 }
                 await client.query('COMMIT');
             } catch (error) {

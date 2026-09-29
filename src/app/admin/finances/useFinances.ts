@@ -1,10 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { buildSummary } from '@/lib/finance';
 import type {
     Category, Contributor, FinanceSettings, FinanceSummary, Payer, Purchase,
     ScheduledPayment, Snapshot,
 } from '@/lib/finance';
+import { applyPlan, type ReorderPlan } from '@/lib/budgetOrder';
 
 export type Resource =
     | 'categories' | 'items' | 'subitems' | 'payers'
@@ -158,6 +160,43 @@ export function useFinances() {
     const removeReceipt = useCallback((id: number) =>
         run(() => fetch(`${BASE}/receipt?id=${id}`, { method: 'DELETE' })), [run]);
 
+    /**
+     * A budget line dragged to a new place.
+     *
+     * Redrawn from the plan before the request goes out. Every other mutation
+     * here waits for the refetch, which is right for a number typed into a field
+     * and wrong for a dragged row: the row would snap back to where it came from
+     * for a beat and then jump. The summary is recomputed locally from the same
+     * pure engine the server runs, so a line moved between sections takes its
+     * money with it immediately rather than leaving both section totals stale
+     * until the round trip lands. The refetch that follows is still the truth —
+     * if the write fails, it puts everything back.
+     */
+    const moveLines = useCallback((plan: ReorderPlan) => {
+        setData((prev) => {
+            if (!prev) return prev;
+            const categories = applyPlan(prev.categories, plan);
+            return {
+                ...prev,
+                categories,
+                summary: buildSummary({
+                    categories,
+                    payers: prev.payers,
+                    purchases: prev.purchases,
+                    contributors: prev.contributors,
+                    settings: prev.settings,
+                    schedule: prev.schedule,
+                    weddingDate: prev.weddingDate,
+                }),
+            };
+        });
+        return run(() => fetch(`${BASE}/items`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(plan.rows),
+        }));
+    }, [run]);
+
     const reorder = useCallback((resource: Resource, ids: { id: number }[]) =>
         run(() => fetch(`${BASE}/${resource}`, {
             method: 'PATCH',
@@ -167,7 +206,7 @@ export function useFinances() {
 
     return {
         data, loading, error, saving: busy > 0,
-        refresh, create, update, remove, reorder,
+        refresh, create, update, remove, reorder, moveLines,
         removeWithUndo, undo, dismissUndo,
         updateMany, uploadReceipt, removeReceipt,
         clearError: () => setError(''),

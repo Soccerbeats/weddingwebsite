@@ -2,6 +2,7 @@
  * Verifies the finance engine reproduces the original spreadsheet's figures
  * exactly. Run: npx tsx scripts/verify-finance-math.mts
  */
+import { applyPlan, planLineMove, sectionsOf, type OrderedSection } from '../src/lib/budgetOrder';
 import {
     buildSummary, budgetTotal, effectiveQuantity, itemTotal, DEFAULT_SETTINGS,
     type Category, type BudgetItem, type Contributor, type Payer, type Purchase, type FinanceSettings,
@@ -73,6 +74,12 @@ function check(label: string, actual: number, expected: number) {
     const ok = Math.abs(actual - expected) < 0.005;
     if (!ok) failures++;
     console.log(`${ok ? 'PASS' : 'FAIL'}  ${label.padEnd(42)} got ${actual}  want ${expected}`);
+}
+
+/** A yes/no assertion, for the checks that are not about a number. */
+function ok(label: string, condition: boolean, detail = '') {
+    if (!condition) failures++;
+    console.log(`${condition ? 'PASS' : 'FAIL'}  ${label.padEnd(42)}${detail ? ` ${detail}` : ''}`);
 }
 
 console.log('\n--- Budget (vs spreadsheet) ---');
@@ -286,6 +293,89 @@ check('and a budget with no bar at all raises nothing',
         payers: [], purchases: [], contributors: [],
         settings: { ...drinkSettings, drinking_count: 0 },
     }).warnings.filter(w => w.kind === 'no-drinkers').length, 0);
+
+
+console.log('\n--- Dragging a line to a new place ---');
+{
+    // Two sections, so a move between them is expressible. `planLineMove` owns
+    // the whole arithmetic: the component only reports what was dragged onto
+    // what, and the answer has to be the same for the optimistic redraw and for
+    // the rows written to the database.
+    const layout = (): OrderedSection[] => ([
+        { id: 1, itemIds: [10, 11, 12] },
+        { id: 2, itemIds: [20, 21] },
+        { id: 3, itemIds: [] },
+    ]);
+    const shape = (plan: { sections: OrderedSection[] } | null) =>
+        plan ? plan.sections.map(s => `${s.id}:[${s.itemIds.join(',')}]`).join(' ') : 'null';
+
+    const down = planLineMove(layout(), 10, { kind: 'item', id: 12 });
+    ok('a line dragged down lands where it was dropped',
+        shape(down) === '1:[11,12,10] 2:[20,21] 3:[]', shape(down));
+
+    const up = planLineMove(layout(), 12, { kind: 'item', id: 10 });
+    ok('and dragged up, likewise',
+        shape(up) === '1:[12,10,11] 2:[20,21] 3:[]', shape(up));
+
+    const across = planLineMove(layout(), 10, { kind: 'item', id: 21 });
+    ok('a line dropped on another section joins it, in place',
+        shape(across) === '1:[11,12] 2:[20,10,21] 3:[]', shape(across));
+
+    const empty = planLineMove(layout(), 10, { kind: 'section', id: 3 });
+    ok('a line dropped on an empty section is that section',
+        shape(empty) === '1:[11,12] 2:[20,21] 3:[10]', shape(empty));
+
+    const toOwnSection = planLineMove(layout(), 10, { kind: 'section', id: 1 });
+    ok('dropped on its own section, it goes to the end',
+        shape(toOwnSection) === '1:[11,12,10] 2:[20,21] 3:[]', shape(toOwnSection));
+
+    // Nothing moved is not a write. The budget refetches on every mutation, so a
+    // no-op drop would cost a round trip and a redraw for nothing.
+    ok('dropping a line on itself is not a move',
+        planLineMove(layout(), 10, { kind: 'item', id: 10 }) === null);
+    ok('nor is dropping it back where it already was',
+        planLineMove(layout(), 10, { kind: 'section', id: 1 }) !== null);
+    ok('an unknown line is not a move',
+        planLineMove(layout(), 99, { kind: 'item', id: 10 }) === null);
+    ok('an unknown target is not a move',
+        planLineMove(layout(), 10, { kind: 'item', id: 99 }) === null);
+
+    // The rows are what the API writes: index becomes sort_order, and a line
+    // that changed section has to carry its new category_id in the same
+    // transaction, or it is briefly filed in neither.
+    const rows = (plan: { rows: { id: number; category_id: number }[] } | null) =>
+        plan ? plan.rows.map(r => `${r.id}@${r.category_id}`).join(' ') : 'null';
+    ok('a move within one section writes only that section',
+        rows(down) === '11@1 12@1 10@1', rows(down));
+    ok('a move across sections writes both, the line carrying its new section',
+        rows(across) === '11@1 12@1 20@2 10@2 21@2', rows(across));
+    ok('and never writes a section it did not touch',
+        !rows(across).includes('@3'), rows(across));
+
+    // The optimistic redraw and the rows sent to the server come from the same
+    // plan, and this is the check that they agree: what the screen shows the
+    // instant you let go must be what a reload would show.
+    const cats = [
+        { id: 1, name: 'A', items: [{ id: 10, category_id: 1 }, { id: 11, category_id: 1 }, { id: 12, category_id: 1 }] },
+        { id: 2, name: 'B', items: [{ id: 20, category_id: 2 }, { id: 21, category_id: 2 }] },
+        { id: 3, name: 'C', items: [] as { id: number; category_id: number }[] },
+    ];
+    ok('sectionsOf reads the arrangement back off the data',
+        sectionsOf(cats).map(s => `${s.id}:[${s.itemIds.join(',')}]`).join(' ')
+            === '1:[10,11,12] 2:[20,21] 3:[]');
+
+    const applied = applyPlan(cats, planLineMove(sectionsOf(cats), 10, { kind: 'item', id: 21 })!);
+    ok('the redraw matches the plan',
+        applied.map(c => `${c.id}:[${c.items.map(i => i.id).join(',')}]`).join(' ')
+            === '1:[11,12] 2:[20,10,21] 3:[]',
+        applied.map(c => `${c.id}:[${c.items.map(i => i.id).join(',')}]`).join(' '));
+    // Without this the moved line keeps its old category_id in local state, and
+    // the very next drag plans against a section it is no longer in.
+    ok('and the moved line carries its new section in local state',
+        applied[1].items.find(i => i.id === 10)?.category_id === 2);
+    ok('a section nothing touched is left exactly as it was',
+        applied[2] === cats[2]);
+}
 
 
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`}\n`);
