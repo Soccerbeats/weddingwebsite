@@ -1,5 +1,5 @@
 {
-  "//": "Type-checks the dev-only verification scripts. They are excluded from the app's tsconfig so `next build` never tries to compile test tooling (and never needs playwright installed).",
+  "//": "Type-checks the dev-only verification scripts. They are excluded from the app's tsconfig so `next build` never tries to compile test tooling (and never needs playwright installed). EVERY script that imports playwright must also be named in `exclude` below — playwright is not a dependency, so CI cannot resolve its types and the check fails on the import alone.",
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "noEmit": true,
@@ -8,5 +8,5 @@
     "allowImportingTsExtensions": true
   },
   "include": ["scripts/**/*.mts", "scripts/**/*.ts", "src/**/*.ts", "src/**/*.tsx"],
-  "exclude": ["node_modules", "scripts/verify-finance-ui.mts"]
+  "exclude": ["node_modules", "scripts/verify-finance-ui.mts", "scripts/verify-hero.mts"]
 }
