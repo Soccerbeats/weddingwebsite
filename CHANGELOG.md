@@ -11,6 +11,18 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.104 — [Released] The hero did not animate on a tablet (`main`, 2026-10-01 14:01)
+
+Austin: the home page animation works on mobile and desktop, but at tablet size — a phone held sideways, for instance — scrolling skips the animation and jumps straight to the collage.
+
+### Fixed
+- **The hero now animates on a touch screen of any width.** It renders two layouts, narrow and wide, chosen on width — but it was also using that same width to decide *what to listen to*, and above the breakpoint it listened only for a mouse wheel. A tablet, or a phone turned on its side, is wide **and** has no wheel, so nothing was listening: the finger scrolled the page, the snap-to-collapsed guard saw the page move, and the hero arrived at the collage with no animation in between. Which layout to draw is a question about width; what someone is scrolling with is a question about their pointer, and the two are now answered separately.
+- **A finger and a wheel run the same two moves.** The collapse and the expand were lifted out of the wheel handler and are shared, so the two inputs cannot drift into doing subtly different things.
+- **Scrolling back up reopens the hero on touch too**, the same as it already did with a wheel.
+
+### Added
+- **`npm run check:hero`** — the home page driven in a real browser at five viewport-and-input pairings: phone portrait, **phone landscape**, tablet portrait, tablet landscape and desktop, each with the input that device actually sends. 25 assertions: the collapse starts, the page is held still while it animates rather than jumping, it lands past the hero, it reopens on the way back, and it returns to the top. Confirmed failing first on all three touch-above-the-breakpoint cases and passing after. Needs a browser and a server with a hero photo configured, so like `check:finance:ui` it is a manual check rather than a CI gate.
+
 ## v0.9.103 — [Released] Drag a budget line where you want it (`main`, 2026-09-29 05:27)
 
 ### Added

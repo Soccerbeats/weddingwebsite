@@ -58,6 +58,7 @@ image:
 | `npm run check:finance` | Budget arithmetic |
 | `npm run check:finance:db` | The same against a live database |
 | `npm run check:finance:ui` | The finance UI's contracts (needs a browser; fetches Playwright on demand) |
+| `npm run check:hero` | The home page's hero collapse in a real browser, at five viewport-and-input pairings — phone portrait, **phone landscape**, tablet portrait, tablet landscape, desktop — each driven by the input that device actually sends. Needs a browser and a server whose site config has a hero photo, or every case reports the placeholder instead of a pass |
 | `npm run audit:finance` | A deeper sweep over the finance logic |
 | `npm run check:seating` | 211 assertions with no database or browser: who takes a chair (a party member who declined takes none), seat-index allocation, moves, swaps, gathering a split party, auto-seating, the plan's own warnings, and the export — tallies, vendor plates, the grand total, the spreadsheet's columns and the one-page fit maths |
 | `npm run check:honeymoon` | 550+ assertions with no database or network: distances, date maths, URL parsing, the calendar grid, `.ics` output, search ranking, seed integrity, the trip-mode day resolution, sunrise/sunset, OSM opening hours, the day timeline, time zones on legs, the budget, conflicts, imports/exports, markdown, the flight parser, and journeys (layovers, day placement, door-to-door time) |
@@ -91,16 +92,23 @@ idempotent — matches on place name, never reverts an edit) and
    sheet, the map — still reads `day_id`/`arrive_day_offset`, so do not remove
    them; they are outputs. A leg with `journey_id IS NULL` is a journey of one,
    which is why journeys needed no migration.
-4. **Photos are served through `/api/photos/[filename]`, never `/photos/…`** —
+4. **The hero's layout breakpoint is not an input breakpoint.** `HeroCollapse`
+   renders a narrow layout and a wide one, chosen on `max-width: 768px` — but
+   which *input* drives the animation is a separate question, and the wide path
+   listens for touch as well as the wheel. It listened for the wheel alone until
+   v0.9.104, so every touch screen wider than the breakpoint (a tablet, a phone
+   on its side) had nothing listening and the hero jumped straight to the
+   collage. `npm run check:hero` covers the pairings.
+5. **Photos are served through `/api/photos/[filename]`, never `/photos/…`** —
    with `output: "standalone"`, files written into a volume at runtime are not
    served statically.
-5. **The image name is sacred**: always
+6. **The image name is sacred**: always
    `ghcr.io/soccerbeats/weddingwebsite:latest`, never any other name — the
    production Portainer stack is configured against it. (The demo's one-shot
    seeder is a separate image under its own name,
    `ghcr.io/soccerbeats/weddingwebsite-seeder:latest` — a different image,
    never a tag of the sacred name.)
-6. **After every code change: deploy automatically — and deploying is just
+7. **After every code change: deploy automatically — and deploying is just
    pushing.** Austin's standing instruction, overriding the older "only deploy
    when asked" gate in `deploy.md`. Push to `main`; CI builds and publishes the
    image. **Do not build and push it by hand** — two builds of the same commit

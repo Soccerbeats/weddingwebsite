@@ -321,7 +321,14 @@ export default function HeroCollapse({
     return () => window.removeEventListener('scroll', snapIfNeeded);
   }, [isMobile]);
 
-  // ── Wheel / touch event hijacking (desktop only) ─────────────────────────
+  // ── Scroll hijacking for the wide layout ─────────────────────────────────
+  // Driven by a wheel *and* by a finger. Which layout to draw is a question
+  // about width; what the person is scrolling with is a question about their
+  // pointer, and the two are independent. This listened for `wheel` alone until
+  // v0.9.104, so every touch screen wider than the breakpoint — a tablet, or a
+  // phone turned on its side — had nothing listening at all: the finger scrolled
+  // the page, the snap below saw it move, and the hero jumped to the collage
+  // with no animation.
   useEffect(() => {
     if (isMobile) return;
 
@@ -330,6 +337,32 @@ export default function HeroCollapse({
       const section = sectionRef.current;
       if (!section) return 0;
       return section.offsetTop + section.offsetHeight - window.innerHeight;
+    };
+
+    const atSectionBoundary = () => window.scrollY <= sectionScrollRoom() + 8;
+
+    // The two moves, shared by both inputs, so a wheel and a finger cannot drift
+    // into doing subtly different things.
+    const collapse = () => {
+      stateRef.current = 'animating';
+      // Tell the nav to become an island pill at the same moment the hero starts collapsing
+      window.dispatchEvent(new CustomEvent('hero-collapsing'));
+      runAnimation(1, () => {
+        stateRef.current = 'collapsed';
+        // Jump scroll to the end of the section so the page content is reachable
+        window.scrollTo({ top: sectionScrollRoom(), behavior: 'instant' });
+      });
+    };
+
+    const expandAtBoundary = () => {
+      cancelAboutTimer(); // user took over during the pause — drop the queued slide
+      stateRef.current = 'animating';
+      // Tell the nav to go back to full banner at the same moment the hero starts expanding
+      window.dispatchEvent(new CustomEvent('hero-expanded'));
+      runAnimation(0, () => {
+        stateRef.current = 'full';
+        window.scrollTo({ top: 0, behavior: 'instant' });
+      });
     };
 
     const onWheel = (e: WheelEvent) => {
@@ -344,31 +377,43 @@ export default function HeroCollapse({
       // Collapse: hero is full, user scrolls down
       if (state === 'full' && e.deltaY > 0) {
         e.preventDefault();
-        stateRef.current = 'animating';
-        // Tell the nav to become an island pill at the same moment the hero starts collapsing
-        window.dispatchEvent(new CustomEvent('hero-collapsing'));
-        runAnimation(1, () => {
-          stateRef.current = 'collapsed';
-          // Jump scroll to the end of the section so the page content is reachable
-          window.scrollTo({ top: sectionScrollRoom(), behavior: 'instant' });
-        });
+        collapse();
         return;
       }
 
       // Expand: hero is collapsed, user scrolls up, and they're still at the section boundary
-      if (state === 'collapsed' && e.deltaY < 0) {
-        const atSectionBoundary = window.scrollY <= sectionScrollRoom() + 8;
-        if (atSectionBoundary) {
-          e.preventDefault();
-          cancelAboutTimer(); // user took over during the pause — drop the queued slide
-          stateRef.current = 'animating';
-          // Tell the nav to go back to full banner at the same moment the hero starts expanding
-          window.dispatchEvent(new CustomEvent('hero-expanded'));
-          runAnimation(0, () => {
-            stateRef.current = 'full';
-            window.scrollTo({ top: 0, behavior: 'instant' });
-          });
-        }
+      if (state === 'collapsed' && e.deltaY < 0 && atSectionBoundary()) {
+        e.preventDefault();
+        expandAtBoundary();
+      }
+    };
+
+    // The same three decisions, from a finger. `dy` is positive when the finger
+    // moves up the screen, which is the gesture for scrolling down — the same
+    // sign as a wheel's deltaY, so the branches below read identically.
+    let touchStartY: number | null = null;
+    const onTouchStart = (e: TouchEvent) => { touchStartY = e.touches[0]?.clientY ?? null; };
+    const onTouchEnd = () => { touchStartY = null; };
+
+    const onTouchMove = (e: TouchEvent) => {
+      const state = stateRef.current;
+
+      if (state === 'animating') { e.preventDefault(); return; }
+      if (touchStartY === null) return;
+      const dy = touchStartY - (e.touches[0]?.clientY ?? touchStartY);
+
+      // While the hero is full the page must not move at all: let it scroll even
+      // a little and the snap handler takes over, which is the jump this whole
+      // effect exists to prevent. A few pixels of slop so a tap is not a swipe.
+      if (state === 'full') {
+        e.preventDefault();
+        if (dy > 5) collapse();
+        return;
+      }
+
+      if (state === 'collapsed' && dy < -5 && atSectionBoundary()) {
+        e.preventDefault();
+        expandAtBoundary();
       }
     };
 
@@ -426,10 +471,16 @@ export default function HeroCollapse({
 
     // Non-passive so we can preventDefault
     window.addEventListener('wheel', onWheel, { passive: false });
+    window.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend', onTouchEnd, { passive: true });
     window.addEventListener('hero-reset', onReset);
     window.addEventListener('hero-to-about', onToAbout);
     return () => {
       window.removeEventListener('wheel', onWheel);
+      window.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
       window.removeEventListener('hero-reset', onReset);
       window.removeEventListener('hero-to-about', onToAbout);
     };
