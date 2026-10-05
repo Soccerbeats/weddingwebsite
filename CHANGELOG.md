@@ -11,6 +11,11 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.10.2 — [Released] Change dates on one line (`main`, 2026-10-05 06:01)
+
+### Fixed
+- **The trip calendar's Change dates button wrapped onto two lines on a phone**, squeezed by the sentence beside it. It keeps to one line now.
+
 ## v0.10.1 — [Released] Files, a calendar that waits for you, and a second pass (`main`, 2026-10-05 05:51)
 
 Austin: on a phone, Settings' trip calendar should need a tap before it can be dragged — scrolling the page kept changing the dates. Add a Files tab, in More on the phone and a tab of its own, as a proper file explorer for the travel documents, and take documents out of Settings. Then another pass of improvements.

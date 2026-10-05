@@ -136,6 +136,7 @@ export default function DateRangePicker({ start, end, onChange, months = 2 }: {
                     </p>
                     <Button
                         tone={locked ? 'primary' : 'default'}
+                        className="shrink-0 whitespace-nowrap"
                         onClick={() => { setUnlocked(locked); setDragging(null); }}
                     >
                         {locked ? 'Change dates' : 'Done'}
