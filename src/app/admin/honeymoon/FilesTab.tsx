@@ -491,12 +491,23 @@ function FileViewer({ docs, openId, onOpen, warnings }: {
                             </MiniSelect>
                         </Field>
                         <Field label="Whose">
-                            <MiniSelect value={doc.person ?? ''} onChange={(e) => set({ person: e.target.value })} aria-label="Whose">
-                                <option value="">Shared</option>
-                                {[...new Set([...partners, ...(doc.person ? [doc.person] : [])])].map((name) => (
-                                    <option key={name} value={name}>{name}</option>
-                                ))}
-                            </MiniSelect>
+                            {/* The trip's two names when Settings has them; a box to type
+                                one when it does not, so a file can always be someone's. */}
+                            {partners.length > 0 ? (
+                                <MiniSelect value={doc.person ?? ''} onChange={(e) => set({ person: e.target.value })} aria-label="Whose">
+                                    <option value="">Shared</option>
+                                    {[...new Set([...partners, ...(doc.person ? [doc.person] : [])])].map((name) => (
+                                        <option key={name} value={name}>{name}</option>
+                                    ))}
+                                </MiniSelect>
+                            ) : (
+                                <InlineText
+                                    value={doc.person ?? ''}
+                                    placeholder="+ A name, or leave for Shared"
+                                    className="-ml-2 text-sm"
+                                    onCommit={(person) => set({ person: person.trim() })}
+                                />
+                            )}
                         </Field>
                         <Field label="Expires">
                             <input

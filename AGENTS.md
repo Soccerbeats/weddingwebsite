@@ -58,11 +58,11 @@ image:
 | `npm run check:finance` | Budget arithmetic |
 | `npm run check:finance:db` | The same against a live database |
 | `npm run check:finance:ui` | The finance UI's contracts (needs a browser; fetches Playwright on demand) |
-| `npm run check:honeymoon:ui` | The honeymoon portal in a real browser, 38 checks: the same place panel and sections from every entry point, the itinerary toolbar staying on screen, travel on both timeline shapes, overview cards never overlapping, and at 390×844 no sideways scroll and no control under 44px on any of its pages. Needs a browser and a server with honeymoon data (`BASE=… ADMIN_PASSWORD=…`, or `DEMO=1` against the demo) |
+| `npm run check:honeymoon:ui` | The honeymoon portal in a real browser, 53 checks (none of them write): the same place panel and sections from every entry point, the itinerary toolbar staying on screen, travel on both timeline shapes, overview cards never overlapping, and at 390×844 no sideways scroll and no control under 44px on any of its pages. Needs a browser and a server with honeymoon data (`BASE=… ADMIN_PASSWORD=…`, or `DEMO=1` against the demo) |
 | `npm run check:hero` | The home page's hero collapse in a real browser, at five viewport-and-input pairings — phone portrait, **phone landscape**, tablet portrait, tablet landscape, desktop — each driven by the input that device actually sends. Needs a browser and a server whose site config has a hero photo, or every case reports the placeholder instead of a pass |
 | `npm run audit:finance` | A deeper sweep over the finance logic |
 | `npm run check:seating` | 211 assertions with no database or browser: who takes a chair (a party member who declined takes none), seat-index allocation, moves, swaps, gathering a split party, auto-seating, the plan's own warnings, and the export — tallies, vendor plates, the grand total, the spreadsheet's columns and the one-page fit maths |
-| `npm run check:honeymoon` | 718 assertions with no database or network: distances, date maths, URL parsing, the calendar grid, `.ics` output, search ranking, seed integrity, the trip-mode day resolution, sunrise/sunset, OSM opening hours, the day timeline, time zones on legs, the budget, conflicts, imports/exports, markdown, the flight parser, and journeys (layovers, day placement, door-to-door time) |
+| `npm run check:honeymoon` | 743 assertions with no database or network: distances, date maths, URL parsing, the calendar grid, `.ics` output, search ranking, seed integrity, the trip-mode day resolution, sunrise/sunset, OSM opening hours, the day timeline, time zones on legs, the budget, conflicts, imports/exports, markdown, the flight parser, and journeys (layovers, day placement, door-to-door time) |
 
 Seeds: `npm run seed:honeymoon` (bundles the Bali/Singapore travel guide,
 idempotent — matches on place name, never reverts an edit) and
@@ -281,6 +281,7 @@ order, before the commit:
   | `honeymoonCalendar.ts` | The `.ics` both calendar routes serve |
   | `honeymoonShare.ts` | Share tokens (server only) |
   | `honeymoonExport.ts` | The dashboard's offline copy: the whole payload as one self-contained HTML file |
+  | `honeymoonFiles.ts` | The Files tab: a document's kind from its filename, the expiry warnings (six months after the trip for a passport), folders, search |
 - `public/config/*.json` — file-based content config, written by the admin at
   runtime (`site.json` settings/colors/dates, `photos.json`, `timeline.json`);
   a Docker volume, not in git
@@ -451,9 +452,18 @@ order, before the commit:
   timeline, **journeys** (a whole ticket with its legs, layovers and one booking),
   places/stays/excursions with a booking vault and a budget, guide notes, a
   phone-first offline **Today** view, and per-country emergency details.
-  Nine tabs (Overview, Today, Itinerary, Map, Places — with Stays and Excursions
-  as its segments on their own URLs — Travel, Checklist, Guide, Settings), each
-  under a `TabToolbar`. **Below 768px** the shell sets `html.hm-compact`, which
+  Ten tabs (Overview, Today, Itinerary, Map, Places — with Stays and Excursions
+  as its segments on their own URLs — Travel, Checklist, Files, Guide, Settings),
+  each under a `TabToolbar`. **Files** (`FilesTab.tsx`) is the only place travel
+  documents live; Settings no longer has them. **Documents work offline because
+  the Files tab and the Today view post the list of document URLs to
+  `public/honeymoon-sw.js`**, which keeps exactly that list in its
+  `honeymoon-files-v1` cache and serves `/api/photos/…` from it when the network
+  fails. Until v0.10.1 the UI promised this and the worker never did it — if you
+  touch either side, keep the message (`honeymoon-sw:files`) and the cache name in
+  step. The trip calendar (`DateRangePicker`) is **locked on `pointer: coarse`**
+  until *Change dates*, and only a press on a day captures the pointer — capturing
+  every press is what broke its month arrows. **Below 768px** the shell sets `html.hm-compact`, which
   hides the site nav and the admin bar (see `globals.css`); the portal draws one
   slim bar and `MobileTabBar` along the bottom, the itinerary shows one day at a
   time, and its timeline is `DayAgenda` (vertical) instead of the bar or clock.

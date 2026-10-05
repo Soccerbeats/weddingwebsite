@@ -11,6 +11,37 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.10.1 — [Released] Files, a calendar that waits for you, and a second pass (`main`, 2026-10-05 05:51)
+
+Austin: on a phone, Settings' trip calendar should need a tap before it can be dragged — scrolling the page kept changing the dates. Add a Files tab, in More on the phone and a tab of its own, as a proper file explorer for the travel documents, and take documents out of Settings. Then another pass of improvements.
+
+### Added
+- **A Files tab** — a file explorer for the travel documents. Folders down the side by kind (Passports, Visas, Insurance, Tickets, Vaccinations, Reservations) and by person, with counts; a grid of thumbnails or a list; search across names and notes. Click a file and it opens big — the image, or the PDF itself — with ‹ › (and the arrow keys) to step through the folder, and its details editable beside it: what it is, whose, when it expires, what it is for (a place or a flight), notes. Drop files anywhere on the page to add them; what each one is gets guessed from its name ("Boarding pass SQ938.png" files itself as a ticket) and is one tap to change. In **More** on a phone, between Checklist and Guide on a laptop, and `g f` from the keyboard.
+- **Warnings that matter at a border.** A passport that expires within six months of coming home — the rule many countries enforce at check-in — or anything (a passport, a visa, a policy) that runs out before or during the trip, is flagged on its file and at the top of the tab. No passport on file is said once.
+- **Documents really work offline.** The old Documents section promised its files were "cached by the offline snapshot, so they open with no signal". They were not: the offline copy held the pages and the trip, never the files. Now the Files tab and the Today view hand every document to the portal's offline store, a deleted file leaves it, and the tab shows "Saved for offline: 5 of 5" so the promise can be checked. Tested by cutting the network and opening all five sample files.
+- **A tap before the dates move, on a touch screen.** Settings' trip calendar is locked on a phone or tablet: it scrolls like the rest of the page, and **Change dates** unlocks dragging. It locks itself again once a range is set. A mouse is never locked.
+- **Pull a panel down to close it**, or up to make it full height — the gesture every phone sheet has taught people. A tap on the handle still toggles the height.
+- **"Travel documents" on the Today view**, one tap to Files. Not on the read-only share link: documents stay private.
+
+### Changed
+- **The phone calendar** is a month of squares — the date, the trip day, a dot per stop and ✈ for travel — instead of seven columns of text cut to "La…". Tap a day to open it.
+- **The place form fits its panel.** It laid itself out by the window's width, so inside the panel on a laptop it squeezed four columns ("Restauran", "— from regio"). It now follows the panel's own width, and on a phone it opens at full height.
+- **Today's day arrows say where they go** — "‹ Day 1", "Day 3 ›", "First day" — instead of a bare arrow, and the one with nowhere to go no longer looks like an empty box.
+- **Show on the map leaves room for the panel**: the place lands in the visible part of the map rather than half under the panel.
+- **Every button has a pressed state and a visible keyboard focus ring**, and the press animation respects reduced motion.
+- **Settings is quieter**: one-line card descriptions with the detail behind ⓘ. The "Adding places" card is gone — its tips are on the place form's Location ⓘ — and so is Documents, which has its own tab.
+- **The place form's help paragraphs** (cost, opening hours) are behind ⓘ.
+- **README screenshots** retaken from the demo trip, with the timeline, the place panel and Files added.
+
+### Fixed
+- **The trip calendar's month arrows did nothing** — in production since the calendar was added. The calendar grabbed every press to track a drag, including presses on its own arrow buttons, so their clicks never arrived. Only a press on a day starts a drag now. Found by the new browser check on the Done button, confirmed against the old code (June stayed June) and fixed (June → July).
+- **The travel-leg editor ran off the screen on a phone**: date and time sat side by side and the time box was cut off. They stack on a phone now, in the Travel tab and inside a day card.
+- **Settings' share-link text** mentioned an internal field name.
+
+### Tested
+- **25 new assertions in `npm run check:honeymoon`** (now 743): guessing a document's kind from its name, the expiry rules (during the trip, before it, under six months after, none without dates or an expiry date), the folders and their counts, and search.
+- **`npm run check:honeymoon:ui`** grows to 53 checks: Files is a tab and in More, Settings has no Documents, a file opens in the viewer, the touch calendar starts locked and Change dates / Done work, the phone calendar fits, nothing inside a card spills past the screen edge on six tabs, and pulling a panel down closes it.
+
 ## v0.10.0 — [Released] The honeymoon portal, reorganised — and usable on a phone (`main`, 2026-10-05 04:12)
 
 Austin: the honeymoon module has a lot of stuff put in with no real organisation. Clicking a place opens two or three different windows depending on where you click it — there should be one all-inclusive popout that is the same wherever it is opened from. The itinerary's controls scroll away with the page; Stacked and Clock belong to the left of Days, Timeline and Calendar; and transport should show in the timeline, whose point is to see everything on a day, when to be there and when it ends. Rework the UI, then make mobile actually work.

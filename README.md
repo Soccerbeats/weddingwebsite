@@ -205,15 +205,21 @@ it), sunrise and sunset, and a conflicts panel that collects everything wrong
 with the plan — a night with nowhere to sleep, two stays booked over the same
 nights, a booking whose dates disagree with the days it covers.
 
-**Finding your way around.** Nine tabs — Overview, Today, Itinerary, Map,
-Places (with Stays and Excursions as segments of it), Travel, Checklist, Guide
-and Settings — each with the same toolbar along its top. Click a place anywhere,
+**Finding your way around.** Ten tabs — Overview, Today, Itinerary, Map,
+Places (with Stays and Excursions as segments of it), Travel, Checklist, Files,
+Guide and Settings — each with the same toolbar along its top. Click a place anywhere,
 on the map, a list, a stay card, a stop on a day or a search result, and the same
 panel opens: everything about it, editable where it stands. The itinerary's
 Timeline view draws each day against the clock, flights and drives included,
 with check-out and check-in marked. On a phone the portal is its own app: one
 slim bar on top, tabs along the bottom, one day at a time with a swipe, and a
 vertical agenda for the timeline.
+
+**Files.** Passports, visas, insurance, tickets and booking confirmations in a
+file explorer of their own: folders by kind and by person, thumbnails, a viewer
+that steps through them, and warnings that matter at a desk — a passport with
+under six months left after you come home, a policy that ends mid-trip. Every
+file is kept on the device for offline use, and the page says how many are.
 
 **Taking it with you.** A Today view built for one thumb, cached by a service
 worker so it opens with no signal; an emergency card with the local numbers as
@@ -230,14 +236,23 @@ passports, visas and insurance you would be sorry to be without.
 | <img src="docs/images/honeymoon-itinerary.jpg" alt="The itinerary: day cards with a base, travel legs, timed stops and straight-line distances between them"> | <img src="docs/images/honeymoon-calendar.jpg" alt="The same itinerary as a month calendar, each trip day a tile carrying its stops"> |
 | Days with a base, travel legs and timed stops | The same trip on a real calendar |
 
-| Dashboard | Guide |
+| Timeline | One place panel |
 |---|---|
-| <img src="docs/images/honeymoon-dashboard.jpg" alt="The honeymoon dashboard: counts, the itinerary, a map of confirmed pins, what needs attention and rough costs"> | <img src="docs/images/honeymoon-guide.jpg" alt="Region write-ups and Know Before You Go notes grouped by category"> |
-| The whole trip on one screen | Region write-ups and everything with no coordinates |
+| <img src="docs/images/honeymoon-timeline.jpg" alt="A day on the clock: stops with start and end times, the flight in its own striped lane, and the hotel check-in marked"> | <img src="docs/images/honeymoon-panel.jpg" alt="The place panel open beside the stays: status, rating, the trip, where, booking and cost, the stay"> |
+| A day against the clock, travel and check-in included | The same panel wherever you click a place |
 
-> The screenshots above predate v0.10.0, which reorganised the portal (one place
-> panel, Stays and Excursions folded into Places, a toolbar on every tab) and
-> rebuilt it for phones. The content is the same; the layout around it changed.
+| Overview | Files |
+|---|---|
+| <img src="docs/images/honeymoon-dashboard.jpg" alt="The honeymoon overview: counts, the itinerary, a map of confirmed pins, what needs attention and rough costs"> | <img src="docs/images/honeymoon-files.jpg" alt="The Files tab: folders by kind and person, thumbnails, and warnings about a passport and a policy"> |
+| The whole trip on one page | Every travel document, checked against the dates and saved for offline |
+
+| Guide | |
+|---|---|
+| <img src="docs/images/honeymoon-guide.jpg" alt="Region write-ups and Know Before You Go notes grouped by category"> | |
+| Region write-ups and everything with no coordinates | |
+
+> Screenshots from the fictional demo trip, v0.10.1. The documents shown are
+> generated samples marked as such.
 
 ### On a phone
 
