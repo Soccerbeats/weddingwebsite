@@ -13,8 +13,8 @@
  * everywhere it surfaces: the whole reason for the OSRM lookup is that a
  * straight line lies about Bali's roads.
  */
-import { distanceKm, hasCoords } from './honeymoon';
-import type { Place, Stop } from './honeymoon';
+import { distanceKm, hasCoords, travelModeMeta } from './honeymoon';
+import type { Booking, Day, Place, Stop, TravelLeg, TravelMode } from './honeymoon';
 
 /** How long a hop takes, and how much that number can be trusted. */
 export interface Hop {
@@ -387,11 +387,42 @@ export interface ClockItem {
     assumed: boolean;
 }
 
+export interface ClockLegItem {
+    legId: number;
+    label: string;
+    mode: TravelMode;
+    startMinutes: number;
+    endMinutes: number;
+    start: string;
+    end: string;
+    startPct: number;
+    widthPct: number;
+    /** Landed this morning off a leg that left yesterday. */
+    fromPrevDay: boolean;
+    /** Still travelling at midnight. */
+    toNextDay: boolean;
+}
+
+export interface ClockMarker {
+    kind: DayMarker['kind'];
+    label: string;
+    time: string;
+    pct: number;
+}
+
 export interface ClockLayout {
     startMinutes: number;
     endMinutes: number;
     items: ClockItem[];
     ticks: { minutes: number; label: string; pct: number }[];
+    /** The day's travel, on the same axis as the stops. */
+    legs: ClockLegItem[];
+    /** Check-out and check-in, as moments on the axis. */
+    markers: ClockMarker[];
+    /** Legs with no times typed — listed, never drawn at midnight. */
+    untimedLegs: DayLeg[];
+    /** Stops placed by spreading, because nobody gave them a time. */
+    untimedStopIds: number[];
 }
 
 /**
@@ -409,8 +440,18 @@ export interface ClockLayout {
  */
 export function clockLayout(
     stops: Stop[], labelOf: (stop: Stop) => string,
+    extras: { legs?: DayLeg[]; markers?: DayMarker[] } = {},
 ): ClockLayout {
-    if (!stops.length) return { startMinutes: 0, endMinutes: 1440, items: [], ticks: [] };
+    const timedLegs = (extras.legs ?? []).filter(
+        (leg): leg is DayLeg & { startMinutes: number; endMinutes: number } =>
+            leg.startMinutes != null && leg.endMinutes != null,
+    );
+    const untimedLegs = (extras.legs ?? []).filter((leg) => leg.startMinutes == null || leg.endMinutes == null);
+    const markers = extras.markers ?? [];
+    const empty: ClockLayout = {
+        startMinutes: 0, endMinutes: 1440, items: [], ticks: [], legs: [], markers: [], untimedLegs, untimedStopIds: [],
+    };
+    if (!stops.length && !timedLegs.length) return empty;
 
     const anchors = stops.map((stop) => minutesOf(stop.start_time));
     const lengths = daySegments(stops, labelOf);
@@ -440,8 +481,15 @@ export function clockLayout(
         assumed: anchors[index] == null && lengths[index].assumed,
     }));
 
-    const first = Math.min(...items.map((row) => row.start));
-    const last = Math.max(...items.map((row) => row.end));
+    // The axis takes in everything that happens: stops, travel and the
+    // check-in/out moments, so a 9am drive is not cut off a day that starts at 10.
+    const edges = [
+        ...items.flatMap((row) => [row.start, row.end]),
+        ...timedLegs.flatMap((leg) => [leg.startMinutes, leg.endMinutes]),
+        ...markers.map((marker) => marker.minutes),
+    ];
+    const first = Math.min(...edges);
+    const last = Math.max(...edges);
     // A single instant is not a scale; give it an hour to sit in.
     const startMinutes = last > first ? first : Math.max(0, first - 30);
     const endMinutes = last > first ? last : Math.min(1440, last + 30);
@@ -470,5 +518,180 @@ export function clockLayout(
             above: index % 2 === 0,
             assumed: row.assumed,
         })),
+        legs: timedLegs.map((leg) => ({
+            legId: leg.legId,
+            label: leg.label,
+            mode: leg.mode,
+            startMinutes: leg.startMinutes,
+            endMinutes: leg.endMinutes,
+            start: clockOf(leg.startMinutes),
+            end: clockOf(leg.endMinutes),
+            startPct: pctOf(leg.startMinutes),
+            widthPct: ((leg.endMinutes - leg.startMinutes) / span) * 100,
+            fromPrevDay: leg.fromPrevDay,
+            toNextDay: leg.toNextDay,
+        })),
+        markers: markers.map((marker) => ({
+            kind: marker.kind, label: marker.label, time: clockOf(marker.minutes), pct: pctOf(marker.minutes),
+        })),
+        untimedLegs,
+        untimedStopIds: stops.filter((stop) => minutesOf(stop.start_time) == null).map((stop) => stop.id),
     };
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Travel and the hotel, on the day's timeline.
+ *
+ * The timeline view's job is "everything on this day, when we need to be there
+ * and when it ends" — and the flight is the most fixed thing on a travel day.
+ * These turn a day's legs and stay bookings into things the clock and the
+ * stacked bar can draw beside the stops.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+export interface DayLeg {
+    legId: number;
+    label: string;
+    mode: TravelMode;
+    /** Minutes past midnight on *this* day; null when no time was typed. */
+    startMinutes: number | null;
+    endMinutes: number | null;
+    fromPrevDay: boolean;
+    toNextDay: boolean;
+}
+
+function legLabel(leg: Pick<TravelLeg, 'mode' | 'from_text' | 'to_text'>): string {
+    const ends = [leg.from_text, leg.to_text].filter(Boolean).join(' → ');
+    return `${travelModeMeta(leg.mode).icon} ${ends || travelModeMeta(leg.mode).label}`;
+}
+
+/**
+ * The legs that touch a day: the ones leaving it, and the ones landing on it
+ * from an earlier day.
+ *
+ * A leg still in the air at midnight runs to the end of its departure day and
+ * resumes from the start of its arrival day. A same-day leg whose arrival reads
+ * earlier than its departure crossed midnight without saying so; it runs to the
+ * end of the day rather than drawing a bar of negative width.
+ */
+export function dayLegs(day: Day, arrivals: { leg: TravelLeg; fromDay: Day }[]): DayLeg[] {
+    const leaving = [...day.travel].sort((a, b) => a.sort_order - b.sort_order).map((leg): DayLeg => {
+        const start = minutesOf(leg.depart_time);
+        const arrive = minutesOf(leg.arrive_time);
+        const overnight = leg.arrive_day_offset > 0
+            || (start != null && arrive != null && arrive < start);
+        return {
+            legId: leg.id,
+            label: legLabel(leg),
+            mode: leg.mode,
+            startMinutes: start,
+            endMinutes: start == null ? null : overnight ? 1440 : arrive,
+            fromPrevDay: false,
+            toNextDay: overnight,
+        };
+    });
+    const landing = arrivals.map(({ leg }): DayLeg => {
+        const arrive = minutesOf(leg.arrive_time);
+        return {
+            legId: leg.id,
+            label: legLabel(leg),
+            mode: leg.mode,
+            startMinutes: arrive == null ? null : 0,
+            endMinutes: arrive,
+            fromPrevDay: true,
+            toNextDay: false,
+        };
+    });
+    return [...landing, ...leaving];
+}
+
+export interface DayMarker {
+    kind: 'check-out' | 'check-in';
+    label: string;
+    minutes: number;
+}
+
+/**
+ * Check-out and check-in on a date, from the stay bookings.
+ *
+ * Only where a time was recorded: "out by 11" is the thing worth a line on the
+ * clock, and inventing an 11 for a booking that never said would put a deadline
+ * on the day that nobody set.
+ */
+export function dayMarkers(
+    dateIso: string | null, bookings: Booking[], placeName: (id: number | null) => string,
+): DayMarker[] {
+    if (!dateIso) return [];
+    const marks: DayMarker[] = [];
+    for (const booking of bookings) {
+        if (booking.kind !== 'stay') continue;
+        const name = placeName(booking.place_id);
+        const out = booking.check_out === dateIso ? minutesOf(booking.check_out_time) : null;
+        if (out != null) marks.push({ kind: 'check-out', label: `Check out${name ? ` · ${name}` : ''}`, minutes: out });
+        const into = booking.check_in === dateIso ? minutesOf(booking.check_in_time) : null;
+        if (into != null) marks.push({ kind: 'check-in', label: `Check in${name ? ` · ${name}` : ''}`, minutes: into });
+    }
+    return marks.sort((a, b) => a.minutes - b.minutes);
+}
+
+export interface SequenceSlice {
+    kind: 'stop' | 'leg';
+    /** The stop's id or the leg's id. */
+    id: number;
+    label: string;
+    minutes: number;
+    share: number;
+    assumed: boolean;
+    /** Clock times, when the day says them. */
+    start: string | null;
+    end: string | null;
+    mode?: TravelMode;
+}
+
+/** How long a leg is assumed to take when its times are missing. */
+export const ASSUMED_LEG_MINUTES = 60;
+
+/**
+ * The day as one stacked bar: stops *and* travel, in the order they happen.
+ *
+ * Stops keep the lengths `daySegments` gives them; a leg takes its real length
+ * when both times are known. Each slice is ordered by when it starts — a stop's
+ * typed time, or a leg's departure — and a slice with no time keeps its place
+ * relative to its neighbours. A leg that landed this morning goes first.
+ */
+export function daySequence(stops: Stop[], legs: DayLeg[], labelOf: (stop: Stop) => string): SequenceSlice[] {
+    const segments = daySegments(stops, labelOf);
+    const clock = clockLayout(stops, labelOf);
+    const timedStops = new Set(stops.filter((s) => minutesOf(s.start_time) != null).map((s) => s.id));
+
+    const rows: (SequenceSlice & { at: number; order: number })[] = [];
+    segments.forEach((segment, index) => {
+        const item = clock.items[index];
+        const timed = timedStops.has(segment.stopId);
+        rows.push({
+            kind: 'stop', id: segment.stopId, label: segment.label, minutes: segment.minutes, share: 0,
+            assumed: segment.assumed,
+            start: timed ? item.start : null,
+            end: timed ? item.end : null,
+            // Untimed stops sort by where the clock spread them, which keeps
+            // them between the timed neighbours they were listed between.
+            at: item.startMinutes,
+            order: index,
+        });
+    });
+    legs.forEach((leg, index) => {
+        const known = leg.startMinutes != null && leg.endMinutes != null;
+        rows.push({
+            kind: 'leg', id: leg.legId, label: leg.label, mode: leg.mode,
+            minutes: known ? Math.max(1, (leg.endMinutes as number) - (leg.startMinutes as number)) : ASSUMED_LEG_MINUTES,
+            share: 0,
+            assumed: !known,
+            start: leg.startMinutes != null ? clockOf(leg.startMinutes) : null,
+            end: leg.endMinutes != null ? (leg.toNextDay ? null : clockOf(leg.endMinutes)) : null,
+            at: leg.fromPrevDay ? -1 : leg.startMinutes ?? -0.5,
+            order: index,
+        });
+    });
+    rows.sort((a, b) => a.at - b.at || (a.kind === b.kind ? a.order - b.order : a.kind === 'leg' ? -1 : 1));
+    const total = rows.reduce((sum, row) => sum + row.minutes, 0);
+    return rows.map(({ at: _at, order: _order, ...row }) => ({ ...row, share: total > 0 ? row.minutes / total : 0 }));
 }

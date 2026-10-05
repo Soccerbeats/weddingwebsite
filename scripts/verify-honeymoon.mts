@@ -38,7 +38,7 @@ import {
 } from '../src/lib/honeymoonJourneys';
 import {
     ASSUMED_STOP_MINUTES, MIN_SEGMENT_MINUTES,
-    addDaysIso, buildTimeline, clockLayout, daySegments, estimateHop, formatDuration, instantOf,
+    addDaysIso, buildTimeline, clockLayout, dayLegs, dayMarkers, daySegments, daySequence, estimateHop, formatDuration, instantOf,
     isWalkable, legRealMinutes, resizeSegments, zoneOffsetMinutes,
 } from '../src/lib/honeymoonTimeline';
 import {
@@ -95,6 +95,14 @@ const LEG_DEFAULTS = {
     depart_tz: null, arrive_tz: null, flight_no: null,
     from_terminal: null, to_terminal: null, aircraft: null,
     journey_id: null, depart_date: null, arrive_date: null,
+};
+
+const BOOKING_FIXTURE = {
+    id: 1, place_id: null, travel_id: null, stop_id: null, journey_id: null, kind: 'other' as const,
+    provider: null, confirmation: null, url: null, contact: null, check_in: null, check_out: null,
+    check_in_time: null, check_out_time: null, cost: null, cost_currency: null, cost_paid: null,
+    deposit_due_on: null, cancel_by: null, party_size: null, dress_code: null, paid: false,
+    documents: [], notes: null, created_at: null,
 };
 
 const REGION_DEFAULTS = {
@@ -2551,6 +2559,75 @@ console.log('\nPlace sheet');
     check('a priced stay reads with what it is per',
         priceText({ ...bare, cost: 250, cost_per: 'night', cost_currency: 'USD' }, 'USD') === '$250 per night');
     check('an unpriced place reads its note', priceText({ ...bare, price_note: 'free' }, 'USD') === 'free');
+}
+
+console.log('\nTimeline with travel');
+{
+    const flight = {
+        ...LEG_DEFAULTS, id: 1, day_id: 10, mode: 'flight' as const, from_text: 'CLT', to_text: 'LIS',
+        depart_time: '18:40', arrive_time: '08:15', arrive_day_offset: 1,
+    };
+    const d1: Day = { id: 10, day_number: 1, title: null, notes: null, base_place_id: null, stops: [], travel: [flight] };
+    const d2: Day = { id: 20, day_number: 2, title: null, notes: null, base_place_id: null, stops: [], travel: [] };
+
+    const out = dayLegs(d1, []);
+    check('a red-eye runs to midnight on the day it leaves',
+        out.length === 1 && out[0].startMinutes === 1120 && out[0].endMinutes === 1440 && out[0].toNextDay,
+        JSON.stringify(out[0]));
+    check('and is labelled with its mode and its ends', out[0].label === '✈️ CLT → LIS', out[0].label);
+    const land = dayLegs(d2, [{ leg: flight, fromDay: d1 }]);
+    check('and from midnight on the day it lands',
+        land.length === 1 && land[0].startMinutes === 0 && land[0].endMinutes === 495 && land[0].fromPrevDay);
+
+    const sameDay = dayLegs({ ...d1, travel: [{ ...flight, arrive_day_offset: 0, depart_time: '09:00', arrive_time: '10:30' }] }, []);
+    check('a same-day leg runs depart to arrive',
+        sameDay[0].startMinutes === 540 && sameDay[0].endMinutes === 630 && !sameDay[0].toNextDay);
+    const backwards = dayLegs({ ...d1, travel: [{ ...flight, arrive_day_offset: 0, depart_time: '23:00', arrive_time: '01:00' }] }, []);
+    check('an arrival "before" departure on a same-day leg is read as past midnight, never negative',
+        backwards[0].endMinutes === 1440 && backwards[0].toNextDay);
+
+    const bare = dayLegs({ ...d1, travel: [{ ...flight, depart_time: null, arrive_time: null, arrive_day_offset: 0 }] }, []);
+    const bareLayout = clockLayout([], () => '', { legs: bare });
+    check('a leg with no times is not drawn at midnight',
+        bareLayout.legs.length === 0 && bareLayout.untimedLegs.length === 1);
+
+    const temple = { ...makeStop(1, null), start_time: '10:00', duration_minutes: 90 };
+    const drive = { legId: 5, label: '🚗 Ubud → Temple', mode: 'car' as const, startMinutes: 540, endMinutes: 585, fromPrevDay: false, toNextDay: false };
+    const withLeg = clockLayout([temple], () => 'Temple', { legs: [drive] });
+    check('the axis widens to take in the drive', withLeg.startMinutes === 540, String(withLeg.startMinutes));
+    check('the drive is on the clock, with its times', withLeg.legs.length === 1
+        && withLeg.legs[0].start === '09:00' && withLeg.legs[0].end === '09:45');
+    check('every stop item carries an end time', withLeg.items[0].end === '11:30');
+
+    const seq = daySequence([temple], [drive], () => 'Temple');
+    check('the stacked bar puts the drive before the stop it leads to',
+        seq.map((x) => x.kind).join() === 'leg,stop', seq.map((x) => x.kind).join());
+    check('and gives the drive its real length', seq[0].minutes === 45 && !seq[0].assumed);
+    check('slices carry their clock times', seq[0].start === '09:00' && seq[1].start === '10:00' && seq[1].end === '11:30');
+    check('the shares still add up to the whole bar',
+        Math.abs(seq.reduce((sum, x) => sum + x.share, 0) - 1) < 1e-9);
+    const late = { ...drive, legId: 6, startMinutes: 1200, endMinutes: 1260 };
+    check('a leg after the last stop comes after it',
+        daySequence([temple], [drive, late], () => 'Temple').map((x) => x.id).join() === '5,1,6');
+    check('a day of stops alone is unchanged',
+        daySequence([temple], [], () => 'Temple').length === 1);
+
+    const marks = dayMarkers('2026-09-14', [
+        { ...BOOKING_FIXTURE, kind: 'stay', place_id: 7, check_in: '2026-09-10', check_out: '2026-09-14', check_out_time: '11:00' },
+        { ...BOOKING_FIXTURE, id: 2, kind: 'stay', place_id: 8, check_in: '2026-09-14', check_out: '2026-09-18', check_in_time: '15:00' },
+    ], (id) => (id === 7 ? 'Villa' : 'Resort'));
+    check('check-out and check-in show on the day of the move',
+        marks.map((m) => `${m.kind}@${m.minutes}`).join() === 'check-out@660,check-in@900',
+        marks.map((m) => `${m.kind}@${m.minutes}`).join());
+    check('and are named for the place', marks[0].label === 'Check out · Villa');
+    check('a booking with no time gives no marker',
+        dayMarkers('2026-09-14', [{ ...BOOKING_FIXTURE, kind: 'stay', check_out: '2026-09-14' }], () => '').length === 0);
+    check('no date, no markers', dayMarkers(null, [{ ...BOOKING_FIXTURE, kind: 'stay', check_out: '2026-09-14', check_out_time: '11:00' }], () => '').length === 0);
+    const markedLayout = clockLayout([temple], () => 'Temple', { markers: marks });
+    check('markers sit on the clock', markedLayout.markers.length === 2 && markedLayout.markers[0].time === '11:00');
+
+    check('an untimed stop is reported, not hidden',
+        clockLayout([makeStop(9, null)], () => 'x').untimedStopIds.join() === '9');
 }
 
 console.log(`\n${failures === 0 ? 'PASS' : 'FAIL'} — ${checks - failures}/${checks} checks passed.\n`);
