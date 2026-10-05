@@ -15,6 +15,7 @@ import type { HoneymoonApi } from './useHoneymoon';
 import ItineraryTab from './ItineraryTab';
 import PlacesTab from './PlacesTab';
 import { usePlaceSheet } from './PlaceSheetContext';
+import { useIsPhone } from './kit/Sheet';
 import {
     BulkFieldMenu, Button, ColumnDivider, EmptyState, MiniSelect, OverflowMenu, SelectField,
 } from './ui';
@@ -82,6 +83,7 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
      * can never disagree about which place you are looking at.
      */
     const sheet = usePlaceSheet();
+    const phone = useIsPhone();
     const selectedId = sheet.state.kind === 'place' ? sheet.state.id : null;
 
     /*
@@ -856,6 +858,8 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                         onSelect={selectPlace}
                         fitSignal={fitSignal}
                         fitPoints={fitPoints}
+                        // The place panel covers ~30rem on the right of a laptop.
+                        fitInsetRight={sheet.state.kind === 'place' && !phone ? 500 : 0}
                         layer={layer}
                         pinColors={pinColors}
                         measureMode={tool === 'measure'}

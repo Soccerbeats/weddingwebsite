@@ -91,6 +91,8 @@ React.ButtonHTMLAttributes<HTMLButtonElement> & { tone?: 'default' | 'primary' |
         <button
             {...props}
             className={`min-h-11 md:min-h-0 rounded-full px-4 py-1.5 text-sm font-medium transition
+                active:scale-[0.98] motion-reduce:active:scale-100 disabled:active:scale-100
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40
                 disabled:opacity-40 disabled:cursor-not-allowed ${tones} ${className}`}
         />
     );
@@ -819,7 +821,7 @@ export function OverflowMenu({ items }: { items: OverflowMenuItem[] }) {
                     setDrilled(null);
                 }}
                 className="inline-flex min-h-11 min-w-11 md:min-h-0 md:min-w-0 items-center justify-center
-                    text-lg md:text-base text-gray-400 hover:text-gray-700 px-2 py-1 rounded-full hover:bg-gray-50"
+                    text-lg md:text-base text-gray-400 hover:text-gray-700 px-2 py-1 rounded-full hover:bg-gray-50 active:scale-[0.98] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
                 aria-label="More actions"
             >
                 ⋯

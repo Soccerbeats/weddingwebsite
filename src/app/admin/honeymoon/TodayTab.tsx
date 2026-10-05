@@ -1,9 +1,11 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import TodaySheet, { useNightMode, useNowMinutes } from '@/components/honeymoon/TodaySheet';
 import { planForDay, planForToday } from '@/lib/honeymoonToday';
 import { useTripIntel } from './useTripIntel';
+import { useOfflineFiles } from './FilesTab';
 import type { HoneymoonApi } from './useHoneymoon';
 
 const NIGHT_KEY = 'honeymoon-today-night';
@@ -15,9 +17,13 @@ const NIGHT_KEY = 'honeymoon-today-night';
  * wants: arrows to look at another day, and the offline snapshot that makes this
  * page open at an airport with no signal.
  */
+const EMPTY_DOCS: never[] = [];
+
 export default function TodayTab({ api }: { api: HoneymoonApi }) {
     const { data } = api;
     const now = useNowMinutes();
+    // Today is the page opened with no signal, so it keeps the documents saved too.
+    useOfflineFiles(api.data?.documents ?? EMPTY_DOCS);
     const intel = useTripIntel(data);
     const [dayNumber, setDayNumber] = useState<number | null>(null);
     const [night, setNight] = useNightMode(NIGHT_KEY);
@@ -91,6 +97,13 @@ export default function TodayTab({ api }: { api: HoneymoonApi }) {
                                 Back to today
                             </button>
                         )}
+                        <Link
+                            href="/admin/honeymoon/files"
+                            className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-gray-200
+                                bg-white px-4 text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                            🗂️ Travel documents
+                        </Link>
                         <p>
                             {offline === 'ready'
                                 ? 'Saved for offline — this page opens without signal.'

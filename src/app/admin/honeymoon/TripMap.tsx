@@ -135,6 +135,11 @@ export interface TripMapProps {
      */
     fitSignal?: number;
     /**
+     * Pixels on the right covered by something over the map (the place panel),
+     * so a fly-to lands in the part you can see rather than under the panel.
+     */
+    fitInsetRight?: number;
+    /**
      * Points to frame on the *next* fit, instead of everything drawn.
      *
      * Set it to one day's stops and bump `fitSignal` to fly to that day; null
@@ -196,7 +201,7 @@ export interface TripMapProps {
 }
 
 export default function TripMap({
-    places, routes = [], legs = [], selectedId = null, onSelect, fitSignal = 0, fitPoints = null,
+    places, routes = [], legs = [], selectedId = null, onSelect, fitSignal = 0, fitPoints = null, fitInsetRight = 0,
     cluster = true, panToSelected = false, pinLabels, layer: layerKey = 'streets', pinColors,
     selectMode = false, selectedIds, onLassoSelect,
     measureMode = false, className = '',
@@ -276,6 +281,9 @@ export default function TripMap({
     // Whether the map has ever been framed, and the last fit request seen.
     const fittedRef = useRef(false);
     const lastSignalRef = useRef(fitSignal);
+    const insetRef = useRef(fitInsetRight);
+    // Read by the fit below; an inset changing on its own never re-frames the map.
+    useEffect(() => { insetRef.current = fitInsetRight; }, [fitInsetRight]);
 
     /* Create the map once. */
     useEffect(() => {
@@ -737,7 +745,11 @@ export default function TripMap({
         // fitting against a zero-height container produces a nonsense zoom.
         const timer = setTimeout(() => {
             map.invalidateSize();
-            const options = { padding: [40, 40] as [number, number], maxZoom: 15 };
+            const options = {
+                paddingTopLeft: [40, 40] as [number, number],
+                paddingBottomRight: [40 + insetRef.current, 40] as [number, number],
+                maxZoom: 15,
+            };
             if (firstDraw) {
                 // Arriving at the page: be where you asked to be. Flying in from
                 // a default view of the Java Sea is a second of animation nobody

@@ -712,7 +712,7 @@ function CalendarCellBox({ cell, day, api, beyondRange, arrivals, onOpen }: {
     // the month is visible.
     if (!day) {
         return (
-            <div className={`min-h-[5.5rem] rounded-xl border border-gray-100 p-1.5
+            <div className={`min-h-[3.25rem] md:min-h-[5.5rem] rounded-xl border border-gray-100 p-1.5
                 ${cell.inMonth ? 'bg-gray-50/60' : 'bg-transparent'}`}>
                 <span className={`text-[11px] tabular-nums
                     ${cell.inMonth ? 'text-gray-400' : 'text-gray-300'}`}>
@@ -728,11 +728,28 @@ function CalendarCellBox({ cell, day, api, beyondRange, arrivals, onOpen }: {
         <button
             onClick={onOpen}
             title={beyondRange ? 'This day falls past the end of the trip' : undefined}
-            className={`min-h-[5.5rem] rounded-xl border p-1.5 text-left transition
+            data-calendar-day={day.day_number}
+            className={`min-h-[3.25rem] md:min-h-[5.5rem] rounded-xl border p-1.5 text-left transition
                 focus:outline-none focus:ring-2 overflow-hidden ${beyondRange
                 ? 'border-rose-300 bg-rose-50 hover:bg-rose-100 hover:border-rose-400 focus:ring-rose-300'
                 : 'border-accent/30 bg-accent/5 hover:bg-accent/10 hover:border-accent/50 focus:ring-accent/30'}`}
         >
+            {/* A phone: the date, the day, a dot per stop and ✈ for travel —
+                seven columns of truncated text could not be read. Tap opens it. */}
+            <div className="flex h-full flex-col items-center justify-between gap-0.5 md:hidden">
+                <span className="text-sm font-semibold tabular-nums text-gray-800">{cell.dayOfMonth}</span>
+                <span className={`text-[9px] font-semibold ${beyondRange ? 'text-rose-700' : 'text-accent'}`}>
+                    D{day.day_number}
+                </span>
+                <span className="flex items-center gap-0.5" aria-label={`${day.stops.length} stops${
+                    day.travel.length + arrivals.length ? ', travel' : ''}`}>
+                    {(day.travel.length > 0 || arrivals.length > 0) && <span className="text-[9px]" aria-hidden>✈</span>}
+                    {day.stops.slice(0, 3).map((stop) => (
+                        <span key={stop.id} className="size-1.5 rounded-full bg-accent/70" aria-hidden />
+                    ))}
+                </span>
+            </div>
+            <div className="hidden md:block">
             <div className="flex items-baseline justify-between gap-1">
                 <span className="text-[11px] tabular-nums text-gray-500">{cell.dayOfMonth}</span>
                 <span className={`text-[10px] font-semibold shrink-0
@@ -776,6 +793,7 @@ function CalendarCellBox({ cell, day, api, beyondRange, arrivals, onOpen }: {
             {!day.stops.length && !day.title && base && (
                 <p className="text-[10px] text-gray-500 truncate">🛏 {base.name}</p>
             )}
+            </div>
         </button>
     );
 }

@@ -223,7 +223,7 @@ export default function LegFields({ api, leg, group }: {
             <div className="grid grid-cols-2 gap-2">
                 <div>
                     <Label>Leaves</Label>
-                    <div className="flex gap-1.5">
+                    <div className="flex flex-col gap-1.5 sm:flex-row">
                         <TextField
                             type="date"
                             key={`dd${leg.depart_date ?? ''}`}
@@ -236,7 +236,7 @@ export default function LegFields({ api, leg, group }: {
                         />
                         <TextField
                             type="time"
-                            className="max-w-[7rem]"
+                            className="sm:max-w-[7rem]"
                             key={`dt${leg.depart_time ?? ''}`}
                             defaultValue={leg.depart_time ?? ''}
                             onBlur={(e) => {
@@ -249,7 +249,7 @@ export default function LegFields({ api, leg, group }: {
                 </div>
                 <div>
                     <Label>Lands</Label>
-                    <div className="flex gap-1.5">
+                    <div className="flex flex-col gap-1.5 sm:flex-row">
                         <TextField
                             type="date"
                             key={`ad${leg.arrive_date ?? ''}`}
@@ -262,7 +262,7 @@ export default function LegFields({ api, leg, group }: {
                         />
                         <TextField
                             type="time"
-                            className="max-w-[7rem]"
+                            className="sm:max-w-[7rem]"
                             key={`at${leg.arrive_time ?? ''}`}
                             defaultValue={leg.arrive_time ?? ''}
                             onBlur={(e) => {

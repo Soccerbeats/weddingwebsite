@@ -26,7 +26,7 @@ export function RatingPills({ value, onChange, size = 'sm', labels = true }: {
                         onClick={(event) => { event.stopPropagation(); onChange(on ? null : rating.key); }}
                         aria-pressed={on}
                         title={rating.label}
-                        className={`min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-full border font-medium transition
+                        className={`min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-full border font-medium transition active:scale-[0.98] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40
                             ${size === 'md' ? 'px-3.5 py-1.5 text-sm' : 'px-3 py-1 text-xs'}
                             ${on ? 'border-transparent text-white' : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
                         style={on ? { backgroundColor: rating.color } : undefined}

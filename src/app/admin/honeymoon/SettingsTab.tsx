@@ -8,6 +8,7 @@ import {
 import { INFO_SECTIONS } from '@/lib/honeymoonToday';
 import type { HoneymoonApi } from './useHoneymoon';
 import { TabToolbar } from './kit/TabToolbar';
+import { Hint } from './kit/Hint';
 import DateRangePicker from './DateRangePicker';
 import MoneySettings from './MoneySettings';
 import ShareLinks from './ShareLinks';
@@ -129,7 +130,6 @@ export default function SettingsTab({ api }: { api: HoneymoonApi }) {
                                 <option key="set-emergency-amp-practical-details" value="set-emergency-amp-practical-details">Emergency &amp; practical details</option>
                                 <option key="set-share-it-with-someone" value="set-share-it-with-someone">Share it with someone</option>
                                 <option key="set-snapshots" value="set-snapshots">Snapshots</option>
-                                <option key="set-adding-places" value="set-adding-places">Adding places</option>
                 </MiniSelect>
             )}
         />
@@ -304,8 +304,7 @@ export default function SettingsTab({ api }: { api: HoneymoonApi }) {
                 <div>
                     <h3 className="text-sm font-semibold text-gray-900">Money</h3>
                     <p className="text-xs text-gray-500 mt-0.5">
-                        A budget to measure against, and a rate per currency pair so prices in
-                        rupiah and dollars can be added together.
+                        The budget, and exchange rates so every price adds up in one currency.
                     </p>
                 </div>
                 <MoneySettings api={api} />
@@ -325,11 +324,14 @@ export default function SettingsTab({ api }: { api: HoneymoonApi }) {
                     </a>
                     <Button onClick={download}>Download a backup (JSON)</Button>
                 </div>
-                <p className="text-xs text-gray-500 leading-relaxed">
-                    The calendar file puts every day, travel leg and timed stop into your phone,
-                    with the right time zone, a map pin on each stop, a link to the booking and a
-                    reminder before anything timed. It needs the dates above to be set. The backup
-                    is the whole portal in one file.
+                <p className="flex items-center gap-1 text-xs text-gray-500">
+                    The trip in your phone&apos;s calendar, and a backup of everything.
+                    <Hint label="About the calendar file and the backup">
+                        The calendar file puts every day, travel leg and timed stop into your phone,
+                        with the right time zone, a map pin on each stop, a link to the booking and a
+                        reminder before anything timed. It needs the trip dates to be set. The backup
+                        is the whole portal in one file.
+                    </Hint>
                 </p>
 
                 {/* A download goes stale the day after you export it. A
@@ -374,10 +376,12 @@ export default function SettingsTab({ api }: { api: HoneymoonApi }) {
                     <h3 className="text-sm font-semibold text-gray-900">
                         Emergency &amp; practical details
                     </h3>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                        These show up on the Today view behind one tap, and they are what you will
-                        want when the phone is at 4% in a taxi. `trip.notes` above is for planning
-                        thoughts; this is for facts.
+                    <p className="flex items-center gap-1 text-xs text-gray-500 mt-0.5">
+                        One tap away on the Today view, for when the phone is at 4% in a taxi.
+                        <Hint label="About these details">
+                            These show on the Today view behind one tap. The trip notes are for planning
+                            thoughts; this is for facts — numbers, policy references, addresses.
+                        </Hint>
                     </p>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -412,10 +416,12 @@ export default function SettingsTab({ api }: { api: HoneymoonApi }) {
             <Card id="set-share-it-with-someone" className="p-4 space-y-3 xl:col-span-2">
                 <div>
                     <h3 className="text-sm font-semibold text-gray-900">Share it with someone</h3>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                        A link that opens the trip read-only — no login, nothing editable, no access
-                        to the shortlists or the budget. The link itself is the password, so treat it
-                        like one: revoke it rather than hoping.
+                    <p className="flex items-center gap-1 text-xs text-gray-500 mt-0.5">
+                        A read-only link to the trip for someone who isn&apos;t you two.
+                        <Hint label="About share links">
+                            No login, nothing editable, no shortlists, no budget and no documents. The
+                            link itself is the password, so treat it like one: revoke it rather than hoping.
+                        </Hint>
                     </p>
                 </div>
                 <ShareLinks api={api} />
@@ -428,24 +434,12 @@ export default function SettingsTab({ api }: { api: HoneymoonApi }) {
                 <div>
                     <h3 className="text-sm font-semibold text-gray-900">Snapshots</h3>
                     <p className="text-xs text-gray-500 mt-0.5">
-                        The whole trip, frozen. Keep the honeymoon after you fly home, or start the
-                        next trip from a copy of this one.
+                        The whole trip, frozen — to keep after you fly home, or to start the next one from.
                     </p>
                 </div>
                 <TripArchives api={api} />
             </Card>
 
-            <Card id="set-adding-places" className="p-4">
-                <h3 className="text-sm font-semibold text-gray-900 mb-1">Adding places</h3>
-                <p className="text-xs text-gray-500 leading-relaxed">
-                    In the place editor, the Find box takes three kinds of input: a name to search
-                    (&ldquo;Tukad Cepung Waterfall&rdquo;), a Google Maps link pasted straight in, or raw
-                    <span className="tabular-nums"> lat, lng</span> numbers. Right-clicking a pin in Google
-                    Maps copies those numbers, which is the most reliable option for anywhere the search
-                    can&apos;t find. Press <kbd className="px-1 rounded bg-gray-100">⌘K</kbd> anywhere in
-                    the portal to jump to a place, a note or a day by name.
-                </p>
-            </Card>
         </div>
         </>
     );

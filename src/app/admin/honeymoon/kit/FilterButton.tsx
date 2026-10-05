@@ -31,7 +31,7 @@ export function FilterButton({ active, onReset, children, title = 'Filters' }: {
             sheetOnPhone
             buttonData="filters"
             buttonClassName={`inline-flex min-h-11 md:min-h-0 shrink-0 items-center gap-1.5 rounded-full border
-                px-4 py-1.5 text-sm font-medium transition
+                px-4 py-1.5 text-sm font-medium transition active:scale-[0.98] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40
                 ${count ? 'border-accent/40 bg-accent/10 text-gray-900' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}
             buttonContent={() => (
                 <>

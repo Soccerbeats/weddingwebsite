@@ -80,6 +80,7 @@ export default function PlaceSheet() {
             onClose={close}
             guard={askGuard}
             modal={false}
+            startTall={formMode}
             width={formMode ? 'lg' : 'md'}
             dataAttrs={place && !formMode
                 ? { 'data-place-sheet': String(place.id), 'data-sections': sheetSections(place).join(',') }

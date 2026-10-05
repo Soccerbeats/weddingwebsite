@@ -42,7 +42,7 @@ export function useIsPhone(): boolean {
  */
 export function Sheet({
     open, onClose, title, actions, children, side = 'right', modal = true, guard, width = 'md',
-    dataAttrs,
+    dataAttrs, startTall = false,
 }: {
     open: boolean;
     onClose: () => void;
@@ -55,6 +55,8 @@ export function Sheet({
     guard?: () => boolean;
     width?: 'md' | 'lg';
     dataAttrs?: Record<string, string>;
+    /** On a phone, open at full height — a form needs the room. */
+    startTall?: boolean;
 }) {
     const panel = useRef<HTMLDivElement>(null);
     const [tall, setTall] = useState(false);
@@ -89,7 +91,33 @@ export function Sheet({
     }, [open, modal]);
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    useEffect(() => { if (!open) setTall(false); }, [open]);
+    useEffect(() => { setTall(open && startTall); }, [open, startTall]);
+
+    /*
+     * Pull the handle down to close, up to expand — the gesture every phone
+     * sheet has taught people. A short tap still toggles the height. The drag
+     * follows the finger so it reads as moving the sheet, not as a button.
+     */
+    const drag = useRef<{ y: number; id: number } | null>(null);
+    const [pull, setPull] = useState(0);
+    const onHandleDown = (event: React.PointerEvent<HTMLButtonElement>) => {
+        drag.current = { y: event.clientY, id: event.pointerId };
+        event.currentTarget.setPointerCapture(event.pointerId);
+    };
+    const onHandleMove = (event: React.PointerEvent<HTMLButtonElement>) => {
+        if (!drag.current) return;
+        setPull(Math.max(0, event.clientY - drag.current.y));
+    };
+    const onHandleUp = (event: React.PointerEvent<HTMLButtonElement>) => {
+        const start = drag.current;
+        drag.current = null;
+        setPull(0);
+        if (!start) return;
+        const dy = event.clientY - start.y;
+        if (dy > 80) { if (!guard || guard()) onClose(); return; }
+        if (dy < -40) { setTall(true); return; }
+        if (Math.abs(dy) < 8) setTall((v) => !v);
+    };
 
     if (!open || typeof document === 'undefined') return null;
 
@@ -115,6 +143,7 @@ export function Sheet({
                 role="dialog"
                 aria-modal={modal}
                 {...dataAttrs}
+                style={pull ? { transform: `translateY(${pull}px)` } : undefined}
                 className={`fixed inset-x-0 bottom-0 z-[56] flex flex-col bg-white shadow-2xl
                     rounded-t-3xl border border-gray-200/70 transition-[height]
                     ${tall ? 'h-[94dvh]' : 'h-[62dvh]'} md:h-auto ${shape}`}
@@ -123,9 +152,14 @@ export function Sheet({
                     the whole of what a phone sheet needs without a gesture library. */}
                 <button
                     type="button"
-                    onClick={() => setTall((v) => !v)}
-                    aria-label={tall ? 'Shrink the panel' : 'Expand the panel'}
-                    className="md:hidden mx-auto mt-1.5 flex h-6 w-16 items-center justify-center"
+                    data-sheet-handle
+                    onPointerDown={onHandleDown}
+                    onPointerMove={onHandleMove}
+                    onPointerUp={onHandleUp}
+                    onPointerCancel={() => { drag.current = null; setPull(0); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setTall((v) => !v); } }}
+                    aria-label={tall ? 'Shrink the panel (drag down to close)' : 'Expand the panel (drag down to close)'}
+                    className="md:hidden mx-auto mt-1 flex h-8 w-24 touch-none items-center justify-center"
                 >
                     <span className="h-1.5 w-10 rounded-full bg-gray-300" />
                 </button>

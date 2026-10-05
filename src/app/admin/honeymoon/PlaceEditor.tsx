@@ -8,6 +8,7 @@ import {
 } from '@/lib/honeymoon';
 import BookingPanel from './BookingPanel';
 import type { HoneymoonApi } from './useHoneymoon';
+import { Hint } from './kit/Hint';
 import {
     Button, CategorySelect, CustomisableSelect, ManageListModal, SelectField, StatusSelect,
     TextArea, TextField,
@@ -307,7 +308,7 @@ export function PlaceForm({ api, place, defaults, onDone, onCancel, registerGuar
 
     return (
             <div
-                className="space-y-3"
+                className="@container space-y-3"
                 // Save without reaching for the mouse. Plain Enter can't do it —
                 // this form has a search box where Enter means "look that up".
                 onKeyDown={(e) => {
@@ -324,7 +325,7 @@ export function PlaceForm({ api, place, defaults, onDone, onCancel, registerGuar
                     />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 @md:grid-cols-2 @4xl:grid-cols-4 gap-3">
                     <div>
                         <label className="block text-xs font-semibold text-gray-500 mb-1">Category</label>
                         <CategorySelect
@@ -400,14 +401,22 @@ export function PlaceForm({ api, place, defaults, onDone, onCancel, registerGuar
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
+                <div className="grid grid-cols-1 @3xl:grid-cols-2 gap-3 items-start">
                     {/* ---- Location ---- */}
                     <div className="rounded-2xl border border-gray-200 p-3 space-y-2.5">
                         {/* Coordinates and Clear pin share the header line — both
                             are about the pin, and giving Clear pin a row of its
                             own cost more height than the control is worth. */}
                         <div className="flex items-center justify-between gap-2">
-                            <label className="block text-xs font-semibold text-gray-500">Location</label>
+                            <label className="flex items-center gap-1 text-xs font-semibold text-gray-500">
+                                Location
+                                <Hint label="Finding a place">
+                                    The Find box takes a name to search (&ldquo;Tukad Cepung Waterfall&rdquo;),
+                                    a Google Maps link pasted straight in, or raw &ldquo;lat, lng&rdquo;
+                                    numbers. Right-clicking a pin in Google Maps copies those numbers — the
+                                    most reliable option for anywhere the search cannot find.
+                                </Hint>
+                            </label>
                             {lat != null && lng != null ? (
                                 <span className="flex items-center gap-2">
                                     <span className="text-[11px] text-gray-400 tabular-nums">
@@ -533,7 +542,7 @@ export function PlaceForm({ api, place, defaults, onDone, onCancel, registerGuar
                             <TextField value={address} onChange={(e) => setAddress(e.target.value)} />
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 @sm:grid-cols-2 gap-3">
                             <div>
                                 <label className="block text-xs font-semibold text-gray-500 mb-1">Source</label>
                                 <TextField
@@ -561,8 +570,13 @@ export function PlaceForm({ api, place, defaults, onDone, onCancel, registerGuar
                         {/* ---- The numbers the budget can add up ---- */}
                         <div className="grid grid-cols-2 gap-3">
                             <div>
-                                <label className="block text-xs font-semibold text-gray-500 mb-1">
+                                <label className="mb-1 flex items-center gap-1 text-xs font-semibold text-gray-500">
                                     Cost ({costCurrency})
+                                    <Hint label="How the cost is used">
+                                        The one price for this place. A booking multiplies it by the
+                                        nights rather than asking for it again. The price note keeps
+                                        the detail; &ldquo;breakfast included&rdquo; is not arithmetic.
+                                    </Hint>
                                 </label>
                                 <TextField
                                     type="number"
@@ -573,12 +587,6 @@ export function PlaceForm({ api, place, defaults, onDone, onCancel, registerGuar
                                     onChange={(e) => setCost(e.target.value)}
                                     placeholder="420"
                                 />
-                                <p className="text-[11px] text-gray-400 mt-1">
-                                    The one price for this place — the booking below multiplies it
-                                    by the nights rather than asking for it again. The note above
-                                    stays for the detail; &ldquo;breakfast included&rdquo; is not
-                                    arithmetic.
-                                </p>
                             </div>
                             <div>
                                 <label className="block text-xs font-semibold text-gray-500 mb-1">
@@ -599,18 +607,19 @@ export function PlaceForm({ api, place, defaults, onDone, onCancel, registerGuar
 
                         <div className="grid grid-cols-2 gap-3">
                             <div>
-                                <label className="block text-xs font-semibold text-gray-500 mb-1">
+                                <label className="mb-1 flex items-center gap-1 text-xs font-semibold text-gray-500">
                                     Opening hours
+                                    <Hint label="About opening hours">
+                                        OSM syntax, like Mo-Su 09:00-18:00 — filled in from the map
+                                        search when it knows. The itinerary warns when a stop falls
+                                        outside them.
+                                    </Hint>
                                 </label>
                                 <TextField
                                     value={openingHours}
                                     onChange={(e) => setOpeningHours(e.target.value)}
                                     placeholder="Mo-Su 09:00-18:00"
                                 />
-                                <p className="text-[11px] text-gray-400 mt-1">
-                                    OSM syntax, filled in from the map search when it knows. The
-                                    itinerary warns when a stop falls outside it.
-                                </p>
                             </div>
                             <div>
                                 <label className="block text-xs font-semibold text-gray-500 mb-1">

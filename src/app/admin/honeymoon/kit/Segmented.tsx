@@ -45,7 +45,7 @@ export function Segmented<T extends string>({
                         aria-pressed={active}
                         title={option.title}
                         className={`shrink-0 whitespace-nowrap rounded-full font-medium transition
-                            min-h-11 md:min-h-0
+                            min-h-11 md:min-h-0 active:scale-[0.98] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40
                             ${size === 'sm' ? 'px-3 py-1 text-xs' : 'px-3.5 py-1.5 text-sm'}
                             ${active ? on : 'text-gray-600 hover:bg-gray-50'}`}
                     >

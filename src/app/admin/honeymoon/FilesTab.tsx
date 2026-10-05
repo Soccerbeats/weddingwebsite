@@ -577,7 +577,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
  * The worker does the fetching (so it survives this tab closing); this posts
  * the current list whenever it changes and listens for the count back.
  */
-function useOfflineFiles(documents: TripDocument[]) {
+export function useOfflineFiles(documents: TripDocument[]) {
     const [saved, setSaved] = useState(0);
     const [supported, setSupported] = useState(true);
     const urls = useMemo(() => documents.map((doc) => fileUrl(doc)).sort(), [documents]);

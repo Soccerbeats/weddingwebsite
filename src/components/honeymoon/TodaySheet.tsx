@@ -361,10 +361,16 @@ function DayArrow({ label, glyph, to, disabled, onSelectDay }: {
             aria-label={label}
             disabled={disabled}
             onClick={() => onSelectDay(to)}
-            className="flex min-h-11 flex-1 items-center justify-center rounded-full border
-                border-gray-200 night:border-gray-700 text-xl disabled:opacity-30"
+            className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-full border
+                border-gray-200 night:border-gray-700 text-sm font-medium text-gray-700 night:text-gray-200
+                transition active:scale-[0.98] disabled:border-dashed disabled:text-gray-300
+                night:disabled:text-gray-600 disabled:active:scale-100"
         >
-            {glyph}
+            {/* Says where it goes, so the row reads on day one too, when the
+                left arrow has nowhere to go and used to look like an empty box. */}
+            {glyph === '‹'
+                ? <><span aria-hidden className="text-lg leading-none">‹</span>{disabled ? 'First day' : `Day ${to}`}</>
+                : <>{disabled ? 'Last day' : `Day ${to}`}<span aria-hidden className="text-lg leading-none">›</span></>}
         </button>
     );
 }
