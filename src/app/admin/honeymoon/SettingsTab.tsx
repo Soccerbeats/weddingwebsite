@@ -7,12 +7,13 @@ import {
 } from '@/lib/honeymoon';
 import { INFO_SECTIONS } from '@/lib/honeymoonToday';
 import type { HoneymoonApi } from './useHoneymoon';
+import { TabToolbar } from './kit/TabToolbar';
 import DateRangePicker from './DateRangePicker';
 import MoneySettings from './MoneySettings';
 import ShareLinks from './ShareLinks';
 import TripArchives from './TripArchives';
 import TripFiles from './TripFiles';
-import { Button, Card, SelectField, TextArea, TextField } from './ui';
+import { Button, Card, SelectField, TextArea, TextField, MiniSelect } from './ui';
 
 /** The handful anyone planning from the US actually prices in. */
 const CURRENCIES = [
@@ -113,9 +114,30 @@ export default function SettingsTab({ api }: { api: HoneymoonApi }) {
     const nights = daysBetween(trip.start_date, trip.end_date ?? impliedEnd);
 
     return (
+        <>
+        <TabToolbar
+            left={(
+                <MiniSelect
+                    value=""
+                    aria-label="Jump to a section"
+                    onChange={(e) => document.getElementById(e.target.value)
+                        ?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                >
+                    <option value="">Jump to…</option>
+                                <option key="set-when-you-re-away" value="set-when-you-re-away">When you&apos;re away</option>
+                                <option key="set-money" value="set-money">Money</option>
+                                <option key="set-take-it-with-you" value="set-take-it-with-you">Take it with you</option>
+                                <option key="set-emergency-amp-practical-details" value="set-emergency-amp-practical-details">Emergency &amp; practical details</option>
+                                <option key="set-share-it-with-someone" value="set-share-it-with-someone">Share it with someone</option>
+                                <option key="set-documents" value="set-documents">Documents</option>
+                                <option key="set-snapshots" value="set-snapshots">Snapshots</option>
+                                <option key="set-adding-places" value="set-adding-places">Adding places</option>
+                </MiniSelect>
+            )}
+        />
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 items-start max-w-6xl">
             {/* ---- Dates ---- */}
-            <Card className="p-4 space-y-3 xl:row-span-2">
+            <Card id="set-when-you-re-away" className="p-4 space-y-3 xl:row-span-2">
                 <div className="flex items-baseline justify-between gap-2">
                     <h3 className="text-sm font-semibold text-gray-900">When you&apos;re away</h3>
                     {working && <span className="text-xs text-gray-400">Updating days…</span>}
@@ -280,7 +302,7 @@ export default function SettingsTab({ api }: { api: HoneymoonApi }) {
             </Card>
 
             {/* ---- Money ---- */}
-            <Card className="p-4 space-y-3">
+            <Card id="set-money" className="p-4 space-y-3">
                 <div>
                     <h3 className="text-sm font-semibold text-gray-900">Money</h3>
                     <p className="text-xs text-gray-500 mt-0.5">
@@ -292,7 +314,7 @@ export default function SettingsTab({ api }: { api: HoneymoonApi }) {
             </Card>
 
             {/* ---- Take it with you ---- */}
-            <Card className="p-4 space-y-3">
+            <Card id="set-take-it-with-you" className="p-4 space-y-3">
                 <h3 className="text-sm font-semibold text-gray-900">Take it with you</h3>
                 <div className="flex flex-wrap gap-2">
                     {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
@@ -349,7 +371,7 @@ export default function SettingsTab({ api }: { api: HoneymoonApi }) {
             </Card>
 
             {/* ---- The things you need at 2am ---- */}
-            <Card className="p-4 space-y-3 xl:col-span-2">
+            <Card id="set-emergency-amp-practical-details" className="p-4 space-y-3 xl:col-span-2">
                 <div>
                     <h3 className="text-sm font-semibold text-gray-900">
                         Emergency &amp; practical details
@@ -389,7 +411,7 @@ export default function SettingsTab({ api }: { api: HoneymoonApi }) {
             </Card>
 
             {/* ---- Sharing ---- */}
-            <Card className="p-4 space-y-3 xl:col-span-2">
+            <Card id="set-share-it-with-someone" className="p-4 space-y-3 xl:col-span-2">
                 <div>
                     <h3 className="text-sm font-semibold text-gray-900">Share it with someone</h3>
                     <p className="text-xs text-gray-500 mt-0.5">
@@ -402,7 +424,7 @@ export default function SettingsTab({ api }: { api: HoneymoonApi }) {
             </Card>
 
             {/* ---- Documents ---- */}
-            <Card className="p-4 space-y-3">
+            <Card id="set-documents" className="p-4 space-y-3">
                 <div>
                     <h3 className="text-sm font-semibold text-gray-900">Documents</h3>
                     <p className="text-xs text-gray-500 mt-0.5">
@@ -415,7 +437,7 @@ export default function SettingsTab({ api }: { api: HoneymoonApi }) {
             </Card>
 
             {/* ---- Snapshots ---- */}
-            <Card className="p-4 space-y-3">
+            <Card id="set-snapshots" className="p-4 space-y-3">
                 <div>
                     <h3 className="text-sm font-semibold text-gray-900">Snapshots</h3>
                     <p className="text-xs text-gray-500 mt-0.5">
@@ -426,7 +448,7 @@ export default function SettingsTab({ api }: { api: HoneymoonApi }) {
                 <TripArchives api={api} />
             </Card>
 
-            <Card className="p-4">
+            <Card id="set-adding-places" className="p-4">
                 <h3 className="text-sm font-semibold text-gray-900 mb-1">Adding places</h3>
                 <p className="text-xs text-gray-500 leading-relaxed">
                     In the place editor, the Find box takes three kinds of input: a name to search
@@ -438,5 +460,6 @@ export default function SettingsTab({ api }: { api: HoneymoonApi }) {
                 </p>
             </Card>
         </div>
+        </>
     );
 }

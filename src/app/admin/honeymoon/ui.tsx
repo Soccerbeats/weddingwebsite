@@ -8,9 +8,11 @@ import {
     type CategoryMeta, type PlaceStatus,
 } from '@/lib/honeymoon';
 
-export function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+export function Card({ children, className = '', ...rest }: React.HTMLAttributes<HTMLDivElement> & {
+    'data-card'?: boolean;
+}) {
     return (
-        <div className={`bg-white rounded-2xl shadow-sm border border-gray-100 ${className}`}>
+        <div {...rest} className={`bg-white rounded-2xl shadow-sm border border-gray-100 ${className}`}>
             {children}
         </div>
     );

@@ -13,6 +13,7 @@ import {
 } from '@/lib/honeymoonBudget';
 import { dueSoon } from '@/lib/honeymoonChecks';
 import { downloadOfflineCopy } from './offlineCopy';
+import { TabToolbar } from './kit/TabToolbar';
 import type { HoneymoonApi } from './useHoneymoon';
 import { usePlaceSheet } from './PlaceSheetContext';
 import { Card, CategoryChip } from './ui';
@@ -209,29 +210,28 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
         [stays, excursions],
     );
 
-    // Fills the viewport rather than scrolling: two flexible bands plus a thin
-    // footer. Each card owns its own overflow, so a long list scrolls inside its
-    // card instead of pushing the page taller. min-h is the floor — below that
-    // nothing can fit and the shell's scrollbar takes over.
+    // A normal page that grows to fit its cards. It used to force itself into
+    // the viewport, which clipped cards mid-row on a laptop and stacked them on
+    // top of each other on a phone.
     return (
-        <div className="h-full min-h-[34rem] flex flex-col gap-3">
-            {/* A laptop thing: the file is for keeping on a disk, not a phone. */}
-            {data && (
-                <div className="hidden md:flex justify-end shrink-0 -mb-1">
+        <div className="space-y-3">
+            <TabToolbar
+                left={<h2 className="text-sm font-semibold text-gray-700">Where the trip stands</h2>}
+                right={data && (
                     <button
                         type="button"
                         onClick={() => downloadOfflineCopy(data)}
                         title="Every detail of the trip in one HTML file that opens with no internet"
-                        className="rounded-full px-4 py-1.5 text-xs font-medium bg-white border
-                            border-gray-200 text-gray-700 hover:bg-gray-50 transition"
+                        className="hidden md:inline-flex rounded-full border border-gray-200 bg-white px-4 py-1.5 text-xs
+                            font-medium text-gray-700 transition hover:bg-gray-50"
                     >
                         ⬇ Download offline copy
                     </button>
-                </div>
-            )}
+                )}
+            />
             {/* ---- Stats and the map ---- */}
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 flex-[3] min-h-0">
-            <div className="xl:col-span-2 flex flex-col gap-3 min-h-0">
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
+            <div className="xl:col-span-2 flex flex-col gap-3">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2 shrink-0">
                 <Stat
                     label="Trip"
@@ -286,7 +286,7 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
             </div>
 
             {/* ---- Itinerary, filling what's left on the left ---- */}
-            <Card className="p-4 flex flex-col min-h-0 flex-1">
+            <Card data-card className="p-4 flex flex-col">
                 <div className="flex items-baseline justify-between gap-2 mb-2 shrink-0">
                     <h2 className="text-sm font-semibold text-gray-900">Itinerary</h2>
                     <Link href={`${BASE}/itinerary`} className="text-xs text-accent hover:underline">
@@ -308,7 +308,7 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
                                 <span className="text-amber-600"> · {emptyDays.length} still empty</span>
                             )}
                         </p>
-                        <ul className="divide-y divide-gray-100 overflow-auto min-h-0 flex-1">
+                        <ul className="divide-y divide-gray-100 max-h-96 overflow-auto">
                             {days.map((day) => (
                                 <li key={day.id} className="py-1.5 flex items-baseline gap-3">
                                     <span className="text-xs font-semibold text-gray-700 shrink-0 w-14">
@@ -344,7 +344,7 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
             </div>
 
                 {/* ---- Where it all is ---- */}
-                <Card className="p-3 flex flex-col min-h-0">
+                <Card data-card className="p-3 flex flex-col">
                     <div className="flex items-baseline justify-between gap-2 mb-2">
                         <h2 className="text-sm font-semibold text-gray-900">Where it all is</h2>
                         <Link href={`${BASE}/map`} className="text-xs text-accent hover:underline">
@@ -352,7 +352,7 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
                         </Link>
                     </div>
                     {mapPlaces.length === 0 ? (
-                        <div className="flex-1 flex items-center justify-center rounded-2xl bg-gray-50">
+                        <div className="h-64 flex items-center justify-center rounded-2xl bg-gray-50">
                             <p className="text-xs text-gray-400 text-center px-4">
                                 Nothing pinned yet.{' '}
                                 <Link href={`${BASE}/places`} className="text-accent hover:underline">
@@ -364,7 +364,7 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
                         <TripMap
                             places={mapPlaces}
                             routes={mapRoutes}
-                            className="flex-1 min-h-0 w-full"
+                            className="h-72 xl:h-80 w-full"
                         />
                     )}
                     <p className="text-[11px] text-gray-400 mt-2">
@@ -378,14 +378,14 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
                 </Card>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 flex-[2] min-h-0">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 items-start">
                 {/* ---- What needs doing ---- */}
-                <Card className="p-4 flex flex-col min-h-0">
+                <Card data-card className="p-4 flex flex-col">
                     <h2 className="text-sm font-semibold text-gray-900 mb-2 shrink-0">Needs attention</h2>
                     {todo.length === 0 ? (
                         <p className="text-sm text-emerald-700">Nothing outstanding. </p>
                     ) : (
-                        <ul className="space-y-1.5 overflow-auto min-h-0 flex-1">
+                        <ul className="space-y-1.5 max-h-72 overflow-auto">
                             {todo.map((item) => (
                                 <li key={item.label}>
                                     <Link
@@ -404,7 +404,7 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
                 </Card>
 
                 {/* ---- Money ---- */}
-                <Card className="p-4 flex flex-col min-h-0 overflow-auto">
+                <Card data-card className="p-4 flex flex-col">
                     <div className="flex items-baseline justify-between gap-2 mb-2 shrink-0">
                         <h2 className="text-sm font-semibold text-gray-900">Cost of the trip</h2>
                         {budget && budget.total > 0 && (
@@ -527,7 +527,7 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
                 </Card>
 
                 {/* ---- Shortlist ---- */}
-                <Card className="p-4 flex flex-col min-h-0">
+                <Card data-card className="p-4 flex flex-col">
                     <div className="flex items-baseline justify-between gap-2 mb-2 shrink-0">
                         <h2 className="text-sm font-semibold text-gray-900">Shortlist</h2>
                         <span className="text-xs text-gray-400">everything you marked interested</span>
@@ -542,7 +542,7 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
                             </Link>.
                         </p>
                     ) : (
-                        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 overflow-auto min-h-0 flex-1">
+                        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-72 overflow-auto">
                             {shortlist.map((item) => (
                                 <li key={item.id}>
                                     <button

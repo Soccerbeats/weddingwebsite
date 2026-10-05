@@ -170,12 +170,9 @@ export default function HoneymoonShell({ children }: { children: React.ReactNode
         return () => { window.removeEventListener('keydown', onKey); clearTimeout(timer); };
     }, [goto, router]);
 
-    // The map owns the viewport outright and never scrolls. The dashboard is
-    // sized to fit too, but inside a scroller: its own min-height is the floor,
-    // so a scrollbar appears only when the window is genuinely too small for it.
-    // Everything else is a normal scrolling page.
+    // The map owns the viewport outright and never scrolls. Everything else —
+    // the overview included — is a normal scrolling page.
     const isMap = onMap;
-    const isDashboard = pathname === BASE || pathname === `${BASE}/`;
 
     if (loading) {
         return (
@@ -323,10 +320,6 @@ export default function HoneymoonShell({ children }: { children: React.ReactNode
 
                 {isMap ? (
                     <div className="flex-1 min-h-0 px-4 md:px-6 pb-4 md:pb-6">{children}</div>
-                ) : isDashboard ? (
-                    <div className="flex-1 min-h-0 overflow-auto">
-                        <div className="h-full w-full px-4 md:px-6 pb-4 md:pb-6">{children}</div>
-                    </div>
                 ) : (
                     <div className="flex-1 min-h-0 overflow-auto">
                         <div className="w-full px-4 md:px-6 pb-6">{children}</div>

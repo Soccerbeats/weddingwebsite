@@ -12,6 +12,9 @@ import {
 import JourneyCard from './JourneyCard';
 import type { HoneymoonApi } from './useHoneymoon';
 import { Button, Card, EmptyState, MiniSelect, TextArea } from './ui';
+import { Hint } from './kit/Hint';
+import { Sheet } from './kit/Sheet';
+import { TabToolbar } from './kit/TabToolbar';
 
 /**
  * Every journey of the trip.
@@ -131,6 +134,7 @@ export default function TravelTab({ api }: { api: HoneymoonApi }) {
 
     /* ---- Building a journey from pasted flight numbers ---- */
     const [paste, setPaste] = useState('');
+    const [pasteOpen, setPasteOpen] = useState(false);
     const [pasting, setPasting] = useState(false);
     const [pasteNote, setPasteNote] = useState('');
 
@@ -278,43 +282,45 @@ export default function TravelTab({ api }: { api: HoneymoonApi }) {
 
     return (
         <div className="max-w-4xl space-y-3">
-            {/* ---- Start one ---- */}
-            <Card className="space-y-3 p-3">
-                <div className="flex flex-wrap items-end gap-2">
-                    <div className="min-w-[9rem]">
-                        <label className="mb-1 block text-xs font-semibold text-gray-500">
-                            A new journey
-                        </label>
+            <TabToolbar
+                left={summary.journeys > 0 ? (
+                    <p className="text-xs text-gray-500">
+                        {summary.journeys} journey{summary.journeys === 1 ? '' : 's'}
+                        {summary.moving > 0 && ` · ${formatMinutes(summary.moving)} in transit`}
+                        {summary.problems > 0 && (
+                            <span className="text-amber-700">
+                                {' '}· {summary.problems} thing{summary.problems === 1 ? '' : 's'} to check
+                            </span>
+                        )}
+                    </p>
+                ) : undefined}
+                right={(
+                    <>
                         <MiniSelect
                             value={mode}
+                            aria-label="Kind of journey"
                             onChange={(e) => setMode(e.target.value as TravelMode)}
                         >
                             {TRAVEL_MODES.map((entry) => (
-                                <option key={entry.key} value={entry.key}>
-                                    {entry.icon} {entry.label}
-                                </option>
+                                <option key={entry.key} value={entry.key}>{entry.icon} {entry.label}</option>
                             ))}
                         </MiniSelect>
-                    </div>
-                    <Button tone="primary" onClick={newJourney} disabled={busy}>
-                        {busy ? 'Working…' : '+ Start it'}
-                    </Button>
-                    <div className="flex-1" />
-                    {summary.journeys > 0 && (
-                        <p className="pb-2 text-[11px] text-gray-400">
-                            {summary.journeys} journey{summary.journeys === 1 ? '' : 's'}
-                            {summary.moving > 0 && ` · ${formatMinutes(summary.moving)} in transit`}
-                            {summary.problems > 0 && (
-                                <span className="text-amber-700">
-                                    {' '}· {summary.problems} thing
-                                    {summary.problems === 1 ? '' : 's'} to check
-                                </span>
-                            )}
-                        </p>
-                    )}
-                </div>
+                        <Button tone="primary" onClick={newJourney} disabled={busy}>
+                            {busy ? 'Working…' : '+ New journey'}
+                        </Button>
+                        <Button onClick={() => setPasteOpen(true)}>Paste flights…</Button>
+                    </>
+                )}
+                below={note ? <p className="text-[11px] text-gray-600">{note}</p> : undefined}
+            />
 
-                <div className="rounded-2xl bg-gray-50 p-3">
+            <Sheet
+                open={pasteOpen}
+                onClose={() => setPasteOpen(false)}
+                side="center"
+                title={<h2 className="font-semibold text-gray-900">Paste the flight numbers off your confirmation</h2>}
+            >
+                <div className="space-y-2">
                     <label className="mb-1 block text-xs font-semibold text-gray-500">
                         Or paste the flight numbers off your confirmation
                     </label>
@@ -329,19 +335,18 @@ export default function TravelTab({ api }: { api: HoneymoonApi }) {
                         <Button onClick={buildFromPaste} disabled={!paste.trim() || pasting}>
                             {pasting ? 'Building…' : 'Build the journey'}
                         </Button>
-                        <span className="text-[11px] text-gray-400">
+                        <Hint label="How pasting flights works">
                             One per line — the rest of the line can stay, dates in any form.
                             Each is looked up and filled in — times, terminals, aircraft, time
                             zones — and placed on the right day. Anything that cannot be looked
                             up still becomes a leg to fill in by hand.
-                        </span>
+                        </Hint>
                     </div>
                     {pasteNote && (
                         <p className="mt-1.5 text-[11px] text-sky-800">{pasteNote}</p>
                     )}
                 </div>
-                {note && <p className="text-[11px] text-gray-600">{note}</p>}
-            </Card>
+            </Sheet>
 
             {/* ---- The journeys ---- */}
             {groups.length === 0 ? (

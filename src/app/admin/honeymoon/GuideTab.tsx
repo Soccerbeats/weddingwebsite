@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { sourceLabel } from '@/lib/honeymoon';
 import Markdown from './Markdown';
 import type { HoneymoonApi } from './useHoneymoon';
+import { TabToolbar } from './kit/TabToolbar';
 import {
     Button, Card, EmptyState, InlineText, MiniSelect, OverflowMenu, TextField,
 } from './ui';
@@ -161,10 +162,20 @@ export default function GuideTab({ api }: { api: HoneymoonApi }) {
         setNewTitle('');
     };
 
+    const jump = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
     return (
         <div className="space-y-4">
+            <TabToolbar
+                left={(
+                    <>
+                        <Button onClick={() => jump('guide-regions')}>Regions</Button>
+                        <Button onClick={() => jump('guide-notes')}>Know before you go</Button>
+                    </>
+                )}
+            />
             {/* ---- Regions ---- */}
-            <section>
+            <section id="guide-regions" className="scroll-mt-16">
                 <h2 className="text-sm font-semibold text-gray-900 mb-2 px-1">Regions</h2>
                 {regions.length === 0 ? (
                     <Card>
@@ -248,7 +259,7 @@ export default function GuideTab({ api }: { api: HoneymoonApi }) {
             </section>
 
             {/* ---- Notes ---- */}
-            <section>
+            <section id="guide-notes" className="scroll-mt-16">
                 <div className="flex items-center justify-between gap-2 mb-2 px-1">
                     <h2 className="text-sm font-semibold text-gray-900">Know Before You Go</h2>
                 </div>

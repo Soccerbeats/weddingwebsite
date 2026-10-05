@@ -13,6 +13,8 @@ import { bucketTodos, dueSoon, packingSuggestions } from '@/lib/honeymoonChecks'
 import { partnersOf } from './PlaceNotes';
 import type { HoneymoonApi } from './useHoneymoon';
 import { Button, Card, EmptyState, InlineText, Modal, OverflowMenu, TextArea, TextField } from './ui';
+import { Segmented } from './kit/Segmented';
+import { TabToolbar } from './kit/TabToolbar';
 
 /**
  * Everything that has to happen before you go, that isn't a place.
@@ -147,28 +149,29 @@ export default function ChecklistTab({ api }: { api: HoneymoonApi }) {
 
     return (
         <div className="space-y-3">
-            {/* ---- Which list ---- */}
-            <div className="flex flex-wrap items-center gap-1.5">
-                {([['task', 'To do'], ['packing', 'Packing']] as const).map(([key, label]) => (
-                    <button
-                        key={key}
-                        onClick={() => setKind(key)}
-                        className={`rounded-full border px-3 py-1.5 text-sm font-medium transition
-                            ${kind === key
-                            ? 'border-transparent bg-accent text-white'
-                            : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}
-                    >
-                        {label} {todos.filter((t) => (t.kind ?? 'task') === key).length || ''}
-                    </button>
-                ))}
-                <div className="flex-1" />
-                <Button onClick={() => setByDue((v) => !v)}>
-                    {byDue ? 'Sort: my order' : 'Sort: by date'}
-                </Button>
-                {kind === 'packing' && (
-                    <Button onClick={() => setSuggesting(true)}>Suggest from the trip</Button>
+            <TabToolbar
+                left={(
+                    <Segmented<'task' | 'packing'>
+                        ariaLabel="Which list"
+                        value={kind}
+                        onChange={setKind}
+                        options={[
+                            { key: 'task', label: 'To do', count: todos.filter((t) => (t.kind ?? 'task') === 'task').length },
+                            { key: 'packing', label: 'Packing', count: todos.filter((t) => (t.kind ?? 'task') === 'packing').length },
+                        ]}
+                    />
                 )}
-            </div>
+                right={(
+                    <>
+                        <Button onClick={() => setByDue((v) => !v)}>
+                            {byDue ? 'Sort: my order' : 'Sort: by date'}
+                        </Button>
+                        {kind === 'packing' && (
+                            <Button onClick={() => setSuggesting(true)}>Suggest from the trip</Button>
+                        )}
+                    </>
+                )}
+            />
 
             {/* ---- Due soon ---- */}
             {soon.length > 0 && (
@@ -395,7 +398,7 @@ function TodoRow({ todo, api, onTicked, due, partners }: {
             style={{ transform: CSS.Transform.toString(transform), transition }}
             className={isDragging ? 'opacity-50' : ''}
         >
-            <div className="flex items-center gap-2 py-1.5 group">
+            <div className="flex flex-wrap items-center gap-2 py-1.5 group">
                 <button
                     {...attributes}
                     {...listeners}
@@ -418,7 +421,7 @@ function TodoRow({ todo, api, onTicked, due, partners }: {
                     aria-label={todo.text}
                     className="w-5 h-5 rounded accent-emerald-600 shrink-0 cursor-pointer"
                 />
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-[12rem]">
                     <InlineText
                         value={todo.text}
                         className={`text-sm -ml-2 ${todo.done ? 'line-through text-gray-400' : 'text-gray-800'}`}
@@ -438,18 +441,26 @@ function TodoRow({ todo, api, onTicked, due, partners }: {
                         </button>
                     )}
                 </div>
-                <input
-                    type="date"
-                    value={todo.due_on ?? ''}
-                    onChange={(e) => api.update('todos', { id: todo.id, due_on: e.target.value })}
-                    aria-label={`Due date for ${todo.text}`}
-                    className={`text-xs bg-transparent rounded-lg px-1 py-1 shrink-0
-                        hover:bg-gray-50 focus:bg-white focus:outline-none focus:ring-2
-                        focus:ring-accent/30 w-[8.5rem] ${
-                        !todo.done && due?.bucket === 'overdue' ? 'text-rose-700 font-medium'
-                            : !todo.done && due?.bucket === 'today' ? 'text-amber-700 font-medium'
-                                : 'text-gray-500'}`}
-                />
+                {/* The date as a chip rather than a 136px date box, which squeezed
+                    every to-do's text down to a few letters on a phone. The real
+                    input sits invisibly on top, so the native picker still opens. */}
+                <label
+                    className={`relative inline-flex min-h-9 md:min-h-0 shrink-0 cursor-pointer items-center rounded-full border
+                        px-2.5 py-1 text-xs hover:bg-gray-50 ${
+                        !todo.done && due?.bucket === 'overdue' ? 'border-rose-200 text-rose-700 font-medium'
+                            : !todo.done && due?.bucket === 'today' ? 'border-amber-200 text-amber-700 font-medium'
+                                : todo.due_on ? 'border-gray-200 text-gray-600' : 'border-dashed border-gray-200 text-gray-400'}`}
+                >
+                    {todo.due_on ? `Due ${formatDate(todo.due_on)}` : 'Due ▸'}
+                    <input
+                        type="date"
+                        value={todo.due_on ?? ''}
+                        onChange={(e) => api.update('todos', { id: todo.id, due_on: e.target.value })}
+                        onClick={(e) => { try { e.currentTarget.showPicker(); } catch { /* older browsers open it themselves */ } }}
+                        aria-label={`Due date for ${todo.text}`}
+                        className="absolute inset-0 cursor-pointer opacity-0"
+                    />
+                </label>
                 {/* The badge is what makes a stored date do something. */}
                 {!todo.done && due && due.bucket !== 'none' && due.bucket !== 'later' && (
                     <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold
