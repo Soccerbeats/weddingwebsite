@@ -194,7 +194,7 @@ export default function GuideTab({ api }: { api: HoneymoonApi }) {
                                     <div className="flex items-center gap-2">
                                         <button
                                             onClick={() => setOpenRegion(open ? null : region.id)}
-                                            className="flex-1 min-w-0 text-left"
+                                            className="flex-1 min-w-0 min-h-11 md:min-h-0 text-left"
                                         >
                                             <span className="text-sm font-medium text-gray-900">
                                                 {region.name}
@@ -282,7 +282,7 @@ export default function GuideTab({ api }: { api: HoneymoonApi }) {
                             <button
                                 key={template.title}
                                 onClick={() => addTemplate(template)}
-                                className="rounded-full border border-gray-200 px-2.5 py-1
+                                className="min-h-11 md:min-h-0 rounded-full border border-gray-200 px-2.5 py-1
                                     text-[11px] text-gray-600 hover:bg-gray-50"
                             >
                                 {template.title}

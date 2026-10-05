@@ -289,7 +289,7 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
             <Card data-card className="p-4 flex flex-col">
                 <div className="flex items-baseline justify-between gap-2 mb-2 shrink-0">
                     <h2 className="text-sm font-semibold text-gray-900">Itinerary</h2>
-                    <Link href={`${BASE}/itinerary`} className="text-xs text-accent hover:underline">
+                    <Link href={`${BASE}/itinerary`} className="inline-flex min-h-11 md:min-h-0 items-center text-xs text-accent hover:underline">
                         Open →
                     </Link>
                 </div>
@@ -347,7 +347,7 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
                 <Card data-card className="p-3 flex flex-col">
                     <div className="flex items-baseline justify-between gap-2 mb-2">
                         <h2 className="text-sm font-semibold text-gray-900">Where it all is</h2>
-                        <Link href={`${BASE}/map`} className="text-xs text-accent hover:underline">
+                        <Link href={`${BASE}/map`} className="inline-flex min-h-11 md:min-h-0 items-center text-xs text-accent hover:underline">
                             Open map →
                         </Link>
                     </div>
@@ -390,7 +390,7 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
                                 <li key={item.label}>
                                     <Link
                                         href={item.href}
-                                        className={`block text-sm rounded-xl px-3 py-2 transition
+                                        className={`block text-sm rounded-xl px-3 py-3 md:py-2 transition
                                             ${item.tone === 'warn'
                                             ? 'bg-amber-50 text-amber-800 hover:bg-amber-100'
                                             : 'bg-gray-50 text-gray-700 hover:bg-gray-100'}`}

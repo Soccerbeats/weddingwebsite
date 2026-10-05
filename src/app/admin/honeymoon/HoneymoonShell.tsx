@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { daysBeyondRange, daysBetween, hasCoords } from '@/lib/honeymoon';
 import { HoneymoonProvider } from './HoneymoonContext';
+import MobileTabBar from './MobileTabBar';
 import PlaceSheet from './PlaceSheet';
 import { PlaceSheetProvider, usePlaceSheet } from './PlaceSheetContext';
 import SearchPalette from './SearchPalette';
@@ -131,6 +132,19 @@ export default function HoneymoonShell({ children }: { children: React.ReactNode
         return () => root.classList.remove('admin-fullscreen');
     }, [fullScreen]);
 
+    /*
+     * Phone chrome. Below 768px the site's nav and the "Admin Panel" bar are
+     * hidden on honeymoon pages (see `.hm-compact` in globals.css) and this
+     * shell draws one slim bar instead, plus the tab bar along the bottom.
+     * Together they gave back about a third of a phone's screen. Taken off on
+     * unmount, so the rest of the admin is untouched.
+     */
+    useEffect(() => {
+        const root = document.documentElement;
+        root.classList.add('hm-compact');
+        return () => root.classList.remove('hm-compact');
+    }, []);
+
     /* The button is on the map tab, so leaving the map turns it off rather than
        hiding the only way out. */
     const onMap = pathname === `${BASE}/map`;
@@ -223,7 +237,35 @@ export default function HoneymoonShell({ children }: { children: React.ReactNode
         <PlaceSheetProvider>
             <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
                 <div className="w-full px-4 md:px-6 pt-4 md:pt-6 shrink-0">
-                    <div className="flex flex-wrap items-start justify-between gap-3 mb-1">
+                    {/* ---- Phone: one slim bar ---- */}
+                    <div className="md:hidden -mx-4 -mt-4 mb-2 flex items-center gap-1 border-b border-gray-200
+                        bg-white px-2" style={{ height: '3.25rem' }}>
+                        <Link
+                            href="/admin"
+                            aria-label="Back to the admin panel"
+                            className="flex size-11 items-center justify-center rounded-full text-xl text-gray-500 hover:bg-gray-50"
+                        >
+                            ‹
+                        </Link>
+                        <div className="min-w-0 flex-1">
+                            <p className="truncate text-base font-semibold text-gray-900">{data.trip.title}</p>
+                            <p className="truncate text-[11px] text-gray-400">
+                                {nights != null ? `${nights} nights · ` : ''}{data.places.length} places
+                                {saving ? ' · saving…' : ''}
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setSearching(true)}
+                            aria-label="Find anything"
+                            className="flex size-11 items-center justify-center rounded-full text-gray-500 hover:bg-gray-50"
+                        >
+                            <svg viewBox="0 0 20 20" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+                                <circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" />
+                            </svg>
+                        </button>
+                    </div>
+                    <div className="hidden md:flex flex-wrap items-start justify-between gap-3 mb-1">
                         <div>
                             <h1 className="text-2xl font-semibold text-gray-900">{data.trip.title}</h1>
                             <p className="text-xs md:text-sm text-gray-400 mt-0.5">
@@ -274,7 +316,7 @@ export default function HoneymoonShell({ children }: { children: React.ReactNode
                         looking like the tabs simply end at Stays. Wrapping to
                         three rows instead would cost 100px of height on the one
                         screen size that can least afford it. */}
-                    <div className="flex items-center gap-2 py-3 md:py-4">
+                    <div className="hidden md:flex items-center gap-2 py-3 md:py-4">
                         <div className="tab-scroller flex flex-1 min-w-0 gap-1.5 overflow-x-auto
                             -mx-1 px-1">
                             {TABS.map((t) => {
@@ -318,13 +360,15 @@ export default function HoneymoonShell({ children }: { children: React.ReactNode
                     </div>
                 </div>
 
+                {/* Bottom padding on a phone clears the tab bar. */}
                 {isMap ? (
-                    <div className="flex-1 min-h-0 px-4 md:px-6 pb-4 md:pb-6">{children}</div>
+                    <div className="flex-1 min-h-0 px-2 md:px-6 pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-6">{children}</div>
                 ) : (
-                    <div className="flex-1 min-h-0 overflow-auto">
-                        <div className="w-full px-4 md:px-6 pb-6">{children}</div>
+                    <div className="flex-1 min-h-0 overflow-auto" data-hm-scroll>
+                        <div className="w-full px-4 md:px-6 pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-6">{children}</div>
                     </div>
                 )}
+                <MobileTabBar />
             </div>
 
             <SearchPalette api={api} open={searching} onClose={() => setSearching(false)} />

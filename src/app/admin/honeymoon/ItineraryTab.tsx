@@ -11,20 +11,21 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import {
     SPREAD_WARNING_KM, arrivalsOn, calendarMonths, dayHops, daysBeyondRange,
-    dateForDay, daysBetween, isoOf, stayBookedOn,
+    dateForDay, daysBetween, isoOf, stayBookedOn, todayIso,
     formatDate, formatDayDate, formatDistance, hasCoords, legIsOvernight,
     travelModeMeta,
     type CalendarCell, type Day, type Place, type Stop, type TravelLeg,
 } from '@/lib/honeymoon';
 import { describeHours, stopIsOutsideHours } from '@/lib/honeymoonHours';
 import { isAfterDark } from '@/lib/honeymoonSun';
+import { dayNumberFor } from '@/lib/honeymoonToday';
 import { buildTimeline, dayLegs, dayMarkers, formatDuration } from '@/lib/honeymoonTimeline';
 import { scheduledPlaceIds, suggestDay } from '@/lib/honeymoonPlaces';
 import { conflictsOf, stayStretches } from '@/lib/honeymoonChecks';
 import { DROP_TYPES, PLACE_DRAG, STOP_DRAG } from './dragTypes';
 import type { TimelineRow } from '@/lib/honeymoonTimeline';
 import BookingPanel from './BookingPanel';
-import { DayBar, DayClock } from './DayShape';
+import { DayAgenda, DayBar, DayClock } from './DayShape';
 import Markdown from './Markdown';
 import { useTripIntel } from './useTripIntel';
 import type { TripIntel } from './useTripIntel';
@@ -36,6 +37,7 @@ import { useLocalPref } from './useLocalPref';
 import { Hint } from './kit/Hint';
 import { Segmented } from './kit/Segmented';
 import { TabToolbar } from './kit/TabToolbar';
+import { useIsPhone } from './kit/Sheet';
 import PrintSheet, { DEFAULT_PRINT_OPTIONS, type PrintOptions } from './PrintSheet';
 import TravelLegCard from './TravelLeg';
 import {
@@ -206,6 +208,22 @@ export default function ItineraryTab({ api, panel = false, onFocusDay, revealDay
         api.reorder('days', ids);
     };
 
+    /*
+     * A phone shows one day at a time. Sixteen day cards in a column is a page
+     * you scroll for a minute to find Thursday; a strip of days and a swipe is
+     * the same trip in the space of one. Opens on today while you are away, and
+     * on day one before.
+     */
+    const phone = useIsPhone();
+    const oneDay = phone && !panel && shownView !== 'calendar';
+    const [phoneDayId, setPhoneDayId] = useState<number | null>(null);
+    const swipe = useRef<{ x: number; y: number } | null>(null);
+    const todayNumber = data?.trip ? dayNumberFor(data.trip, todayIso(), days.length) : null;
+    const phoneDay = days.find((d) => d.id === (phoneDayId ?? reveal?.id))
+        ?? days.find((d) => d.day_number === todayNumber)
+        ?? days[0];
+    const listedDays = oneDay && phoneDay ? [phoneDay] : days;
+
     if (!days.length) {
         return (
             <Card>
@@ -227,12 +245,13 @@ export default function ItineraryTab({ api, panel = false, onFocusDay, revealDay
         <div className="space-y-3">
             {!panel && (
                 <TabToolbar
+                    stickyOnPhone
                     left={(
                         <>
                             {/* Left of the view switch, and only where it applies: a
                                 shape switch beside the other two views would be a
                                 control that does nothing. */}
-                            {view === 'timeline' && (
+                            {view === 'timeline' && !phone && (
                                 <Segmented<DayShape>
                                     ariaLabel="Timeline shape"
                                     tone="dark"
@@ -254,13 +273,23 @@ export default function ItineraryTab({ api, panel = false, onFocusDay, revealDay
                                     { key: 'calendar', label: '🗓 Calendar' },
                                 ]}
                             />
+                            <span className="hidden md:contents">
                             <Hint label="How the itinerary works">
                                 Drag a day by its ⠿ handle to reorder the trip — the days renumber and
                                 their dates follow. Timeline draws each day against the clock, travel
                                 included; Calendar puts the trip on real dates.
                             </Hint>
+                            </span>
                         </>
                     )}
+                    below={oneDay && phoneDay ? (
+                        <PhoneDayStrip
+                            days={days}
+                            current={phoneDay}
+                            startDate={data?.trip.start_date ?? null}
+                            onPick={(day) => setPhoneDayId(day.id)}
+                        />
+                    ) : undefined}
                     right={(
                         <OverflowMenu items={[
                             { label: '🖨 Print…', onClick: () => setPrinting(true) },
@@ -499,11 +528,24 @@ export default function ItineraryTab({ api, panel = false, onFocusDay, revealDay
                             lay its hours out across. */}
                         <div
                             ref={listRef}
+                            onPointerDown={oneDay ? (event) => { swipe.current = { x: event.clientX, y: event.clientY }; } : undefined}
+                            onPointerUp={oneDay ? (event) => {
+                                const start = swipe.current;
+                                swipe.current = null;
+                                if (!start || !phoneDay) return;
+                                const dx = event.clientX - start.x;
+                                const dy = event.clientY - start.y;
+                                // A clear sideways flick, not a scroll that wandered.
+                                if (Math.abs(dx) < 70 || Math.abs(dy) > 45) return;
+                                const at = days.findIndex((d) => d.id === phoneDay.id);
+                                const next = days[at + (dx < 0 ? 1 : -1)];
+                                if (next) setPhoneDayId(next.id);
+                            } : undefined}
                             className={`grid gap-3 items-start ${panel || shownView === 'timeline'
                                 ? 'grid-cols-1'
                                 : 'grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3'}`}
                         >
-                            {days.map((day) => (
+                            {listedDays.map((day) => (
                                 <DayCard
                                     key={day.id}
                                     day={day}
@@ -769,6 +811,7 @@ function DayCard({
         attributes: dayAttributes, listeners: dayListeners, setNodeRef: setDayRef,
         transform: dayTransform, transition: dayTransition, isDragging: dayDragging,
     } = useSortable({ id: day.id });
+    const phone = useIsPhone();
     const [adding, setAdding] = useState(false);
     const [pickPlace, setPickPlace] = useState('');
     const [customLabel, setCustomLabel] = useState('');
@@ -1114,7 +1157,7 @@ function DayCard({
                         <button
                             {...dayAttributes}
                             {...dayListeners}
-                            className="cursor-grab active:cursor-grabbing text-gray-300
+                            className="[@media(pointer:coarse)]:hidden cursor-grab active:cursor-grabbing text-gray-300
                                 hover:text-gray-500 touch-none -ml-1 px-1 shrink-0"
                             aria-label={`Drag day ${day.day_number} to reorder`}
                         >
@@ -1233,7 +1276,7 @@ function DayCard({
                     <button
                         onClick={() => onViewPlace(base)}
                         title={`${base.name} — open the booking and everything else about it`}
-                        className="min-w-0 flex items-baseline gap-1.5 text-left rounded-xl px-1.5 py-0.5
+                        className="min-w-0 min-h-11 md:min-h-0 flex items-baseline gap-1.5 text-left rounded-xl px-1.5 py-0.5
                             hover:bg-gray-50 group/base"
                     >
                         <span className="truncate text-sm text-gray-800
@@ -1292,7 +1335,19 @@ function DayCard({
                     /* The same stops, drawn rather than listed. Both shapes open
                        the place behind a stop on click, which is the read the
                        list gets from its rows. */
-                    shape === 'bars' ? (
+                    phone ? (
+                        <DayAgenda
+                            api={api}
+                            stops={day.stops}
+                            legs={timelineLegs}
+                            markers={timelineMarkers}
+                            onOpenLeg={openLeg}
+                            onOpenStop={(stop) => {
+                                const place = stop.place_id == null ? null : api.placeById.get(stop.place_id) ?? null;
+                                if (place) onViewPlace(place);
+                            }}
+                        />
+                    ) : shape === 'bars' ? (
                         <DayBar
                             api={api}
                             stops={day.stops}
@@ -1345,6 +1400,15 @@ function DayCard({
                                                 ?? timeline.rows[index - 1]?.arrive ?? null
                                             : null}
                                         onEditPlace={onEditPlace}
+                                        onMove={(delta) => {
+                                            const ids = day.stops.map((row) => row.id);
+                                            const to = index + delta;
+                                            if (to < 0 || to >= ids.length) return;
+                                            [ids[index], ids[to]] = [ids[to], ids[index]];
+                                            api.reorderStops(day.id, ids);
+                                        }}
+                                        isFirst={index === 0}
+                                        isLast={index === day.stops.length - 1}
                                         // Insert *above* this row: the gesture is
                                         // "something goes here", and the row you
                                         // point at is the one it goes before.
@@ -1486,14 +1550,14 @@ function DayCard({
                 <div className="mt-3 flex flex-wrap items-center gap-3">
                     <button
                         onClick={() => setAdding(true)}
-                        className="text-sm text-gray-400 hover:text-gray-700"
+                        className="min-h-11 md:min-h-0 text-sm text-gray-400 hover:text-gray-700"
                     >
                         + Add stop
                     </button>
                     <button
                         onClick={suggest}
                         title="Three places near the stay that you have not scheduled or ruled out"
-                        className="text-sm text-gray-400 hover:text-accent"
+                        className="min-h-11 md:min-h-0 text-sm text-gray-400 hover:text-accent"
                     >
                         ✨ Suggest a day
                     </button>
@@ -1520,12 +1584,16 @@ function DayCard({
 
 function StopRow({
     stop, index, api, dayNumber, hopKm, row, dayDate, sunset, phase, previousEnd, onEditPlace,
-    onInsertBefore, compact = false,
+    onInsertBefore, compact: compactProp = false, onMove, isFirst = false, isLast = false,
 }: {
     stop: Stop;
     index: number;
     api: HoneymoonApi;
     /** Rendered in the map's split view — see the row itself for what changes. */
+    /** Up or down one place — the way to reorder on a phone, where dragging is a fight with scrolling. */
+    onMove?: (delta: -1 | 1) => void;
+    isFirst?: boolean;
+    isLast?: boolean;
     compact?: boolean;
     dayNumber: number;
     hopKm: number | null;
@@ -1546,6 +1614,10 @@ function StopRow({
     /** Open the add row above this stop. */
     onInsertBefore: () => void;
 }) {
+    // A phone gets the two-line row the map's narrow column uses: on one line
+    // the six controls squeezed the place's name down to its first letter.
+    const phone = useIsPhone();
+    const compact = compactProp || phone;
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
         useSortable({ id: stop.id });
     const place = stop.place_id == null ? undefined : api.placeById.get(stop.place_id);
@@ -1599,7 +1671,7 @@ function StopRow({
         <button
             {...attributes}
             {...listeners}
-            className={`cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500
+            className={`[@media(pointer:coarse)]:hidden cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500
                 touch-none ${compact ? 'px-0.5 text-sm leading-5' : 'px-1'}`}
             aria-label="Drag to reorder"
         >
@@ -1652,7 +1724,7 @@ function StopRow({
                 // afternoon stop read "03:30 PI".
                 className={`text-gray-500 bg-transparent w-[6.75rem] shrink-0 rounded-lg px-1
                     hover:bg-gray-50 focus:bg-white focus:outline-none focus:ring-2
-                    focus:ring-accent/30 ${compact ? 'text-[11px] py-0' : 'text-xs py-1'}`}
+                    focus:ring-accent/30 ${phone ? 'min-h-11 text-base py-1' : compact ? 'text-[11px] py-0' : 'text-xs py-1'}`}
                 aria-label="Start time"
             />
             {showPresets && (
@@ -1716,7 +1788,7 @@ function StopRow({
             className={`text-gray-400 bg-transparent w-12 shrink-0 rounded-lg px-1
                 hover:bg-gray-50 focus:bg-white focus:outline-none focus:ring-2
                 focus:ring-accent/30 tabular-nums
-                ${compact ? 'text-[11px] py-0' : 'text-xs py-1'}`}
+                ${phone ? 'min-h-11 w-16 text-base py-1' : compact ? 'text-[11px] py-0' : 'text-xs py-1'}`}
             aria-label="Minutes here"
         />
     );
@@ -1729,7 +1801,7 @@ function StopRow({
         <button
             onClick={() => onEditPlace(place)}
             title={`Edit ${place.name}`}
-            className={`flex items-center gap-2 text-left group/place w-full min-w-0
+            className={`flex min-h-11 md:min-h-0 items-center gap-2 text-left group/place w-full min-w-0
                 ${compact ? '' : 'flex-wrap'}`}
         >
             <span className={`text-sm text-gray-900 truncate group-hover/place:text-accent
@@ -1751,13 +1823,15 @@ function StopRow({
     const menu = (
         <OverflowMenu items={[
             ...(place ? [{
-                label: `Edit ${place.name}`,
+                label: `Open ${place.name}`,
                 onClick: () => onEditPlace(place),
             }] : []),
             {
                 label: showNotes || stop.notes ? 'Hide note' : 'Add a note',
                 onClick: () => setShowNotes((v) => !v),
             },
+            ...(onMove && !isFirst ? [{ label: 'Move up', onClick: () => onMove(-1) }] : []),
+            ...(onMove && !isLast ? [{ label: 'Move down', onClick: () => onMove(1) }] : []),
             // One entry each, not one per day: a fortnight's trip put thirty
             // "move to day N" lines above the actions worth reading. The days
             // live one level in, in a list that scrolls.
@@ -1979,5 +2053,63 @@ function StopRow({
                 </div>
             )}
         </li>
+    );
+}
+
+/** The phone's day picker: ‹ a strip of days you can scroll › */
+function PhoneDayStrip({ days, current, startDate, onPick }: {
+    days: Day[];
+    current: Day;
+    startDate: string | null;
+    onPick: (day: Day) => void;
+}) {
+    const strip = useRef<HTMLDivElement>(null);
+    const at = days.findIndex((d) => d.id === current.id);
+    useEffect(() => {
+        strip.current?.querySelector<HTMLElement>(`[data-strip-day="${current.id}"]`)
+            ?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+    }, [current.id]);
+    const step = (delta: number) => { const next = days[at + delta]; if (next) onPick(next); };
+    return (
+        <div className="-mx-2 flex items-center gap-1">
+            <button
+                type="button"
+                onClick={() => step(-1)}
+                disabled={at <= 0}
+                aria-label="Previous day"
+                className="flex size-11 shrink-0 items-center justify-center rounded-full text-xl text-gray-600 disabled:opacity-30"
+            >
+                ‹
+            </button>
+            <div ref={strip} className="flex min-w-0 flex-1 snap-x gap-1.5 overflow-x-auto [scrollbar-width:none]">
+                {days.map((day) => {
+                    const on = day.id === current.id;
+                    const date = formatDayDate(startDate, day.day_number);
+                    return (
+                        <button
+                            key={day.id}
+                            type="button"
+                            data-strip-day={day.id}
+                            onClick={() => onPick(day)}
+                            aria-pressed={on}
+                            className={`flex min-h-11 shrink-0 snap-center flex-col items-center justify-center rounded-2xl px-3
+                                text-xs leading-tight ${on ? 'bg-accent text-white' : 'bg-white text-gray-600 border border-gray-200'}`}
+                        >
+                            <span className="font-semibold">Day {day.day_number}</span>
+                            {date && <span className={on ? 'text-white/80' : 'text-gray-400'}>{date}</span>}
+                        </button>
+                    );
+                })}
+            </div>
+            <button
+                type="button"
+                onClick={() => step(1)}
+                disabled={at >= days.length - 1}
+                aria-label="Next day"
+                className="flex size-11 shrink-0 items-center justify-center rounded-full text-xl text-gray-600 disabled:opacity-30"
+            >
+                ›
+            </button>
+        </div>
     );
 }

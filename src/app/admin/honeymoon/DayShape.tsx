@@ -368,3 +368,109 @@ function ClockLabel({ item, time, above, onClick }: {
         </div>
     );
 }
+
+/**
+ * The day as an agenda, top to bottom — the timeline on a phone.
+ *
+ * A horizontal axis of the whole day cannot be read at 390px, so on a phone
+ * the time runs down the left edge instead: stops, travel and the hotel's
+ * check-out and check-in in the order they happen, each with when it starts
+ * and when it ends. Untimed stops go last, said to be untimed.
+ */
+export function DayAgenda({ api, stops, legs = [], markers = [], onOpenStop, onOpenLeg }: {
+    api: HoneymoonApi;
+    stops: Stop[];
+    legs?: DayLeg[];
+    markers?: DayMarker[];
+    onOpenStop: (stop: Stop) => void;
+    onOpenLeg?: (legId: number) => void;
+}) {
+    const fmt = useTimeFormat();
+    const layout = clockLayout(stops, (stop) => labelFor(stop, api.placeById), { legs, markers });
+    const stopById = new Map(stops.map((stop) => [stop.id, stop]));
+    const untimed = new Set(layout.untimedStopIds);
+
+    type Row =
+        | { kind: 'stop'; at: number; stop: Stop; start: string; end: string }
+        | { kind: 'leg'; at: number; leg: (typeof layout.legs)[number] }
+        | { kind: 'marker'; at: number; label: string; time: string };
+    const rows: Row[] = [
+        ...layout.items
+            .filter((item) => !untimed.has(item.stopId))
+            .map((item): Row => ({
+                kind: 'stop', at: item.startMinutes, stop: stopById.get(item.stopId) as Stop, start: item.start, end: item.end,
+            })),
+        ...layout.legs.map((leg): Row => ({ kind: 'leg', at: leg.fromPrevDay ? -1 : leg.startMinutes, leg })),
+        ...markers.map((marker, index): Row => ({
+            kind: 'marker', at: marker.minutes, label: marker.label, time: layout.markers[index]?.time ?? '',
+        })),
+    ].sort((a, b) => a.at - b.at);
+    const later = stops.filter((stop) => untimed.has(stop.id));
+
+    if (!rows.length && !later.length && !layout.untimedLegs.length) {
+        return <p className="py-2 text-sm text-gray-400">Nothing planned yet.</p>;
+    }
+
+    return (
+        <ol className="mt-1 space-y-1.5" data-day-agenda>
+            {rows.map((row, index) => {
+                if (row.kind === 'marker') {
+                    return (
+                        <li key={`m-${index}`} className="flex items-center gap-3 py-1 text-xs text-gray-500">
+                            <span className="w-16 shrink-0 text-right tabular-nums">{fmt(row.time)}</span>
+                            <span className="h-px flex-1 border-t border-dashed border-gray-300" />
+                            <span className="shrink-0">{row.label}</span>
+                        </li>
+                    );
+                }
+                if (row.kind === 'leg') {
+                    const { leg } = row;
+                    return (
+                        <li key={`l-${leg.legId}`}>
+                            <button
+                                type="button"
+                                data-leg-slice={leg.legId}
+                                onClick={() => onOpenLeg?.(leg.legId)}
+                                className="flex min-h-12 w-full items-stretch gap-3 text-left"
+                            >
+                                <span className="w-16 shrink-0 pt-2 text-right text-xs tabular-nums text-gray-500">
+                                    {leg.fromPrevDay ? '' : fmt(leg.start)}
+                                    <span className="block text-gray-400">{leg.toNextDay ? '→ next day' : fmt(leg.end)}</span>
+                                </span>
+                                <span className="flex min-w-0 flex-1 items-center rounded-2xl px-3 py-2 text-sm font-medium text-white"
+                                    style={legBackground(leg.mode)}>
+                                    <span className="truncate">{leg.label}</span>
+                                </span>
+                            </button>
+                        </li>
+                    );
+                }
+                const colour = colourOf(row.stop, api.placeById);
+                return (
+                    <li key={`s-${row.stop.id}`}>
+                        <button
+                            type="button"
+                            onClick={() => onOpenStop(row.stop)}
+                            className="flex min-h-12 w-full items-stretch gap-3 text-left"
+                        >
+                            <span className="w-16 shrink-0 pt-2 text-right text-xs tabular-nums text-gray-700">
+                                {fmt(row.start)}
+                                <span className="block text-gray-400">{fmt(row.end)}</span>
+                            </span>
+                            <span className="flex min-w-0 flex-1 items-center rounded-2xl border border-gray-100 bg-white px-3 py-2
+                                text-sm text-gray-800 shadow-sm" style={{ borderLeft: `4px solid ${colour}` }}>
+                                <span className="truncate">{labelFor(row.stop, api.placeById)}</span>
+                            </span>
+                        </button>
+                    </li>
+                );
+            })}
+            {(later.length > 0 || layout.untimedLegs.length > 0) && (
+                <li className="pt-1 text-xs text-amber-700">
+                    Not timed yet:{' '}
+                    {[...later.map((stop) => labelFor(stop, api.placeById)), ...layout.untimedLegs.map((leg) => leg.label)].join(', ')}
+                </li>
+            )}
+        </ol>
+    );
+}

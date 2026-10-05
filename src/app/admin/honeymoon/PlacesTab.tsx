@@ -452,7 +452,7 @@ export default function PlacesTab({ api, panel = false, segmentSwitch }: {
             {counts.review > 0 && (
                 <>
                     {' · '}
-                    <button type="button" className="text-amber-700 hover:underline" onClick={() => setReviewState('on')}>
+                    <button type="button" className="min-h-11 md:min-h-0 text-amber-700 hover:underline" onClick={() => setReviewState('on')}>
                         {counts.review} to review
                     </button>
                 </>
@@ -477,6 +477,7 @@ export default function PlacesTab({ api, panel = false, segmentSwitch }: {
                                 value={sort}
                                 onChange={(e) => setSort(e.target.value as SortKey)}
                                 aria-label="Sort by"
+                                className="max-w-[7.5rem] md:max-w-[10rem]"
                             >
                                 {SORTS.map((option) => (
                                     <option key={option.key} value={option.key}>
@@ -486,7 +487,9 @@ export default function PlacesTab({ api, panel = false, segmentSwitch }: {
                                     </option>
                                 ))}
                             </MiniSelect>
-                            <Button tone="primary" onClick={() => newPlace()}>+ Add</Button>
+                            <Button tone="primary" onClick={() => newPlace()} aria-label="Add a place">
+                                +<span className="hidden sm:inline"> Add</span>
+                            </Button>
                             <OverflowMenu items={menu} />
                         </>
                     )}

@@ -889,7 +889,7 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                         <button
                             onClick={() => { setFitPoints(null); setFitSignal((n) => n + 1); }}
                             title="Frame everything currently shown"
-                            className="shrink-0 rounded-full px-2.5 py-1 text-xs font-medium
+                            className="shrink-0 min-h-11 md:min-h-0 rounded-full px-2.5 py-1 text-xs font-medium
                                 border border-gray-200 bg-gray-50 text-gray-600
                                 hover:bg-gray-100 transition"
                         >
@@ -901,7 +901,7 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                             <button
                                 onClick={toggleSplit}
                                 title="Itinerary on the left, places on the right, map in the middle — drag the dividers to resize"
-                                className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium
+                                className={`shrink-0 min-h-11 md:min-h-0 rounded-full px-2.5 py-1 text-xs font-medium
                                     border transition ${split
                                     ? 'bg-slate-900 border-slate-900 text-white'
                                     : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}
@@ -912,7 +912,7 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                         <button
                             onClick={() => sheet.newPlace()}
                             title="Add a place"
-                            className="shrink-0 rounded-full px-2.5 py-1 text-xs font-medium
+                            className="shrink-0 min-h-11 md:min-h-0 rounded-full px-2.5 py-1 text-xs font-medium
                                 border border-transparent bg-accent text-white
                                 hover:opacity-90 transition"
                         >
@@ -927,7 +927,7 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                                 setSelectMode(false);
                             }}
                             title="Click two points for the distance and bearing between them"
-                            className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium
+                            className={`shrink-0 min-h-11 md:min-h-0 rounded-full px-2.5 py-1 text-xs font-medium
                                 border transition ${tool === 'measure'
                                 ? 'bg-slate-900 border-slate-900 text-white'
                                 : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}
@@ -942,7 +942,7 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                                 setBoundaryNote('');
                             }}
                             title="Drag a loop round the pins you want — then act on them, or save the loop as an area"
-                            className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium
+                            className={`shrink-0 min-h-11 md:min-h-0 rounded-full px-2.5 py-1 text-xs font-medium
                                 border transition ${selectMode
                                 ? 'bg-slate-900 border-slate-900 text-white'
                                 : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}

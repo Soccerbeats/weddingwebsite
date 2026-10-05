@@ -183,7 +183,7 @@ export default function JourneyCard({ api, group, onAddLeg }: {
                                     <button
                                         type="button"
                                         onClick={() => setOpen(open === leg.id ? null : leg.id)}
-                                        className="flex w-full items-center gap-2 text-left"
+                                        className="flex min-h-11 md:min-h-0 w-full items-center gap-2 text-left"
                                     >
                                         <span className="text-base leading-none" aria-hidden>
                                             {travelModeMeta(leg.mode).icon}

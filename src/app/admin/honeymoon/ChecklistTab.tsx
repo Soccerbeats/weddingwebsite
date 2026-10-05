@@ -408,19 +408,21 @@ function TodoRow({ todo, api, onTicked, due, partners }: {
                 >
                     ⠿
                 </button>
+                <label className="-m-2 flex size-11 md:size-9 shrink-0 cursor-pointer items-center justify-center">
                 <input
-                    type="checkbox"
-                    checked={todo.done}
-                    onChange={(e) => {
-                        const done = e.target.checked;
-                        api.patchTodo(todo.id, { done });
-                        // Ask only on the way in. Un-ticking is a correction, not
-                        // an outcome worth writing up.
-                        if (done) onTicked(todo);
-                    }}
-                    aria-label={todo.text}
-                    className="w-5 h-5 rounded accent-emerald-600 shrink-0 cursor-pointer"
-                />
+                        type="checkbox"
+                        checked={todo.done}
+                        onChange={(e) => {
+                            const done = e.target.checked;
+                            api.patchTodo(todo.id, { done });
+                            // Ask only on the way in. Un-ticking is a correction, not
+                            // an outcome worth writing up.
+                            if (done) onTicked(todo);
+                        }}
+                        aria-label={todo.text}
+                        className="w-5 h-5 rounded accent-emerald-600 shrink-0 cursor-pointer"
+                    />
+                </label>
                 <div className="flex-1 min-w-[12rem]">
                     <InlineText
                         value={todo.text}
@@ -433,7 +435,7 @@ function TodoRow({ todo, api, onTicked, due, partners }: {
                     {todo.result && (
                         <button
                             onClick={() => onTicked(todo)}
-                            className="block text-left text-[11px] text-gray-500 px-2 -mt-0.5
+                            className="block min-h-11 md:min-h-0 text-left text-[11px] text-gray-500 px-2 -mt-0.5
                                 hover:text-gray-800 truncate max-w-full"
                             title="Edit this note"
                         >
@@ -445,7 +447,7 @@ function TodoRow({ todo, api, onTicked, due, partners }: {
                     every to-do's text down to a few letters on a phone. The real
                     input sits invisibly on top, so the native picker still opens. */}
                 <label
-                    className={`relative inline-flex min-h-9 md:min-h-0 shrink-0 cursor-pointer items-center rounded-full border
+                    className={`relative inline-flex min-h-11 md:min-h-0 shrink-0 cursor-pointer items-center rounded-full border
                         px-2.5 py-1 text-xs hover:bg-gray-50 ${
                         !todo.done && due?.bucket === 'overdue' ? 'border-rose-200 text-rose-700 font-medium'
                             : !todo.done && due?.bucket === 'today' ? 'border-amber-200 text-amber-700 font-medium'

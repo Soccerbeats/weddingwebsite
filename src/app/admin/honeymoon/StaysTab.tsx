@@ -986,6 +986,15 @@ function RankingList({ stays, currency, pickedId, onPick, onReorder, cardRefs }:
                         {rows.map((stay, index) => (
                             <RankRow
                                 key={stay.id}
+                                onMove={(delta) => {
+                                    const ids = rows.map((s) => s.id);
+                                    const to = index + delta;
+                                    if (to < 0 || to >= ids.length) return;
+                                    [ids[index], ids[to]] = [ids[to], ids[index]];
+                                    onReorder(ids);
+                                }}
+                                isFirst={index === 0}
+                                isLast={index === rows.length - 1}
                                 stay={stay}
                                 currency={currency}
                                 position={index + 1}
@@ -1001,7 +1010,11 @@ function RankingList({ stays, currency, pickedId, onPick, onReorder, cardRefs }:
     );
 }
 
-function RankRow({ stay, currency, position, picked, onPick, cardRefs }: {
+function RankRow({ stay, currency, position, picked, onPick, cardRefs, onMove, isFirst, isLast }: {
+    /** ↑ / ↓ — the ranking on a touch screen, where a drag fights the scroll. */
+    onMove: (delta: -1 | 1) => void;
+    isFirst: boolean;
+    isLast: boolean;
     currency: string;
     stay: Place;
     position: number;
@@ -1033,12 +1046,20 @@ function RankRow({ stay, currency, position, picked, onPick, cardRefs }: {
             <button
                 {...attributes}
                 {...listeners}
-                className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500
-                    touch-none pl-2 pr-1 shrink-0"
+                className="hidden [@media(pointer:fine)]:block cursor-grab active:cursor-grabbing text-gray-300
+                    hover:text-gray-500 touch-none pl-2 pr-1 shrink-0"
                 aria-label={`Drag ${stay.name} to reorder the ranking`}
             >
                 ⠿
             </button>
+            <span className="flex shrink-0 flex-col justify-center [@media(pointer:fine)]:hidden">
+                <button type="button" onClick={() => onMove(-1)} disabled={isFirst}
+                    aria-label={`Move ${stay.name} up`}
+                    className="flex size-11 items-center justify-center text-gray-500 disabled:opacity-25">▲</button>
+                <button type="button" onClick={() => onMove(1)} disabled={isLast}
+                    aria-label={`Move ${stay.name} down`}
+                    className="flex size-11 items-center justify-center text-gray-500 disabled:opacity-25">▼</button>
+            </span>
             {/* The position on screen, not the stored rank: mid-drag they differ,
                 and the number under your hand has to be the one you are aiming at. */}
             <span className="w-6 shrink-0 self-center text-sm font-bold text-accent tabular-nums

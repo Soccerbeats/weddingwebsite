@@ -533,3 +533,32 @@ html.admin-fullscreen [data-admin-frame] {
 html.admin-fullscreen [data-demo-banner] {
   display: none;
 }
+
+/* ---------------------------------------------------------------------------
+   Honeymoon portal on a phone: one bar, not three.
+
+   Below 768px the site nav (80px) and the admin panel's own top bar (56px) are
+   hidden on honeymoon pages; the portal draws a slim bar of its own and a tab
+   bar along the bottom. The same mechanism as `.admin-fullscreen` above — a
+   class on <html>, set and always removed by the honeymoon shell. The demo
+   banner stays: on the demo it is the one thing that must be seen.
+   --------------------------------------------------------------------------- */
+@media (max-width: 767px) {
+  html.hm-compact [data-site-nav],
+  html.hm-compact [data-admin-topbar] {
+    display: none;
+  }
+
+  html.hm-compact [data-admin-frame] {
+    top: var(--demo-banner-h, 0px);
+  }
+}
+
+/* Leaflet's zoom buttons are 30px; on a phone make them a fingertip. */
+@media (max-width: 767px) {
+  html.hm-compact .leaflet-touch .leaflet-bar a {
+    width: 44px;
+    height: 44px;
+    line-height: 44px;
+  }
+}

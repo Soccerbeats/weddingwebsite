@@ -101,13 +101,13 @@ export default function DateRangePicker({ start, end, onChange, months = 2 }: {
             className="select-none touch-none"
         >
             <div className="flex items-center justify-between gap-2 mb-2">
-                <Button className="!px-2.5" onClick={() => step(-1)} aria-label="Previous month">‹</Button>
+                <Button className="!px-2.5 min-w-11 md:min-w-0" onClick={() => step(-1)} aria-label="Previous month">‹</Button>
                 <div className="flex-1 text-center text-xs text-gray-500">
                     {preview
                         ? `${label(preview.start)} → ${label(preview.end)} · ${nights + 1} days, ${nights} night${nights === 1 ? '' : 's'}`
                         : 'Drag across the days you are away'}
                 </div>
-                <Button className="!px-2.5" onClick={() => step(1)} aria-label="Next month">›</Button>
+                <Button className="!px-2.5 min-w-11 md:min-w-0" onClick={() => step(1)} aria-label="Next month">›</Button>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -144,7 +144,7 @@ export default function DateRangePicker({ start, end, onChange, months = 2 }: {
                                         }}
                                         aria-label={cell.key}
                                         aria-pressed={!!inRange}
-                                        className={`h-8 text-xs tabular-nums transition
+                                        className={`h-11 md:h-8 text-sm md:text-xs tabular-nums transition
                                             ${isStart && isEnd ? 'rounded-lg'
                                             : isStart ? 'rounded-l-lg'
                                                 : isEnd ? 'rounded-r-lg' : ''}

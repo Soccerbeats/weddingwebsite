@@ -67,8 +67,8 @@ export function MiniSelect(props: React.SelectHTMLAttributes<HTMLSelectElement>)
         <select
             {...props}
             style={{ ...chevronStyle, ...(props.style ?? {}) }}
-            className={`w-auto bg-white border border-gray-200 rounded-full pl-4 pr-9 py-1.5
-                text-sm font-medium text-gray-700 focus:outline-none focus:ring-2
+            className={`w-auto min-h-11 md:min-h-0 bg-white border border-gray-200 rounded-full pl-4 pr-9 py-1.5
+                text-base md:text-sm font-medium text-gray-700 focus:outline-none focus:ring-2
                 focus:ring-accent/30 focus:border-accent/40 transition
                 ${SELECT_CHROME} ${props.className ?? ''}`}
         />
@@ -90,7 +90,7 @@ React.ButtonHTMLAttributes<HTMLButtonElement> & { tone?: 'default' | 'primary' |
     return (
         <button
             {...props}
-            className={`rounded-full px-4 py-1.5 text-sm font-medium transition
+            className={`min-h-11 md:min-h-0 rounded-full px-4 py-1.5 text-sm font-medium transition
                 disabled:opacity-40 disabled:cursor-not-allowed ${tones} ${className}`}
         />
     );
@@ -113,7 +113,7 @@ export function InlineText({ value, onCommit, placeholder, className = '', multi
     if (value !== seen) { setSeen(value); setDraft(value); }
 
     const commit = () => { if (draft !== value) onCommit(draft); };
-    const shared = `bg-transparent rounded-lg px-2 py-2 md:py-1 text-base md:text-sm w-full
+    const shared = `min-h-11 md:min-h-0 bg-transparent rounded-lg px-2 py-2 md:py-1 text-base md:text-sm w-full
         hover:bg-gray-50 focus:bg-white focus:outline-none focus:ring-2
         focus:ring-accent/30 transition ${className}`;
 
@@ -556,7 +556,7 @@ export function UndoToast({ label, onUndo, onDismiss, seconds = 10, stacked = 1 
 
     return createPortal((
         <div
-            className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[70] w-max max-w-[calc(100%-2rem)]"
+            className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] md:bottom-5 left-1/2 -translate-x-1/2 z-[70] w-max max-w-[calc(100%-2rem)]"
             onMouseEnter={() => setPaused(true)}
             onMouseLeave={() => setPaused(false)}
             role="status"
@@ -769,13 +769,13 @@ export function OverflowMenu({ items }: { items: OverflowMenuItem[] }) {
             <div className="fixed inset-0 z-[900]" onClick={close} />
             <div
                 className="fixed z-[901] bg-white rounded-2xl shadow-lg border border-gray-100
-                    py-1 min-w-[10rem] max-w-[18rem] flex flex-col"
+                    py-1 min-w-[12rem] max-w-[min(18rem,calc(100vw-1rem))] flex flex-col"
                 style={{ top: box.top, right: box.right, maxHeight: box.maxHeight }}
             >
                 {current && (
                     <button
                         onClick={() => setDrilled(null)}
-                        className="flex w-full shrink-0 items-center gap-1 px-3 py-2 text-xs font-semibold
+                        className="flex min-h-11 md:min-h-0 w-full shrink-0 items-center gap-1 px-3 py-2 text-xs font-semibold
                             text-gray-500 hover:text-gray-800 border-b border-gray-100"
                     >
                         <span aria-hidden>‹</span>
@@ -793,8 +793,8 @@ export function OverflowMenu({ items }: { items: OverflowMenuItem[] }) {
                                 close();
                                 item.onClick?.();
                             }}
-                            className={`flex w-full items-center justify-between gap-2 text-left
-                                px-4 py-2 text-sm hover:bg-gray-50
+                            className={`flex min-h-11 md:min-h-0 w-full items-center justify-between gap-2 text-left
+                                px-4 py-2 text-base md:text-sm hover:bg-gray-50
                                 ${item.danger ? 'text-rose-600' : 'text-gray-700'}`}
                         >
                             <span className="truncate">{item.label}</span>
@@ -815,7 +815,8 @@ export function OverflowMenu({ items }: { items: OverflowMenuItem[] }) {
                     setOpen((v) => !v);
                     setDrilled(null);
                 }}
-                className="text-gray-400 hover:text-gray-700 px-2 py-1 rounded-full hover:bg-gray-50"
+                className="inline-flex min-h-11 min-w-11 md:min-h-0 md:min-w-0 items-center justify-center
+                    text-lg md:text-base text-gray-400 hover:text-gray-700 px-2 py-1 rounded-full hover:bg-gray-50"
                 aria-label="More actions"
             >
                 ⋯

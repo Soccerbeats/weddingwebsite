@@ -320,8 +320,8 @@ export default function SettingsTab({ api }: { api: HoneymoonApi }) {
                     {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
                     <a
                         href="/api/admin/honeymoon/ics"
-                        className="rounded-full bg-accent text-white px-4 py-1.5 text-sm font-medium
-                            hover:opacity-90"
+                        className="inline-flex min-h-11 md:min-h-0 items-center rounded-full bg-accent text-white px-4 py-1.5
+                            text-sm font-medium hover:opacity-90"
                     >
                         Add to calendar (.ics)
                     </a>
