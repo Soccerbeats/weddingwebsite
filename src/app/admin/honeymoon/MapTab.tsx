@@ -16,8 +16,9 @@ import ItineraryTab from './ItineraryTab';
 import PlacesTab from './PlacesTab';
 import { usePlaceSheet } from './PlaceSheetContext';
 import {
-    BulkFieldMenu, Button, ColumnDivider, EmptyState, MiniSelect, SelectField,
+    BulkFieldMenu, Button, ColumnDivider, EmptyState, MiniSelect, OverflowMenu, SelectField,
 } from './ui';
+import { FilterButton, FilterChips, FilterField, type ActiveFilter } from './kit/FilterButton';
 
 // Leaflet must never be part of the server bundle — it reaches for `window` on
 // import. This is the only place the map is loaded.
@@ -111,6 +112,8 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
     const [lassoLoop, setLassoLoop] = useState<{ lat: number; lng: number }[] | null>(null);
     const [boundaryNote, setBoundaryNote] = useState('');
     const [showItinerary, setShowItinerary] = useState(false);
+    /** The legend folds to a chip: it covered a quarter of a phone's map. */
+    const [legendOpen, setLegendOpen] = useState(false);
     /**
      * Whether the itinerary overlay is expanded.
      *
@@ -660,116 +663,108 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
         setLassoed(new Set());
     };
 
+    const activeFilters: ActiveFilter[] = [
+        ...(dayFilter ? [{ key: 'day', label: `Day ${days.find((d) => String(d.id) === dayFilter)?.day_number ?? ''}`, clear: () => setDayFilter('') }] : []),
+        ...(sourceFilter ? [{ key: 'source', label: sourceFilter, clear: () => setSourceFilter('') }] : []),
+        ...(regionFilter ? [{ key: 'region', label: (data?.regions ?? []).find((r) => String(r.id) === regionFilter)?.name ?? 'Region', clear: () => setRegionFilter('') }] : []),
+        ...(categoryFilter ? [{ key: 'type', label: categoryMeta(categoryFilter).label, clear: () => setCategoryFilter('') }] : []),
+        ...(statusFilter ? [{ key: 'status', label: STATUSES.find((st) => st.key === statusFilter)?.label ?? statusFilter, clear: () => setStatusFilter('') }] : []),
+    ];
+
     return (
         <div className="h-full flex flex-col gap-2">
-            {/* ---- Filters ---- */}
-            <div className="shrink-0 bg-white rounded-2xl shadow-sm border border-gray-100 p-2.5">
-                <div className="flex flex-wrap 2xl:flex-nowrap items-center gap-1.5">
-                    <SelectField
-                        className="flex-1 min-w-[7rem] !py-1.5 !px-2.5 !text-sm"
-                        value={country}
-                        title="Saved with the trip — it stays set across refreshes and logins"
-                        onChange={(e) => api.update('trip', { focus_country: e.target.value })}
-                    >
-                        <option value="">All countries</option>
-                        {countries.map((c) => <option key={c} value={c}>{c}</option>)}
-                    </SelectField>
-                    <SelectField
-                        className="flex-1 min-w-[7rem] !py-1.5 !px-2.5 !text-sm"
-                        value={dayFilter}
-                        onChange={(e) => setDayFilter(e.target.value)}
-                    >
-                        <option value="">All places</option>
-                        {days.map((d) => (
-                            <option key={d.id} value={d.id}>
-                                Day {d.day_number}{d.title ? ` — ${d.title}` : ''}
-                            </option>
-                        ))}
-                    </SelectField>
-                    <SelectField
-                        className="flex-1 min-w-[7rem] !py-1.5 !px-2.5 !text-sm"
-                        value={sourceFilter}
-                        onChange={(e) => setSourceFilter(e.target.value)}
-                        disabled={!!selectedDay}
-                    >
-                        <option value="">All sources</option>
-                        {sourcesOf(places).map((src) => <option key={src} value={src}>{src}</option>)}
-                    </SelectField>
-                    <SelectField
-                        className="flex-1 min-w-[7rem] !py-1.5 !px-2.5 !text-sm"
-                        value={regionFilter}
-                        onChange={(e) => setRegionFilter(e.target.value)}
-                        disabled={!!selectedDay}
-                    >
-                        <option value="">All regions</option>
-                        {(data?.regions ?? []).map((r) => (
-                            <option key={r.id} value={r.id}>{r.name}</option>
-                        ))}
-                    </SelectField>
-                    <SelectField
-                        className="flex-1 min-w-[7rem] !py-1.5 !px-2.5 !text-sm"
-                        value={categoryFilter}
-                        onChange={(e) => setCategoryFilter(e.target.value)}
-                        disabled={!!selectedDay}
-                    >
-                        <option value="">All types ({typeOptions.length})</option>
-                        {typeOptions.map((c) => (
-                            <option key={c.key} value={c.key}>{c.icon} {c.label}</option>
-                        ))}
-                    </SelectField>
-                    <SelectField
-                        className="flex-1 min-w-[7rem] !py-1.5 !px-2.5 !text-sm"
-                        value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
-                        disabled={!!selectedDay}
-                    >
-                        <option value="">Any status</option>
-                        {STATUSES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
-                    </SelectField>
-                    <button
-                        onClick={() => setShowUnconfirmed((v) => !v)}
-                        disabled={!!selectedDay}
-                        title="Unconfirmed pins are hidden from the map. Turn this on to work through them."
-                        className={`shrink-0 rounded-2xl px-2.5 py-1.5 text-sm font-medium border transition
-                            disabled:opacity-40 ${showUnconfirmed
-                            ? 'bg-amber-500 border-amber-500 text-white'
-                            : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}
-                    >
-                        {showUnconfirmed ? '⚠ Hide' : '⚠ Unconfirmed'}
-                    </button>
-                    <button
-                        onClick={() => { setShowItinerary((v) => !v); setRouteListOpen(false); }}
-                        disabled={!!selectedDay || days.length === 0}
-                        title="Overlay each day's stops, in order"
-                        className={`shrink-0 rounded-2xl px-2.5 py-1.5 text-sm font-medium border transition
-                            disabled:opacity-40 ${showItinerary
-                            ? 'bg-slate-900 border-slate-900 text-white'
-                            : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}
-                    >
-                        {showItinerary ? '🗓 On' : '🗓 Itinerary'}
-                    </button>
-                    <MiniSelect
-                        value={layer}
-                        onChange={(e) => setLayer(e.target.value as MapLayerKey)}
-                        aria-label="Base map"
-                        title="Satellite for beaches, terrain for waterfalls"
-                    >
-                        {MAP_LAYERS.map((entry) => (
-                            <option key={entry.key} value={entry.key}>{entry.label}</option>
-                        ))}
-                    </MiniSelect>
-                    <MiniSelect
-                        value={colourBy}
-                        onChange={(e) => setColourBy(e.target.value as 'category' | 'region')}
-                        aria-label="Colour the pins by"
-                        title="Colour pins by what they are, or by which area they are in"
-                    >
-                        <option value="category">Colour: type</option>
-                        <option value="region">Colour: area</option>
-                    </MiniSelect>
-                </div>
-
-                <div className="flex flex-wrap items-center justify-between gap-2 mt-1.5 px-1">
+            {/* ---- Filters: one row ----
+                The country stays out in the open because it is saved with the
+                trip; everything else that narrows the pins is behind Filters, the
+                two overlays are chips, and the base map lives in the ⋯ menu. The
+                card that held all ten took more room than the map on a phone. */}
+            <div className="shrink-0 flex flex-wrap items-center gap-2">
+                <MiniSelect
+                    value={country}
+                    aria-label="Country"
+                    title="Saved with the trip — it stays set across refreshes and logins"
+                    onChange={(e) => api.update('trip', { focus_country: e.target.value })}
+                >
+                    <option value="">All countries</option>
+                    {countries.map((c) => <option key={c} value={c}>{c}</option>)}
+                </MiniSelect>
+                <FilterButton active={activeFilters} onReset={resetFilters}>
+                    <FilterField label="Day">
+                        <SelectField value={dayFilter} onChange={(e) => setDayFilter(e.target.value)}>
+                            <option value="">All places</option>
+                            {days.map((d) => (
+                                <option key={d.id} value={d.id}>Day {d.day_number}{d.title ? ` — ${d.title}` : ''}</option>
+                            ))}
+                        </SelectField>
+                    </FilterField>
+                    <FilterField label="Source">
+                        <SelectField value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} disabled={!!selectedDay}>
+                            <option value="">All sources</option>
+                            {sourcesOf(places).map((src) => <option key={src} value={src}>{src}</option>)}
+                        </SelectField>
+                    </FilterField>
+                    <FilterField label="Region">
+                        <SelectField value={regionFilter} onChange={(e) => setRegionFilter(e.target.value)} disabled={!!selectedDay}>
+                            <option value="">All regions</option>
+                            {(data?.regions ?? []).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                        </SelectField>
+                    </FilterField>
+                    <FilterField label="Type">
+                        <SelectField value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} disabled={!!selectedDay}>
+                            <option value="">All types ({typeOptions.length})</option>
+                            {typeOptions.map((c) => <option key={c.key} value={c.key}>{c.icon} {c.label}</option>)}
+                        </SelectField>
+                    </FilterField>
+                    <FilterField label="Status">
+                        <SelectField value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} disabled={!!selectedDay}>
+                            <option value="">Any status</option>
+                            {STATUSES.map((st) => <option key={st.key} value={st.key}>{st.label}</option>)}
+                        </SelectField>
+                    </FilterField>
+                </FilterButton>
+                <button
+                    type="button"
+                    onClick={() => setShowUnconfirmed((v) => !v)}
+                    disabled={!!selectedDay}
+                    aria-pressed={showUnconfirmed}
+                    title="Unconfirmed pins are hidden from the map. Turn this on to work through them."
+                    className={`min-h-11 md:min-h-0 shrink-0 rounded-full border px-3.5 py-1.5 text-sm font-medium transition
+                        disabled:opacity-40 ${showUnconfirmed
+                        ? 'border-amber-500 bg-amber-500 text-white'
+                        : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}
+                >
+                    ⚠ Unconfirmed{hiddenUnconfirmed > 0 && !showUnconfirmed ? ` ${hiddenUnconfirmed}` : ''}
+                </button>
+                <button
+                    type="button"
+                    onClick={() => { setShowItinerary((v) => !v); setRouteListOpen(false); }}
+                    disabled={!!selectedDay || days.length === 0}
+                    aria-pressed={showItinerary}
+                    title="Overlay each day's stops, in order"
+                    className={`min-h-11 md:min-h-0 shrink-0 rounded-full border px-3.5 py-1.5 text-sm font-medium transition
+                        disabled:opacity-40 ${showItinerary
+                        ? 'border-slate-900 bg-slate-900 text-white'
+                        : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}
+                >
+                    🗓 Itinerary
+                </button>
+                <div className="flex-1" />
+                <OverflowMenu items={[
+                    {
+                        label: `Base map: ${MAP_LAYERS.find((entry) => entry.key === layer)?.label ?? layer}`,
+                        submenu: MAP_LAYERS.map((entry) => ({
+                            label: `${entry.key === layer ? '✓ ' : ''}${entry.label}`,
+                            onClick: () => setLayer(entry.key),
+                        })),
+                    },
+                    {
+                        label: colourBy === 'category' ? 'Colour pins by area' : 'Colour pins by type',
+                        onClick: () => setColourBy(colourBy === 'category' ? 'region' : 'category'),
+                    },
+                    { label: 'Reset filters', onClick: resetFilters },
+                ]} />
+                <div className="basis-full flex flex-wrap items-center gap-2">
+                    <FilterChips active={activeFilters} />
                     <p className="text-xs text-gray-400">
                         {pinnedCount} pinned
                         {unpinnedCount > 0 && (
@@ -808,11 +803,7 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                             </span>
                         )}
                     </p>
-                    <button onClick={resetFilters} className="text-xs text-gray-400 hover:text-gray-700">
-                        Reset
-                    </button>
                 </div>
-
             </div>
 
             {/* ---- Map, with a column either side of it in split view ---- */}
@@ -1168,10 +1159,27 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                 )}
 
                 {/* ---- Legend, floating bottom-left ---- */}
-                {pinnedCount > 0 && (
-                    <div className="absolute bottom-3 left-3 z-[500] bg-white/90 backdrop-blur
-                        rounded-2xl shadow border border-gray-200 px-3 py-2 max-w-[45%]
-                        hidden md:block pointer-events-none">
+                {pinnedCount > 0 && !legendOpen && (
+                    <button
+                        type="button"
+                        onClick={() => setLegendOpen(true)}
+                        className="absolute bottom-3 left-3 z-[500] min-h-11 md:min-h-0 rounded-full border border-gray-200
+                            bg-white/95 px-3 py-1.5 text-xs font-medium text-gray-600 shadow backdrop-blur hover:text-gray-900"
+                    >
+                        ● Legend
+                    </button>
+                )}
+                {pinnedCount > 0 && legendOpen && (
+                    <div className="absolute bottom-3 left-3 z-[500] max-w-[min(28rem,80%)] rounded-2xl border
+                        border-gray-200 bg-white/95 px-3 py-2 shadow backdrop-blur">
+                        <button
+                            type="button"
+                            onClick={() => setLegendOpen(false)}
+                            aria-label="Hide the legend"
+                            className="float-right -mr-1 -mt-1 ml-2 size-8 rounded-full text-gray-400 hover:text-gray-700"
+                        >
+                            ×
+                        </button>
                         <div className="flex flex-wrap gap-x-3 gap-y-1">
                             {categoriesOf(visible).filter((c) => visible.some((p) => p.category === c.key && hasCoords(p)))
                                 .map((c) => (
