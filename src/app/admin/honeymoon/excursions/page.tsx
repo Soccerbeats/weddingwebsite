@@ -1,8 +1,7 @@
 'use client';
 
-import ExcursionsTab from '../ExcursionsTab';
-import { useHoneymoonApi } from '../HoneymoonContext';
+import PlacesHub from '../PlacesHub';
 
-export default function HoneymoonExcursionsPage() {
-    return <ExcursionsTab api={useHoneymoonApi()} />;
+export default function HoneymoonPlacesPage() {
+    return <PlacesHub segment="excursions" />;
 }

@@ -1,9 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import Image from 'next/image';
 import {
-    STATUSES, categoriesOf, countriesInUse, distanceKm, formatDistance, hasCoords, reviewToggleFor,
+    STATUSES, categoriesOf, categoryMeta, countriesInUse, distanceKm, formatDistance, hasCoords, reviewToggleFor,
     sourceLabel, sourcesOf,
     type Place, type PlaceStatus,
 } from '@/lib/honeymoon';
@@ -15,11 +14,13 @@ import { usePlaceSheet } from './PlaceSheetContext';
 import ImportPlaces from './ImportPlaces';
 import SavedViews from './SavedViews';
 import { useLocalPref } from './useLocalPref';
-import { PLACE_DRAG } from './dragTypes';
 import {
-    BulkFieldMenu, Button, Card, CategoryChip, EmptyState, MiniSelect, OverflowMenu, SelectField,
-    StatusChip, TextField, TriToggle, type TriState,
+    BulkFieldMenu, Button, Card, EmptyState, MiniSelect, OverflowMenu, SelectField,
+    TriToggle, type TriState,
 } from './ui';
+import { TabToolbar } from './kit/TabToolbar';
+import { FilterButton, FilterChips, FilterField, type ActiveFilter } from './kit/FilterButton';
+import { PlaceRow } from './kit/PlaceCard';
 
 /** The orders the list can be read in. */
 type SortKey = 'name' | 'recent' | 'region' | 'status' | 'rating' | 'distance';
@@ -68,12 +69,14 @@ function rank(place: Place): number {
  *   whole page: the five count cards go (the shell header already carries those
  *   numbers) and the filters stack two-up, so the list keeps the height.
  */
-export default function PlacesTab({ api, panel = false }: {
+export default function PlacesTab({ api, panel = false, segmentSwitch }: {
     api: HoneymoonApi;
     panel?: boolean;
+    /** The hub's All · Stays · Excursions control, drawn at the left of the toolbar. */
+    segmentSwitch?: React.ReactNode;
 }) {
     const { data } = api;
-    const [search, setSearch] = useState('');
+    const [search_, setSearch] = useState('');
     /*
      * Filters, sort and density are remembered per browser.
      *
@@ -102,7 +105,7 @@ export default function PlacesTab({ api, panel = false }: {
     const places = useMemo(() => data?.places ?? [], [data]);
 
     const filtered = useMemo(() => {
-        const term = search.trim().toLowerCase();
+        const term = search_.trim().toLowerCase();
         return places.filter((p) => {
             if (term && !p.name.toLowerCase().includes(term)
                 && !(p.description ?? '').toLowerCase().includes(term)) return false;
@@ -116,7 +119,7 @@ export default function PlacesTab({ api, panel = false }: {
             if (sourceFilter && sourceLabel(p.source) !== sourceFilter) return false;
             return true;
         });
-    }, [places, search, regionFilter, categoryFilter, statusFilter,
+    }, [places, search_, regionFilter, categoryFilter, statusFilter,
         reviewState, pinState, sourceFilter]);
 
     /**
@@ -335,159 +338,165 @@ export default function PlacesTab({ api, panel = false }: {
         setSelected(new Set());
     };
 
+    const regionName = (id: string) => (data?.regions ?? []).find((r) => String(r.id) === id)?.name ?? id;
+    const active: ActiveFilter[] = [
+        ...(sourceFilter ? [{ key: 'source', label: sourceFilter, clear: () => setSourceFilter('') }] : []),
+        ...(regionFilter ? [{ key: 'region', label: regionName(regionFilter), clear: () => setRegionFilter('') }] : []),
+        ...(categoryFilter ? [{ key: 'category', label: categoryMeta(categoryFilter).label, clear: () => setCategoryFilter('') }] : []),
+        ...(statusFilter ? [{ key: 'status', label: STATUSES.find((st) => st.key === statusFilter)?.label ?? statusFilter, clear: () => setStatusFilter('') }] : []),
+        ...(reviewState !== 'off' ? [{ key: 'review', label: reviewState === 'on' ? 'Needs review' : 'Already reviewed', clear: () => setReviewState('off') }] : []),
+        ...(pinState !== 'off' ? [{ key: 'pin', label: pinState === 'on' ? 'Not pinned' : 'Pinned', clear: () => setPinState('off') }] : []),
+    ];
+    const resetFilters = () => {
+        setRegionFilter(''); setCategoryFilter(''); setStatusFilter('');
+        setSourceFilter(''); setReviewState('off'); setPinState('off');
+    };
+
+    const filters = (
+        <FilterButton active={active} onReset={resetFilters}>
+            <FilterField label="Source">
+                <SelectField value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}>
+                    <option value="">All sources</option>
+                    {sources.map((src) => <option key={src} value={src}>{src}</option>)}
+                </SelectField>
+            </FilterField>
+            <FilterField label="Region">
+                <SelectField value={regionFilter} onChange={(e) => setRegionFilter(e.target.value)}>
+                    <option value="">All regions</option>
+                    {(data?.regions ?? []).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                </SelectField>
+            </FilterField>
+            <FilterField label="Type">
+                <SelectField value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+                    <option value="">All types</option>
+                    {categoriesOf(places).map((c) => (
+                        <option key={c.key} value={c.key}>{c.icon} {c.label}</option>
+                    ))}
+                </SelectField>
+            </FilterField>
+            <FilterField label="Status">
+                <SelectField value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                    <option value="">Any status</option>
+                    {STATUSES.map((st) => <option key={st.key} value={st.key}>{st.label}</option>)}
+                </SelectField>
+            </FilterField>
+            <div className="grid grid-cols-2 gap-2">
+                <TriToggle state={reviewState} onChange={setReviewState}
+                    offLabel="⚠ Review: any" onLabel="⚠ Needs review" invertedLabel="✓ Reviewed" />
+                <TriToggle state={pinState} onChange={setPinState} tone="sky"
+                    offLabel="Pin: any" onLabel="Not pinned" invertedLabel="Pinned" />
+            </div>
+            <FilterField label="Saved views">
+                <SavedViews
+                    api={api}
+                    current={{
+                        region: regionFilter, category: categoryFilter, status: statusFilter,
+                        source: sourceFilter, review: reviewState, pin: pinState, sort,
+                    }}
+                    onApply={(saved: Record<string, unknown>) => {
+                        setRegionFilter(String(saved.region ?? ''));
+                        setCategoryFilter(String(saved.category ?? ''));
+                        setStatusFilter(String(saved.status ?? ''));
+                        setSourceFilter(String(saved.source ?? ''));
+                        setReviewState((saved.review as TriState) ?? 'off');
+                        setPinState((saved.pin as TriState) ?? 'off');
+                        setSort((saved.sort as SortKey) ?? 'name');
+                    }}
+                />
+            </FilterField>
+        </FilterButton>
+    );
+
+    const search = (
+        <input
+            type="search"
+            value={search_}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search places…"
+            aria-label="Search places"
+            className={`min-h-11 md:min-h-0 rounded-full border border-gray-200 bg-white px-4 py-1.5 text-base md:text-sm
+                focus:outline-none focus:ring-2 focus:ring-accent/30 ${panel ? 'min-w-0 flex-1' : 'w-full sm:w-56'}`}
+        />
+    );
+
+    const menu = [
+        { label: dense ? 'Comfortable rows' : 'Dense rows', onClick: () => setDense(!dense) },
+        { label: 'Import a list…', onClick: () => setImporting(true) },
+        {
+            label: 'Export as CSV',
+            onClick: () => download(
+                placesToCsv(sorted, (id) => (id != null ? api.regionById.get(id) ?? '' : '')),
+                'places.csv', 'text/csv',
+            ),
+        },
+        {
+            label: 'Export as GeoJSON',
+            onClick: () => download(
+                placesToGeoJson(sorted, (id) => (id != null ? api.regionById.get(id) ?? '' : '')),
+                'places.geojson', 'application/geo+json',
+            ),
+        },
+        {
+            label: 'Export as KML (Google My Maps)',
+            onClick: () => download(
+                placesToKml(sorted, data?.trip.title ?? 'Honeymoon places'),
+                'places.kml', 'application/vnd.google-earth.kml+xml',
+            ),
+        },
+        { label: 'Assign regions by location', onClick: fileByLocation },
+    ];
+
+    const summary = (
+        <p className="text-xs text-gray-500">
+            {counts.total} places · {counts.pinned} pinned
+            {counts.review > 0 && (
+                <>
+                    {' · '}
+                    <button type="button" className="text-amber-700 hover:underline" onClick={() => setReviewState('on')}>
+                        {counts.review} to review
+                    </button>
+                </>
+            )}
+            {' '}· {counts.shortlisted} shortlisted · {counts.booked} booked
+            {sorted.length !== places.length && <span className="text-gray-400"> · showing {sorted.length}</span>}
+        </p>
+    );
+
     return (
         <div className="space-y-3">
-            {/* ---- Counts ---- */}
-            {!panel && (
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-                {[
-                    { label: 'Places', value: counts.total },
-                    { label: 'Pinned', value: counts.pinned },
-                    { label: 'Needs review', value: counts.review, warn: counts.review > 0 },
-                    { label: 'Shortlisted', value: counts.shortlisted },
-                    { label: 'Booked', value: counts.booked },
-                ].map((stat) => (
-                    <Card key={stat.label} className="p-3">
-                        <div className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">
-                            {stat.label}
-                        </div>
-                        <div className={`mt-0.5 text-base md:text-xl font-semibold tabular-nums
-                            ${stat.warn ? 'text-amber-600' : 'text-gray-900'}`}>
-                            {stat.value}
-                        </div>
-                    </Card>
-                ))}
-            </div>
-            )}
-
-            {/* ---- Search & filters ---- */}
-            <Card className="p-3 space-y-2">
-                <div className="flex gap-2">
-                    <TextField
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        placeholder="Search places…"
-                    />
-                    <Button tone="primary" onClick={() => newPlace()}>
-                        + Add
-                    </Button>
-                </div>
-                <div className={`grid gap-2 ${panel ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-6'}`}>
-                    <SelectField value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}>
-                        <option value="">All sources</option>
-                        {sources.map((src) => <option key={src} value={src}>{src}</option>)}
-                    </SelectField>
-                    <SelectField value={regionFilter} onChange={(e) => setRegionFilter(e.target.value)}>
-                        <option value="">All regions</option>
-                        {(data?.regions ?? []).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-                    </SelectField>
-                    <SelectField value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
-                        <option value="">All types</option>
-                        {categoriesOf(places).map((c) => (
-                            <option key={c.key} value={c.key}>{c.icon} {c.label}</option>
-                        ))}
-                    </SelectField>
-                    <SelectField value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-                        <option value="">Any status</option>
-                        {STATUSES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
-                    </SelectField>
-                    <TriToggle
-                        state={reviewState}
-                        onChange={setReviewState}
-                        offLabel="⚠ Review: any"
-                        onLabel="⚠ Needs review"
-                        invertedLabel="✓ Already reviewed"
-                    />
-                    <TriToggle
-                        state={pinState}
-                        onChange={setPinState}
-                        tone="sky"
-                        offLabel="Pin: any"
-                        onLabel="Not pinned"
-                        invertedLabel="Pinned"
-                    />
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 pt-2">
-                    <MiniSelect
-                        value={sort}
-                        onChange={(e) => setSort(e.target.value as SortKey)}
-                        aria-label="Sort by"
-                    >
-                        {SORTS.map((option) => (
-                            <option key={option.key} value={option.key}>
-                                {option.key === 'distance' && !distanceFrom
-                                    ? 'Distance (set a base first)'
-                                    : option.label}
-                            </option>
-                        ))}
-                    </MiniSelect>
-                    <Button onClick={() => setDense(!dense)}>
-                        {dense ? 'Comfortable rows' : 'Dense rows'}
-                    </Button>
-                    <SavedViews
-                        api={api}
-                        current={{
-                            region: regionFilter, category: categoryFilter, status: statusFilter,
-                            source: sourceFilter, review: reviewState, pin: pinState, sort,
-                        }}
-                        onApply={(filters: Record<string, unknown>) => {
-                            setRegionFilter(String(filters.region ?? ''));
-                            setCategoryFilter(String(filters.category ?? ''));
-                            setStatusFilter(String(filters.status ?? ''));
-                            setSourceFilter(String(filters.source ?? ''));
-                            setReviewState((filters.review as TriState) ?? 'off');
-                            setPinState((filters.pin as TriState) ?? 'off');
-                            setSort((filters.sort as SortKey) ?? 'name');
-                        }}
-                    />
-                    <div className="flex-1" />
-                    {(regionFilter || categoryFilter || statusFilter || sourceFilter
-                        || reviewState !== 'off' || pinState !== 'off') && (
-                        <Button
-                            tone="ghost"
-                            onClick={() => {
-                                setRegionFilter(''); setCategoryFilter(''); setStatusFilter('');
-                                setSourceFilter(''); setReviewState('off'); setPinState('off');
-                            }}
-                        >
-                            Clear filters
-                        </Button>
+            {panel ? (
+                <div className="flex items-center gap-2">{search}{filters}</div>
+            ) : (
+                <TabToolbar
+                    left={segmentSwitch}
+                    right={(
+                        <>
+                            {search}
+                            {filters}
+                            <MiniSelect
+                                value={sort}
+                                onChange={(e) => setSort(e.target.value as SortKey)}
+                                aria-label="Sort by"
+                            >
+                                {SORTS.map((option) => (
+                                    <option key={option.key} value={option.key}>
+                                        {option.key === 'distance' && !distanceFrom
+                                            ? 'Distance (set a base first)'
+                                            : option.label}
+                                    </option>
+                                ))}
+                            </MiniSelect>
+                            <Button tone="primary" onClick={() => newPlace()}>+ Add</Button>
+                            <OverflowMenu items={menu} />
+                        </>
                     )}
-                    <Button onClick={() => setImporting(true)}>Import…</Button>
-                    <OverflowMenu items={[
-                        {
-                            label: 'Export as CSV',
-                            onClick: () => download(
-                                placesToCsv(sorted, (id) => (id != null
-                                    ? api.regionById.get(id) ?? '' : '')),
-                                'places.csv', 'text/csv',
-                            ),
-                        },
-                        {
-                            label: 'Export as GeoJSON',
-                            onClick: () => download(
-                                placesToGeoJson(sorted, (id) => (id != null
-                                    ? api.regionById.get(id) ?? '' : '')),
-                                'places.geojson', 'application/geo+json',
-                            ),
-                        },
-                        {
-                            label: 'Export as KML (Google My Maps)',
-                            onClick: () => download(
-                                placesToKml(sorted, data?.trip.title ?? 'Honeymoon places'),
-                                'places.kml', 'application/vnd.google-earth.kml+xml',
-                            ),
-                        },
-                        { label: 'Assign regions by location', onClick: fileByLocation },
-                    ]} />
-                </div>
-                {filing && (
-                    <p className="rounded-xl bg-sky-50 px-2.5 py-1.5 text-[11px] text-sky-900">
-                        {filing}
-                    </p>
-                )}
-            </Card>
+                    below={<div className="flex flex-wrap items-center gap-2">{summary}<FilterChips active={active} /></div>}
+                />
+            )}
+            {panel && <FilterChips active={active} />}
+            {filing && (
+                <p className="rounded-xl bg-sky-50 px-2.5 py-1.5 text-[11px] text-sky-900">{filing}</p>
+            )}
 
             {/* ---- Bulk bar ---- */}
             {selected.size > 0 && (
@@ -572,134 +581,46 @@ export default function PlacesTab({ api, panel = false }: {
                     </div>
                 ) : (
                     <ul className="divide-y divide-gray-100">
-                        {sorted.map((place) => {
-                            const onDays = api.dayOfPlace.get(place.id) ?? [];
-                            const scheduled = onDays.length > 0;
-                            return (
-                                <li
-                                    key={place.id}
-                                    // Draggable straight onto a day card — the
-                                    // point of the map's split view, and the
-                                    // reason the day cards accept a native drop.
-                                    draggable
-                                    onDragStart={(event) => {
-                                        event.dataTransfer.setData(PLACE_DRAG, String(place.id));
-                                        event.dataTransfer.effectAllowed = 'copy';
-                                    }}
-                                    className={`flex items-center gap-3 px-3 hover:bg-gray-50
-                                        ${dense ? 'py-1' : 'py-2.5'}`}
-                                >
-                                    <input
-                                        type="checkbox"
-                                        checked={selected.has(place.id)}
-                                        onChange={() => toggle(place.id)}
-                                        className="w-4 h-4 rounded accent-accent shrink-0"
-                                        aria-label={`Select ${place.name}`}
-                                    />
-                                    {/* The cover photo, when there is one: a
-                                        shortlist of villas is much easier to read
-                                        by picture than by name. Hidden in dense
-                                        mode, which is for scanning names. */}
-                                    {!dense && place.photos.length > 0 && (
-                                        <div className="relative size-10 shrink-0 overflow-hidden
-                                            rounded-lg bg-gray-100">
-                                            <Image
-                                                src={`/api/photos/${place.photos[0]}`}
-                                                alt=""
-                                                fill
-                                                unoptimized
-                                                className="object-cover"
-                                            />
-                                        </div>
-                                    )}
-                                    <button
-                                        onClick={() => openPlace(place.id)}
-                                        className="flex-1 min-w-0 text-left"
-                                    >
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                            <span className="text-sm font-medium text-gray-900 truncate">
-                                                {place.name}
-                                            </span>
-                                            {!hasCoords(place) && (
-                                                <span className="text-[10px] text-sky-700 bg-sky-50 rounded-full px-1.5 py-0.5">
-                                                    no pin
-                                                </span>
-                                            )}
-                                            {place.needs_review && (
-                                                <span className="text-[10px] text-amber-800 bg-amber-50 rounded-full px-1.5 py-0.5">
-                                                    ⚠ review
-                                                </span>
-                                            )}
-                                            {scheduled && (
-                                                <span className="text-[10px] text-emerald-800 bg-emerald-50 rounded-full px-1.5 py-0.5">
-                                                    day {onDays.join(', ')}
-                                                </span>
-                                            )}
-                                        </div>
-                                        <div className={`flex items-center gap-1.5 flex-wrap
-                                            ${dense ? 'hidden' : 'mt-1'}`}>
-                                            <CategoryChip category={place.category} />
-                                            <StatusChip status={place.status} />
-                                            {place.region_id != null && (
-                                                <span className="text-[11px] text-gray-400">
-                                                    {api.regionById.get(place.region_id)}
-                                                </span>
-                                            )}
-                                            <span className="text-[11px] text-gray-300">
-                                                · {sourceLabel(place.source)}
-                                            </span>
-                                        </div>
-                                    </button>
-                                    {sort === 'distance' && distanceFrom && hasCoords(place) && (
-                                        <span className="shrink-0 text-[11px] text-gray-400
-                                            tabular-nums">
-                                            {formatDistance(distanceKm(
-                                                { lat: distanceFrom.lat as number,
-                                                  lng: distanceFrom.lng as number },
-                                                { lat: place.lat, lng: place.lng },
-                                            ))}
-                                        </span>
-                                    )}
-                                    <OverflowMenu
-                                        items={[
-                                            {
-                                                label: 'Open',
-                                                onClick: () => openPlace(place.id),
-                                            },
-                                            ...STATUSES
-                                                .filter((s) => s.key !== place.status)
-                                                .map((s) => ({
-                                                    label: `Mark ${s.label.toLowerCase()}`,
-                                                    onClick: () => api.update('places', {
-                                                        id: place.id, status: s.key as PlaceStatus,
-                                                    }),
-                                                })),
-                                            ...(place.needs_review ? [{
-                                                label: 'Pin looks right',
-                                                onClick: () => api.update('places', {
-                                                    id: place.id, needs_review: false,
-                                                }),
-                                            }] : []),
-                                            {
-                                                label: 'Delete',
-                                                danger: true,
-                                                // Undoable — including the link back
-                                                // to any stop it was scheduled on.
-                                                onClick: () => api.removePlaces([place]),
-                                            },
-                                        ]}
-                                    />
-                                </li>
-                            );
-                        })}
+                        {sorted.map((place) => (
+                            <PlaceRow
+                                key={place.id}
+                                place={place}
+                                dense={dense}
+                                selected={selected.has(place.id)}
+                                onToggleSelect={() => toggle(place.id)}
+                                trailing={sort === 'distance' && distanceFrom && hasCoords(place) ? (
+                                    <span className="shrink-0 text-[11px] tabular-nums text-gray-400">
+                                        {formatDistance(distanceKm(
+                                            { lat: distanceFrom.lat as number, lng: distanceFrom.lng as number },
+                                            { lat: place.lat, lng: place.lng },
+                                        ))}
+                                    </span>
+                                ) : undefined}
+                                menu={[
+                                    { label: 'Open', onClick: () => openPlace(place.id) },
+                                    ...STATUSES
+                                        .filter((st) => st.key !== place.status)
+                                        .map((st) => ({
+                                            label: `Mark ${st.label.toLowerCase()}`,
+                                            onClick: () => api.update('places', {
+                                                id: place.id, status: st.key as PlaceStatus,
+                                            }),
+                                        })),
+                                    ...(place.needs_review ? [{
+                                        label: 'Pin looks right',
+                                        onClick: () => api.update('places', { id: place.id, needs_review: false }),
+                                    }] : []),
+                                    { label: 'Delete', danger: true, onClick: () => api.removePlaces([place]) },
+                                ]}
+                            />
+                        ))}
                     </ul>
                 )}
             </Card>
 
-            {sorted.length > 0 && (
-                <p className="text-[11px] text-gray-400 px-1">
-                    Showing {sorted.length} of {places.length}.
-                    {panel && ' Drag a row onto a day to schedule it.'}
+            {panel && sorted.length > 0 && (
+                <p className="px-1 text-[11px] text-gray-400">
+                    Showing {sorted.length} of {places.length}. Drag a row onto a day to schedule it.
                 </p>
             )}
 

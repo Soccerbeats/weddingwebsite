@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import {
-    RATINGS, categoryMeta, cleanListingTitle, formatPrice, nameFromAnyUrl, stayUrlsFromText,
+    categoryMeta, cleanListingTitle, nameFromAnyUrl, stayUrlsFromText,
     type Place,
 } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
@@ -10,8 +10,13 @@ import LinkPreview from './LinkPreview';
 import RateQueue from './RateQueue';
 import { usePlaceSheet } from './PlaceSheetContext';
 import {
-    BulkFieldMenu, Button, Card, CategorySelect, EmptyState, InlineText, OverflowMenu, TextArea,
+    BulkFieldMenu, Button, Card, EmptyState, OverflowMenu, SelectField, TextArea,
 } from './ui';
+import { FilterButton, FilterField } from './kit/FilterButton';
+import { PlaceCard } from './kit/PlaceCard';
+import { Segmented } from './kit/Segmented';
+import { Sheet } from './kit/Sheet';
+import { TabToolbar } from './kit/TabToolbar';
 
 /**
  * Things to do — tours, classes, dives, day trips.
@@ -27,7 +32,10 @@ import {
  * browser agent then a link-preview crawler, which is what gets a title and a
  * photo out of sites that stonewall an ordinary request.
  */
-export default function ExcursionsTab({ api }: { api: HoneymoonApi }) {
+export default function ExcursionsTab({ api, segmentSwitch }: {
+    api: HoneymoonApi;
+    segmentSwitch?: React.ReactNode;
+}) {
     const { data } = api;
     const [bulk, setBulk] = useState('');
     const [adding, setAdding] = useState(false);
@@ -37,6 +45,7 @@ export default function ExcursionsTab({ api }: { api: HoneymoonApi }) {
     const [typeFilter, setTypeFilter] = useState('');
     const [preview, setPreview] = useState<Place | null>(null);
     const { openPlace } = usePlaceSheet();
+    const [pasting, setPasting] = useState(false);
     const [fetching, setFetching] = useState(0);
     const [triaging, setTriaging] = useState(false);
     /** Multi-select, matching the Places and Stays tabs. */
@@ -150,87 +159,54 @@ export default function ExcursionsTab({ api }: { api: HoneymoonApi }) {
 
     return (
         <div className="space-y-3">
-            {/* ---- Paste links ---- */}
-            <Card className="p-3">
-                <label className="block text-xs font-semibold text-gray-500 mb-1">
-                    Paste any link — a tour, a class, a dive shop. One per line, or several at once.
-                </label>
-                <TextArea
-                    rows={2}
-                    value={bulk}
-                    onChange={(e) => setBulk(e.target.value)}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={(e) => {
-                        const text = e.dataTransfer.getData('text/uri-list')
-                            || e.dataTransfer.getData('text');
-                        if (!text) return;
-                        e.preventDefault();
-                        setBulk((prev) => (prev ? `${prev}\n${text.trim()}` : text.trim()));
-                    }}
-                    placeholder="https://…"
-                />
-                <div className="flex items-center justify-between gap-2 mt-2">
-                    <p className="text-[11px] text-gray-400">
-                        Name and photo come from the page where it offers them. Type and cost are yours.
-                    </p>
-                    <Button
-                        tone="primary"
-                        onClick={addLinks}
-                        disabled={adding || !stayUrlsFromText(bulk).length}
-                    >
-                        {adding ? 'Adding…' : `Add ${stayUrlsFromText(bulk).length || ''}`.trim()}
-                    </Button>
-                </div>
-            </Card>
-
-            {/* ---- Filters ---- */}
-            <div className="flex flex-wrap items-center gap-1.5">
-                {([
-                    ['all', `All ${counts.all}`],
-                    ['yes', `👍 Interested ${counts.yes}`],
-                    ['mid', `😐 Mid tier ${counts.mid}`],
-                    ['no', `👎 Not interested ${counts.no}`],
-                    ['unrated', `Unrated ${counts.unrated}`],
-                    // Only once there is something in it, as on Stays.
-                    ...(counts.removed
-                        ? [['removed', `🗑 Removed ${counts.removed}`] as const] : []),
-                ] as const).map(([key, label]) => (
-                    <button
-                        key={key}
-                        onClick={() => setRated(key)}
-                        className={`rounded-full px-3 py-1.5 text-sm font-medium border transition
-                            ${rated === key
-                            ? 'bg-accent text-white border-transparent'
-                            : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                    >
-                        {label}
-                    </button>
-                ))}
-                {types.length > 1 && types.map((t) => (
-                    <button
-                        key={t.key}
-                        onClick={() => setTypeFilter(typeFilter === t.key ? '' : t.key)}
-                        className={`rounded-full px-3 py-1.5 text-sm font-medium border transition
-                            ${typeFilter === t.key
-                            ? 'text-white border-transparent'
-                            : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                        style={typeFilter === t.key ? { backgroundColor: t.color } : undefined}
-                    >
-                        {t.icon} {t.label}
-                    </button>
-                ))}
-                <div className="flex-1" />
-                {counts.unrated > 0 && (
-                    <Button onClick={() => setTriaging(true)}>
-                        ⚡ Rate {counts.unrated} unrated
-                    </Button>
+            <TabToolbar
+                left={(
+                    <>
+                        {segmentSwitch}
+                        <Segmented
+                            ariaLabel="Show which excursions"
+                            size="sm"
+                            value={rated}
+                            onChange={setRated}
+                            options={[
+                                { key: 'all', label: 'All', count: counts.all },
+                                { key: 'yes', label: '👍', count: counts.yes, title: 'Interested' },
+                                { key: 'mid', label: '😐', count: counts.mid, title: 'Mid tier' },
+                                { key: 'no', label: '👎', count: counts.no, title: 'Not interested' },
+                                { key: 'unrated', label: 'Unrated', count: counts.unrated },
+                                ...(counts.removed ? [{ key: 'removed' as const, label: '🗑', count: counts.removed, title: 'Removed' }] : []),
+                            ]}
+                        />
+                    </>
                 )}
-                {missingImages.length > 0 && (
-                    <Button onClick={fetchMissingImages} disabled={fetching > 0}>
-                        {fetching > 0 ? `Fetching… ${fetching} left` : `Get photos for ${missingImages.length}`}
-                    </Button>
+                right={(
+                    <>
+                        {types.length > 1 && (
+                            <FilterButton
+                                active={typeFilter ? [{
+                                    key: 'type', label: categoryMeta(typeFilter).label, clear: () => setTypeFilter(''),
+                                }] : []}
+                                onReset={() => setTypeFilter('')}
+                            >
+                                <FilterField label="What it is">
+                                    <SelectField value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+                                        <option value="">Every type</option>
+                                        {types.map((t) => <option key={t.key} value={t.key}>{t.icon} {t.label}</option>)}
+                                    </SelectField>
+                                </FilterField>
+                            </FilterButton>
+                        )}
+                        <Button tone="primary" onClick={() => setPasting(true)}>+ Add excursions</Button>
+                        <OverflowMenu items={[
+                            ...(counts.unrated > 0 ? [{ label: `⚡ Rate ${counts.unrated} unrated`, onClick: () => setTriaging(true) }] : []),
+                            ...(missingImages.length > 0 && fetching === 0 ? [{
+                                label: `Get photos for ${missingImages.length}`, onClick: fetchMissingImages,
+                            }] : []),
+                        ]} />
+                    </>
                 )}
-            </div>
+                below={fetching > 0 ? <p className="text-[11px] text-gray-500">Fetching photos… {fetching} left</p> : undefined}
+            />
 
             {selected.size > 0 && (
                 <Card className="sticky top-2 z-10 flex flex-wrap items-center gap-2 p-3">
@@ -300,163 +276,28 @@ export default function ExcursionsTab({ api }: { api: HoneymoonApi }) {
                 </Card>
             ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3 items-start">
-                    {shown.map((item) => {
-                        const link = linkOf(item);
-                        return (
-                            <Card key={item.id} className="overflow-hidden">
-                                {item.image_url && (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img
-                                        src={item.image_url}
-                                        alt={item.name}
-                                        referrerPolicy="no-referrer"
-                                        loading="lazy"
-                                        className="w-full h-40 object-cover bg-gray-100 cursor-pointer"
-                                        onClick={() => setPreview(item)}
-                                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                                    />
-                                )}
-                                <div className="p-4">
-                                    <div className="flex items-start justify-between gap-2">
-                                        <label className="mt-0.5 flex shrink-0 cursor-pointer
-                                            items-center">
-                                            <input
-                                                type="checkbox"
-                                                checked={selected.has(item.id)}
-                                                onChange={() => setSelected((prev) => {
-                                                    const next = new Set(prev);
-                                                    if (next.has(item.id)) next.delete(item.id);
-                                                    else next.add(item.id);
-                                                    return next;
-                                                })}
-                                                className="size-4 rounded accent-accent"
-                                                aria-label={`Select ${item.name}`}
-                                            />
-                                        </label>
-                                        <div className="min-w-0 flex-1">
-                                            <InlineText
-                                                value={item.name}
-                                                className="font-semibold text-gray-900 -ml-2"
-                                                onCommit={(name) => api.update('places', { id: item.id, name })}
-                                            />
-                                        </div>
-                                        <OverflowMenu
-                                            items={[
-                                                {
-                                                    label: 'Edit details',
-                                                    onClick: () => openPlace(item.id),
-                                                },
-                                                ...(item.rating ? [{
-                                                    label: 'Clear rating',
-                                                    onClick: () => api.update('places', { id: item.id, rating: '' }),
-                                                }] : []),
-                                                // Archive, not un-flag: see `removed`.
-                                                ...(item.archived ? [{
-                                                    label: 'Put back on the shortlist',
-                                                    onClick: () => api.patchPlace(item.id, {
-                                                        archived: false,
-                                                    }),
-                                                }] : [{
-                                                    label: 'Remove from the shortlist',
-                                                    onClick: () => api.patchPlace(item.id, {
-                                                        archived: true,
-                                                    }),
-                                                }]),
-                                                {
-                                                    label: 'Not an excursion',
-                                                    onClick: () => api.update('places', {
-                                                        id: item.id, is_excursion: false,
-                                                    }),
-                                                },
-                                                {
-                                                    label: 'Delete for good',
-                                                    danger: true,
-                                                    onClick: () => api.removePlaces([item]),
-                                                },
-                                            ]}
-                                        />
-                                    </div>
-
-                                    {/* What it is, and what it costs. */}
-                                    <div className="grid grid-cols-2 gap-2 mt-2">
-                                        <div>
-                                            <label className="block text-[11px] font-semibold text-gray-400 mb-1">
-                                                What it is
-                                            </label>
-                                            <CategorySelect
-                                                value={item.category}
-                                                places={places}
-                                                onChange={(category) => api.update('places', {
-                                                    id: item.id, category,
-                                                })}
-                                                onCreateCategory={api.createCategory}
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-[11px] font-semibold text-gray-400 mb-1">
-                                                Cost
-                                            </label>
-                                            <InlineText
-                                                value={item.price_note ?? ''}
-                                                placeholder="120, or 120 per person"
-                                                className="text-sm"
-                                                onCommit={(price_note) => api.update('places', {
-                                                    id: item.id,
-                                                    price_note: formatPrice(
-                                                        price_note, data?.trip.home_currency,
-                                                    ),
-                                                })}
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <InlineText
-                                        multiline
-                                        value={item.description ?? ''}
-                                        placeholder="Notes — how long, what's included, when to book…"
-                                        className="text-sm text-gray-600 -ml-2 mt-2"
-                                        onCommit={(description) => api.update('places', {
-                                            id: item.id, description,
-                                        })}
-                                    />
-
-                                    <div className="flex flex-wrap items-center gap-1.5 mt-3">
-                                        {RATINGS.map((r) => {
-                                            const on = item.rating === r.key;
-                                            return (
-                                                <button
-                                                    key={r.key}
-                                                    onClick={() => api.patchPlace(item.id, {
-                                                        rating: on ? '' : r.key,
-                                                    })}
-                                                    className={`rounded-full px-3 py-1 text-xs font-medium border transition
-                                                        ${on
-                                                        ? 'text-white border-transparent'
-                                                        : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}
-                                                    style={on ? { backgroundColor: r.color } : undefined}
-                                                >
-                                                    {r.icon} {r.label}
-                                                </button>
-                                            );
-                                        })}
-                                        <div className="flex-1" />
-                                        {link && <Button onClick={() => setPreview(item)}>Preview</Button>}
-                                    </div>
-
-                                    {link && (
-                                        <a
-                                            href={link}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="block text-[11px] text-gray-400 hover:text-gray-700 mt-2 truncate"
-                                        >
-                                            {link}
-                                        </a>
-                                    )}
-                                </div>
-                            </Card>
-                        );
-                    })}
+                    {shown.map((item) => (
+                        <PlaceCard
+                            key={item.id}
+                            place={item}
+                            selected={selected.has(item.id)}
+                            onToggleSelect={() => setSelected((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(item.id)) next.delete(item.id); else next.add(item.id);
+                                return next;
+                            })}
+                            menu={[
+                                { label: 'Open', onClick: () => openPlace(item.id) },
+                                ...(linkOf(item) ? [{ label: 'Preview the page', onClick: () => setPreview(item) }] : []),
+                                // Archive, not un-flag: see `removed`.
+                                item.archived
+                                    ? { label: 'Put back on the shortlist', onClick: () => api.patchPlace(item.id, { archived: false }) }
+                                    : { label: 'Remove from the shortlist', onClick: () => api.patchPlace(item.id, { archived: true }) },
+                                { label: 'Not an excursion', onClick: () => api.update('places', { id: item.id, is_excursion: false }) },
+                                { label: 'Delete for good', danger: true, onClick: () => api.removePlaces([item]) },
+                            ]}
+                        />
+                    ))}
                 </div>
             )}
 
@@ -470,6 +311,41 @@ export default function ExcursionsTab({ api }: { api: HoneymoonApi }) {
                     onRate={(rating) => api.patchPlace(preview.id, { rating })}
                 />
             )}
+
+            <Sheet
+                open={pasting}
+                onClose={() => setPasting(false)}
+                side="center"
+                title={<h2 className="font-semibold text-gray-900">Add excursions from links</h2>}
+            >
+                <div className="space-y-2">
+                    <TextArea
+                        rows={4}
+                        value={bulk}
+                        onChange={(e) => setBulk(e.target.value)}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => {
+                            const text = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text');
+                            if (!text) return;
+                            e.preventDefault();
+                            setBulk((prev) => (prev ? `${prev}\n${text.trim()}` : text.trim()));
+                        }}
+                        placeholder="https://…  — a tour, a class, a dive shop. One per line."
+                    />
+                    <p className="text-[11px] text-gray-400">
+                        Name and photo come from the page where it offers them. Type and cost are yours.
+                    </p>
+                    <div className="flex justify-end">
+                        <Button
+                            tone="primary"
+                            onClick={async () => { await addLinks(); setPasting(false); }}
+                            disabled={adding || !stayUrlsFromText(bulk).length}
+                        >
+                            {adding ? 'Adding…' : `Add ${stayUrlsFromText(bulk).length || ''}`.trim()}
+                        </Button>
+                    </div>
+                </div>
+            </Sheet>
 
             <RateQueue
                 api={api}

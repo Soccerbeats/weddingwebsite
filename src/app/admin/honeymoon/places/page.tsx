@@ -1,8 +1,7 @@
 'use client';
 
-import PlacesTab from '../PlacesTab';
-import { useHoneymoonApi } from '../HoneymoonContext';
+import PlacesHub from '../PlacesHub';
 
 export default function HoneymoonPlacesPage() {
-    return <PlacesTab api={useHoneymoonApi()} />;
+    return <PlacesHub segment="all" />;
 }

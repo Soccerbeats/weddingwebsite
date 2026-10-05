@@ -1,8 +1,7 @@
 'use client';
 
-import StaysTab from '../StaysTab';
-import { useHoneymoonApi } from '../HoneymoonContext';
+import PlacesHub from '../PlacesHub';
 
-export default function HoneymoonStaysPage() {
-    return <StaysTab api={useHoneymoonApi()} />;
+export default function HoneymoonPlacesPage() {
+    return <PlacesHub segment="stays" />;
 }

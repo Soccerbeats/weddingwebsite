@@ -14,21 +14,25 @@ import { useHoneymoon } from './useHoneymoon';
 
 const BASE = '/admin/honeymoon';
 
-const TABS = [
-    { href: BASE, label: 'Dashboard' },
-    // Second, not last: on the trip itself this is the only tab that matters,
-    // and it should be reachable without scrolling the strip.
-    { href: `${BASE}/today`, label: 'Today' },
-    { href: `${BASE}/map`, label: 'Map' },
-    { href: `${BASE}/itinerary`, label: 'Itinerary' },
-    { href: `${BASE}/travel`, label: 'Travel' },
-    { href: `${BASE}/places`, label: 'Places' },
-    { href: `${BASE}/stays`, label: 'Stays' },
-    { href: `${BASE}/excursions`, label: 'Excursions' },
-    { href: `${BASE}/checklist`, label: 'To Do' },
-    { href: `${BASE}/guide`, label: 'Guide' },
-    { href: `${BASE}/settings`, label: 'Settings' },
-] as const;
+export const TABS = [
+    { href: BASE, label: 'Overview', also: [] as string[] },
+    // Second, not last: on the trip itself this is the only tab that matters.
+    { href: `${BASE}/today`, label: 'Today', also: [] as string[] },
+    { href: `${BASE}/itinerary`, label: 'Itinerary', also: [] as string[] },
+    { href: `${BASE}/map`, label: 'Map', also: [] as string[] },
+    // Stays and excursions are segments of Places now, on their own URLs.
+    { href: `${BASE}/places`, label: 'Places', also: [`${BASE}/stays`, `${BASE}/excursions`] },
+    { href: `${BASE}/travel`, label: 'Travel', also: [] as string[] },
+    { href: `${BASE}/checklist`, label: 'Checklist', also: [] as string[] },
+    { href: `${BASE}/guide`, label: 'Guide', also: [] as string[] },
+    { href: `${BASE}/settings`, label: 'Settings', also: [] as string[] },
+];
+
+/** Is this tab the one the path is on? */
+export function tabIsActive(tab: (typeof TABS)[number], pathname: string | null): boolean {
+    if (tab.href === BASE) return pathname === BASE || pathname === `${BASE}/`;
+    return [tab.href, ...tab.also].some((href) => pathname?.startsWith(href));
+}
 
 /**
  * Header, tab bar and shared data for every honeymoon route.
@@ -277,9 +281,7 @@ export default function HoneymoonShell({ children }: { children: React.ReactNode
                         <div className="tab-scroller flex flex-1 min-w-0 gap-1.5 overflow-x-auto
                             -mx-1 px-1">
                             {TABS.map((t) => {
-                                const active = t.href === BASE
-                                    ? pathname === BASE || pathname === `${BASE}/`
-                                    : pathname?.startsWith(t.href);
+                                const active = tabIsActive(t, pathname);
                                 return (
                                     <Link
                                         key={t.href}

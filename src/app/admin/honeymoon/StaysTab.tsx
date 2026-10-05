@@ -9,10 +9,11 @@ import {
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
-    COST_PER_LABELS, RATINGS, STATUSES, byRank, cleanListingTitle, daysBetween, formatDate,
-    formatPrice, hasCoords, isStayUrl, nameFromStayUrl, nightlyRate, priceValue, stayUrlsFromText,
+    RATINGS, STATUSES, byRank, cleanListingTitle, hasCoords, isStayUrl, nameFromStayUrl, nightlyRate,
+    stayUrlsFromText,
     type Place, type PlaceStatus,
 } from '@/lib/honeymoon';
+import { priceText } from '@/lib/honeymoonPlaceSheet';
 import type { HoneymoonApi } from './useHoneymoon';
 import { usePlaceSheet } from './PlaceSheetContext';
 import CompareTable from './CompareTable';
@@ -20,9 +21,14 @@ import PriceWatch from './PriceWatch';
 import LinkPreview from './LinkPreview';
 import RateQueue from './RateQueue';
 import {
-    BulkFieldMenu, Button, Card, ColumnDivider, CustomisableSelect, EmptyState, InlineText,
-    ManageListModal, MiniSelect, OverflowMenu, StatusChip, TextArea,
+    BulkFieldMenu, Button, Card, ColumnDivider, EmptyState, MiniSelect, OverflowMenu, SelectField, StatusChip,
+    TextArea,
 } from './ui';
+import { FilterButton, FilterField } from './kit/FilterButton';
+import { PlaceCard } from './kit/PlaceCard';
+import { Segmented } from './kit/Segmented';
+import { Sheet } from './kit/Sheet';
+import { TabToolbar } from './kit/TabToolbar';
 
 // Leaflet reaches for `window` on import, so the map is never in the server
 // bundle. Same treatment as the map tab.
@@ -70,7 +76,10 @@ const STATUS_RANK: Record<PlaceStatus, number> = { booked: 3, shortlisted: 2, id
  * fetch-meta can pull a real name and a photo. The URL slug is the fallback for
  * anywhere that gives us nothing.
  */
-export default function StaysTab({ api }: { api: HoneymoonApi }) {
+export default function StaysTab({ api, segmentSwitch }: {
+    api: HoneymoonApi;
+    segmentSwitch?: React.ReactNode;
+}) {
     const { data } = api;
     /** What a price with no currency of its own is in. */
     const home = data?.trip.home_currency || 'USD';
@@ -177,8 +186,9 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
         return next;
     });
     const { openPlace } = usePlaceSheet();
-    // The ✎ Edit / remove… option on the area picker opens this.
-    const [managingRegions, setManagingRegions] = useState(false);
+    /** The paste box and the price watch, behind toolbar buttons. */
+    const [pasting, setPasting] = useState(false);
+    const [watching, setWatching] = useState(false);
 
     const places = useMemo(() => data?.places ?? [], [data]);
     /**
@@ -578,45 +588,102 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
             inside the window. Put it beside only the cards and it starts halfway
             down the page, runs off the bottom, and a pin down there eats the
             click that should have selected it. */}
+        <TabToolbar
+            left={(
+                <>
+                    {segmentSwitch}
+                    {view === 'cards' && (
+                        <Segmented
+                            ariaLabel="Show which stays"
+                            size="sm"
+                            value={filter}
+                            onChange={setFilter}
+                            options={[
+                                { key: 'all', label: 'All', count: counts.all },
+                                { key: 'yes', label: '👍', count: counts.yes, title: 'Interested' },
+                                { key: 'mid', label: '😐', count: counts.mid, title: 'Mid tier' },
+                                { key: 'no', label: '👎', count: counts.no, title: 'Not interested' },
+                                { key: 'unrated', label: 'Unrated', count: counts.unrated },
+                                ...(counts.removed ? [{ key: 'removed' as const, label: '🗑', count: counts.removed, title: 'Removed' }] : []),
+                            ]}
+                        />
+                    )}
+                </>
+            )}
+            right={(
+                <>
+                    <Segmented
+                        ariaLabel="Stays view"
+                        size="sm"
+                        value={view}
+                        onChange={chooseView}
+                        options={[
+                            { key: 'cards', label: '▦ Cards' },
+                            { key: 'ranking', label: '① Ranking' },
+                            { key: 'compare', label: '⊞ Compare' },
+                        ]}
+                    />
+                    {view === 'cards' && areaOptions.length > 2 && (
+                        <FilterButton
+                            active={area ? [{
+                                key: 'area',
+                                label: areaOptions.find((o) => o.key === area)?.label ?? 'Area',
+                                clear: () => setArea(''),
+                            }] : []}
+                            onReset={() => setArea('')}
+                        >
+                            <FilterField label="Area">
+                                <SelectField value={area} onChange={(e) => setArea(e.target.value)}>
+                                    {areaOptions.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+                                </SelectField>
+                            </FilterField>
+                        </FilterButton>
+                    )}
+                    {view === 'cards' && (
+                        <MiniSelect
+                            value={sort}
+                            onChange={(e) => chooseSort(e.target.value as SortKey)}
+                            aria-label="Sort the shortlist"
+                        >
+                            {SORTS.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}
+                        </MiniSelect>
+                    )}
+                    <Button tone="primary" onClick={() => setPasting(true)}>+ Add stays</Button>
+                    <OverflowMenu items={[
+                        ...(stays.length > 0 ? [{ label: 'Watch the prices…', onClick: () => setWatching(true) }] : []),
+                        ...(counts.unrated > 0 ? [{ label: `⚡ Rate ${counts.unrated} unrated`, onClick: () => setTriaging(true) }] : []),
+                        ...(missingLocation.length > 0 && locating === 0 ? [{
+                            label: `Get locations for ${missingLocation.length}`, onClick: fetchMissingLocations,
+                        }] : []),
+                        ...(missingImages.length > 0 && fetching === 0 ? [{
+                            label: `Get photos for ${missingImages.length}`, onClick: fetchMissingImages,
+                        }] : []),
+                        ...(view === 'ranking' && stays.some((st) => st.rank != null)
+                            ? [{ label: 'Clear the ranking', onClick: clearRanking }] : []),
+                    ]} />
+                </>
+            )}
+            below={(locating > 0 || fetching > 0 || (located != null && locating === 0) || (area && view === 'cards')) ? (
+                <div className="flex flex-wrap items-center gap-2 text-[11px] text-gray-500">
+                    {locating > 0 && <span>Looking up locations… {locating} left</span>}
+                    {fetching > 0 && <span>Fetching photos… {fetching} left</span>}
+                    {located != null && locating === 0 && (
+                        <span>
+                            {located > 0
+                                ? `Found a location for ${located} stay${located === 1 ? '' : 's'}. They are on the map now.`
+                                : 'No new locations found — open a stay and use Find to pin it by hand.'}
+                        </span>
+                    )}
+                </div>
+            ) : undefined}
+        />
+
         <div ref={splitRef} className="flex flex-col xl:flex-row gap-3 items-stretch">
         {/* A container, not a media query: with a draggable divider the cards
             have to answer to the width of *this column*, not the window's — the
             same 1600px screen holds one column of cards or three depending on
             where you put the divider. */}
         <div className="@container/stays min-w-0 xl:flex-1 space-y-3">
-            {/* ---- Paste links ---- */}
-            <Card className="p-3">
-                <label className="block text-xs font-semibold text-gray-500 mb-1">
-                    Paste booking links — one per line, or several at once
-                </label>
-                <TextArea
-                    rows={2}
-                    value={bulk}
-                    onChange={(e) => setBulk(e.target.value)}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={(e) => {
-                        const text = e.dataTransfer.getData('text/uri-list')
-                            || e.dataTransfer.getData('text');
-                        if (!text) return;
-                        e.preventDefault();
-                        setBulk((prev) => (prev ? `${prev}\n${text.trim()}` : text.trim()));
-                    }}
-                    placeholder="https://www.booking.com/hotel/id/…"
-                />
-                <div className="flex items-center justify-between gap-2 mt-2">
-                    <p className="text-[11px] text-gray-400">
-                        The name is read from the link; price and notes are yours to add.
-                    </p>
-                    <Button
-                        tone="primary"
-                        onClick={addLinks}
-                        disabled={adding || !stayUrlsFromText(bulk).length}
-                    >
-                        {adding ? 'Adding…' : `Add ${stayUrlsFromText(bulk).length || ''}`.trim()}
-                    </Button>
-                </div>
-            </Card>
-
             {selected.size > 0 && (
                 <Card className="sticky top-2 z-10 flex flex-wrap items-center gap-2 p-3">
                     <span className="text-sm font-medium text-gray-700">
@@ -671,103 +738,6 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                 </Card>
             )}
 
-            {stays.length > 0 && <PriceWatch api={api} />}
-
-            {/* ---- Filters ---- */}
-            <div className="flex flex-wrap items-center gap-1.5">
-                {/* The pills step aside in the ranking view: see `ranking`. */}
-                {view === 'cards' && ([
-                    ['all', `All ${counts.all}`],
-                    ['yes', `👍 Interested ${counts.yes}`],
-                    ['mid', `😐 Mid tier ${counts.mid}`],
-                    ['no', `👎 Not interested ${counts.no}`],
-                    ['unrated', `Unrated ${counts.unrated}`],
-                    // Only once there is something in it: a bucket that is
-                    // always empty is a button that does nothing, and it would
-                    // sit there on every trip that never removes a stay.
-                    ...(counts.removed ? [['removed', `🗑 Removed ${counts.removed}`] as const] : []),
-                ] as const).map(([key, label]) => (
-                    <button
-                        key={key}
-                        onClick={() => setFilter(key)}
-                        className={`rounded-full px-3 py-1.5 text-sm font-medium border transition
-                            ${filter === key
-                            ? 'bg-accent text-white border-transparent'
-                            : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                    >
-                        {label}
-                    </button>
-                ))}
-                <div className="flex-1" />
-                <ViewToggle view={view} onChange={chooseView} />
-                {/* No sort control in the ranking view: the order *is* the
-                    ranking, and offering to sort it by price would either lie or
-                    make the next drag write nonsense. */}
-                {/* Only where there is more than one area to choose between:
-                    a filter offering "All areas" and nothing else is furniture. */}
-                {view === 'cards' && areaOptions.length > 2 && (
-                    <MiniSelect
-                        value={area}
-                        onChange={(e) => setArea(e.target.value)}
-                        aria-label="Filter the shortlist by area"
-                        title="Show only stays in one area"
-                    >
-                        {areaOptions.map((o) => (
-                            <option key={o.key} value={o.key}>{o.label}</option>
-                        ))}
-                    </MiniSelect>
-                )}
-                {view === 'cards' && (
-                    <MiniSelect
-                        value={sort}
-                        onChange={(e) => chooseSort(e.target.value as SortKey)}
-                        aria-label="Sort the shortlist"
-                        title="How the shortlist is ordered"
-                    >
-                        {SORTS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
-                    </MiniSelect>
-                )}
-                {view === 'ranking' && stays.some((st) => st.rank != null) && (
-                    <Button onClick={clearRanking}>Clear ranking</Button>
-                )}
-                {counts.unrated > 0 && view === 'cards' && (
-                    <Button
-                        onClick={() => setTriaging(true)}
-                        title="One at a time, big photo, three buttons — the fast way through a long list"
-                    >
-                        ⚡ Rate {counts.unrated} unrated
-                    </Button>
-                )}
-                {missingLocation.length > 0 && (
-                    <Button
-                        onClick={fetchMissingLocations}
-                        disabled={locating > 0}
-                        title="Read the address and map pin off each booking link, so these stays show on the map"
-                    >
-                        {locating > 0
-                            ? `Looking up… ${locating} left`
-                            : `Get locations for ${missingLocation.length}`}
-                    </Button>
-                )}
-                {missingImages.length > 0 && (
-                    <Button onClick={fetchMissingImages} disabled={fetching > 0}>
-                        {fetching > 0
-                            ? `Fetching… ${fetching} left`
-                            : `Get photos for ${missingImages.length}`}
-                    </Button>
-                )}
-            </div>
-
-            {located != null && locating === 0 && (
-                <p className="text-[11px] text-gray-500 px-1">
-                    {located > 0
-                        ? `Found a location for ${located} stay${located === 1 ? '' : 's'}. `
-                            + 'They are on the map now.'
-                        : 'No new locations found — those listings did not publish one. '
-                            + 'Open a stay and use Find to pin it by hand.'}
-                </p>
-            )}
-
             {/* ---- Ranking / compare / cards ---- */}
             {view === 'compare' ? (
                 <Card className="p-3">
@@ -800,378 +770,36 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
             ) : (
                 <div className="grid grid-cols-1 @2xl/stays:grid-cols-2 @5xl/stays:grid-cols-3
                     gap-3 items-start">
-                    {shown.map((stay) => {
-                        const link = stayLink(stay);
-                        const active = picked?.id === stay.id;
-                        return (
-                            <div
-                                key={stay.id}
-                                // The ring lives on a wrapper: Card owns its own
-                                // border colour, and two same-specificity border
-                                // classes leave the winner up to emission order.
-                                ref={(node) => {
-                                    if (node) cardRefs.current.set(stay.id, node);
-                                    else cardRefs.current.delete(stay.id);
-                                }}
-                                className={`rounded-2xl transition
-                                    ${active ? 'ring-2 ring-accent' : ''}`}
-                            >
-                            <Card className="relative overflow-hidden">
-                                {/* Bottom-left of the photo rather than the top:
-                                    the top-right corner is where the rank and the
-                                    status chips already are. */}
-                                <label className="absolute bottom-2 left-2 z-10 flex size-7
-                                    cursor-pointer items-center justify-center rounded-full
-                                    bg-white/90 shadow">
-                                    <input
-                                        type="checkbox"
-                                        checked={selected.has(stay.id)}
-                                        onChange={() => setSelected((prev) => {
-                                            const next = new Set(prev);
-                                            if (next.has(stay.id)) next.delete(stay.id);
-                                            else next.add(stay.id);
-                                            return next;
-                                        })}
-                                        className="size-4 rounded accent-accent"
-                                        aria-label={`Select ${stay.name}`}
-                                    />
-                                </label>
-                                {stay.image_url && (
-                                    // Plain <img>: the host is a third-party CDN, and
-                                    // next/image would need every booking domain
-                                    // whitelisted up front. no-referrer keeps the
-                                    // admin URL out of their logs.
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img
-                                        src={stay.image_url}
-                                        alt={stay.name}
-                                        referrerPolicy="no-referrer"
-                                        loading="lazy"
-                                        title={hasCoords(stay)
-                                            ? `Show ${stay.name} on the map`
-                                            : `${stay.name} has no location yet`}
-                                        // The photo points the map at this stay.
-                                        // It used to open the listing preview;
-                                        // that is what the Preview button below
-                                        // is for, and pointing at the map is the
-                                        // thing you do far more often.
-                                        className="w-full h-40 object-cover bg-gray-100 cursor-pointer"
-                                        onClick={() => pickFromList(stay)}
-                                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                                    />
-                                )}
-                                <div className="p-4">
-                                <div className="flex items-start justify-between gap-2">
-                                    <div className="min-w-0 flex-1">
-                                        <div className="flex items-baseline gap-1.5">
-                                            {stay.rank != null && (
-                                                <span
-                                                    className="shrink-0 text-[11px] font-bold text-accent
-                                                        tabular-nums"
-                                                    title={`Ranked #${stay.rank} in your shortlist`}
-                                                >
-                                                    #{stay.rank}
-                                                </span>
-                                            )}
-                                            <InlineText
-                                                value={stay.name}
-                                                className="font-semibold text-gray-900 -ml-2"
-                                                onCommit={(name) => api.update('places', {
-                                                    id: stay.id, name,
-                                                })}
-                                            />
-                                        </div>
-                                        {/* Only once it is more than an idea: a chip
-                                            on every card would be noise, but a
-                                            shortlist you cannot see the state of
-                                            makes the status sort look arbitrary. */}
-                                        {stay.status !== 'idea' && (
-                                            <div className="mt-0.5">
-                                                <StatusChip status={stay.status} />
-                                            </div>
-                                        )}
-                                        {/* What the listing itself said. Free with
-                                            the photo fetch, and exactly the detail
-                                            you would otherwise open six tabs to
-                                            compare. */}
-                                        {(stay.star_rating != null || stay.price_range
-                                            || stay.amenities.length > 0) && (
-                                            <div className="mt-1 flex flex-wrap items-center gap-1">
-                                                {stay.star_rating != null && (
-                                                    <span className="rounded-full bg-amber-50 px-2
-                                                        py-0.5 text-[10px] font-medium
-                                                        text-amber-800">
-                                                        {stay.star_rating}★
-                                                    </span>
-                                                )}
-                                                {stay.price_range && (
-                                                    <span className="rounded-full bg-gray-100 px-2
-                                                        py-0.5 text-[10px] text-gray-600">
-                                                        {stay.price_range}
-                                                    </span>
-                                                )}
-                                                {stay.amenities.slice(0, 3).map((amenity) => (
-                                                    <span
-                                                        key={amenity}
-                                                        className="rounded-full bg-gray-100 px-2
-                                                            py-0.5 text-[10px] text-gray-600"
-                                                    >
-                                                        {amenity}
-                                                    </span>
-                                                ))}
-                                                {stay.amenities.length > 3 && (
-                                                    <span
-                                                        className="text-[10px] text-gray-400"
-                                                        title={stay.amenities.join(' · ')}
-                                                    >
-                                                        +{stay.amenities.length - 3}
-                                                    </span>
-                                                )}
-                                            </div>
-                                        )}
-                                        {/* The nights this stay is booked for.
-                                            They are what puts it on the itinerary
-                                            — the day cards read the booking, not a
-                                            dropdown of their own — so the tab that
-                                            owns stays has to show them. Edit them
-                                            under "Edit details", with the rest of
-                                            the booking. */}
-                                        {(() => {
-                                            const booked = (data?.bookings ?? []).find(
-                                                (row) => row.kind === 'stay'
-                                                    && row.place_id === stay.id
-                                                    && row.check_in && row.check_out,
-                                            );
-                                            if (!booked) return null;
-                                            const nights = daysBetween(
-                                                booked.check_in, booked.check_out,
-                                            );
-                                            return (
-                                                <p className="px-2 text-[11px] text-emerald-700">
-                                                    🛏 {formatDate(booked.check_in)} →{' '}
-                                                    {formatDate(booked.check_out)}
-                                                    {nights != null && nights > 0
-                                                        && ` · ${nights} night${nights === 1 ? '' : 's'}`}
-                                                </p>
-                                            );
-                                        })()}
-                                        {/* The stay's price, and the only place
-                                            it is typed. It writes the real
-                                            number the budget adds up rather than
-                                            a second copy in free text, and the
-                                            booking multiplies it by the nights
-                                            instead of asking for the money
-                                            again. Anything that isn't a figure —
-                                            "ask at the desk" — still lands in the
-                                            note, because that is not arithmetic
-                                            and pretending it is would be worse
-                                            than keeping the words. */}
-                                        <InlineText
-                                            value={stayPriceText(stay, home)}
-                                            placeholder="Price per night — type 250"
-                                            className="text-xs text-gray-500 -ml-2"
-                                            onCommit={(typed) => {
-                                                const text = typed.trim();
-                                                const amount = priceValue(text);
-                                                api.update('places', amount != null
-                                                    ? {
-                                                        id: stay.id,
-                                                        cost: String(amount),
-                                                        // A first price is a
-                                                        // nightly one, which is
-                                                        // what the box asks for.
-                                                        // An existing figure
-                                                        // keeps whatever it was
-                                                        // per — the text above
-                                                        // says so, and editing
-                                                        // it must not quietly
-                                                        // turn a week's total
-                                                        // into a rate.
-                                                        cost_per: stay.cost != null
-                                                            ? stay.cost_per : 'night',
-                                                        cost_currency: stay.cost_currency || home,
-                                                    }
-                                                    : {
-                                                        id: stay.id,
-                                                        cost: '',
-                                                        price_note: text,
-                                                    });
-                                            }}
-                                        />
-                                        {/* Where it is, and whether the map knows.
-                                            "no pin" is the honest state of a stay
-                                            that will not appear on the map yet. */}
-                                        {!stay.image_url && hasCoords(stay) && (
-                                            <button
-                                                onClick={() => pickFromList(stay)}
-                                                className="text-[11px] text-accent hover:underline px-2"
-                                            >
-                                                {active ? '◉ On the map' : '◎ Show on the map'}
-                                            </button>
-                                        )}
-                                        {(stay.address || !hasCoords(stay)) && (
-                                            <div className="flex items-center gap-1.5 flex-wrap px-2">
-                                                {stay.address && (
-                                                    <span className="text-[11px] text-gray-400 truncate">
-                                                        📍 {stay.address}
-                                                    </span>
-                                                )}
-                                                {!hasCoords(stay) && (
-                                                    <span className="text-[10px] text-sky-700 bg-sky-50
-                                                        rounded-full px-1.5 py-0.5 shrink-0">
-                                                        no pin
-                                                    </span>
-                                                )}
-                                            </div>
-                                        )}
-
-                                        {/*
-                                          Which area it is in — Ubud, Seminyak, Canggu.
-                                          It sits with the address and the pin because it
-                                          answers the same question, and a stay's area is
-                                          the thing you sort a shortlist by in your head
-                                          long before you care what it costs.
-
-                                          The same regions the rest of the portal uses, so
-                                          one added here shows up on the map's filter and
-                                          gets its own write-up on the Guide tab. Editing
-                                          it inline rather than through the place editor is
-                                          the point: tagging six hotels should not be six
-                                          trips through a modal.
-                                        */}
-                                        <div className="mt-1.5 px-2">
-                                            <CustomisableSelect
-                                                compact
-                                                label={`Area for ${stay.name}`}
-                                                value={stay.region_id != null ? String(stay.region_id) : ''}
-                                                placeholder="Ubud, Seminyak, Canggu…"
-                                                options={[
-                                                    { key: '', label: '— area not set —' },
-                                                    ...(data?.regions ?? []).map((r) => ({
-                                                        key: String(r.id),
-                                                        label: r.name,
-                                                    })),
-                                                ]}
-                                                onChange={(next) => api.update('places', {
-                                                    id: stay.id,
-                                                    region_id: next === '' ? null : Number(next),
-                                                })}
-                                                onCreate={async (typed) => {
-                                                    // A region is a real row, so it must
-                                                    // exist before it can be selected.
-                                                    // Match an existing name rather than
-                                                    // creating a near-duplicate.
-                                                    const existing = (data?.regions ?? []).find(
-                                                        (r) => r.name.toLowerCase() === typed.toLowerCase(),
-                                                    );
-                                                    if (existing) return String(existing.id);
-                                                    const created = await api.createRegion(
-                                                        typed, data?.trip.focus_country || '',
-                                                    );
-                                                    return created == null ? null : String(created);
-                                                }}
-                                                onManage={() => setManagingRegions(true)}
-                                            />
-                                        </div>
-                                    </div>
-                                    <OverflowMenu
-                                        items={[
-                                            {
-                                                label: 'Edit details',
-                                                onClick: () => openPlace(stay.id),
-                                            },
-                                            ...(stay.rating ? [{
-                                                label: 'Clear rating',
-                                                onClick: () => api.update('places', {
-                                                    id: stay.id, rating: '',
-                                                }),
-                                            }] : []),
-                                            /*
-                                             * Removing is the ordinary action and deleting
-                                             * is not offered here at all. You ruled a hotel
-                                             * out for a reason, and "why did we say no to
-                                             * that one?" comes back a fortnight later — so
-                                             * the default keeps it. Permanent deletion lives
-                                             * in the Removed bucket, one deliberate step
-                                             * further on.
-                                             */
-                                            stay.archived
-                                                ? {
-                                                    label: 'Put back on the shortlist',
-                                                    onClick: () => api.update('places', {
-                                                        id: stay.id, archived: false,
-                                                    }),
-                                                }
-                                                : {
-                                                    label: 'Remove from the shortlist',
-                                                    onClick: () => api.update('places', {
-                                                        id: stay.id, archived: true,
-                                                    }),
-                                                },
-                                            ...(stay.archived ? [{
-                                                label: 'Delete for good',
-                                                danger: true,
-                                                onClick: () => api.removePlaces([stay]),
-                                            }] : []),
-                                        ]}
-                                    />
-                                </div>
-
-                                <InlineText
-                                    multiline
-                                    value={stay.description ?? ''}
-                                    placeholder="Notes — what you liked, what put you off…"
-                                    className="text-sm text-gray-600 -ml-2 mt-1"
-                                    onCommit={(description) => api.update('places', {
-                                        id: stay.id, description,
-                                    })}
-                                />
-
-                                {/* Rating */}
-                                <div className="flex flex-wrap items-center gap-1.5 mt-3">
-                                    {RATINGS.map((r) => {
-                                        const on = stay.rating === r.key;
-                                        return (
-                                            <button
-                                                key={r.key}
-                                                // Optimistic: the pill is the
-                                                // fastest thing in the portal and
-                                                // must not wait for a refetch.
-                                                // Clicking the active one clears it.
-                                                onClick={() => api.patchPlace(stay.id, {
-                                                    rating: on ? '' : r.key,
-                                                })}
-                                                className={`rounded-full px-3 py-1 text-xs font-medium border transition
-                                                    ${on
-                                                    ? 'text-white border-transparent'
-                                                    : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}
-                                                style={on ? { backgroundColor: r.color } : undefined}
-                                            >
-                                                {r.icon} {r.label}
-                                            </button>
-                                        );
-                                    })}
-                                    <div className="flex-1" />
-                                    {link && (
-                                        <Button onClick={() => setPreview(stay)}>Preview</Button>
-                                    )}
-                                </div>
-
-                                {link && (
-                                    <a
-                                        href={link}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="block text-[11px] text-gray-400 hover:text-gray-700 mt-2 truncate"
-                                    >
-                                        {link}
-                                    </a>
-                                )}
-                                </div>
-                            </Card>
-                            </div>
-                        );
-                    })}
+                    {shown.map((stay) => (
+                        <PlaceCard
+                            key={stay.id}
+                            place={stay}
+                            active={picked?.id === stay.id}
+                            selected={selected.has(stay.id)}
+                            onToggleSelect={() => setSelected((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(stay.id)) next.delete(stay.id); else next.add(stay.id);
+                                return next;
+                            })}
+                            onShowOnMap={() => pickFromList(stay)}
+                            cardRef={(node) => {
+                                if (node) cardRefs.current.set(stay.id, node);
+                                else cardRefs.current.delete(stay.id);
+                            }}
+                            menu={[
+                                { label: 'Open', onClick: () => openPlace(stay.id) },
+                                ...(stayLink(stay) ? [{ label: 'Preview the listing', onClick: () => setPreview(stay) }] : []),
+                                // Removing is the ordinary action; deleting for good
+                                // lives one deliberate step further on, in Removed.
+                                stay.archived
+                                    ? { label: 'Put back on the shortlist', onClick: () => api.patchPlace(stay.id, { archived: false }) }
+                                    : { label: 'Remove from the shortlist', onClick: () => api.patchPlace(stay.id, { archived: true }) },
+                                ...(stay.archived ? [{
+                                    label: 'Delete for good', danger: true, onClick: () => api.removePlaces([stay]),
+                                }] : []),
+                            ]}
+                        />
+                    ))}
                 </div>
             )}
             </div>
@@ -1246,70 +874,55 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                 filter={(place) => place.category === 'stay' && !place.is_excursion}
             />
 
-            {/* Renaming an area keeps every place filed under it; deleting one
-                leaves the places and clears their area. The counts include
-                everything in the region, not just stays, because that is what
-                the delete actually affects. */}
-            <ManageListModal
-                open={managingRegions}
-                onClose={() => setManagingRegions(false)}
-                title="Edit areas"
-                hint="Renaming keeps every place in it. Deleting leaves the places but clears their area."
-                items={(data?.regions ?? []).map((r) => {
-                    const used = (data?.places ?? []).filter((p) => p.region_id === r.id).length;
-                    return {
-                        id: r.id,
-                        label: r.name,
-                        detail: used ? `${used} place${used === 1 ? '' : 's'}` : 'unused',
-                        warn: used
-                            ? `Delete "${r.name}"? ${used} place(s) stay but lose their area.`
-                            : `Delete "${r.name}"?`,
-                    };
-                })}
-                onRename={(id, name) => api.update('regions', { id, name })}
-                onDelete={(id) => api.remove('regions', id)}
-            />
+            <Sheet
+                open={pasting}
+                onClose={() => setPasting(false)}
+                side="center"
+                title={<h2 className="font-semibold text-gray-900">Add stays from links</h2>}
+            >
+                <div className="space-y-2">
+                    <TextArea
+                        rows={4}
+                        value={bulk}
+                        onChange={(e) => setBulk(e.target.value)}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => {
+                            const text = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text');
+                            if (!text) return;
+                            e.preventDefault();
+                            setBulk((prev) => (prev ? `${prev}\n${text.trim()}` : text.trim()));
+                        }}
+                        placeholder="https://www.booking.com/hotel/id/…  — one per line, or several at once"
+                    />
+                    <p className="text-[11px] text-gray-400">
+                        The name, photo, address and pin are read from each listing; price and notes are yours.
+                    </p>
+                    <div className="flex justify-end">
+                        <Button
+                            tone="primary"
+                            onClick={async () => { await addLinks(); setPasting(false); }}
+                            disabled={adding || !stayUrlsFromText(bulk).length}
+                        >
+                            {adding ? 'Adding…' : `Add ${stayUrlsFromText(bulk).length || ''}`.trim()}
+                        </Button>
+                    </div>
+                </div>
+            </Sheet>
+
+            <Sheet
+                open={watching}
+                onClose={() => setWatching(false)}
+                side="center"
+                width="lg"
+                title={<h2 className="font-semibold text-gray-900">Watch the prices</h2>}
+            >
+                <PriceWatch api={api} />
+            </Sheet>
         </>
     );
 }
 
-/** Cards to compare stays, ranking to put them in order. */
-function ViewToggle({ view, onChange }: { view: View; onChange: (view: View) => void }) {
-    const options: { key: View; label: string }[] = [
-        { key: 'cards', label: '▦ Cards' },
-        { key: 'ranking', label: '① Ranking' },
-        // Ranking answers "which order"; the table answers "why".
-        { key: 'compare', label: '⊞ Compare' },
-    ];
-    return (
-        <div className="shrink-0 inline-flex rounded-full border border-gray-200 bg-white p-0.5">
-            {options.map((opt) => (
-                <button
-                    key={opt.key}
-                    onClick={() => onChange(opt.key)}
-                    aria-pressed={view === opt.key}
-                    className={`rounded-full px-3 py-1 text-sm font-medium transition
-                        ${view === opt.key ? 'bg-accent text-white' : 'text-gray-600 hover:bg-gray-50'}`}
-                >
-                    {opt.label}
-                </button>
-            ))}
-        </div>
-    );
-}
 
-/**
- * The stay's price, in words, from wherever its number lives.
- *
- * Shows what `nightlyRate` reads, so the box you type into and the sort, the
- * compare table and the budget cannot show three different prices for one hotel
- * — which they did while the card knew only about the free-text note.
- */
-function stayPriceText(stay: Place, currency: string | null | undefined): string {
-    if (stay.cost == null) return stay.price_note ?? '';
-    const money = formatPrice(String(stay.cost), stay.cost_currency || currency);
-    return stay.cost_per === 'total' ? money : `${money} ${COST_PER_LABELS[stay.cost_per]}`;
-}
 
 /**
  * The shortlist as an ordered list you can drag.
@@ -1485,7 +1098,7 @@ function RankRow({ stay, currency, position, picked, onPick, cardRefs }: {
             )}
             <span className="shrink-0 self-center text-xs text-gray-500 tabular-nums w-20
                 text-right">
-                {price != null ? stayPriceText(stay, currency) : '—'}
+                {price != null ? priceText(stay, currency) : '—'}
             </span>
         </li>
     );
