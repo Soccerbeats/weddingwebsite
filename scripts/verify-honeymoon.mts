@@ -57,6 +57,7 @@ import {
     coordsFromMapsUrl, coordsFromPair, nameFromMapsUrl,
 } from '../src/app/api/admin/honeymoon/geocode/route';
 import { SEED_PLACES, SEED_REGIONS, SEED_NOTES } from '../src/lib/honeymoonSeed';
+import { pricePatch, priceText, sheetSections } from '../src/lib/honeymoonPlaceSheet';
 import { buildOfflineHtml, escapeHtml, offlineExportFilename } from '../src/lib/honeymoonExport';
 
 let failures = 0;
@@ -2523,6 +2524,33 @@ console.log('\nTime format');
     check('a malformed time is shown as typed rather than guessed', formatClock('9:5', '12h') === '9:5');
     check('noon and midnight in 12-hour form',
         formatClock('12:00', '12h') === '12:00 PM' && formatClock('00:15', '12h') === '12:15 AM');
+}
+
+console.log('\nPlace sheet');
+{
+    check('every place gets the same core sections, in order',
+        sheetSections({ category: 'temple', is_excursion: false }).join()
+        === 'plan,where,booking,practical,notes,opinions,photos,nearby');
+    check('a stay adds its stay section straight after booking',
+        sheetSections({ category: 'stay', is_excursion: false }).join()
+        === 'plan,where,booking,stay,practical,notes,opinions,photos,nearby');
+    check('an excursion is the same panel as any other place',
+        sheetSections({ category: 'activity', is_excursion: true }).join()
+        === sheetSections({ category: 'temple', is_excursion: false }).join());
+
+    const bare = { ...PLACE_DEFAULTS, id: 1, name: 'Villa', lat: null, lng: null, category: 'stay' };
+    check('a first number typed on a stay is a nightly rate',
+        JSON.stringify(pricePatch(bare, '250', 'USD')) === JSON.stringify({ cost: '250', cost_per: 'night', cost_currency: 'USD' }));
+    check('a first number on anything else is the total',
+        pricePatch({ ...bare, category: 'temple' }, '20', 'USD').cost_per === 'total');
+    check('editing a priced place keeps what it was per',
+        pricePatch({ ...bare, cost: 900, cost_per: 'total', cost_currency: 'EUR' }, '950', 'USD').cost_per === 'total'
+        && pricePatch({ ...bare, cost: 900, cost_per: 'total', cost_currency: 'EUR' }, '950', 'USD').cost_currency === 'EUR');
+    check('words that are not a price stay words',
+        JSON.stringify(pricePatch(bare, 'ask at the desk', 'USD')) === JSON.stringify({ cost: '', price_note: 'ask at the desk' }));
+    check('a priced stay reads with what it is per',
+        priceText({ ...bare, cost: 250, cost_per: 'night', cost_currency: 'USD' }, 'USD') === '$250 per night');
+    check('an unpriced place reads its note', priceText({ ...bare, price_note: 'free' }, 'USD') === 'free');
 }
 
 console.log(`\n${failures === 0 ? 'PASS' : 'FAIL'} — ${checks - failures}/${checks} checks passed.\n`);

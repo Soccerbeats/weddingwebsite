@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import Image from 'next/image';
 import {
     STATUSES, categoriesOf, countriesInUse, distanceKm, formatDistance, hasCoords, reviewToggleFor,
@@ -11,8 +11,7 @@ import {
     assignRegions, placesToCsv, placesToGeoJson, placesToKml,
 } from '@/lib/honeymoonPlaces';
 import type { HoneymoonApi } from './useHoneymoon';
-import PlaceEditor from './PlaceEditor';
-import PlaceDrawer from './PlaceDrawer';
+import { usePlaceSheet } from './PlaceSheetContext';
 import ImportPlaces from './ImportPlaces';
 import SavedViews from './SavedViews';
 import { useLocalPref } from './useLocalPref';
@@ -91,9 +90,7 @@ export default function PlacesTab({ api, panel = false }: {
     const [sourceFilter, setSourceFilter] = useLocalPref('hm-places-source', '');
     const [sort, setSort] = useLocalPref<SortKey>('hm-places-sort', 'name');
     const [dense, setDense] = useLocalPref('hm-places-dense', false);
-    const [editing, setEditing] = useState<Place | null>(null);
-    const [editorOpen, setEditorOpen] = useState(false);
-    const [viewing, setViewing] = useState<Place | null>(null);
+    const { openPlace, newPlace } = usePlaceSheet();
     const [importing, setImporting] = useState(false);
     const [filing, setFiling] = useState('');
     const [seeding, setSeeding] = useState(false);
@@ -300,13 +297,6 @@ export default function PlacesTab({ api, panel = false }: {
         }
     };
 
-    /* `n` from anywhere in the portal opens the new-place editor here. */
-    useEffect(() => {
-        const onNew = () => { setEditing(null); setEditorOpen(true); };
-        window.addEventListener('honeymoon:new-place', onNew);
-        return () => window.removeEventListener('honeymoon:new-place', onNew);
-    }, []);
-
     /**
      * File the unfiled places by where they are.
      *
@@ -378,7 +368,7 @@ export default function PlacesTab({ api, panel = false }: {
                         onChange={(e) => setSearch(e.target.value)}
                         placeholder="Search places…"
                     />
-                    <Button tone="primary" onClick={() => { setEditing(null); setEditorOpen(true); }}>
+                    <Button tone="primary" onClick={() => newPlace()}>
                         + Add
                     </Button>
                 </div>
@@ -623,7 +613,7 @@ export default function PlacesTab({ api, panel = false }: {
                                         </div>
                                     )}
                                     <button
-                                        onClick={() => setViewing(place)}
+                                        onClick={() => openPlace(place.id)}
                                         className="flex-1 min-w-0 text-left"
                                     >
                                         <div className="flex items-center gap-2 flex-wrap">
@@ -673,14 +663,8 @@ export default function PlacesTab({ api, panel = false }: {
                                     <OverflowMenu
                                         items={[
                                             {
-                                                label: 'Open details',
-                                                onClick: () => setViewing(place),
-                                            },
-                                            {
-                                                label: 'Edit',
-                                                onClick: () => {
-                                                    setEditing(place); setEditorOpen(true);
-                                                },
+                                                label: 'Open',
+                                                onClick: () => openPlace(place.id),
                                             },
                                             ...STATUSES
                                                 .filter((s) => s.key !== place.status)
@@ -718,20 +702,6 @@ export default function PlacesTab({ api, panel = false }: {
                     {panel && ' Drag a row onto a day to schedule it.'}
                 </p>
             )}
-
-            <PlaceEditor
-                api={api}
-                place={editing}
-                open={editorOpen}
-                onClose={() => { setEditorOpen(false); setEditing(null); }}
-            />
-
-            <PlaceDrawer
-                api={api}
-                place={viewing ? api.placeById.get(viewing.id) ?? viewing : null}
-                onClose={() => setViewing(null)}
-                onEdit={(place) => { setViewing(null); setEditing(place); setEditorOpen(true); }}
-            />
 
             <ImportPlaces api={api} open={importing} onClose={() => setImporting(false)} />
         </div>

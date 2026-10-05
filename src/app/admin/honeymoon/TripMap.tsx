@@ -483,14 +483,8 @@ export default function TripMap({
                 keyboard: false,
             });
 
-            const reviewNote = place.needs_review
-                ? '<div style="color:#b45309;font-size:11px;margin-top:4px">⚠ Pin not confirmed</div>'
-                : '';
-            marker.bindPopup(
-                `<div style="font-weight:600;margin-bottom:2px">${escapeHtml(place.name)}</div>`
-                + `<div style="color:#6b7280;font-size:12px">${meta.icon} ${meta.label}</div>`
-                + reviewNote,
-            );
+            // No popup: a click opens the place panel beside the map, which
+            // says everything a popup could and is the same panel as everywhere else.
             marker.on('click', () => {
                 if (selectModeRef.current) return;
                 onSelectRef.current?.(place.id);

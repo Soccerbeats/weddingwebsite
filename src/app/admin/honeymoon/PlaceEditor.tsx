@@ -9,7 +9,7 @@ import {
 import BookingPanel from './BookingPanel';
 import type { HoneymoonApi } from './useHoneymoon';
 import {
-    Button, CategorySelect, CustomisableSelect, ManageListModal, Modal, SelectField, StatusSelect,
+    Button, CategorySelect, CustomisableSelect, ManageListModal, SelectField, StatusSelect,
     TextArea, TextField,
 } from './ui';
 
@@ -61,12 +61,17 @@ interface GeocodeHit {
  * to search, a Google Maps link to paste, or raw "lat, lng" — because in
  * practice you reach for whichever is closest to hand.
  */
-export default function PlaceEditor({ api, place, open, onClose }: {
+export function PlaceForm({ api, place, defaults, onDone, onCancel, registerGuard }: {
     api: HoneymoonApi;
     /** null means "create new". */
     place: Place | null;
-    open: boolean;
-    onClose: () => void;
+    /** What a new place starts with — a stay from the Stays segment, say. */
+    defaults?: Partial<Place>;
+    /** After a successful save. */
+    onDone: () => void;
+    onCancel: () => void;
+    /** Hands the panel its "you have unsaved changes" check. */
+    registerGuard?: (guard: () => boolean) => void;
 }) {
     const editing = place != null;
     /**
@@ -115,22 +120,22 @@ export default function PlaceEditor({ api, place, open, onClose }: {
      * afterwards captures the *previous* form and every dialog would then look
      * dirty the moment it opened.
      */
+    const seed = place ?? defaults ?? null;
     useEffect(() => {
-        if (!open) return;
         const initial = {
-            name: place?.name ?? '',
-            category: place?.category ?? 'misc',
-            regionId: place?.region_id != null ? String(place.region_id) : '',
-            status: place?.status ?? 'idea',
-            description: place?.description ?? '',
-            address: place?.address ?? '',
-            priceNote: place?.price_note ?? '',
-            lat: place?.lat ?? null,
-            lng: place?.lng ?? null,
-            needsReview: place?.needs_review ?? false,
-            links: place?.links ?? [],
+            name: seed?.name ?? '',
+            category: seed?.category ?? 'misc',
+            regionId: seed?.region_id != null ? String(seed.region_id) : '',
+            status: seed?.status ?? 'idea',
+            description: seed?.description ?? '',
+            address: seed?.address ?? '',
+            priceNote: seed?.price_note ?? '',
+            lat: seed?.lat ?? null,
+            lng: seed?.lng ?? null,
+            needsReview: seed?.needs_review ?? false,
+            links: seed?.links ?? [],
             source: place ? sourceLabel(place.source) : SOURCE_MANUAL,
-            country: place?.country ?? '',
+            country: seed?.country ?? '',
             cost: place?.cost != null ? String(place.cost) : '',
             /*
              * With no number yet, "per" says nothing — and the column's own
@@ -141,9 +146,9 @@ export default function PlaceEditor({ api, place, open, onClose }: {
              */
             costPer: place?.cost != null
                 ? place.cost_per
-                : (place?.category ?? 'misc') === 'stay' ? 'night' : 'total',
-            openingHours: place?.opening_hours ?? '',
-            bestTime: place?.best_time ?? '',
+                : (seed?.category ?? 'misc') === 'stay' ? 'night' : 'total',
+            openingHours: seed?.opening_hours ?? '',
+            bestTime: seed?.best_time ?? '',
         };
         setName(initial.name);
         setCategory(initial.category);
@@ -166,7 +171,10 @@ export default function PlaceEditor({ api, place, open, onClose }: {
         setHits([]);
         setLookupError('');
         pristine.current = fingerprint(initial);
-    }, [open, place]);
+    // Loaded once per place: a refetch after an inline edit elsewhere must not
+    // wipe what is being typed here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [place?.id]);
 
     /** What this place would count as if it just followed its region. */
     const inheritedCountry = (api.data?.regions ?? [])
@@ -262,6 +270,8 @@ export default function PlaceEditor({ api, place, open, onClose }: {
     }, [name, category, regionId, status, description, address, priceNote,
         lat, lng, needsReview, links, source, country, cost, costPer, openingHours, bestTime]);
 
+    useEffect(() => { registerGuard?.(confirmDiscard); }, [registerGuard, confirmDiscard]);
+
     const save = async () => {
         if (!name.trim()) return;
         const payload: Record<string, unknown> = {
@@ -287,25 +297,15 @@ export default function PlaceEditor({ api, place, open, onClose }: {
             cost_currency: cost.trim() ? costCurrency : '',
             opening_hours: openingHours.trim(),
             best_time: bestTime.trim(),
+            ...(editing ? {} : { is_excursion: defaults?.is_excursion ?? false }),
         };
         const ok = editing
             ? await api.update('places', { id: place.id, ...payload })
             : await api.create('places', payload);
-        if (ok) onClose();
+        if (ok) onDone();
     };
 
     return (
-        <Modal
-            open={open}
-            onClose={onClose}
-            guard={confirmDiscard}
-            title={editing ? 'Edit place' : 'Add a place'}
-            wide
-        >
-            {/* Two columns from lg up, and tight spacing throughout: this dialog
-                has to fit a laptop screen without a scrollbar, and stacking the
-                map above the notes made it about twice as tall as it needed to
-                be while the space beside the map sat empty. */}
             <div
                 className="space-y-3"
                 // Save without reaching for the mouse. Plain Enter can't do it —
@@ -733,12 +733,11 @@ export default function PlaceEditor({ api, place, open, onClose }: {
                 />
 
                 <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
-                    <Button onClick={() => { if (confirmDiscard()) onClose(); }}>Cancel</Button>
+                    <Button onClick={() => { if (confirmDiscard()) onCancel(); }}>Cancel</Button>
                     <Button tone="primary" onClick={save} disabled={!name.trim()}>
                         {editing ? 'Save' : 'Add place'}
                     </Button>
                 </div>
             </div>
-        </Modal>
     );
 }

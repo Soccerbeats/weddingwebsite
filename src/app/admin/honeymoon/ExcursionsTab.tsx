@@ -8,7 +8,7 @@ import {
 import type { HoneymoonApi } from './useHoneymoon';
 import LinkPreview from './LinkPreview';
 import RateQueue from './RateQueue';
-import PlaceEditor from './PlaceEditor';
+import { usePlaceSheet } from './PlaceSheetContext';
 import {
     BulkFieldMenu, Button, Card, CategorySelect, EmptyState, InlineText, OverflowMenu, TextArea,
 } from './ui';
@@ -36,8 +36,7 @@ export default function ExcursionsTab({ api }: { api: HoneymoonApi }) {
     >('all');
     const [typeFilter, setTypeFilter] = useState('');
     const [preview, setPreview] = useState<Place | null>(null);
-    const [editing, setEditing] = useState<Place | null>(null);
-    const [editorOpen, setEditorOpen] = useState(false);
+    const { openPlace } = usePlaceSheet();
     const [fetching, setFetching] = useState(0);
     const [triaging, setTriaging] = useState(false);
     /** Multi-select, matching the Places and Stays tabs. */
@@ -345,7 +344,7 @@ export default function ExcursionsTab({ api }: { api: HoneymoonApi }) {
                                             items={[
                                                 {
                                                     label: 'Edit details',
-                                                    onClick: () => { setEditing(item); setEditorOpen(true); },
+                                                    onClick: () => openPlace(item.id),
                                                 },
                                                 ...(item.rating ? [{
                                                     label: 'Clear rating',
@@ -480,12 +479,6 @@ export default function ExcursionsTab({ api }: { api: HoneymoonApi }) {
                 filter={(place) => place.is_excursion}
             />
 
-            <PlaceEditor
-                api={api}
-                place={editing}
-                open={editorOpen}
-                onClose={() => { setEditorOpen(false); setEditing(null); }}
-            />
         </div>
     );
 }

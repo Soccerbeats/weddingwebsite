@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
     STATUSES, categoriesOf, categoryMeta, countriesInUse, dayColor, effectiveCountry, formatDayDate,
     hasCoords, legEnds, reviewToggleFor, sourceLabel, sourcesOf, travelModeMeta,
-    type Day, type Place, type PlaceStatus,
+    type Day, type PlaceStatus,
 } from '@/lib/honeymoon';
 import { useTripIntel } from './useTripIntel';
 import { useLocalPref } from './useLocalPref';
@@ -14,10 +14,9 @@ import { MAP_LAYERS, type MapLayerKey } from './TripMap';
 import type { HoneymoonApi } from './useHoneymoon';
 import ItineraryTab from './ItineraryTab';
 import PlacesTab from './PlacesTab';
-import PlaceEditor from './PlaceEditor';
+import { usePlaceSheet } from './PlaceSheetContext';
 import {
-    BulkFieldMenu, Button, CategoryChip, ColumnDivider, EmptyState, MiniSelect, SelectField,
-    StatusChip,
+    BulkFieldMenu, Button, ColumnDivider, EmptyState, MiniSelect, SelectField,
 } from './ui';
 
 // Leaflet must never be part of the server bundle — it reaches for `window` on
@@ -76,9 +75,13 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
      * swapping to them, so you always keep your bearings while reviewing.
      */
     const [showUnconfirmed, setShowUnconfirmed] = useState(false);
-    const [selectedId, setSelectedId] = useState<number | null>(null);
-    const [editing, setEditing] = useState<Place | null>(null);
-    const [editorOpen, setEditorOpen] = useState(false);
+    /*
+     * The selected pin *is* the open place: the map no longer keeps a
+     * selection of its own, so the highlighted pin and the panel beside the map
+     * can never disagree about which place you are looking at.
+     */
+    const sheet = usePlaceSheet();
+    const selectedId = sheet.state.kind === 'place' ? sheet.state.id : null;
 
     /*
      * Base map, pin colouring and the tools.
@@ -468,7 +471,6 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
             : places.filter((p) => p.needs_review && hasCoords(p)).length),
         [places, selectedDay, showUnconfirmed],
     );
-    const selected = selectedId == null ? null : api.placeById.get(selectedId) ?? null;
 
     /**
      * The day the itinerary column should scroll to.
@@ -483,8 +485,8 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
      */
     const [revealDay, setRevealDay] = useState<{ id: number; at: number } | null>(null);
     const selectPlace = useCallback((id: number | null) => {
-        setSelectedId(id);
-        if (id == null) { setRevealDay(null); return; }
+        if (id == null) { sheet.close(); setRevealDay(null); return; }
+        sheet.openPlace(id);
         const dayNumbers = api.dayOfPlace.get(id);
         const first = dayNumbers?.length ? Math.min(...dayNumbers) : null;
         const day = first == null
@@ -494,7 +496,25 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
         // the pin is still selected, and the panel stays where it was rather
         // than jumping somewhere arbitrary.
         setRevealDay(day ? { id: day.id, at: Date.now() } : null);
-    }, [api.dayOfPlace, api.data]);
+    }, [api.dayOfPlace, api.data, sheet]);
+
+    /*
+     * Arriving from a place panel's "Show on the map": open that place and fly
+     * to it. Read once, from the URL, after the data is in — `useSearchParams`
+     * would need a Suspense boundary for a value only the first render wants.
+     */
+    const arrived = useRef(false);
+    useEffect(() => {
+        if (arrived.current || !api.data) return;
+        arrived.current = true;
+        const id = Number(new URLSearchParams(window.location.search).get('place'));
+        const target = id ? api.placeById.get(id) : undefined;
+        if (!target || !hasCoords(target)) return;
+        sheet.openPlace(target.id);
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setFitPoints([{ lat: target.lat, lng: target.lng }]);
+        setFitSignal((n) => n + 1);
+    }, [api.data, api.placeById, sheet]);
 
     const resetFilters = () => {
         setRegionFilter(''); setCategoryFilter(''); setStatusFilter('');
@@ -796,7 +816,7 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
             </div>
 
             {/* ---- Map, with a column either side of it in split view ---- */}
-            <div ref={areaRef} className="flex-1 min-h-0 flex items-stretch">
+            <div ref={areaRef} data-sheet-keep className="flex-1 min-h-0 flex items-stretch">
                 {showPanels && (
                     <>
                         <SidePanel
@@ -899,7 +919,7 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                             </button>
                         )}
                         <button
-                            onClick={() => { setEditing(null); setEditorOpen(true); }}
+                            onClick={() => sheet.newPlace()}
                             title="Add a place"
                             className="shrink-0 rounded-full px-2.5 py-1 text-xs font-medium
                                 border border-transparent bg-accent text-white
@@ -1075,71 +1095,6 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                         </div>
                     )}
 
-                    {/* ---- The selected place, under the tools ---- */}
-                    {/* A row of the same column rather than its own corner: the tools
-                        are up here now, and two things claiming the top-right would
-                        cover each other. Scrolls inside the column's height cap. */}
-                    {selected && (
-                        <div className="w-[min(22rem,100%)] min-h-0 overflow-auto
-                            bg-white rounded-2xl shadow-lg border border-gray-200 p-4">
-                            <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                    <h3 className="font-semibold text-gray-900">{selected.name}</h3>
-                                    <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                                        <CategoryChip category={selected.category} />
-                                        <StatusChip status={selected.status} />
-                                        {selected.region_id != null && (
-                                            <span className="text-[11px] text-gray-400">
-                                                {api.regionById.get(selected.region_id)}
-                                            </span>
-                                        )}
-                                    </div>
-                                    {selected.description && (
-                                        <p className="text-sm text-gray-600 mt-2 line-clamp-3">
-                                            {selected.description}
-                                        </p>
-                                    )}
-                                    {selected.links.length > 0 && (
-                                        <div className="flex flex-wrap gap-2 mt-2">
-                                            {selected.links.map((link, i) => (
-                                                <a
-                                                    key={i}
-                                                    href={link.url}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="text-xs text-accent hover:underline"
-                                                >
-                                                    {link.label || 'Link'} ↗
-                                                </a>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="flex items-center gap-2 shrink-0">
-                                    <Button onClick={() => { setEditing(selected); setEditorOpen(true); }}>
-                                        Edit
-                                    </Button>
-                                    <button
-                                        onClick={() => selectPlace(null)}
-                                        className="text-gray-400 hover:text-gray-700 text-xl leading-none"
-                                        aria-label="Close"
-                                    >
-                                        &times;
-                                    </button>
-                                </div>
-                            </div>
-                            {hasCoords(selected) && (
-                                <a
-                                    href={`https://www.google.com/maps/search/?api=1&query=${selected.lat},${selected.lng}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-block text-xs text-gray-400 hover:text-gray-700 mt-3"
-                                >
-                                    Open in Google Maps ↗
-                                </a>
-                            )}
-                        </div>
-                    )}
                 </div>
 
                 {/* ---- What happens each day, while the overlay is on ---- */}
@@ -1257,12 +1212,6 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                 )}
             </div>
 
-            <PlaceEditor
-                api={api}
-                place={editing}
-                open={editorOpen}
-                onClose={() => { setEditorOpen(false); setEditing(null); }}
-            />
         </div>
     );
 }

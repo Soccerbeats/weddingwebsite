@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { searchHoneymoon, type SearchHit } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
-import PlaceEditor from './PlaceEditor';
+import { usePlaceSheet } from './PlaceSheetContext';
 import { useLocalPref } from './useLocalPref';
 import { Modal } from './ui';
 
@@ -52,33 +52,22 @@ export default function SearchPalette({ api, open, onClose }: {
     onClose: () => void;
 }) {
     const router = useRouter();
-    const [editingPlace, setEditingPlace] = useState<number | null>(null);
+    const { openPlace } = usePlaceSheet();
 
     const go = (hit: SearchHit) => {
         onClose();
         // A place opens where you are; everything else lives on a tab, and the
         // tab is where you can act on it.
-        if (hit.kind === 'place') setEditingPlace(hit.id);
+        if (hit.kind === 'place') openPlace(hit.id);
         else router.push(KIND_HREF[hit.kind]);
     };
 
-    const place = editingPlace == null ? null : api.placeById.get(editingPlace) ?? null;
-
     return (
-        <>
-            <Modal open={open} onClose={onClose} title="Find anything">
-                {/* The query lives in here, which only exists while the dialog is
-                    open — so re-opening starts blank with no reset logic. */}
-                <SearchBody api={api} onPick={go} />
-            </Modal>
-
-            <PlaceEditor
-                api={api}
-                place={place}
-                open={place != null}
-                onClose={() => setEditingPlace(null)}
-            />
-        </>
+        <Modal open={open} onClose={onClose} title="Find anything">
+            {/* The query lives in here, which only exists while the dialog is
+                open — so re-opening starts blank with no reset logic. */}
+            <SearchBody api={api} onPick={go} />
+        </Modal>
     );
 }
 

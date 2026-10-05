@@ -14,7 +14,7 @@ import {
     type Place, type PlaceStatus,
 } from '@/lib/honeymoon';
 import type { HoneymoonApi } from './useHoneymoon';
-import PlaceEditor from './PlaceEditor';
+import { usePlaceSheet } from './PlaceSheetContext';
 import CompareTable from './CompareTable';
 import PriceWatch from './PriceWatch';
 import LinkPreview from './LinkPreview';
@@ -176,8 +176,7 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
         localStorage.setItem(MAP_WIDTH_KEY, String(next));
         return next;
     });
-    const [editing, setEditing] = useState<Place | null>(null);
-    const [editorOpen, setEditorOpen] = useState(false);
+    const { openPlace } = usePlaceSheet();
     // The ✎ Edit / remove… option on the area picker opens this.
     const [managingRegions, setManagingRegions] = useState(false);
 
@@ -1079,7 +1078,7 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                                         items={[
                                             {
                                                 label: 'Edit details',
-                                                onClick: () => { setEditing(stay); setEditorOpen(true); },
+                                                onClick: () => openPlace(stay.id),
                                             },
                                             ...(stay.rating ? [{
                                                 label: 'Clear rating',
@@ -1238,13 +1237,6 @@ export default function StaysTab({ api }: { api: HoneymoonApi }) {
                     onRate={(rating) => api.patchPlace(preview.id, { rating })}
                 />
             )}
-
-            <PlaceEditor
-                api={api}
-                place={editing}
-                open={editorOpen}
-                onClose={() => { setEditorOpen(false); setEditing(null); }}
-            />
 
             <RateQueue
                 api={api}

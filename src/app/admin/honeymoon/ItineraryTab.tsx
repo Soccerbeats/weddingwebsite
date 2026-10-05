@@ -29,8 +29,7 @@ import Markdown from './Markdown';
 import { useTripIntel } from './useTripIntel';
 import type { TripIntel } from './useTripIntel';
 import type { HoneymoonApi } from './useHoneymoon';
-import PlaceDrawer from './PlaceDrawer';
-import PlaceEditor from './PlaceEditor';
+import { usePlaceSheet } from './PlaceSheetContext';
 import PrintSheet, { DEFAULT_PRINT_OPTIONS, type PrintOptions } from './PrintSheet';
 import TravelLegCard from './TravelLeg';
 import {
@@ -99,19 +98,12 @@ export default function ItineraryTab({ api, panel = false, onFocusDay, revealDay
     const [shape, setShape] = useState<DayShape>('bars');
 
     /**
-     * The place a stop points at, opened for editing.
-     *
-     * Held here rather than in the stop row so there is one editor for the whole
-     * tab — and so it works identically in the map's split view, where this same
-     * component is the left-hand column.
+     * Every place opens in the one panel, whichever line of a day you clicked —
+     * the hotel on the Sleep line and the restaurant on a stop used to open two
+     * different windows.
      */
-    const [editingPlace, setEditingPlace] = useState<Place | null>(null);
-    /**
-     * A place opened to be read rather than edited — the night's stay, from the
-     * day card. The same panel the Places tab opens, so "everything about this
-     * hotel" is one thing that exists once, booking and all.
-     */
-    const [viewingPlace, setViewingPlace] = useState<Place | null>(null);
+    const { openPlace } = usePlaceSheet();
+    const showPlace = (place: Place) => openPlace(place.id);
 
     /*
      * Scrolling to the day a clicked pin belongs to.
@@ -450,8 +442,8 @@ export default function ItineraryTab({ api, panel = false, onFocusDay, revealDay
                 <CalendarView
                     api={api}
                     days={days}
-                    onEditPlace={setEditingPlace}
-                    onViewPlace={setViewingPlace}
+                    onEditPlace={showPlace}
+                    onViewPlace={showPlace}
                     onFocusDay={onFocusDay}
                     beyond={beyond}
                     intel={intel}
@@ -476,8 +468,8 @@ export default function ItineraryTab({ api, panel = false, onFocusDay, revealDay
                                     intel={intel}
                                     compact={panel}
                                     shape={shownView === 'timeline' ? shape : null}
-                                    onEditPlace={setEditingPlace}
-                                    onViewPlace={setViewingPlace}
+                                    onEditPlace={showPlace}
+                                    onViewPlace={showPlace}
                                     onFocusDay={onFocusDay}
                                     beyondRange={beyond.has(day.day_number)}
                                     flash={flashDay === day.id}
@@ -495,25 +487,6 @@ export default function ItineraryTab({ api, panel = false, onFocusDay, revealDay
                 </Button>
             </div>
 
-            {/* Never `place={null}`: a null place means "create new" to the
-                editor, and the itinerary has no reason to offer that. */}
-            <PlaceEditor
-                api={api}
-                place={editingPlace}
-                open={editingPlace != null}
-                onClose={() => setEditingPlace(null)}
-            />
-
-            {/* Read first, edit if you then want to — the same pair the Places
-                tab offers, so a stay opened from a day is the same panel as a
-                stay opened from the list. Re-read from the store each render so
-                an edit made in the drawer shows without reopening it. */}
-            <PlaceDrawer
-                api={api}
-                place={viewingPlace ? api.placeById.get(viewingPlace.id) ?? viewingPlace : null}
-                onClose={() => setViewingPlace(null)}
-                onEdit={(place) => { setViewingPlace(null); setEditingPlace(place); }}
-            />
         </div>
     );
 }

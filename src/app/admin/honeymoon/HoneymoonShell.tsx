@@ -5,6 +5,8 @@ import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { daysBeyondRange, daysBetween, hasCoords } from '@/lib/honeymoon';
 import { HoneymoonProvider } from './HoneymoonContext';
+import PlaceSheet from './PlaceSheet';
+import { PlaceSheetProvider, usePlaceSheet } from './PlaceSheetContext';
 import SearchPalette from './SearchPalette';
 import ReauthModal from './ReauthModal';
 import { UndoToast } from './ui';
@@ -217,6 +219,7 @@ export default function HoneymoonShell({ children }: { children: React.ReactNode
 
     return (
         <HoneymoonProvider api={api}>
+        <PlaceSheetProvider>
             <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
                 <div className="w-full px-4 md:px-6 pt-4 md:pt-6 shrink-0">
                     <div className="flex flex-wrap items-start justify-between gap-3 mb-1">
@@ -397,6 +400,20 @@ export default function HoneymoonShell({ children }: { children: React.ReactNode
                     onDismiss={api.dismissSessionExpiry}
                 />
             )}
+            <PlaceSheet />
+            <NewPlaceKey />
+        </PlaceSheetProvider>
         </HoneymoonProvider>
     );
+}
+
+/** `n` from anywhere in the portal: a new place, in the one panel. */
+function NewPlaceKey() {
+    const { newPlace } = usePlaceSheet();
+    useEffect(() => {
+        const onNew = () => newPlace();
+        window.addEventListener('honeymoon:new-place', onNew);
+        return () => window.removeEventListener('honeymoon:new-place', onNew);
+    }, [newPlace]);
+    return null;
 }

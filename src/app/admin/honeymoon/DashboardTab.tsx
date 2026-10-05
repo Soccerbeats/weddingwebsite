@@ -14,6 +14,7 @@ import {
 import { dueSoon } from '@/lib/honeymoonChecks';
 import { buildOfflineHtml, offlineExportFilename } from '@/lib/honeymoonExport';
 import type { HoneymoonApi } from './useHoneymoon';
+import { usePlaceSheet } from './PlaceSheetContext';
 import { Card, CategoryChip } from './ui';
 
 // Leaflet touches `window` on import, so it never joins the server bundle.
@@ -49,6 +50,7 @@ function downloadOfflineCopy(data: NonNullable<HoneymoonApi['data']>) {
  */
 export default function DashboardTab({ api }: { api: HoneymoonApi }) {
     const { data } = api;
+    const { openPlace } = usePlaceSheet();
 
     // Removed (archived) places are kept for the record but are not part of
     // the trip; every headline number here leaves them out.
@@ -557,8 +559,12 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
                     ) : (
                         <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 overflow-auto min-h-0 flex-1">
                             {shortlist.map((item) => (
-                                <li key={item.id}
-                                    className="flex items-center gap-2 rounded-xl border border-gray-100 p-2">
+                                <li key={item.id}>
+                                    <button
+                                        type="button"
+                                        onClick={() => openPlace(item.id)}
+                                        className="flex w-full items-center gap-2 rounded-xl border border-gray-100 p-2
+                                            text-left hover:bg-gray-50">
                                     {item.image_url && (
                                         // eslint-disable-next-line @next/next/no-img-element
                                         <img
@@ -581,6 +587,7 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
                                             )}
                                         </div>
                                     </div>
+                                    </button>
                                 </li>
                             ))}
                         </ul>
