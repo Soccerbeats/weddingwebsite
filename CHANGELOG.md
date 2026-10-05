@@ -11,6 +11,33 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.10.0 — [Released] The honeymoon portal, reorganised — and usable on a phone (`main`, 2026-10-05 04:12)
+
+Austin: the honeymoon module has a lot of stuff put in with no real organisation. Clicking a place opens two or three different windows depending on where you click it — there should be one all-inclusive popout that is the same wherever it is opened from. The itinerary's controls scroll away with the page; Stacked and Clock belong to the left of Days, Timeline and Calendar; and transport should show in the timeline, whose point is to see everything on a day, when to be there and when it ends. Rework the UI, then make mobile actually work.
+
+### Added
+- **One place panel, opened the same way from everywhere.** A map pin, a Places row, a stay or excursion card, a stop on a day, the hotel on a day's Sleep line, a calendar day, a search hit, the Overview's shortlist — all open the same panel with the same sections: on the trip, where, booking & cost, the stay (stays only), practical, notes & links, what you two think, photos, nearby. It reads first and edits in place: click a field, change it, it saves when you leave it. "Edit everything" swaps in the full form — the pin search, links, the lot — inside the same panel. On a laptop it slides in from the right with the map still usable beside it; on a phone it comes up from the bottom. Before this there were five different windows (a drawer, an edit dialog, the map's corner card, inline-editing cards, map popups), and the drawer opened with its title hidden under the site's nav.
+- **Travel on the timeline.** Both timeline shapes now draw the day's flights, drives, boats and trains, striped in their mode's colour so they never read as a stop. An overnight flight runs to midnight on the day it leaves and from midnight on the day it lands. Hotel **check-out and check-in** times show as marks on the clock. Every item is labelled with when it **starts and ends**, not just when it starts, and anything without a time is listed as "not timed yet" rather than being quietly placed somewhere.
+- **A toolbar on every tab**, pinned to the top as the page scrolls: view switches on the left, the one main action and a ⋯ menu on the right. On the Itinerary that is Stacked/Clock, then Days/Timeline/Calendar, then ⋯ (print, calendar file, offline copy).
+- **Filters behind one button.** "Filters (3)" on Places, Stays, Excursions and the Map, with whatever is switched on shown as chips you can knock off one at a time. It replaces three different filter bars, one of which (the map's) took more room than the map on a phone.
+- **Phones.** The site's nav and the admin bar step aside on honeymoon pages and the portal draws one slim bar instead, with **tabs along the bottom** — Today, Itinerary, Map, Places, More. The itinerary shows **one day at a time** with a strip of days and a sideways swipe; its timeline becomes a **vertical agenda**, because a 24-hour axis cannot be read at 390px. Compare becomes swipeable cards. Reordering is ⋯ → Move up / Move down on a stop and ▲/▼ on the stay ranking, because dragging fights the scroll. Every control is at least 44px — a fingertip — on every tab; on the demo, 68 to 371 controls per tab were smaller than that.
+- **`npm run check:honeymoon:ui`** — 38 checks in a real browser: the same panel and sections from every entry point, the panel's own menu working inside it, the toolbar staying on screen, the order of the itinerary's switches, travel on both timelines, overview cards never overlapping, and on a phone no sideways scroll and no control under 44px on all eleven pages. Against the demo (still v0.9.105) it fails 25 of 36, which is the point. Needs a browser and a server with honeymoon data, so like `check:hero` it is a manual check.
+
+### Changed
+- **Stays and Excursions are segments of Places** — All · Stays · Excursions — sharing one card, one panel and one toolbar. Stays keeps what only a hotel shortlist needs (Ranking, Compare, Price watch). Eleven tabs became nine: Overview, Today, Itinerary, Map, Places, Travel, Checklist, Guide, Settings. `/stays` and `/excursions` still work.
+- **Cards read, the panel edits.** Stay and excursion cards were inline editors — a name box, a price box, a notes box, an area picker. They now show the place and open the panel; the rating pills and the select box stay on the card, because those are done twenty at a sitting.
+- **The paste boxes moved behind buttons** — "+ Add stays", "+ Add excursions", "Paste flights…" — instead of sitting above the list.
+- **The itinerary's two warning boxes** fold into one line, "⚠ 11 things to check · 6 stays", that opens on a tap.
+- **The Overview grows to fit.** It forced itself into the window, which cut its cards off mid-row on a laptop and stacked them on top of each other on a phone.
+- **Every time follows the trip's 12h/24h setting** — travel legs, journeys, the print sheet, calendar cells and the timeline used to print 12-hour regardless.
+- **The map's legend is a chip** that opens on a tap; the base map and the pin colouring moved into its ⋯ menu.
+- **Help text is behind ⓘ** where it was a paragraph in the way.
+- **The checklist's due date is a chip**, not a date box that squeezed each to-do down to a few letters.
+
+### Fixed
+- **The place drawer opened with its title hidden** under the site's nav; the new panel sits above it.
+- **A dialog opened from inside a panel** (a listing preview, the category editor) now sits above the panel rather than under it.
+
 ## v0.9.105 — [Released] Download the trip as one offline file (`main`, 2026-10-05 02:29)
 
 Austin: an export on the honeymoon dashboard that, clicked on desktop, downloads an HTML file with every honeymoon detail in it and easy to find. A backup in case the offline viewing feature does not work.

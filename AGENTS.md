@@ -58,10 +58,11 @@ image:
 | `npm run check:finance` | Budget arithmetic |
 | `npm run check:finance:db` | The same against a live database |
 | `npm run check:finance:ui` | The finance UI's contracts (needs a browser; fetches Playwright on demand) |
+| `npm run check:honeymoon:ui` | The honeymoon portal in a real browser, 38 checks: the same place panel and sections from every entry point, the itinerary toolbar staying on screen, travel on both timeline shapes, overview cards never overlapping, and at 390×844 no sideways scroll and no control under 44px on any of its pages. Needs a browser and a server with honeymoon data (`BASE=… ADMIN_PASSWORD=…`, or `DEMO=1` against the demo) |
 | `npm run check:hero` | The home page's hero collapse in a real browser, at five viewport-and-input pairings — phone portrait, **phone landscape**, tablet portrait, tablet landscape, desktop — each driven by the input that device actually sends. Needs a browser and a server whose site config has a hero photo, or every case reports the placeholder instead of a pass |
 | `npm run audit:finance` | A deeper sweep over the finance logic |
 | `npm run check:seating` | 211 assertions with no database or browser: who takes a chair (a party member who declined takes none), seat-index allocation, moves, swaps, gathering a split party, auto-seating, the plan's own warnings, and the export — tallies, vendor plates, the grand total, the spreadsheet's columns and the one-page fit maths |
-| `npm run check:honeymoon` | 550+ assertions with no database or network: distances, date maths, URL parsing, the calendar grid, `.ics` output, search ranking, seed integrity, the trip-mode day resolution, sunrise/sunset, OSM opening hours, the day timeline, time zones on legs, the budget, conflicts, imports/exports, markdown, the flight parser, and journeys (layovers, day placement, door-to-door time) |
+| `npm run check:honeymoon` | 718 assertions with no database or network: distances, date maths, URL parsing, the calendar grid, `.ics` output, search ranking, seed integrity, the trip-mode day resolution, sunrise/sunset, OSM opening hours, the day timeline, time zones on legs, the budget, conflicts, imports/exports, markdown, the flight parser, and journeys (layovers, day placement, door-to-door time) |
 
 Seeds: `npm run seed:honeymoon` (bundles the Bali/Singapore travel guide,
 idempotent — matches on place name, never reverts an edit) and
@@ -114,6 +115,17 @@ idempotent — matches on place name, never reverts an edit) and
    image. **Do not build and push it by hand** — two builds of the same commit
    both writing `:latest` leaves no answer to "which build is deployed". Do not
    wait to be asked.
+8. **Never render your own place window — call `openPlace(id)`.** Every
+   surface in the honeymoon portal opens a place through `usePlaceSheet()`
+   (`PlaceSheetContext.tsx`), and the shell draws the one `PlaceSheet`. Until
+   v0.10.0 there were five different windows depending on where you clicked, each
+   showing a different part of the same place. Which sections show is decided by
+   the place (`sheetSections()` in `src/lib/honeymoonPlaceSheet.ts`), never by the
+   caller. New tabs build from `src/app/admin/honeymoon/kit/` (`TabToolbar`,
+   `Segmented`, `FilterButton`, `RatingPills`, `PlaceCard`/`PlaceRow`, `Sheet`,
+   `Hint`, `useTimeFormat`) rather than drawing their own — and every printed time
+   goes through `useTimeFormat()`, which follows the trip's 12h/24h setting.
+   `npm run check:honeymoon:ui` covers the entry points and the phone layout.
 
 ### Changelog entry format
 
@@ -439,6 +451,12 @@ order, before the commit:
   timeline, **journeys** (a whole ticket with its legs, layovers and one booking),
   places/stays/excursions with a booking vault and a budget, guide notes, a
   phone-first offline **Today** view, and per-country emergency details.
+  Nine tabs (Overview, Today, Itinerary, Map, Places — with Stays and Excursions
+  as its segments on their own URLs — Travel, Checklist, Guide, Settings), each
+  under a `TabToolbar`. **Below 768px** the shell sets `html.hm-compact`, which
+  hides the site nav and the admin bar (see `globals.css`); the portal draws one
+  slim bar and `MobileTabBar` along the bottom, the itinerary shows one day at a
+  time, and its timeline is `DayAgenda` (vertical) instead of the bar or clock.
   Admin-only, with two deliberate exceptions that are *not* under `/admin`:
   `/honeymoon/<token>` (a read-only share link) and
   `/api/honeymoon/feed?token=…` (a subscribe-able calendar). Both authenticate

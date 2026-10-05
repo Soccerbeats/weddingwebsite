@@ -205,6 +205,16 @@ it), sunrise and sunset, and a conflicts panel that collects everything wrong
 with the plan — a night with nowhere to sleep, two stays booked over the same
 nights, a booking whose dates disagree with the days it covers.
 
+**Finding your way around.** Nine tabs — Overview, Today, Itinerary, Map,
+Places (with Stays and Excursions as segments of it), Travel, Checklist, Guide
+and Settings — each with the same toolbar along its top. Click a place anywhere,
+on the map, a list, a stay card, a stop on a day or a search result, and the same
+panel opens: everything about it, editable where it stands. The itinerary's
+Timeline view draws each day against the clock, flights and drives included,
+with check-out and check-in marked. On a phone the portal is its own app: one
+slim bar on top, tabs along the bottom, one day at a time with a swipe, and a
+vertical agenda for the timeline.
+
 **Taking it with you.** A Today view built for one thumb, cached by a service
 worker so it opens with no signal; an emergency card with the local numbers as
 tap-to-call buttons; a calendar you can subscribe to rather than download; a
@@ -225,10 +235,9 @@ passports, visas and insurance you would be sorry to be without.
 | <img src="docs/images/honeymoon-dashboard.jpg" alt="The honeymoon dashboard: counts, the itinerary, a map of confirmed pins, what needs attention and rough costs"> | <img src="docs/images/honeymoon-guide.jpg" alt="Region write-ups and Know Before You Go notes grouped by category"> |
 | The whole trip on one screen | Region write-ups and everything with no coordinates |
 
-> The screenshots above predate v0.9.44–v0.9.50, which added the Today view, the
-> booking vault, the budget, road times, weather, the conflicts panel and the rest
-> of `docs/honeymoon-improvements-2026-08-25.md`. The layout is the same; there is
-> more on each screen.
+> The screenshots above predate v0.10.0, which reorganised the portal (one place
+> panel, Stays and Excursions folded into Places, a toolbar on every tab) and
+> rebuilt it for phones. The content is the same; the layout around it changed.
 
 ### On a phone
 
