@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { addDays, daysBetween, monthMatrix, todayIso } from '@/lib/honeymoon';
 import { Button } from './ui';
 
@@ -37,6 +37,28 @@ export default function DateRangePicker({ start, end, onChange, months = 2 }: {
         return { year: date.getUTCFullYear(), month: date.getUTCMonth() };
     });
 
+    /*
+     * Locked on a touch screen until you ask to change the dates.
+     *
+     * On a phone this calendar is most of the screen, and a scroll that started
+     * on it dragged out a new trip. A finger cannot say "scroll" or "select" by
+     * itself, so the page asks: the grid scrolls like everything else until
+     * Change dates is tapped, and locks itself again once a range is set. A
+     * mouse is never locked — a drag with one is never a scroll. `pointer:
+     * coarse` reads the *primary* pointer, so a touch-screen laptop driven by its
+     * trackpad stays unlocked too.
+     */
+    const [coarse, setCoarse] = useState(false);
+    const [unlocked, setUnlocked] = useState(false);
+    useEffect(() => {
+        const query = window.matchMedia('(pointer: coarse)');
+        const apply = () => setCoarse(query.matches);
+        apply();
+        query.addEventListener('change', apply);
+        return () => query.removeEventListener('change', apply);
+    }, []);
+    const locked = coarse && !unlocked;
+
     /** The end being dragged, and where it currently is. */
     const [dragging, setDragging] = useState<{ anchorDate: string; hover: string } | null>(null);
 
@@ -69,6 +91,8 @@ export default function DateRangePicker({ start, end, onChange, months = 2 }: {
         const range = normalise(dragging.anchorDate, dragging.hover);
         setDragging(null);
         onChange(range.start, range.end);
+        // Set, so lock again: the next scroll must not move it.
+        setUnlocked(false);
     };
 
     const nights = preview ? (daysBetween(preview.start, preview.end) ?? 0) : 0;
@@ -94,12 +118,26 @@ export default function DateRangePicker({ start, end, onChange, months = 2 }: {
             // still has to end the drag, or the range would follow the cursor
             // around the page. Pointer capture keeps the move events coming even
             // when the pointer leaves the grid.
-            onPointerDown={(e) => e.currentTarget.setPointerCapture?.(e.pointerId)}
-            onPointerMove={(e) => hoverAt(e.clientX, e.clientY)}
-            onPointerUp={finish}
-            onPointerCancel={finish}
-            className="select-none touch-none"
+            onPointerDown={locked ? undefined : (e) => e.currentTarget.setPointerCapture?.(e.pointerId)}
+            onPointerMove={locked ? undefined : (e) => hoverAt(e.clientX, e.clientY)}
+            onPointerUp={locked ? undefined : finish}
+            onPointerCancel={locked ? undefined : finish}
+            data-date-range={locked ? 'locked' : 'editing'}
+            className={`select-none ${locked ? '' : 'touch-none'}`}
         >
+            {coarse && (
+                <div className="mb-2 flex items-center justify-between gap-2 rounded-2xl bg-gray-50 px-3 py-2">
+                    <p className="text-xs text-gray-600">
+                        {locked ? 'Dates are locked so the page scrolls.' : 'Drag across the days you are away.'}
+                    </p>
+                    <Button
+                        tone={locked ? 'primary' : 'default'}
+                        onClick={() => { setUnlocked(locked); setDragging(null); }}
+                    >
+                        {locked ? 'Change dates' : 'Done'}
+                    </Button>
+                </div>
+            )}
             <div className="flex items-center justify-between gap-2 mb-2">
                 <Button className="!px-2.5 min-w-11 md:min-w-0" onClick={() => step(-1)} aria-label="Previous month">‹</Button>
                 <div className="flex-1 text-center text-xs text-gray-500">
@@ -110,7 +148,8 @@ export default function DateRangePicker({ start, end, onChange, months = 2 }: {
                 <Button className="!px-2.5 min-w-11 md:min-w-0" onClick={() => step(1)} aria-label="Next month">›</Button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className={`grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-2xl transition
+                ${coarse && !locked ? 'ring-2 ring-accent/50 ring-offset-4' : ''} ${locked ? 'opacity-80' : ''}`}>
                 {grids.map((grid) => (
                     <div key={grid.key}>
                         <h4 className="text-xs font-semibold text-gray-700 text-center mb-1">
@@ -137,11 +176,13 @@ export default function DateRangePicker({ start, end, onChange, months = 2 }: {
                                         type="button"
                                         data-day={cell.key}
                                         onPointerDown={(e) => {
+                                            if (locked) return;
                                             // Stops the browser turning the drag
                                             // into a text selection across cells.
                                             e.preventDefault();
                                             beginAt(cell.key);
                                         }}
+                                        tabIndex={locked ? -1 : undefined}
                                         aria-label={cell.key}
                                         aria-pressed={!!inRange}
                                         className={`h-11 md:h-8 text-sm md:text-xs tabular-nums transition
@@ -167,7 +208,7 @@ export default function DateRangePicker({ start, end, onChange, months = 2 }: {
             </div>
 
             {/* Round numbers, because "a week" is how people actually decide. */}
-            <div className="flex flex-wrap items-center gap-1.5 mt-3">
+            <div className={`flex flex-wrap items-center gap-1.5 mt-3 ${locked ? 'hidden' : ''}`}>
                 <span className="text-[11px] text-gray-400 mr-1">Quick set:</span>
                 {[7, 10, 14].map((n) => (
                     <Button
@@ -176,6 +217,7 @@ export default function DateRangePicker({ start, end, onChange, months = 2 }: {
                         onClick={() => {
                             const from = preview?.start ?? start ?? today;
                             onChange(from, addDays(from, n - 1));
+                            setUnlocked(false);
                         }}
                     >
                         {n} days
