@@ -67,6 +67,7 @@ export function Modal({ open, onClose, title, children, wide = false, guard }: {
      */
     return createPortal((
         <div
+            data-popover
             className="fixed inset-0 z-[60] bg-gray-900/30 backdrop-blur-sm flex items-end md:items-center
                 justify-center p-0 md:p-4"
             onPointerDown={(e) => { pressedBackdrop.current = e.target === e.currentTarget; }}
@@ -78,6 +79,9 @@ export function Modal({ open, onClose, title, children, wide = false, guard }: {
             }}
         >
             <div
+                role="dialog"
+                aria-modal="true"
+                aria-label={title}
                 className={`bg-white w-full ${wide ? 'md:max-w-3xl xl:max-w-5xl' : 'md:max-w-lg'} rounded-t-3xl md:rounded-3xl
                     shadow-xl max-h-[92vh] overflow-y-auto`}
                 onClick={(e) => e.stopPropagation()}

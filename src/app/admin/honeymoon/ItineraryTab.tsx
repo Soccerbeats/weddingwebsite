@@ -1274,6 +1274,7 @@ function DayCard({
                 </span>
                 {base ? (
                     <button
+                        data-sleep-place
                         onClick={() => onViewPlace(base)}
                         title={`${base.name} — open the booking and everything else about it`}
                         className="min-w-0 min-h-11 md:min-h-0 flex items-baseline gap-1.5 text-left rounded-xl px-1.5 py-0.5

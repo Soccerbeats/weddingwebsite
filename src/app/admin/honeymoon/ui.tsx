@@ -766,8 +766,11 @@ export function OverflowMenu({ items }: { items: OverflowMenuItem[] }) {
 
     const panel = box && (
         <>
-            <div className="fixed inset-0 z-[900]" onClick={close} />
+            {/* `data-popover`: a press in here is not a press "outside" a
+                non-modal place panel the menu was opened from. */}
+            <div data-popover className="fixed inset-0 z-[900]" onClick={close} />
             <div
+                data-popover
                 className="fixed z-[901] bg-white rounded-2xl shadow-lg border border-gray-100
                     py-1 min-w-[12rem] max-w-[min(18rem,calc(100vw-1rem))] flex flex-col"
                 style={{ top: box.top, right: box.right, maxHeight: box.maxHeight }}

@@ -15,6 +15,7 @@
     "check:honeymoon": "npx --yes tsx scripts/verify-honeymoon.mts",
     "check:seating": "npx --yes tsx scripts/verify-seating.mts",
     "check:hero": "npx --yes -p playwright -p tsx tsx scripts/verify-hero.mts",
+    "check:honeymoon:ui": "npx --yes -p playwright -p tsx tsx scripts/verify-honeymoon-ui.mts",
     "check:schedule": "npx --yes tsx scripts/verify-schedule.mts",
     "seed:honeymoon": "npx --yes tsx scripts/seed-honeymoon.mts",
     "check:types": "tsc --noEmit && tsc --noEmit -p tsconfig.scripts.json",
