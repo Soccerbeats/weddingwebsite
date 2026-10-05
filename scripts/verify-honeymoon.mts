@@ -22,7 +22,7 @@ import {
     type Place, type Stop, type TravelLeg,
 } from '../src/lib/honeymoon';
 import {
-    baseRun, dayNumberFor, emergencyFor, minutesOf, navUrl, neighbourDays, nextStop,
+    baseRun, dayNumberFor, emergencyFor, formatClock, minutesOf, navUrl, neighbourDays, nextStop,
     planForDay, planForToday, standingOf, stopWindow, timeOf,
 } from '../src/lib/honeymoonToday';
 import {
@@ -2513,6 +2513,16 @@ console.log('\nOffline copy');
     check('the filename is the trip and the date',
         offlineExportFilename(payload, new Date('2026-10-05T12:00:00Z')) === 'bali-singapore-offline-2026-10-05.html');
     check('escaping covers quotes too', escapeHtml(`"a'&`) === '&quot;a&#39;&amp;');
+}
+
+console.log('\nTime format');
+{
+    check('12-hour clock reads as AM/PM', formatClock('09:30', '12h') === '9:30 AM');
+    check('24-hour clock stays as typed', formatClock('21:05', '24h') === '21:05');
+    check('no time is blank', formatClock(null, '24h') === '' && formatClock(undefined, '12h') === '');
+    check('a malformed time is shown as typed rather than guessed', formatClock('9:5', '12h') === '9:5');
+    check('noon and midnight in 12-hour form',
+        formatClock('12:00', '12h') === '12:00 PM' && formatClock('00:15', '12h') === '12:15 AM');
 }
 
 console.log(`\n${failures === 0 ? 'PASS' : 'FAIL'} — ${checks - failures}/${checks} checks passed.\n`);

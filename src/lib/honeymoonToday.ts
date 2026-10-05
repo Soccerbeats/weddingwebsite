@@ -370,3 +370,15 @@ export function stopWindow(stop: DayStop, format: '12h' | '24h'): string | null 
 export function tomorrowOf(date: string | null): string | null {
     return date ? addDays(date, 1) : null;
 }
+
+/**
+ * A stored "HH:MM" in the trip's own clock — the one function every view
+ * prints a time through, so the list, the clock and the agenda cannot say
+ * `09:30` and `9:30 AM` about the same stop. A value that is not a time is
+ * shown exactly as typed rather than guessed at.
+ */
+export function formatClock(value: string | null | undefined, format: '12h' | '24h'): string {
+    if (!value) return '';
+    if (minutesOf(value) == null) return value;
+    return format === '12h' ? formatTime(value) : value;
+}
