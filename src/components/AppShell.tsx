@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import Navigation from './Navigation';
 import ConditionalFooter from './ConditionalFooter';
 import HeartBurst from './HeartBurst';
+import OfflineManager from './offline/OfflineManager';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -50,6 +51,7 @@ export default function AppShell({
             The wrapper is the handle full-screen mode hides by — see
             `.admin-fullscreen` in globals.css. Everything Navigation
             draws is `position: fixed`, so a plain wrapper costs no layout. */}
+        <OfflineManager />
         <div data-site-nav>
           <Navigation
             brideName={brideName}
@@ -92,6 +94,7 @@ export default function AppShell({
         isAdmin={isAdmin}
         isDemo={isDemo}
       />
+      <OfflineManager />
       <HeartBurst />
       {/* Home page: hero fills under the floating nav island (pt-0).
           All other pages: push content below the nav bar (pt-20).       */}

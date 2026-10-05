@@ -29,7 +29,7 @@ export default function SharedTodayView({ payload, scope, label }: {
     // scope. Nothing here can write, so a stale copy is only ever a stale read.
     useEffect(() => {
         if (!('serviceWorker' in navigator)) return;
-        navigator.serviceWorker.register('/honeymoon-sw.js', { scope: '/' }).catch(() => {});
+        navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
     }, []);
 
     const canBrowse = scope !== 'today';

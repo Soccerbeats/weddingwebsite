@@ -604,7 +604,7 @@ export function useOfflineFiles(documents: TripDocument[]) {
             if (event.data?.type === 'honeymoon-sw:files-done') setSaved(Number(event.data.saved) || 0);
         };
         navigator.serviceWorker.addEventListener('message', onMessage);
-        void navigator.serviceWorker.register('/honeymoon-sw.js', { scope: '/' })
+        void navigator.serviceWorker.register('/sw.js', { scope: '/' })
             .then(() => navigator.serviceWorker.ready)
             .then((registration) => {
                 registration.active?.postMessage({ type: 'honeymoon-sw:files', urls: key ? key.split('|') : [] });

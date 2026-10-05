@@ -40,7 +40,7 @@ export default function TodayTab({ api }: { api: HoneymoonApi }) {
      */
     useEffect(() => {
         if (!('serviceWorker' in navigator)) return;
-        navigator.serviceWorker.register('/honeymoon-sw.js', { scope: '/' })
+        navigator.serviceWorker.register('/sw.js', { scope: '/' })
             .then(() => setOffline('ready'))
             .catch(() => setOffline('failed'));
     }, []);

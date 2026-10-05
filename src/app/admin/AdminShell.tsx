@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 import Changelog from '@/components/admin/Changelog';
+import OfflineStatus from '@/components/offline/OfflineStatus';
+import { clearOffline } from '@/components/offline/offlineStore';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 
@@ -30,7 +32,10 @@ export default function AdminShell({
     }, [pathname]);
 
     const handleLogout = async () => {
-        await fetch('/api/auth/logout', { method: 'POST' });
+        // Signing out also forgets everything saved on this device for offline
+        // use — the admin pages and their data were saved under this session.
+        await clearOffline();
+        await fetch('/api/auth/logout', { method: 'POST' }).catch(() => undefined);
         router.push('/admin/login');
         router.refresh();
     };
@@ -184,9 +189,12 @@ export default function AdminShell({
                                     </div>
                                 </div>
                             ))}
+                            <div className="mt-8 px-1">
+                                <OfflineStatus />
+                            </div>
                             <button
                                 onClick={handleLogout}
-                                className="w-full text-left px-4 py-2 rounded-md text-sm font-medium text-red-600 hover:bg-red-50 transition-colors mt-8"
+                                className="w-full text-left px-4 py-2 rounded-md text-sm font-medium text-red-600 hover:bg-red-50 transition-colors mt-2"
                             >
                                 Logout
                             </button>
