@@ -18,7 +18,7 @@ import {
     monthMatrix, planRange, daysBeyondRange, tripLength, daysBetween, addDays, isoOf, buildIcs,
     tripEvents, searchHoneymoon, reviewToggleFor, basesFromBookings, stayBookedOn,
     bookingKindFor, nightlyRate,
-    type Booking, type Day, type GuideNote, type Region, type TodoItem,
+    type Booking, type Day, type GuideNote, type Region, type TodoItem, type TripDocument,
     type Place, type Stop, type TravelLeg,
 } from '../src/lib/honeymoon';
 import {
@@ -58,6 +58,7 @@ import {
 } from '../src/app/api/admin/honeymoon/geocode/route';
 import { SEED_PLACES, SEED_REGIONS, SEED_NOTES } from '../src/lib/honeymoonSeed';
 import { pricePatch, priceText, sheetSections } from '../src/lib/honeymoonPlaceSheet';
+import { documentFolders, documentWarnings, filterDocuments, guessDocumentKind } from '../src/lib/honeymoonFiles';
 import { buildOfflineHtml, escapeHtml, offlineExportFilename } from '../src/lib/honeymoonExport';
 
 let failures = 0;
@@ -2628,6 +2629,63 @@ console.log('\nTimeline with travel');
 
     check('an untimed stop is reported, not hidden',
         clockLayout([makeStop(9, null)], () => 'x').untimedStopIds.join() === '9');
+}
+
+console.log('\nTravel documents');
+{
+    const doc = (id: number, fields: Partial<TripDocument>): TripDocument => ({
+        id, name: `Doc ${id}`, kind: 'other', path: `${id}.pdf`, place_id: null, travel_id: null,
+        person: null, expires_on: null, notes: null, created_at: null, ...fields,
+    });
+
+    check('a passport scan is a passport', guessDocumentKind('Austin passport scan.pdf') === 'passport');
+    check('a boarding pass is a ticket', guessDocumentKind('Boarding pass SQ938.png') === 'ticket');
+    check('an e-ticket is a ticket', guessDocumentKind('eticket-TAP.pdf') === 'ticket');
+    check('a policy is insurance', guessDocumentKind('AXA travel policy.pdf') === 'insurance');
+    check('a visa is a visa', guessDocumentKind('e-visa_indonesia.pdf') === 'visa');
+    check('a yellow fever card is a vaccination', guessDocumentKind('yellow fever certificate.jpg') === 'vaccination');
+    check('a booking confirmation is a reservation', guessDocumentKind('Booking.com confirmation 4471.pdf') === 'reservation');
+    check('a name that says nothing takes the folder you are in',
+        guessDocumentKind('IMG_2231.jpg', 'insurance') === 'insurance');
+    check('and is Other with no folder', guessDocumentKind('IMG_2231.jpg') === 'other');
+
+    const trip = { start_date: '2026-09-12', end_date: '2026-09-26' };
+    const mid = documentWarnings([doc(1, { kind: 'passport', person: 'Austin', expires_on: '2026-09-20' })], trip);
+    check('a passport that runs out during the trip is a warning',
+        mid.length === 1 && mid[0].level === 'warn' && mid[0].documentId === 1, JSON.stringify(mid));
+    const soon = documentWarnings([doc(2, { kind: 'passport', expires_on: '2027-01-15' })], trip);
+    check('one that runs out within six months of coming home is a warning too',
+        soon.length === 1 && soon[0].level === 'warn', JSON.stringify(soon));
+    check('eight months after is fine',
+        documentWarnings([doc(3, { kind: 'passport', expires_on: '2027-06-01' })], trip).length === 0);
+    check('a visa follows the same rule',
+        documentWarnings([doc(4, { kind: 'visa', expires_on: '2026-09-25' })], trip).some((w) => w.documentId === 4));
+    check('an insurance policy ending mid-trip is a warning',
+        documentWarnings([doc(8, { kind: 'insurance', expires_on: '2026-09-20' })], trip).some((w) => w.documentId === 8));
+    check('a document with no expiry raises nothing', documentWarnings([doc(5, { kind: 'passport' })], trip).length === 0);
+    const none = documentWarnings([doc(6, { kind: 'ticket' })], trip);
+    check('no passport on file is said once, gently', none.length === 1 && none[0].level === 'info' && none[0].documentId === null);
+    check('a trip with no dates draws no expiry conclusions',
+        documentWarnings([doc(7, { kind: 'passport', expires_on: '2026-09-20' })], { start_date: null, end_date: null }).length === 0);
+
+    const docs = [
+        doc(1, { kind: 'ticket', person: 'Austin', name: 'Lisbon flights' }),
+        doc(2, { kind: 'passport', person: 'Heaven', name: 'Heaven passport' }),
+        doc(3, { kind: 'passport', person: 'Austin', name: 'Austin passport', notes: 'expires 2031' }),
+        doc(4, { kind: 'insurance', person: null, name: 'AXA policy' }),
+    ];
+    const folders = documentFolders(docs);
+    check('folders follow the kinds’ own order and only exist when used',
+        folders.kinds.map((f) => `${f.key}:${f.count}`).join() === 'kind:passport:2,kind:insurance:1,kind:ticket:1',
+        folders.kinds.map((f) => `${f.key}:${f.count}`).join());
+    check('people get folders, and unassigned files are Shared',
+        folders.people.map((f) => `${f.label}:${f.count}`).join() === 'Austin:2,Heaven:1,Shared:1',
+        folders.people.map((f) => `${f.label}:${f.count}`).join());
+    check('a kind folder filters', filterDocuments(docs, 'kind:passport', '').length === 2);
+    check('a person folder filters', filterDocuments(docs, 'person:Austin', '').length === 2);
+    check('Shared is the files with nobody on them', filterDocuments(docs, 'person:', '').map((d) => d.id).join() === '4');
+    check('search reads names and notes, any case',
+        filterDocuments(docs, 'all', 'LISBON').length === 1 && filterDocuments(docs, 'all', '2031').length === 1);
 }
 
 console.log(`\n${failures === 0 ? 'PASS' : 'FAIL'} — ${checks - failures}/${checks} checks passed.\n`);
