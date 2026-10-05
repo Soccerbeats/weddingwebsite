@@ -693,5 +693,10 @@ export function daySequence(stops: Stop[], legs: DayLeg[], labelOf: (stop: Stop)
     });
     rows.sort((a, b) => a.at - b.at || (a.kind === b.kind ? a.order - b.order : a.kind === 'leg' ? -1 : 1));
     const total = rows.reduce((sum, row) => sum + row.minutes, 0);
-    return rows.map(({ at: _at, order: _order, ...row }) => ({ ...row, share: total > 0 ? row.minutes / total : 0 }));
+    return rows.map((row) => ({
+        kind: row.kind, id: row.id, label: row.label, minutes: row.minutes,
+        share: total > 0 ? row.minutes / total : 0,
+        assumed: row.assumed, start: row.start, end: row.end,
+        ...(row.mode ? { mode: row.mode } : {}),
+    }));
 }
