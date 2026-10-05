@@ -25,6 +25,7 @@ export const TABS = [
     { href: `${BASE}/places`, label: 'Places', also: [`${BASE}/stays`, `${BASE}/excursions`] },
     { href: `${BASE}/travel`, label: 'Travel', also: [] as string[] },
     { href: `${BASE}/checklist`, label: 'Checklist', also: [] as string[] },
+    { href: `${BASE}/files`, label: 'Files', also: [] as string[] },
     { href: `${BASE}/guide`, label: 'Guide', also: [] as string[] },
     { href: `${BASE}/settings`, label: 'Settings', also: [] as string[] },
 ];
@@ -171,7 +172,7 @@ export default function HoneymoonShell({ children }: { children: React.ReactNode
         const targets: Record<string, string> = {
             d: BASE, t: `${BASE}/today`, m: `${BASE}/map`, i: `${BASE}/itinerary`,
             v: `${BASE}/travel`, p: `${BASE}/places`, s: `${BASE}/stays`,
-            e: `${BASE}/excursions`, c: `${BASE}/checklist`, u: `${BASE}/guide`,
+            e: `${BASE}/excursions`, c: `${BASE}/checklist`, f: `${BASE}/files`, u: `${BASE}/guide`,
             g: `${BASE}/settings`,
         };
         const onKey = (event: KeyboardEvent) => {
@@ -376,7 +377,7 @@ export default function HoneymoonShell({ children }: { children: React.ReactNode
             {goto && (
                 <div className="fixed bottom-5 left-5 z-[75] rounded-2xl bg-gray-900 px-4 py-2
                     text-sm text-white shadow-xl">
-                    Go to… <span className="text-white/60">d t m i v p s e c u g</span>
+                    Go to… <span className="text-white/60">d t m i v p s e c f u g</span>
                 </div>
             )}
 
@@ -398,7 +399,7 @@ export default function HoneymoonShell({ children }: { children: React.ReactNode
                             {[
                                 ['⌘K or /', 'Find anything'],
                                 ['⌘Z', 'Undo the last delete'],
-                                ['g then d/t/m/i/v/p/s/e/c/u/g', 'Jump to a tab'],
+                                ['g then d/t/m/i/v/p/s/e/c/f/u/g', 'Jump to a tab'],
                                 ['n', 'New place'],
                                 ['[ ]', 'Previous / next day on Today'],
                                 ['Esc', 'Leave full screen'],

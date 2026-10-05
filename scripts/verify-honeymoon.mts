@@ -2681,6 +2681,8 @@ console.log('\nTravel documents');
     check('people get folders, and unassigned files are Shared',
         folders.people.map((f) => `${f.label}:${f.count}`).join() === 'Austin:2,Heaven:1,Shared:1',
         folders.people.map((f) => `${f.label}:${f.count}`).join());
+    check('folders are named in the plural', folders.kinds[0].label === 'Passports');
+    check('warnings read as sentences', mid[0].message.startsWith('Austin'), mid[0].message);
     check('a kind folder filters', filterDocuments(docs, 'kind:passport', '').length === 2);
     check('a person folder filters', filterDocuments(docs, 'person:Austin', '').length === 2);
     check('Shared is the files with nobody on them', filterDocuments(docs, 'person:', '').map((d) => d.id).join() === '4');

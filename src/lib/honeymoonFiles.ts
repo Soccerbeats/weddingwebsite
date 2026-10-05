@@ -8,6 +8,12 @@
 import { DOCUMENT_KINDS, addDays, formatDate } from './honeymoon';
 import type { DocumentKind, Trip, TripDocument } from './honeymoon';
 
+/** Folder names: a folder holds several of a thing. */
+const FOLDER_LABELS: Record<string, string> = {
+    passport: 'Passports', visa: 'Visas', insurance: 'Insurance', ticket: 'Tickets',
+    vaccination: 'Vaccinations', reservation: 'Reservations', other: 'Other',
+};
+
 /** Filename words, in the order they are tested — the first match wins. */
 const KIND_WORDS: { kind: DocumentKind; pattern: RegExp }[] = [
     { kind: 'passport', pattern: /passport/i },
@@ -67,15 +73,16 @@ export function documentWarnings(
             const whose = doc.person ? `${doc.person}'s ` : '';
             const what = DOCUMENT_KINDS.find((k) => k.key === doc.kind)?.label.toLowerCase() ?? 'document';
             const on = formatDate(doc.expires_on);
+            const lead = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
             if (doc.expires_on < start) {
-                warnings.push({ documentId: doc.id, level: 'warn', message: `${whose}${what} expires ${on}, before you leave.` });
+                warnings.push({ documentId: doc.id, level: 'warn', message: lead(`${whose}${what} expires ${on}, before you leave.`) });
             } else if (doc.expires_on <= end) {
-                warnings.push({ documentId: doc.id, level: 'warn', message: `${whose}${what} expires ${on}, during the trip.` });
+                warnings.push({ documentId: doc.id, level: 'warn', message: lead(`${whose}${what} expires ${on}, during the trip.`) });
             } else if (doc.kind === 'passport' && doc.expires_on < margin) {
                 warnings.push({
                     documentId: doc.id,
                     level: 'warn',
-                    message: `${whose}passport expires ${on}, under six months after you come home — many countries refuse that.`,
+                    message: lead(`${whose}passport expires ${on}, under six months after you come home — many countries refuse that.`),
                 });
             }
         }
@@ -102,7 +109,7 @@ export function documentFolders(docs: TripDocument[]): { kinds: Folder[]; people
     const kinds = DOCUMENT_KINDS
         .map((kind) => ({
             key: `kind:${kind.key}`,
-            label: kind.label,
+            label: FOLDER_LABELS[kind.key] ?? kind.label,
             icon: kind.icon,
             count: docs.filter((doc) => doc.kind === kind.key).length,
         }))

@@ -26,6 +26,7 @@ const MORE: BarItem[] = [
     { href: BASE, label: 'Overview', icon: '📊' },
     { href: `${BASE}/travel`, label: 'Travel', icon: '✈️' },
     { href: `${BASE}/checklist`, label: 'Checklist', icon: '✅' },
+    { href: `${BASE}/files`, label: 'Files', icon: '🗂️' },
     { href: `${BASE}/guide`, label: 'Guide', icon: '📖' },
     { href: `${BASE}/settings`, label: 'Settings', icon: '⚙️' },
 ];

@@ -12,7 +12,6 @@ import DateRangePicker from './DateRangePicker';
 import MoneySettings from './MoneySettings';
 import ShareLinks from './ShareLinks';
 import TripArchives from './TripArchives';
-import TripFiles from './TripFiles';
 import { Button, Card, SelectField, TextArea, TextField, MiniSelect } from './ui';
 
 /** The handful anyone planning from the US actually prices in. */
@@ -129,7 +128,6 @@ export default function SettingsTab({ api }: { api: HoneymoonApi }) {
                                 <option key="set-take-it-with-you" value="set-take-it-with-you">Take it with you</option>
                                 <option key="set-emergency-amp-practical-details" value="set-emergency-amp-practical-details">Emergency &amp; practical details</option>
                                 <option key="set-share-it-with-someone" value="set-share-it-with-someone">Share it with someone</option>
-                                <option key="set-documents" value="set-documents">Documents</option>
                                 <option key="set-snapshots" value="set-snapshots">Snapshots</option>
                                 <option key="set-adding-places" value="set-adding-places">Adding places</option>
                 </MiniSelect>
@@ -424,17 +422,6 @@ export default function SettingsTab({ api }: { api: HoneymoonApi }) {
             </Card>
 
             {/* ---- Documents ---- */}
-            <Card id="set-documents" className="p-4 space-y-3">
-                <div>
-                    <h3 className="text-sm font-semibold text-gray-900">Documents</h3>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                        Passports, visas, insurance, e-tickets — cached by the offline snapshot, so
-                        they open with no signal. They are served from the photos volume like every
-                        other upload, so treat the URLs as unlisted rather than secret.
-                    </p>
-                </div>
-                <TripFiles api={api} />
-            </Card>
 
             {/* ---- Snapshots ---- */}
             <Card id="set-snapshots" className="p-4 space-y-3">

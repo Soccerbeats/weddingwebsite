@@ -23,7 +23,14 @@ const VERSION = 'v1';
 const SHELL = `honeymoon-shell-${VERSION}`;
 const DATA = `honeymoon-data-${VERSION}`;
 const STATIC = `honeymoon-static-${VERSION}`;
-const KEEP = [SHELL, DATA, STATIC];
+/**
+ * Travel documents — passports, tickets, policies. The Files tab posts the list
+ * of them; this keeps exactly that list, so a deleted file is not served from a
+ * cache forever. Until this existed the portal promised documents worked
+ * offline and they did not: `/api/photos/…` was never cached.
+ */
+const FILES = 'honeymoon-files-v1';
+const KEEP = [SHELL, DATA, STATIC, FILES];
 
 /** The portal's own pages, and nothing else. */
 function isPortalPage(url) {
@@ -57,7 +64,34 @@ self.addEventListener('activate', (event) => {
     })());
 });
 
+/** Bring the file cache in line with the list the Files tab sent, then report. */
+async function syncFiles(urls, client) {
+    const cache = await caches.open(FILES);
+    const wanted = new Set(urls.map((url) => new URL(url, self.location.origin).href));
+    for (const request of await cache.keys()) {
+        if (!wanted.has(request.url)) await cache.delete(request);
+    }
+    let saved = 0;
+    for (const url of wanted) {
+        if (await cache.match(url)) { saved += 1; continue; }
+        try {
+            const response = await fetch(url, { credentials: 'same-origin' });
+            if (response && response.status === 200) {
+                await cache.put(url, response);
+                saved += 1;
+            }
+        } catch (error) {
+            // Offline right now: it is saved on the next visit with a connection.
+        }
+    }
+    if (client) client.postMessage({ type: 'honeymoon-sw:files-done', saved, total: wanted.size });
+}
+
 self.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'honeymoon-sw:files' && Array.isArray(event.data.urls)) {
+        event.waitUntil(syncFiles(event.data.urls, event.source));
+        return;
+    }
     if (event.data === 'honeymoon-sw:clear') {
         event.waitUntil((async () => {
             const names = await caches.keys();
@@ -112,6 +146,20 @@ self.addEventListener('fetch', (event) => {
     }
     if (isImmutableAsset(url)) {
         event.respondWith(cacheFirst(request, STATIC));
+        return;
+    }
+    // A document: the network when there is one, the saved copy when there is
+    // not. Only files the Files tab listed are ever in this cache.
+    if (url.pathname.startsWith('/api/photos/')) {
+        event.respondWith((async () => {
+            try {
+                return await fetch(request);
+            } catch (error) {
+                const cached = await (await caches.open(FILES)).match(request.url);
+                if (cached) return cached;
+                throw error;
+            }
+        })());
         return;
     }
     if (request.mode === 'navigate' && isPortalPage(url)) {
