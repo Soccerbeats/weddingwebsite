@@ -11,6 +11,30 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.10.3 — [Released] The whole site, offline (`main`, 2026-10-05 14:23)
+
+Austin: the site is installed to the iPhone home screen, and with no internet it does not open. Make the entire site work without internet.
+
+### Added
+- **Every page opens with no connection** — the wedding pages and every admin page, honeymoon portal included — showing their content and data as they were last saved. Tested with the server genuinely unreachable (a proxy in front of it dropping every connection), not just the browser's offline switch: all 40 pages opened with their data.
+- **The installed app saves the whole site by itself.** Opened from the home screen with a connection, it saves everything in the background when the saved copy is missing, from an older version of the site, or over 12 hours old: the app's code, every page, the data each page loads and the photos it shows. About two minutes on the demo trip; nothing to do but open it once.
+- **"Saved for offline · today 14:02"** at the bottom of the admin sidebar, with **Save now** for saving from an ordinary browser tab, and a progress bar while it runs.
+- **An offline bar** — "Offline · showing the copy saved today 14:02" — whenever a page is showing the saved copy. It checks with the server itself rather than trusting the phone's own "online" flag, which stays on with a weak or captive signal, and clears itself when the signal comes back.
+- **A save made offline says so**: "You're offline — this wasn't saved. Try again when you're back online." Changes are not queued for later — replaying edits made on a plane over changes made since would lose work silently.
+- **A page that was never saved** opens a short "You're offline" page listing every page that is.
+- **`npm run check:offline`** (38 checks, no browser, now part of CI): how the worker treats each kind of request, what it may save (never a page that redirected to the login, never a refused request), when the saved copy is stale, and that every page in the site is in the offline lists — so a new page cannot be forgotten.
+- **`npm run check:offline:ui`** (49 checks, a real browser against a production build): save, cut the server off, open every page, follow a link, try a save, sign out.
+
+### Changed
+- **The service worker is site-wide** (`/sw.js`), registered from every page. The honeymoon-only worker loads it, so phones that had the old one get the new behaviour without anything being re-registered.
+- **Signing out clears everything saved on that device.**
+- In an ordinary browser tab the site saves only the pages you visit — a guest's phone does not download the whole site because they opened the RSVP page. The full save is for the installed app, or **Save now**.
+
+### Notes
+- Map tiles, weather and driving-time lookups, and photos from booking sites come from other services and still need a connection; the pages around them open.
+- iOS keeps a home-screen app's saved copy separately from Safari's, and may clear it if the app goes unused for weeks — opening it with a connection saves it again.
+- The background save opens each page once in a hidden frame and refuses every write from it, so it cannot change anything (the honeymoon tabs' background weather and route lookups are refused during it).
+
 ## v0.10.2 — [Released] Change dates on one line (`main`, 2026-10-05 06:01)
 
 ### Fixed

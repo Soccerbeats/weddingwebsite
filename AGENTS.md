@@ -46,7 +46,7 @@ docker compose -f docker/docker-compose.dev.yml up -d
 None need a network except `check:finance:db` (live database) and
 `check:finance:ui` (a browser), so they are cheap to run before a commit — and
 CI runs `check:types`, `lint`, `check:photos`, `check:finance`,
-`check:honeymoon` and `check:seating` on every push, so a red one blocks the
+`check:honeymoon`, `check:seating`, `check:schedule` and `check:offline` on every push, so a red one blocks the
 image:
 
 | Command | What it covers |
@@ -58,6 +58,8 @@ image:
 | `npm run check:finance` | Budget arithmetic |
 | `npm run check:finance:db` | The same against a live database |
 | `npm run check:finance:ui` | The finance UI's contracts (needs a browser; fetches Playwright on demand) |
+| `npm run check:offline` | 38 checks with no browser, in CI: the offline worker's routing and saving rules, staleness, and that every page in `src/app` is in the offline lists |
+| `npm run check:offline:ui` | The whole site offline in a real browser, 49 checks: save, cut the server off (through a proxy), open every page, follow a link, try a save, sign out. Needs a **production build** (`BASE=… ADMIN_PASSWORD=…`) |
 | `npm run check:honeymoon:ui` | The honeymoon portal in a real browser, 53 checks (none of them write): the same place panel and sections from every entry point, the itinerary toolbar staying on screen, travel on both timeline shapes, overview cards never overlapping, and at 390×844 no sideways scroll and no control under 44px on any of its pages. Needs a browser and a server with honeymoon data (`BASE=… ADMIN_PASSWORD=…`, or `DEMO=1` against the demo) |
 | `npm run check:hero` | The home page's hero collapse in a real browser, at five viewport-and-input pairings — phone portrait, **phone landscape**, tablet portrait, tablet landscape, desktop — each driven by the input that device actually sends. Needs a browser and a server whose site config has a hero photo, or every case reports the placeholder instead of a pass |
 | `npm run audit:finance` | A deeper sweep over the finance logic |
@@ -126,6 +128,20 @@ idempotent — matches on place name, never reverts an edit) and
    `Hint`, `useTimeFormat`) rather than drawing their own — and every printed time
    goes through `useTimeFormat()`, which follows the trip's 12h/24h setting.
    `npm run check:honeymoon:ui` covers the entry points and the phone layout.
+9. **Every new page goes in `src/lib/offline.ts`.** The whole site works offline
+   (v0.10.3): `public/sw.js` keeps a copy of every page, its data, its photos and
+   the build's code, and the installed app saves everything in the background by
+   opening each listed page once in a hidden frame (the worker refuses every
+   write from that frame). A page missing from `PUBLIC_PAGES` / `ADMIN_PAGES` /
+   `EXCLUDED_PAGES` fails `check:offline` in CI. The worker's decisions are pure
+   functions at the top of `sw.js`, tested under Node — keep them free of worker
+   globals. Never let it save a redirected page (the login must never be stored
+   as `/admin`), an auth route, or a non-200; never trust `navigator.onLine` for
+   "am I offline" — ask `/api/offline/ping`, which the worker never answers from
+   the cache. Test offline with the server truly unreachable
+   (`check:offline:ui` puts a proxy in front of it): Playwright's offline switch
+   does not reach a service worker's own requests, so a test that only flips it
+   passes with the network still there.
 
 ### Changelog entry format
 

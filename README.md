@@ -221,6 +221,12 @@ that steps through them, and warnings that matter at a desk — a passport with
 under six months left after you come home, a policy that ends mid-trip. Every
 file is kept on the device for offline use, and the page says how many are.
 
+**Offline, all of it.** Install the site to a phone's home screen and it saves
+itself — every page, its data and its photos — so it opens on a plane or at a
+border with no signal, showing what it last saw. A small bar says when you are
+offline and how old the copy is; a change made offline says plainly that it was
+not saved.
+
 **Taking it with you.** A Today view built for one thumb, cached by a service
 worker so it opens with no signal; an emergency card with the local numbers as
 tap-to-call buttons; a calendar you can subscribe to rather than download; a
