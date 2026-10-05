@@ -118,7 +118,11 @@ export default function DateRangePicker({ start, end, onChange, months = 2 }: {
             // still has to end the drag, or the range would follow the cursor
             // around the page. Pointer capture keeps the move events coming even
             // when the pointer leaves the grid.
-            onPointerDown={locked ? undefined : (e) => e.currentTarget.setPointerCapture?.(e.pointerId)}
+            onPointerDown={locked ? undefined : (e) => {
+                // Only a press on a day starts a drag. Capturing every press
+                // swallowed the clicks on Done and the month arrows.
+                if ((e.target as HTMLElement).closest('[data-day]')) e.currentTarget.setPointerCapture?.(e.pointerId);
+            }}
             onPointerMove={locked ? undefined : (e) => hoverAt(e.clientX, e.clientY)}
             onPointerUp={locked ? undefined : finish}
             onPointerCancel={locked ? undefined : finish}

@@ -174,8 +174,24 @@ console.log('\nOne place panel, from every entry point');
         }
     }
     check('no two overview cards overlap', boxes.length > 0 && overlaps === 0, `${overlaps} of ${boxes.length}`);
+
+    console.log('\nFiles');
+    check('Files is a tab', (await p.locator('a:has-text("Files")').count()) > 0);
+    await go(p, '/settings');
+    check('Settings no longer has a Documents section', (await p.locator('h3:has-text("Documents")').count()) === 0);
+    await go(p, '/files');
+    if (await p.locator('[data-file]').count()) {
+        await p.locator('[data-file]').first().click();
+        await p.waitForTimeout(600);
+        const viewer = await p.locator('[data-file-viewer]').getAttribute('data-file-viewer').catch(() => '');
+        check('a file opens in the viewer', !!viewer);
+        await p.keyboard.press('Escape');
+    } else {
+        check('with no files, the tab says what goes there', (await p.locator('text=The papers you would hate to lose').count()) === 1);
+    }
     await p.context().close();
 }
+
 
 /* ------------------------------------------------------------------ phone */
 console.log('\nPhone (390×844)');
@@ -215,6 +231,61 @@ console.log('\nPhone (390×844)');
     await p.waitForTimeout(400);
     check('the phone timeline is a vertical agenda', (await p.locator('[data-day-agenda]').count()) === 1);
     check('the bottom tab bar is there', await p.locator('[data-mobile-tabbar]').isVisible().catch(() => false));
+
+    // Nothing inside a card may run past the edge of the screen — the page not
+    // scrolling sideways is not enough, a card can clip its own contents.
+    const spill = async () => p.evaluate(() => {
+        const out: string[] = [];
+        for (const el of document.querySelectorAll<HTMLElement>('[data-admin-frame] *, [data-sheet-panel] *')) {
+            const r = el.getBoundingClientRect();
+            if (!r.width || r.right <= 0 || r.left >= innerWidth) continue;
+            if (el.closest('.leaflet-container, [data-admin-sidebar], .overflow-x-auto, .overflow-hidden, .truncate, [data-segmented]')) continue;
+            if (r.right > innerWidth + 1) out.push(el.tagName + ' ' + (el.getAttribute('aria-label') ?? el.textContent ?? '').trim().slice(0, 24));
+        }
+        return out;
+    });
+    for (const tab of ['', 'itinerary', 'travel', 'files', 'settings', 'checklist']) {
+        await go(p, `/${tab}`);
+        const out = await spill();
+        check(`${tab || 'overview'}: nothing spills past the screen edge`, out.length === 0, out.slice(0, 3).join(' | '));
+    }
+
+    await go(p, '/today');
+    await p.getByRole('button', { name: /More/ }).last().click().catch(() => undefined);
+    await p.waitForTimeout(400);
+    check('More includes Files', (await p.locator('[data-sheet-panel] a:has-text("Files")').count()) === 1);
+    await p.keyboard.press('Escape');
+
+    await go(p, '/settings');
+    const range = p.locator('[data-date-range]').first();
+    check('on a touch screen the trip dates start locked', (await range.getAttribute('data-date-range')) === 'locked');
+    await range.getByRole('button', { name: 'Change dates', exact: true }).click().catch(() => undefined);
+    await p.waitForTimeout(200);
+    check('Change dates unlocks them', (await range.getAttribute('data-date-range')) === 'editing');
+    await range.getByRole('button', { name: 'Done', exact: true }).click().catch(() => undefined);
+    await p.waitForTimeout(200);
+    check('and Done locks them again', (await range.getAttribute('data-date-range')) === 'locked');
+
+    await go(p, '/itinerary');
+    await p.getByRole('button', { name: /Calendar/ }).first().click().catch(() => undefined);
+    await p.waitForTimeout(500);
+    const cells = await p.locator('[data-calendar-day]').evaluateAll((els) => els.map((el) => el.getBoundingClientRect().right <= innerWidth));
+    check('the phone calendar fits the screen', cells.length > 0 && cells.every(Boolean), `${cells.length} days`);
+
+    await go(p, '/places');
+    if (await clickFirst(p, '[data-place-row] button')) {
+        await p.waitForTimeout(500);
+        const handle = await p.locator('[data-sheet-handle]').boundingBox();
+        if (handle) {
+            await p.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+            await p.mouse.down();
+            await p.mouse.move(handle.x + handle.width / 2, handle.y + 260, { steps: 8 });
+            await p.mouse.up();
+            await p.waitForTimeout(400);
+        }
+        check('pulling a panel down closes it', (await p.locator('[data-sheet-panel]').count()) === 0);
+    }
+
     await p.context().close();
 }
 
