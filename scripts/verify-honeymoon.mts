@@ -57,6 +57,7 @@ import {
     coordsFromMapsUrl, coordsFromPair, nameFromMapsUrl,
 } from '../src/app/api/admin/honeymoon/geocode/route';
 import { SEED_PLACES, SEED_REGIONS, SEED_NOTES } from '../src/lib/honeymoonSeed';
+import { buildOfflineHtml, escapeHtml, offlineExportFilename } from '../src/lib/honeymoonExport';
 
 let failures = 0;
 let checks = 0;
@@ -2427,6 +2428,91 @@ console.log('\nJourneys');
     check('a landing time can be read in another zone',
         sameInstantIn('2026-09-14', '12:00', 'Asia/Makassar', 'America/Los_Angeles') === '21:00',
         String(sameInstantIn('2026-09-14', '12:00', 'Asia/Makassar', 'America/Los_Angeles')));
+}
+
+console.log('\nOffline copy');
+{
+    const trip = {
+        id: 1, title: 'Bali & Singapore', start_date: '2026-09-12', end_date: '2026-09-14',
+        home_currency: 'USD', notes: 'Back up plan', focus_country: 'Indonesia', budget: 5000,
+        partner_names: 'Austin, Heaven',
+        info: { insurance: 'Policy WX-77 · 24h +1 800 555 0100' },
+        time_format: '24h' as const, distance_unit: 'km' as const, phase: 'planning' as const,
+    };
+    const villa = { ...makePlace(200, 'Villa <script>alert(1)</script>', -8.5, 115.26),
+        category: 'stay', cost: 300, cost_per: 'night' as const, cost_currency: 'USD',
+        links: [{ label: 'Bad', url: 'javascript:alert(1)' }, { label: 'Listing', url: 'https://example.com/v' }] };
+    const temple = { ...makePlace(300, 'Tirta Empul', -8.41, 115.31), category: 'temple',
+        address: 'Jl. Tirta, Tampaksiring', opening_hours: 'Mo-Su 08:00-17:00' };
+    const gone = { ...makePlace(400, 'Rejected Resort', null, null), category: 'stay', archived: true };
+    const payload = {
+        trip,
+        journeys: [{ id: 7, title: 'Flights out', kind: 'flight' as const, notes: null, sort_order: 0, created_at: null }],
+        categories: [], views: [], shares: [], price_checks: [], archives: [], rates: [],
+        regions: [{ id: 1, name: 'Ubud', country: 'Indonesia', description: null,
+            center_lat: null, center_lng: null, sort_order: 0, boundary: null }],
+        notes: [{ id: 1, title: 'Tipping', body: '## Rule\n- **10%** is fine', category: 'Money',
+            source: null, sort_order: 0, region_id: null, place_id: null }],
+        todos: [
+            { id: 1, text: 'Buy SIM', done: false, result: null, category: null, due_on: null,
+              sort_order: 0, kind: 'task' as const, person: null, place_id: null, day_id: 20 },
+            { id: 2, text: 'Sunscreen', done: true, result: null, category: null, due_on: null,
+              sort_order: 1, kind: 'packing' as const, person: 'Heaven', place_id: null, day_id: null },
+        ],
+        documents: [{ id: 1, name: 'Austin passport', kind: 'passport' as const, path: 'x.pdf',
+            place_id: null, travel_id: null, person: 'Austin', expires_on: '2031-01-01', notes: null, created_at: null }],
+        comments: [{ id: 1, place_id: 200, author: 'Heaven', body: 'Love the pool', created_at: null }],
+        bookings: [{
+            id: 1, place_id: 200, travel_id: null, stop_id: null, journey_id: null, kind: 'stay' as const,
+            provider: 'Airbnb', confirmation: 'HMABC123', url: null, contact: '+62 812 0000',
+            check_in: '2026-09-12', check_out: '2026-09-14', check_in_time: '15:00', check_out_time: '11:00',
+            cost: 600, cost_currency: 'USD', cost_paid: 600, deposit_due_on: null, cancel_by: null,
+            party_size: 2, dress_code: null, paid: true, documents: [], notes: null, created_at: null,
+        }],
+        places: [villa, temple, gone],
+        days: [
+            { id: 10, day_number: 1, title: 'Arrive', notes: null, base_place_id: 200, stops: [],
+              travel: [{ ...LEG_DEFAULTS, id: 5, day_id: 10, from_text: 'SIN', to_text: 'DPS',
+                  depart_time: '09:10', arrive_time: '11:55', flight_no: 'SQ938',
+                  confirmation_ref: 'PNR7QX', journey_id: 7, depart_date: '2026-09-12', arrive_date: '2026-09-12' }] },
+            { id: 20, day_number: 2, title: 'Temples', notes: 'Sarong needed', base_place_id: 200,
+              travel: [], stops: [{ ...STOP_DEFAULTS, id: 21, day_id: 20, place_id: 300,
+                  start_time: '08:30', notes: 'Go early', sort_order: 0 }] },
+        ],
+    };
+    const html = buildOfflineHtml(payload, { generatedAt: new Date('2026-10-05T12:00:00Z') });
+
+    check('it is a whole HTML document', html.startsWith('<!doctype html>') && html.trimEnd().endsWith('</html>'));
+    check('it loads nothing from anywhere — no external script, stylesheet or image',
+        !/<script[^>]+src=/i.test(html) && !/<link[^>]+stylesheet/i.test(html) && !/<img\b/i.test(html));
+    check('the trip is named and dated', html.includes('Bali &amp; Singapore') && html.includes('Sat, Sep 12'));
+    check('it says it is a snapshot, and when it was taken',
+        html.includes('snapshot') && html.includes('Oct 5, 2026'));
+    check('a place name cannot run script', !html.includes('<script>alert(1)')
+        && html.includes('Villa &lt;script&gt;alert(1)&lt;/script&gt;'));
+    check('a javascript: link stays text', !html.includes('href="javascript:'));
+    check('an http link is still a link', html.includes('href="https://example.com/v"'));
+    check('booking confirmations are in it', html.includes('HMABC123') && html.includes('PNR7QX'));
+    check('so are the flight number and the times', html.includes('SQ938') && html.includes('09:10'));
+    check('every day has its own block', html.includes('id="day-1"') && html.includes('id="day-2"'));
+    check('a stop links to its place card', html.includes('href="#place-300"') && html.includes('id="place-300"'));
+    check('a stop has directions', html.includes('google.com/maps/dir/?api=1&amp;destination=-8.41,115.31'));
+    check('the emergency numbers for the trip country', html.includes('tel:112') && html.includes('Indonesia'));
+    check('the essentials typed into the trip', html.includes('Policy WX-77'));
+    check('a removed place is left out', !html.includes('Rejected Resort'));
+    check('guide notes are rendered, not raw Markdown',
+        html.includes('<strong>10%</strong>') && !html.includes('**10%**'));
+    check('checklist and packing are both there', html.includes('Buy SIM') && html.includes('Sunscreen'));
+    check('a document is listed by what it is', html.includes('Austin passport'));
+    check('comments travel with their place', html.includes('Love the pool'));
+    check('the search box is there', html.includes('id="q"') && html.includes('type="search"'));
+    check('in 12-hour form when that is the setting',
+        buildOfflineHtml({ ...payload, trip: { ...trip, time_format: '12h' } }).includes('8:30 AM'));
+    check('an empty trip still exports', buildOfflineHtml({ ...payload, days: [], places: [], bookings: [],
+        notes: [], todos: [], documents: [], journeys: [] }).includes('Emergency'));
+    check('the filename is the trip and the date',
+        offlineExportFilename(payload, new Date('2026-10-05T12:00:00Z')) === 'bali-singapore-offline-2026-10-05.html');
+    check('escaping covers quotes too', escapeHtml(`"a'&`) === '&quot;a&#39;&amp;');
 }
 
 console.log(`\n${failures === 0 ? 'PASS' : 'FAIL'} — ${checks - failures}/${checks} checks passed.\n`);

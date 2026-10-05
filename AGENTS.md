@@ -268,6 +268,7 @@ order, before the commit:
   | `honeymoonFetch.ts` | The outbound services and their caches (server only) |
   | `honeymoonCalendar.ts` | The `.ics` both calendar routes serve |
   | `honeymoonShare.ts` | Share tokens (server only) |
+  | `honeymoonExport.ts` | The dashboard's offline copy: the whole payload as one self-contained HTML file |
 - `public/config/*.json` — file-based content config, written by the admin at
   runtime (`site.json` settings/colors/dates, `photos.json`, `timeline.json`);
   a Docker volume, not in git

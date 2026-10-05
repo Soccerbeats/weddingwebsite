@@ -12,6 +12,7 @@ import {
     buildBudget, completenessOf, deadlinesOf, formatMoney, perPerson, phaseHint, unbookedDays,
 } from '@/lib/honeymoonBudget';
 import { dueSoon } from '@/lib/honeymoonChecks';
+import { buildOfflineHtml, offlineExportFilename } from '@/lib/honeymoonExport';
 import type { HoneymoonApi } from './useHoneymoon';
 import { Card, CategoryChip } from './ui';
 
@@ -22,6 +23,22 @@ const TripMap = dynamic(() => import('./TripMap'), {
 });
 
 const BASE = '/admin/honeymoon';
+
+/**
+ * Save the whole trip as one self-contained HTML file.
+ *
+ * The backup for when the offline Today view does not come through: built from
+ * the payload already on screen, so it is exactly what the tabs show.
+ */
+function downloadOfflineCopy(data: NonNullable<HoneymoonApi['data']>) {
+    const html = buildOfflineHtml(data);
+    const url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = offlineExportFilename(data);
+    link.click();
+    URL.revokeObjectURL(url);
+}
 
 /**
  * The whole trip on one screen.
@@ -211,6 +228,20 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
     // nothing can fit and the shell's scrollbar takes over.
     return (
         <div className="h-full min-h-[34rem] flex flex-col gap-3">
+            {/* A laptop thing: the file is for keeping on a disk, not a phone. */}
+            {data && (
+                <div className="hidden md:flex justify-end shrink-0 -mb-1">
+                    <button
+                        type="button"
+                        onClick={() => downloadOfflineCopy(data)}
+                        title="Every detail of the trip in one HTML file that opens with no internet"
+                        className="rounded-full px-4 py-1.5 text-xs font-medium bg-white border
+                            border-gray-200 text-gray-700 hover:bg-gray-50 transition"
+                    >
+                        ⬇ Download offline copy
+                    </button>
+                </div>
+            )}
             {/* ---- Stats and the map ---- */}
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 flex-[3] min-h-0">
             <div className="xl:col-span-2 flex flex-col gap-3 min-h-0">

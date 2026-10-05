@@ -11,6 +11,21 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.9.105 — [Released] Download the trip as one offline file (`main`, 2026-10-05 02:29)
+
+Austin: an export on the honeymoon dashboard that, clicked on desktop, downloads an HTML file with every honeymoon detail in it and easy to find. A backup in case the offline viewing feature does not work.
+
+### Added
+- **⬇ Download offline copy on the honeymoon dashboard** (top right, desktop and tablet widths; hidden on a phone, because the file is for keeping on a laptop). One click saves `<trip>-offline-<date>.html`.
+- **The file opens in any browser with no internet and no login.** Everything is inside it: no script, stylesheet, font or image is loaded from anywhere, so it works on a plane, in a hotel lobby, or after the site goes down. It works in dark mode and prints cleanly.
+- **What is in it**, in the order you would look for it: emergency numbers for every country on the trip, plus the essentials typed into Settings (insurance, embassy, medical, contacts, money) · the itinerary day by day — where you are staying, every travel leg with flight number, times, terminals and confirmation, and every stop with its time, address, a directions link and its notes · flights and travel as whole journeys with layovers · every booking and confirmation in one list · what documents you hold (not the files themselves) · stays, excursions and all other places by region, with addresses, hours, links, comments and their bookings · the checklist and packing list · the guide notes · the money totals.
+- **Search everything from the box at the top** — a hotel, a booking reference, a phone number. Anything that does not match is hidden, and a closed note that matches opens itself. Section links, Expand all and Collapse all sit beside it.
+- **It says it is a snapshot** and when it was saved, so nobody mistakes it for the live plan.
+
+### Tested
+- **24 assertions in `npm run check:honeymoon`** (now 683): a whole document; nothing loaded from outside; confirmation numbers, flight numbers and times present; per-day blocks; stops linked to their place; directions links; emergency numbers; removed places left out; Markdown notes rendered rather than raw; a place name with a script tag in it cannot run; a `javascript:` link stays text; 12-hour times when that is the setting; an empty trip still exports; the filename.
+- Rendered in a real browser: the search narrowed a three-day sample to the three stops that matched.
+
 ## v0.9.104 — [Released] The hero did not animate on a tablet (`main`, 2026-10-01 14:01)
 
 Austin: the home page animation works on mobile and desktop, but at tablet size — a phone held sideways, for instance — scrolling skips the animation and jumps straight to the collage.
