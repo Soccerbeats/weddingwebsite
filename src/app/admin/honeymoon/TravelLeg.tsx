@@ -1,13 +1,14 @@
 'use client';
 
 import {
-    TRAVEL_MODES, formatDate, formatDayDate, formatTime, legArrivalDay, legEnds, legIsOvernight,
+    TRAVEL_MODES, formatDate, formatDayDate, legArrivalDay, legEnds, legIsOvernight,
     travelModeMeta,
     type Day, type TravelLeg, type TravelMode,
 } from '@/lib/honeymoon';
 import { journeysOf } from '@/lib/honeymoonJourneys';
 import { addDaysIso } from '@/lib/honeymoonTimeline';
 import LegFields from './LegFields';
+import { useTimeFormat } from './kit/useTimeFormat';
 import type { HoneymoonApi } from './useHoneymoon';
 import { OverflowMenu, SelectField } from './ui';
 
@@ -30,6 +31,7 @@ export default function TravelLegCard({ leg, day, api }: {
     day: Day;
     api: HoneymoonApi;
 }) {
+    const fmt = useTimeFormat();
     const startDate = api.data?.trip.start_date ?? null;
     const realDate = formatDayDate(startDate, day.day_number);
     const meta = travelModeMeta(leg.mode);
@@ -67,9 +69,9 @@ export default function TravelLegCard({ leg, day, api }: {
                         )}
                     </p>
                     <p className="text-[11px] text-gray-500 tabular-nums">
-                        {leg.depart_time ? formatTime(leg.depart_time) : '—'}
+                        {leg.depart_time ? fmt(leg.depart_time) : '—'}
                         {' → '}
-                        {leg.arrive_time ? formatTime(leg.arrive_time) : '—'}
+                        {leg.arrive_time ? fmt(leg.arrive_time) : '—'}
                         {legIsOvernight(leg) && ` · lands day ${legArrivalDay(leg, day.day_number)}`}
                         {sibling > 0 && ` · ${sibling} more leg${sibling === 1 ? '' : 's'} on this ticket`}
                     </p>
@@ -135,10 +137,10 @@ export default function TravelLegCard({ leg, day, api }: {
             {legIsOvernight(leg) && (
                 <p className="mt-2 rounded-xl bg-slate-100 px-2.5 py-1.5 text-[11px] text-slate-700">
                     {meta.icon} Leaves day {day.day_number}
-                    {leg.depart_time ? ` at ${formatTime(leg.depart_time)}` : ''}
+                    {leg.depart_time ? ` at ${fmt(leg.depart_time)}` : ''}
                     {realDate ? ` (${realDate})` : ''}, lands day{' '}
                     {legArrivalDay(leg, day.day_number)}
-                    {leg.arrive_time ? ` at ${formatTime(leg.arrive_time)}` : ''}
+                    {leg.arrive_time ? ` at ${fmt(leg.arrive_time)}` : ''}
                     {formatDayDate(startDate, legArrivalDay(leg, day.day_number))
                         ? ` (${formatDayDate(startDate, legArrivalDay(leg, day.day_number))})`
                         : ''}.

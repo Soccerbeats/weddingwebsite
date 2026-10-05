@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import {
-    TRAVEL_MODES, formatDate, formatDayDate, formatTime, travelModeMeta,
+    TRAVEL_MODES, formatDate, formatDayDate, travelModeMeta,
     type TravelLeg, type TravelMode,
 } from '@/lib/honeymoon';
 import {
@@ -11,6 +11,7 @@ import {
 } from '@/lib/honeymoonJourneys';
 import BookingPanel from './BookingPanel';
 import LegFields from './LegFields';
+import { useTimeFormat } from './kit/useTimeFormat';
 import type { HoneymoonApi } from './useHoneymoon';
 import { Button, Card, InlineText, MiniSelect, OverflowMenu, TextField } from './ui';
 
@@ -29,6 +30,7 @@ export default function JourneyCard({ api, group, onAddLeg }: {
     /** Append a leg to this journey, prefilled from the one before it. */
     onAddLeg: (group: JourneyGroup) => void;
 }) {
+    const fmt = useTimeFormat();
     const [open, setOpen] = useState<number | null>(null);
     const trip = api.data?.trip;
     const days = api.data?.days ?? [];
@@ -201,10 +203,10 @@ export default function JourneyCard({ api, group, onAddLeg }: {
                                             <span className="block text-[11px] text-gray-500
                                                 tabular-nums">
                                                 {leg.depart_time
-                                                    ? formatTime(leg.depart_time) : '—'}
+                                                    ? fmt(leg.depart_time) : '—'}
                                                 {' → '}
                                                 {leg.arrive_time
-                                                    ? formatTime(leg.arrive_time) : '—'}
+                                                    ? fmt(leg.arrive_time) : '—'}
                                                 {/* The one thing people always want
                                                     on a red-eye: what that landing
                                                     time is back where they came

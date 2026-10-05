@@ -2,9 +2,10 @@
 
 import { createPortal } from 'react-dom';
 import {
-    TRAVEL_MODES, arrivalsOn, formatDayDate, formatTime, legIsOvernight, travelModeMeta,
+    TRAVEL_MODES, arrivalsOn, formatDayDate, legIsOvernight, travelModeMeta,
     type Booking, type Day, type TravelLeg,
 } from '@/lib/honeymoon';
+import { useTimeFormat } from './kit/useTimeFormat';
 import type { HoneymoonApi } from './useHoneymoon';
 
 /**
@@ -126,6 +127,7 @@ function DaySheet({ day, startDate, name, arrivals, bookings }: {
     /** The confirmations that belong to this day, when they are wanted. */
     bookings: Booking[];
 }) {
+    const fmt = useTimeFormat();
     const date = formatDayDate(startDate, day.day_number);
     const base = name(day.base_place_id);
 
@@ -145,7 +147,7 @@ function DaySheet({ day, startDate, name, arrivals, bookings }: {
             {arrivals.map(({ leg, fromDay }) => (
                 <p key={`in-${leg.id}`} className="text-sm">
                     <span className="font-semibold">
-                        Arrives{leg.arrive_time && ` ${formatTime(leg.arrive_time)}`}
+                        Arrives{leg.arrive_time && ` ${fmt(leg.arrive_time)}`}
                     </span>
                     {leg.to_text && ` · ${leg.to_text}`}
                     {` · ${travelModeMeta(leg.mode).label.toLowerCase()} from day ${fromDay.day_number}`}
@@ -169,8 +171,8 @@ function DaySheet({ day, startDate, name, arrivals, bookings }: {
                 return (
                     <p key={leg.id} className="text-sm">
                         <span className="font-semibold">{mode}</span>
-                        {leg.depart_time && ` ${formatTime(leg.depart_time)}`}
-                        {leg.arrive_time && `–${formatTime(leg.arrive_time)}`}
+                        {leg.depart_time && ` ${fmt(leg.depart_time)}`}
+                        {leg.arrive_time && `–${fmt(leg.arrive_time)}`}
                         {/* On paper this is the difference between a 23:40 flight
                             that lands at 06:20 tomorrow and one that reads as
                             impossible. */}
@@ -190,7 +192,7 @@ function DaySheet({ day, startDate, name, arrivals, bookings }: {
                     {day.stops.map((stop) => (
                         <li key={stop.id} className="flex gap-2 py-0.5">
                             <span className="w-16 shrink-0 tabular-nums">
-                                {stop.start_time ? formatTime(stop.start_time) : ''}
+                                {stop.start_time ? fmt(stop.start_time) : ''}
                             </span>
                             <span>
                                 {stop.custom_label || name(stop.place_id) || 'Stop'}

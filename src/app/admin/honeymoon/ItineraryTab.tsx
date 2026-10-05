@@ -12,13 +12,13 @@ import { CSS } from '@dnd-kit/utilities';
 import {
     SPREAD_WARNING_KM, arrivalsOn, calendarMonths, dayHops, daysBeyondRange,
     dateForDay, daysBetween, isoOf, stayBookedOn,
-    formatDate, formatDayDate, formatDistance, formatTime, hasCoords, legIsOvernight,
+    formatDate, formatDayDate, formatDistance, hasCoords, legIsOvernight,
     travelModeMeta,
     type CalendarCell, type Day, type Place, type Stop, type TravelLeg,
 } from '@/lib/honeymoon';
 import { describeHours, stopIsOutsideHours } from '@/lib/honeymoonHours';
 import { isAfterDark } from '@/lib/honeymoonSun';
-import { buildTimeline, formatDuration } from '@/lib/honeymoonTimeline';
+import { buildTimeline, dayLegs, dayMarkers, formatDuration } from '@/lib/honeymoonTimeline';
 import { scheduledPlaceIds, suggestDay } from '@/lib/honeymoonPlaces';
 import { conflictsOf, stayStretches } from '@/lib/honeymoonChecks';
 import { DROP_TYPES, PLACE_DRAG, STOP_DRAG } from './dragTypes';
@@ -28,8 +28,14 @@ import { DayBar, DayClock } from './DayShape';
 import Markdown from './Markdown';
 import { useTripIntel } from './useTripIntel';
 import type { TripIntel } from './useTripIntel';
+import { useTimeFormat } from './kit/useTimeFormat';
 import type { HoneymoonApi } from './useHoneymoon';
 import { usePlaceSheet } from './PlaceSheetContext';
+import { downloadOfflineCopy } from './offlineCopy';
+import { useLocalPref } from './useLocalPref';
+import { Hint } from './kit/Hint';
+import { Segmented } from './kit/Segmented';
+import { TabToolbar } from './kit/TabToolbar';
 import PrintSheet, { DEFAULT_PRINT_OPTIONS, type PrintOptions } from './PrintSheet';
 import TravelLegCard from './TravelLeg';
 import {
@@ -86,6 +92,9 @@ export default function ItineraryTab({ api, panel = false, onFocusDay, revealDay
     const [printing, setPrinting] = useState(false);
     const [printOptions, setPrintOptions] = useState<PrintOptions>(DEFAULT_PRINT_OPTIONS);
     const conflicts = useMemo(() => (data ? conflictsOf(data) : []), [data]);
+    const warnCount = conflicts.filter((entry) => entry.severity === 'warn').length;
+    /** The checks start folded: nothing should stand between you and day one. */
+    const [checksOpen, setChecksOpen] = useLocalPref('hm-itin-checks', false);
     const stretches = useMemo(() => (data ? stayStretches(data) : []), [data]);
 
     // Remembered like the other view preferences, but locally: which way you
@@ -119,7 +128,22 @@ export default function ItineraryTab({ api, panel = false, onFocusDay, revealDay
     // records which request has already faded, so nothing is set as the effect
     // runs and the card is ringed on the same render that scrolls it.
     const [faded, setFaded] = useState(0);
+    /*
+     * `?day=N` — a place panel's "Day 3" link lands here. Read once from the
+     * URL rather than through useSearchParams, which would need a Suspense
+     * boundary for a value only the first render wants.
+     */
+    const [urlReveal, setUrlReveal] = useState<{ id: number; at: number } | null>(null);
     useEffect(() => {
+        if (panel || !days.length || urlReveal) return;
+        const wanted = Number(new URLSearchParams(window.location.search).get('day'));
+        const day = wanted ? days.find((d) => d.day_number === wanted) : undefined;
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        if (day) setUrlReveal({ id: day.id, at: Date.now() });
+    }, [panel, days, urlReveal]);
+    const reveal = revealDay ?? urlReveal;
+    useEffect(() => {
+        const revealDay = reveal;
         if (!revealDay) return;
         const card = listRef.current
             ?.querySelector<HTMLElement>(`[data-day-id="${revealDay.id}"]`);
@@ -127,8 +151,8 @@ export default function ItineraryTab({ api, panel = false, onFocusDay, revealDay
         card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         const timer = setTimeout(() => setFaded(revealDay.at), 1800);
         return () => clearTimeout(timer);
-    }, [revealDay]);
-    const flashDay = revealDay && revealDay.at !== faded ? revealDay.id : null;
+    }, [reveal]);
+    const flashDay = reveal && reveal.at !== faded ? reveal.id : null;
     useEffect(() => {
         const saved = localStorage.getItem(VIEW_KEY);
         // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -202,55 +226,58 @@ export default function ItineraryTab({ api, panel = false, onFocusDay, revealDay
     return (
         <div className="space-y-3">
             {!panel && (
-            <div className="flex items-center justify-between gap-3 px-1">
-                <p className="text-xs text-gray-400">
-                    {view === 'list'
-                        ? 'Drag a day by its ⠿ handle to reorder the trip — the days renumber and '
-                            + 'their dates follow.'
-                        : 'Click any day to open it.'}
-                </p>
-                <div className="flex items-center gap-2 shrink-0">
-                    <Button
-                        onClick={() => setPrinting(true)}
-                        title="Choose what goes on the paper, then print"
-                    >
-                        🖨 Print
-                    </Button>
-                    {/* A real navigation to a download endpoint: next/link would
-                        client-route it and nothing would download. */}
-                    {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-                    <a
-                        href="/api/admin/honeymoon/ics"
-                        className="rounded-full border border-gray-200 bg-white px-4 py-1.5 text-sm
-                            font-medium text-gray-700 hover:bg-gray-50 transition"
-                        title="Every day, travel leg and timed stop, as a calendar file"
-                    >
-                        🗓 Export
-                    </a>
-                    <ViewToggle view={view} onChange={chooseView} />
-                    {/* Only where it applies: a shape switch beside the other two
-                        views would be a control that does nothing. */}
-                    {view === 'timeline' && (
-                        <div className="shrink-0 inline-flex rounded-full border border-gray-200
-                            bg-white p-0.5">
-                            {([['bars', '▤ Stacked'], ['clock', '⏱ Clock']] as const)
-                                .map(([key, label]) => (
-                                    <button
-                                        key={key}
-                                        onClick={() => chooseShape(key)}
-                                        aria-pressed={shape === key}
-                                        className={`rounded-full px-3 py-1 text-xs font-medium transition
-                                            ${shape === key
-                                            ? 'bg-gray-900 text-white'
-                                            : 'text-gray-600 hover:bg-gray-50'}`}
-                                    >
-                                        {label}
-                                    </button>
-                                ))}
-                        </div>
+                <TabToolbar
+                    left={(
+                        <>
+                            {/* Left of the view switch, and only where it applies: a
+                                shape switch beside the other two views would be a
+                                control that does nothing. */}
+                            {view === 'timeline' && (
+                                <Segmented<DayShape>
+                                    ariaLabel="Timeline shape"
+                                    tone="dark"
+                                    value={shape}
+                                    onChange={chooseShape}
+                                    options={[
+                                        { key: 'bars', label: '▤ Stacked' },
+                                        { key: 'clock', label: '⏱ Clock' },
+                                    ]}
+                                />
+                            )}
+                            <Segmented<View>
+                                ariaLabel="Itinerary view"
+                                value={view}
+                                onChange={chooseView}
+                                options={[
+                                    { key: 'list', label: '☰ Days' },
+                                    { key: 'timeline', label: '▤ Timeline' },
+                                    { key: 'calendar', label: '🗓 Calendar' },
+                                ]}
+                            />
+                            <Hint label="How the itinerary works">
+                                Drag a day by its ⠿ handle to reorder the trip — the days renumber and
+                                their dates follow. Timeline draws each day against the clock, travel
+                                included; Calendar puts the trip on real dates.
+                            </Hint>
+                        </>
                     )}
-                </div>
-            </div>
+                    right={(
+                        <OverflowMenu items={[
+                            { label: '🖨 Print…', onClick: () => setPrinting(true) },
+                            // A real navigation to a download endpoint: a client-side
+                            // route change would download nothing.
+                            {
+                                label: '🗓 Export to a calendar',
+                                onClick: () => {
+                                    const link = document.createElement('a');
+                                    link.href = '/api/admin/honeymoon/ics';
+                                    link.click();
+                                },
+                            },
+                            ...(data ? [{ label: '⬇ Download offline copy', onClick: () => downloadOfflineCopy(data) }] : []),
+                        ]} />
+                    )}
+                />
             )}
 
             {beyond.size > 0 && (
@@ -271,6 +298,22 @@ export default function ItineraryTab({ api, panel = false, onFocusDay, revealDay
                 Both are read-outs over the payload, and both were previously
                 things you had to notice yourself by reading every card. */}
             {!panel && (conflicts.length > 0 || stretches.length > 0) && (
+                <button
+                    type="button"
+                    onClick={() => setChecksOpen(!checksOpen)}
+                    aria-expanded={checksOpen}
+                    className="flex min-h-11 md:min-h-0 w-full items-center gap-2 rounded-2xl border border-gray-200 bg-white
+                        px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                >
+                    {warnCount > 0
+                        ? <span className="text-amber-700">⚠ {warnCount} thing{warnCount === 1 ? '' : 's'} to check</span>
+                        : <span className="text-emerald-700">✓ Nothing to fix</span>}
+                    <span className="text-gray-300">·</span>
+                    <span>{stretches.filter((st) => st.place).length} stay{stretches.length === 1 ? '' : 's'} across the trip</span>
+                    <span className="ml-auto text-xs text-gray-400">{checksOpen ? 'Hide ▴' : 'Show ▾'}</span>
+                </button>
+            )}
+            {!panel && checksOpen && (conflicts.length > 0 || stretches.length > 0) && (
                 <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                     {conflicts.length > 0 && (
                         <div className="rounded-2xl border border-gray-200 bg-white p-3">
@@ -491,31 +534,6 @@ export default function ItineraryTab({ api, panel = false, onFocusDay, revealDay
     );
 }
 
-/** Two views of the same trip: the working list, and the shape of it. */
-function ViewToggle({ view, onChange }: { view: View; onChange: (view: View) => void }) {
-    const options: { key: View; label: string }[] = [
-        { key: 'list', label: '☰ Days' },
-        { key: 'timeline', label: '▤ Timeline' },
-        { key: 'calendar', label: '🗓 Calendar' },
-    ];
-    return (
-        <div className="shrink-0 inline-flex rounded-full border border-gray-200 bg-white p-0.5">
-            {options.map((opt) => (
-                <button
-                    key={opt.key}
-                    onClick={() => onChange(opt.key)}
-                    aria-pressed={view === opt.key}
-                    className={`rounded-full px-3 py-1 text-sm font-medium transition
-                        ${view === opt.key
-                        ? 'bg-accent text-white'
-                        : 'text-gray-600 hover:bg-gray-50'}`}
-                >
-                    {opt.label}
-                </button>
-            ))}
-        </div>
-    );
-}
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -647,6 +665,7 @@ function CalendarCellBox({ cell, day, api, beyondRange, arrivals, onOpen }: {
     arrivals: { leg: TravelLeg; fromDay: Day }[];
     onOpen: () => void;
 }) {
+    const fmt = useTimeFormat();
     // Outside the trip: a real date, greyed, so the shape of the trip against
     // the month is visible.
     if (!day) {
@@ -687,13 +706,13 @@ function CalendarCellBox({ cell, day, api, beyondRange, arrivals, onOpen }: {
             {arrivals.map(({ leg }) => (
                 <p key={`in-${leg.id}`} className="text-[10px] text-slate-500 truncate">
                     ↓ {travelModeMeta(leg.mode).icon}{' '}
-                    {leg.arrive_time ? formatTime(leg.arrive_time) : ''} {leg.to_text ?? ''}
+                    {leg.arrive_time ? fmt(leg.arrive_time) : ''} {leg.to_text ?? ''}
                 </p>
             ))}
             {day.travel.map((leg) => (
                 <p key={leg.id} className="text-[10px] text-slate-500 truncate">
                     {travelModeMeta(leg.mode).icon}{' '}
-                    {leg.depart_time ? formatTime(leg.depart_time) : ''} {leg.to_text ?? ''}
+                    {leg.depart_time ? fmt(leg.depart_time) : ''} {leg.to_text ?? ''}
                     {legIsOvernight(leg) && (
                         <span className="font-semibold"> +{leg.arrive_day_offset}d</span>
                     )}
@@ -703,7 +722,7 @@ function CalendarCellBox({ cell, day, api, beyondRange, arrivals, onOpen }: {
                 the whole week. */}
             {day.stops.slice(0, 3).map((stop) => (
                 <p key={stop.id} className="text-[10px] text-gray-600 truncate">
-                    {stop.start_time ? `${formatTime(stop.start_time)} ` : '• '}
+                    {stop.start_time ? `${fmt(stop.start_time)} ` : '• '}
                     {stop.custom_label
                         || (stop.place_id != null ? api.placeById.get(stop.place_id)?.name : '')
                         || 'Untitled stop'}
@@ -745,6 +764,7 @@ function DayCard({
     /** Legs that left on an earlier day and land on this one. */
     arrivals?: { leg: TravelLeg; fromDay: Day }[];
 }) {
+    const fmt = useTimeFormat();
     const {
         attributes: dayAttributes, listeners: dayListeners, setNodeRef: setDayRef,
         transform: dayTransform, transition: dayTransition, isDragging: dayDragging,
@@ -758,6 +778,8 @@ function DayCard({
     const [dropping, setDropping] = useState(false);
     /** Index the "+ here" row is open at, or null. */
     const [insertAt, setInsertAt] = useState<number | null>(null);
+    /** In the timeline view the legs are drawn on the day; their editors fold away. */
+    const [travelOpen, setTravelOpen] = useState(false);
 
     const startDate = api.data?.trip.start_date ?? null;
     const realDate = formatDayDate(startDate, day.day_number);
@@ -841,6 +863,18 @@ function DayCard({
             return date ? isoOf(date) : null;
         })()
         : null;
+
+    /* What the timeline draws beside the stops: the day's travel, and the
+       hotel's check-out and check-in. */
+    const timelineLegs = shape ? dayLegs(day, arrivals) : [];
+    const timelineMarkers = shape
+        ? dayMarkers(dayDate, api.data?.bookings ?? [], (id) => (id == null ? '' : api.placeById.get(id)?.name ?? ''))
+        : [];
+    const openLeg = (legId: number) => {
+        setTravelOpen(true);
+        // After the disclosure has opened.
+        setTimeout(() => document.getElementById(`leg-${legId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 60);
+    };
 
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -1177,11 +1211,11 @@ function DayCard({
                         text-[11px] text-slate-700"
                 >
                     {travelModeMeta(leg.mode).icon} Arrives
-                    {leg.arrive_time ? ` ${formatTime(leg.arrive_time)}` : ''}
+                    {leg.arrive_time ? ` ${fmt(leg.arrive_time)}` : ''}
                     {leg.to_text ? ` at ${leg.to_text}` : ''} — the{' '}
                     {travelModeMeta(leg.mode).label.toLowerCase()} that left on day{' '}
                     {fromDay.day_number}
-                    {leg.depart_time ? ` at ${formatTime(leg.depart_time)}` : ''}.
+                    {leg.depart_time ? ` at ${fmt(leg.depart_time)}` : ''}.
                 </p>
             ))}
 
@@ -1227,15 +1261,26 @@ function DayCard({
                 stack of them would push the hours off the bottom of the card. */}
             {shape ? (
                 day.travel.length > 0 && (
-                    <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                        {day.travel.map((leg) => (
-                            <TravelLegCard key={leg.id} leg={leg} day={day} api={api} />
-                        ))}
-                    </div>
+                    <details
+                        open={travelOpen}
+                        onToggle={(e) => setTravelOpen((e.currentTarget as HTMLDetailsElement).open)}
+                        className="mt-2"
+                    >
+                        <summary className="min-h-11 md:min-h-0 cursor-pointer py-1 text-xs text-gray-500 hover:text-gray-800">
+                            Travel details ({day.travel.length})
+                        </summary>
+                        <div className="mt-1 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                            {day.travel.map((leg) => (
+                                <div key={leg.id} id={`leg-${leg.id}`}>
+                                    <TravelLegCard leg={leg} day={day} api={api} />
+                                </div>
+                            ))}
+                        </div>
+                    </details>
                 )
             ) : (
                 day.travel.map((leg) => (
-                    <div key={leg.id} className="mt-2">
+                    <div key={leg.id} id={`leg-${leg.id}`} className="mt-2">
                         <TravelLegCard leg={leg} day={day} api={api} />
                     </div>
                 ))
@@ -1251,6 +1296,8 @@ function DayCard({
                         <DayBar
                             api={api}
                             stops={day.stops}
+                            legs={timelineLegs}
+                            onOpenLeg={openLeg}
                             onOpenStop={(stop) => {
                                 const place = stop.place_id == null
                                     ? null : api.placeById.get(stop.place_id) ?? null;
@@ -1261,6 +1308,9 @@ function DayCard({
                         <DayClock
                             api={api}
                             stops={day.stops}
+                            legs={timelineLegs}
+                            markers={timelineMarkers}
+                            onOpenLeg={openLeg}
                             onOpenStop={(stop) => {
                                 const place = stop.place_id == null
                                     ? null : api.placeById.get(stop.place_id) ?? null;

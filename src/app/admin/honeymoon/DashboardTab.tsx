@@ -12,7 +12,7 @@ import {
     buildBudget, completenessOf, deadlinesOf, formatMoney, perPerson, phaseHint, unbookedDays,
 } from '@/lib/honeymoonBudget';
 import { dueSoon } from '@/lib/honeymoonChecks';
-import { buildOfflineHtml, offlineExportFilename } from '@/lib/honeymoonExport';
+import { downloadOfflineCopy } from './offlineCopy';
 import type { HoneymoonApi } from './useHoneymoon';
 import { usePlaceSheet } from './PlaceSheetContext';
 import { Card, CategoryChip } from './ui';
@@ -25,21 +25,6 @@ const TripMap = dynamic(() => import('./TripMap'), {
 
 const BASE = '/admin/honeymoon';
 
-/**
- * Save the whole trip as one self-contained HTML file.
- *
- * The backup for when the offline Today view does not come through: built from
- * the payload already on screen, so it is exactly what the tabs show.
- */
-function downloadOfflineCopy(data: NonNullable<HoneymoonApi['data']>) {
-    const html = buildOfflineHtml(data);
-    const url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = offlineExportFilename(data);
-    link.click();
-    URL.revokeObjectURL(url);
-}
 
 /**
  * The whole trip on one screen.
