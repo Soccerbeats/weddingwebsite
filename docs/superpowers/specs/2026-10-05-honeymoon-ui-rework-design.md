@@ -16,7 +16,7 @@ the review is where to overturn any of them.
    Stacked / Clock belongs to the *left* of Days / Timeline / Calendar.
    Transportation must appear in the timelines — the point of timeline mode is
    to see everything on a day, when you need to be there and when it ends.
-3. **The UI overall needs reworking.** The map page is the one he likes, and
+3. **The UI overall needs reworking.** The map page is the one Austin likes, and
    even it needs changes.
 4. **Then mobile — the big one.** Some things are unusable on a phone, others
    are just bad.
