@@ -3,7 +3,7 @@ import pool from '@/lib/db';
 import { getSiteConfig } from '@/lib/config';
 import { partyAttendees } from '@/lib/seating';
 import { cleanName, cleanNameSql } from '@/lib/names';
-import { dietCodes, dietNote, type DietaryEntry, type ExportPerson, type ExportTable, type ExportVendor, type SeatingExportData } from '@/lib/seatingExport';
+import { dietCodes, dietNote, type DietaryEntry, type ExportPerson, type ExportTable, type ExportVendor, type PlanPoint, type SeatingExportData } from '@/lib/seatingExport';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,8 +12,8 @@ export const dynamic = 'force-dynamic';
  * cannot eat.
  *
  * A separate read from the floor plan the editor loads, deliberately — the
- * editor does not need anybody's dietary answers, and the export does not need
- * table coordinates. It is also the only place the two halves of the data meet:
+ * editor does not need anybody's dietary answers. It carries the coordinates and
+ * the room outline too, for the printed floor plan. It is also the only place the two halves of the data meet:
  * a chair lives in `seat_assignments` and a restriction lives in an RSVP, joined
  * on nothing sturdier than the name the seat was created with.
  */
@@ -93,11 +93,11 @@ export async function GET() {
         const vendors = await loadVendors(client);
 
         if (!floorPlan) {
-            return NextResponse.json({ ...header, tables: [], unseated: [], vendors } satisfies SeatingExportData);
+            return NextResponse.json({ ...header, tables: [], unseated: [], vendors, room: null } satisfies SeatingExportData);
         }
 
         const tablesResult = await client.query(
-            `SELECT id, name, table_type, seat_count FROM seating_tables
+            `SELECT id, name, table_type, seat_count, x, y FROM seating_tables
               WHERE floor_plan_id = $1 ORDER BY id ASC`,
             [floorPlan.id],
         );
@@ -183,6 +183,8 @@ export async function GET() {
                 // Same rule as the floor plan: a declared capacity, widened to
                 // the chairs actually in use.
                 seat_count: Math.max(Number(table.seat_count) || 0, people.length),
+                x: Number(table.x) || 0,
+                y: Number(table.y) || 0,
                 people,
             };
         });
@@ -232,7 +234,16 @@ export async function GET() {
             ))
         ));
 
-        return NextResponse.json({ ...header, tables, unseated, vendors } satisfies SeatingExportData);
+        const roomResult = await client.query(
+            'SELECT vertices FROM floor_plan_room WHERE floor_plan_id = $1 LIMIT 1',
+            [floorPlan.id],
+        );
+        const vertices = roomResult.rows[0]?.vertices;
+        const room: PlanPoint[] | null = Array.isArray(vertices) && vertices.length >= 3
+            ? vertices.map((v: PlanPoint) => ({ x: Number(v.x) || 0, y: Number(v.y) || 0 }))
+            : null;
+
+        return NextResponse.json({ ...header, tables, unseated, vendors, room } satisfies SeatingExportData);
     } catch (error) {
         console.error('Error building seating export:', error);
         return NextResponse.json({ error: 'Failed to build seating export' }, { status: 500 });

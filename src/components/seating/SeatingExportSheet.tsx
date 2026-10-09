@@ -1,10 +1,11 @@
 'use client';
 
 import {
-    ALL_DIET_CODES, DIET_LABELS, NO_RESTRICTION_LABEL, alphabetical, freeSeats, grandTotal,
-    seatedPeople, sortedVendors, tally, tallyChips, tallyParts, vendorMeals,
+    ALL_DIET_CODES, DIET_LABELS, NO_RESTRICTION_LABEL, PLAN_LANDSCAPE, PLAN_PORTRAIT, PLAN_TABLE,
+    alphabetical, drawingScale, freeSeats, grandTotal, planBounds, planIsLandscape,
+    seatedPeople, sortedVendors, tableGeometry, tally, tallyChips, tallyParts, vendorMeals,
     type DietCode, type ExportOptions, type ExportPerson, type ExportTable, type ExportVendor,
-    type SeatingExportData,
+    type PlanBox, type PlanPoint, type SeatingExportData,
 } from '@/lib/seatingExport';
 
 /**
@@ -152,7 +153,7 @@ function TableBlock({ table, options, compact = false }: {
     // breathing room a roster does — and the point of that mode is fitting.
     const spacing = compact ? 'mb-3' : options.detail === 'counts' ? 'mb-4' : 'mb-7';
     return (
-        <section className={`${spacing} break-inside-avoid ${options.pageBreak ? 'break-after-page last:break-after-auto' : ''}`}>
+        <section className={`${spacing} break-inside-avoid`}>
             <div className="flex items-baseline gap-2 border-b border-gray-300 pb-1">
                 <h3 className="font-serif text-base font-semibold text-gray-900">{table.name}</h3>
                 <span className="text-[10px] uppercase tracking-widest text-gray-400">{table.table_type}</span>
@@ -384,6 +385,184 @@ function SheetHeader({ data, subtitle }: { data: SeatingExportData; subtitle: st
     );
 }
 
+/** A name at a chair, the way the canvas draws one. */
+function PlanChip({ person, number }: { person: ExportPerson; number?: number }) {
+    const declined = person.rsvp_status === 'declined';
+    return (
+        <span
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border bg-white text-[11px] font-medium whitespace-nowrap leading-4 ${
+                declined ? 'border-gray-300 text-gray-400 line-through' : 'border-gray-400 text-gray-800'
+            }`}
+        >
+            {number !== undefined && <span className="font-mono text-[9px] text-gray-400">{number}</span>}
+            {person.name}
+        </span>
+    );
+}
+
+/**
+ * The floor plan — or one table of it — as a drawing.
+ *
+ * Laid out at the canvas's own coordinates (`tableGeometry` holds TableNode's
+ * numbers) and scaled as a whole, so the paper looks like the screen. A
+ * transform is safe here, unlike on the counts sheet, because the outer box is
+ * given its scaled size explicitly: nothing measures the flow height.
+ */
+function PlanDrawing({ tables, room, bounds, scale, numbered = false, textScale }: {
+    tables: ExportTable[];
+    room: PlanPoint[] | null;
+    bounds: PlanBox;
+    scale: number;
+    /** Number the chairs, to match the roster printed under a single table. */
+    numbered?: boolean;
+    /**
+     * The names' size on paper, when it should not follow the drawing's. A single
+     * table is blown up to fill its page; its names blown up with it ran into
+     * each other, so they keep a reading size while the table around them grows.
+     */
+    textScale?: number;
+}) {
+    const chipZoom = textScale === undefined ? 1 : textScale / scale;
+    const w = bounds.maxX - bounds.minX;
+    const h = bounds.maxY - bounds.minY;
+    const ox = -bounds.minX;
+    const oy = -bounds.minY;
+    return (
+        <div className="relative overflow-hidden" style={{ width: w * scale, height: h * scale }}>
+            <div className="absolute left-0 top-0" style={{ width: w, height: h, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
+                {room && (
+                    <svg className="absolute inset-0" width={w} height={h}>
+                        <polygon
+                            points={room.map(p => `${p.x + ox},${p.y + oy}`).join(' ')}
+                            fill="#f9fafb"
+                            stroke="#374151"
+                            strokeWidth={3}
+                            strokeLinejoin="round"
+                        />
+                    </svg>
+                )}
+                {tables.map(table => {
+                    const g = tableGeometry(table);
+                    return (
+                        <div key={table.id}>
+                            <div
+                                className={`absolute flex flex-col items-center justify-center border-2 border-gray-500 bg-white text-center ${
+                                    g.shape === 'round' ? 'rounded-full' : 'rounded-xl'
+                                }`}
+                                style={{ left: g.body.x + ox, top: g.body.y + oy, width: g.body.width, height: g.body.height }}
+                            >
+                                <span className="px-3 font-serif text-sm font-semibold leading-tight text-gray-900">{table.name}</span>
+                                <span className="font-mono text-[10px] text-gray-500 tabular-nums">
+                                    {table.people.length}/{table.seat_count}
+                                </span>
+                            </div>
+                            {g.shape === 'round' && g.seats.map((pt, i) => (
+                                <div
+                                    key={i}
+                                    className="absolute"
+                                    style={{ left: pt.x + ox, top: pt.y + oy, transform: `translate(-50%, -50%) scale(${chipZoom})` }}
+                                >
+                                    <PlanChip person={table.people[i]} number={numbered ? i + 1 : undefined} />
+                                </div>
+                            ))}
+                            {g.shape === 'rect' && g.chipsTop !== null && (
+                                <div
+                                    className="absolute flex flex-wrap justify-center gap-1"
+                                    style={{
+                                        left: g.body.x + ox - 30,
+                                        top: g.chipsTop + oy,
+                                        width: (g.body.width + 60) / chipZoom,
+                                        transform: `scale(${chipZoom})`,
+                                        transformOrigin: 'top left',
+                                    }}
+                                >
+                                    {table.people.map((person, i) => (
+                                        <PlanChip key={i} person={person} number={numbered ? i + 1 : undefined} />
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
+
+/**
+ * The whole room on one page.
+ *
+ * Landscape when the room is wider than deep, through a named `@page` (see
+ * `globals.css`) — the only way to turn one page of a document on its side. The
+ * preview cannot turn a page, so it draws the landscape page shrunk to the
+ * portrait sheet's width instead.
+ */
+function PlanRoomPage({ data, preview }: { data: SeatingExportData; preview: boolean }) {
+    const bounds = planBounds(data.tables, data.room);
+    if (!bounds) {
+        return (
+            <section>
+                <SheetHeader data={data} subtitle="Floor plan" />
+                <p className="text-[11px] italic text-gray-400">No tables on the plan yet.</p>
+            </section>
+        );
+    }
+    const landscape = planIsLandscape(bounds);
+    const area = landscape ? PLAN_LANDSCAPE : PLAN_PORTRAIT;
+    const scale = drawingScale(bounds, area.width, area.height, 1.5);
+    const page = (
+        <section
+            className={`break-inside-avoid ${landscape ? 'print-landscape' : ''}`}
+            style={{ width: area.width }}
+        >
+            <SheetHeader data={data} subtitle="Floor plan" />
+            <div className="flex justify-center"><PlanDrawing tables={data.tables} room={data.room} bounds={bounds} scale={scale} /></div>
+        </section>
+    );
+    if (!(preview && landscape)) return page;
+    const shrink = PLAN_PORTRAIT.width / PLAN_LANDSCAPE.width;
+    return (
+        <div>
+            <p className="mb-2 text-[9px] uppercase tracking-widest text-gray-400">Prints sideways — landscape</p>
+            <div className="relative" style={{ zoom: shrink }}>{page}</div>
+        </div>
+    );
+}
+
+/** One table, its own page: the drawing with numbered chairs, then the roster. */
+function PlanTablePage({ data, table, options }: {
+    data: SeatingExportData;
+    table: ExportTable;
+    options: ExportOptions;
+}) {
+    const bounds = planBounds([table], null)!;
+    const scale = drawingScale(bounds, PLAN_TABLE.width, PLAN_TABLE.height, 1.8);
+    const free = freeSeats(table);
+    return (
+        <section className="break-inside-avoid">
+            {/* A div, not a <header>: the print stylesheet forces every header
+                in the sheet to `display: block`, which would undo the flex. */}
+            <div className="border-b-2 border-gray-900 pb-2 mb-4 flex items-baseline gap-3">
+                <h2 className="font-serif text-2xl font-semibold text-gray-900">{table.name}</h2>
+                <span className="text-[10px] uppercase tracking-widest text-gray-400">{table.table_type}</span>
+                <span className="ml-auto font-mono text-[11px] text-gray-500 tabular-nums">
+                    {table.people.length}/{table.seat_count} · {data.title}
+                </span>
+            </div>
+            <div className="flex justify-center my-4">
+                <PlanDrawing tables={[table]} room={null} bounds={bounds} scale={scale} numbered textScale={1.15} />
+            </div>
+            {options.detail !== 'names' && <TallyLine people={table.people} seatCount={table.seat_count} />}
+            {table.people.length > 0
+                ? <><div className="mt-3"><Legend /></div><Roster people={table.people} options={options} withSeat /></>
+                : <p className="mt-2 text-[11px] italic text-gray-400">Nobody seated here yet.</p>}
+            {options.empty && free > 0 && (
+                <p className="mt-1.5 text-[11px] text-gray-400">{free} empty seat{free === 1 ? '' : 's'}</p>
+            )}
+        </section>
+    );
+}
+
 /**
  * Where the printed copy starts a new page.
  *
@@ -411,6 +590,10 @@ export default function SeatingExportSheet({ data, options, preview = false }: {
     const showNames = options.detail !== 'counts';
     const showTables = options.sections === 'table' || options.sections === 'both';
     const showList = options.sections === 'list' || options.sections === 'both';
+    // The drawing comes first, a page (or a page per table) of its own; every
+    // section after it starts a fresh page.
+    const planPages = options.plan === 'room' ? 1 : options.plan === 'tables' ? data.tables.length : 0;
+    const afterPlan = planPages > 0;
     // Counts only is a narrow column of headings and numbers — a page of it is
     // mostly margin, and thirteen tables run onto a second sheet for no reason.
     // Two columns puts a normal wedding on one page. Not when every table is
@@ -425,8 +608,20 @@ export default function SeatingExportSheet({ data, options, preview = false }: {
 
     return (
         <div className="bg-white text-gray-900 p-8 text-[12px] leading-relaxed">
+            {options.plan === 'room' && <PlanRoomPage data={data} preview={preview} />}
+            {options.plan === 'tables' && data.tables.map((table, i) => (
+                <div key={table.id} className={i > 0 ? 'break-before-page' : undefined}>
+                    {preview && i > 0 && <PageBreak />}
+                    <PlanTablePage data={data} table={table} options={options} />
+                </div>
+            ))}
+            {options.plan === 'tables' && data.tables.length === 0 && (
+                <p className="text-[11px] italic text-gray-400">No tables on the plan yet.</p>
+            )}
+
+            {showTables && preview && afterPlan && <PageBreak />}
             {showTables && (
-                <>
+                <div className={afterPlan ? 'break-before-page' : undefined}>
                     <SheetHeader data={data} subtitle="Seating chart · by table" />
                     {options.kitchen && (
                         <Kitchen people={seated} vendors={data.vendors} showVendors={options.vendors} />
@@ -437,7 +632,20 @@ export default function SeatingExportSheet({ data, options, preview = false }: {
                     )}
                     <div className={countsMode ? `${columns === 3 ? 'columns-3 gap-x-5' : 'columns-2 gap-x-8'}` : undefined}>
                     {data.tables.map((table, i) => (
-                        <div key={table.id} className={twoColumn ? 'break-inside-avoid' : undefined}>
+                        // The break lives on this wrapper, before every table but
+                        // the first. It used to be `break-after` on the section
+                        // inside with `last:break-after-auto` to spare the final
+                        // table — but each section is the only child of its
+                        // wrapper, so *every* one was "last", every break was
+                        // cancelled, and the preview's dashed lines were the only
+                        // page breaks there were.
+                        <div
+                            key={table.id}
+                            className={[
+                                twoColumn ? 'break-inside-avoid' : '',
+                                options.pageBreak && i > 0 ? 'break-before-page' : '',
+                            ].join(' ').trim() || undefined}
+                        >
                             {preview && options.pageBreak && i > 0 && <PageBreak />}
                             <TableBlock table={table} options={options} compact={twoColumn} />
                         </div>
@@ -455,12 +663,12 @@ export default function SeatingExportSheet({ data, options, preview = false }: {
                         </section>
                     )}
                     </div>
-                </>
+                </div>
             )}
 
-            {showList && preview && showTables && <PageBreak />}
+            {showList && preview && (showTables || afterPlan) && <PageBreak />}
             {showList && (
-                <div className={showTables ? 'break-before-page pt-2' : ''}>
+                <div className={showTables || afterPlan ? 'break-before-page pt-2' : ''}>
                     <SheetHeader data={data} subtitle="Seating chart · every guest, A–Z" />
                     {options.kitchen && !showTables && (
                         <Kitchen people={seated} vendors={data.vendors} showVendors={options.vendors} />
@@ -486,16 +694,18 @@ export default function SeatingExportSheet({ data, options, preview = false }: {
             {/* Once, at the end, whichever sections are on — a vendor belongs to
                 no table and sorts under no surname, so there is nowhere else for
                 the block to sit and no reason to print it twice. */}
-            {options.vendors && (
+            {options.vendors && options.sections !== 'none' && (
                 <div className={(showTables || showList) ? (countsMode ? 'mt-4' : 'mt-8 pt-2') : ''}>
                     <Vendors vendors={data.vendors} compact={countsMode} />
                 </div>
             )}
 
+            {(options.sections !== 'none' || options.plan === 'tables') && (
             <p className="mt-6 pt-2 border-t border-gray-100 text-[10px] text-gray-400">
                 Dietary answers come from the RSVP form. A dash means nothing was reported —
                 that plate is the {NO_RESTRICTION_LABEL.toLowerCase()}.
             </p>
+            )}
         </div>
     );
 }

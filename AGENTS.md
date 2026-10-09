@@ -63,7 +63,7 @@ image:
 | `npm run check:honeymoon:ui` | The honeymoon portal in a real browser, 53 checks (none of them write): the same place panel and sections from every entry point, the itinerary toolbar staying on screen, travel on both timeline shapes, overview cards never overlapping, and at 390×844 no sideways scroll and no control under 44px on any of its pages. Needs a browser and a server with honeymoon data (`BASE=… ADMIN_PASSWORD=…`, or `DEMO=1` against the demo) |
 | `npm run check:hero` | The home page's hero collapse in a real browser, at five viewport-and-input pairings — phone portrait, **phone landscape**, tablet portrait, tablet landscape, desktop — each driven by the input that device actually sends. Needs a browser and a server whose site config has a hero photo, or every case reports the placeholder instead of a pass |
 | `npm run audit:finance` | A deeper sweep over the finance logic |
-| `npm run check:seating` | 211 assertions with no database or browser: who takes a chair (a party member who declined takes none), seat-index allocation, moves, swaps, gathering a split party, auto-seating, the plan's own warnings, and the export — tallies, vendor plates, the grand total, the spreadsheet's columns and the one-page fit maths |
+| `npm run check:seating` | 238 assertions with no database or browser: who takes a chair (a party member who declined takes none), seat-index allocation, moves, swaps, gathering a split party, auto-seating, the plan's own warnings, and the export — tallies, vendor plates, the grand total, the spreadsheet's columns, the one-page fit maths, and the floor plan drawing's geometry |
 | `npm run check:honeymoon` | 743 assertions with no database or network: distances, date maths, URL parsing, the calendar grid, `.ics` output, search ranking, seed integrity, the trip-mode day resolution, sunrise/sunset, OSM opening hours, the day timeline, time zones on legs, the budget, conflicts, imports/exports, markdown, the flight parser, and journeys (layovers, day placement, door-to-door time) |
 
 Seeds: `npm run seed:honeymoon` (bundles the Bali/Singapore travel guide,
@@ -457,6 +457,14 @@ order, before the commit:
     `Tally.plates` is `total − NOM` and is what `grandTotal()` and the kitchen
     tiles count; `total` is chairs. Handing a caterer the headcount when someone
     is not eating orders one plate too many.
+  - **Page breaks go on the wrapper, as `break-before-page` on every table but
+    the first** — never `break-after` with a `last:` exemption: each table section
+    is the only child of its wrapper, so `last:` matched all of them and cancelled
+    every break until v0.10.4.
+  - **The floor plan drawing** (`plan: 'room' | 'tables'`) is drawn from
+    `tableGeometry()`, which copies `TableNode`'s sizes and chair positions —
+    change one, change the other. The whole room turns landscape through the
+    named page `plan-landscape` in `globals.css` (`.print-landscape`).
   - `dietCodes()` returns `['NOM']` and nothing else for a not-eating entry, so
     the exclusivity holds even for a row written by an older release or by hand
     — the editors enforce it too, but they are not the last line.

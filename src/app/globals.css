@@ -257,6 +257,25 @@ html {
 }
 
 /*
+ * The seating chart's floor plan, on its side.
+ *
+ * A named page is the only way to turn one page of a document landscape while
+ * the rest stays portrait: the element asks for the page by name, and the
+ * browser starts a fresh sheet for it (and another after it). `size: landscape`
+ * keeps whatever paper the print dialog chose — A4 or Letter.
+ */
+@page plan-landscape {
+  size: landscape;
+  margin: 12mm;
+}
+
+@media print {
+  .print-landscape {
+    page: plan-landscape;
+  }
+}
+
+/*
  * Horizontally scrolling tab strips (the honeymoon portal's nine tabs).
  *
  * On a phone the strip always overflows, so it fades at the right edge to say

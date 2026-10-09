@@ -19,7 +19,7 @@ import {
 import {
     DEFAULT_EXPORT_OPTIONS, NO_RESTRICTION_LABEL, alphabetical, csvHeaders, csvRows,
     A4_CONTENT_HEIGHT, ALL_DIET_CODES, dietCodes, dietNote, exportFilename, fitScale, freeSeats, grandTotal,
-    pageCount, seatedPeople, sortedVendors, surname,
+    pageCount, seatedPeople, sortedVendors, surname, tableGeometry, planBounds, drawingScale, planIsLandscape,
     tally, tallyChips, tallyParts, vendorMeals,
     type ExportOptions, type ExportPerson, type ExportVendor, type SeatingExportData,
 } from '../src/lib/seatingExport';
@@ -671,7 +671,7 @@ console.log('\nExporting the chart');
 
     /* free chairs */
     const exTable = (seat_count: number, people: ExportPerson[]) => ({
-        id: 1, name: 'Table 1', table_type: 'round', seat_count, people,
+        id: 1, name: 'Table 1', table_type: 'round', seat_count, x: 0, y: 0, people,
     });
     check('free chairs are capacity less the people', freeSeats(exTable(8, table1)) === 3);
     check('an over-full table reports no free chairs, never a negative',
@@ -691,7 +691,7 @@ console.log('\nExporting the chart');
         venue: null,
         tables: [
             exTable(8, [person('Bo Zeller'), person('Ada Marsh', ['VGN'])]),
-            { id: 2, name: 'Table 2', table_type: 'round', seat_count: 4, people: [person('Cy Abbott', [], { table_name: 'Table 2', seat: 1 })] },
+            { id: 2, name: 'Table 2', table_type: 'round', seat_count: 4, x: 400, y: 0, people: [person('Cy Abbott', [], { table_name: 'Table 2', seat: 1 })] },
         ],
         unseated: [person('Di Nolan', ['GF'], { seat: null, table_name: null })],
         vendors: [
@@ -700,6 +700,7 @@ console.log('\nExporting the chart');
             vendor(2, 'Sam Deane', null, ['VGN']),
             vendor(4, 'Rory Vance', 'Planner', [], false),
         ],
+        room: null,
     };
 
     const az = alphabetical(data, true);
@@ -1018,6 +1019,43 @@ console.log('\nSeating the rest of a party');
 
     const guestSeat = buildPersonSeat(household, nobody.unseated[0], 5, []);
     check('the guest themself keeps theirs', guestSeat.guest_list_id === 20);
+}
+
+console.log('\nThe floor plan drawing');
+{
+    const four = [1, 2, 3, 4];
+    const round = tableGeometry({ table_type: 'round', x: 100, y: 50, people: four });
+    check('a round table sits inside its orbit, where the canvas draws it',
+        round.body.x === 152 && round.body.y === 102 && round.body.width === 160,
+        JSON.stringify(round.body));
+    check('a round table has a chair per person', round.seats.length === 4);
+    check('the first chair is at twelve o\'clock',
+        Math.abs(round.seats[0].x - 232) < 1e-9 && round.seats[0].y < round.body.y,
+        JSON.stringify(round.seats[0]));
+    check('the chairs go round clockwise, as on the canvas', round.seats[1].x > round.seats[0].x);
+
+    const head = tableGeometry({ table_type: 'head', x: 0, y: 0, people: Array(8).fill(0) });
+    check('a head table widens with the people at it, as on the canvas',
+        head.body.width === 384 && head.body.height === 80, JSON.stringify(head.body));
+    check('its names go underneath it', head.chipsTop === 88 && head.box.maxY > 88);
+    const empty = tableGeometry({ table_type: 'rectangular', x: 0, y: 0, people: [] });
+    check('an empty table draws no row of names', empty.chipsTop === null && empty.box.maxY === 100);
+
+    const bounds = planBounds([{ table_type: 'round', x: 0, y: 0, people: four }], null, 0)!;
+    check('the bounds take in the chairs and their names, not only the table',
+        bounds.minX < 52 && bounds.maxX > 212 && bounds.minY < 52, JSON.stringify(bounds));
+    const withRoom = planBounds([], [{ x: -100, y: -50 }, { x: 900, y: -50 }, { x: 900, y: 400 }], 10)!;
+    check('the room outline is part of the drawing',
+        withRoom.minX === -110 && withRoom.maxX === 910 && withRoom.maxY === 410, JSON.stringify(withRoom));
+    check('nothing to draw is no drawing', planBounds([], null) === null);
+    check('a wide room prints landscape', planIsLandscape(withRoom));
+    check('a deep room prints portrait', !planIsLandscape({ minX: 0, minY: 0, maxX: 100, maxY: 300 }));
+
+    const box = { minX: 0, minY: 0, maxX: 2000, maxY: 500 };
+    check('a drawing too big for the page shrinks to its tighter side',
+        drawingScale(box, 1000, 1000) === 0.5);
+    check('a small drawing grows no further than it is allowed',
+        drawingScale({ minX: 0, minY: 0, maxX: 100, maxY: 100 }, 600, 600, 1.8) === 1.8);
 }
 
 console.log(`\n${failures === 0 ? 'PASS' : 'FAIL'} — ${checks - failures}/${checks} checks passed.\n`);

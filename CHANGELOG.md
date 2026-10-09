@@ -11,6 +11,20 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.10.4 — [Released] Seating chart: page breaks that break, and the floor plan on paper (`main`, 2026-10-09 03:59)
+
+Austin: "New page per table" draws where each page starts, but the print is one long run of tables. Also needs a way to print the visual seating chart — the whole floor plan, or each table on its own page.
+
+### Fixed
+- **"New page per table" now starts every table on a new page.** Each table asked for a break after itself and then cancelled it, because a rule meant to spare only the *last* table matched every one of them — so the dashed lines in the preview were the only page breaks there were. Checked in a real print: 13 tables now print as 14 pages (the kitchen summary shares page one with the first table), where before they ran together.
+
+### Added
+- **The floor plan, printed.** A new *Floor plan drawing* choice in the export dialog:
+  - **Whole room** — the canvas on one page: the room outline, every table where it sits, every name at its chair. It turns the page sideways (landscape) when the room is wider than it is deep, and the rest of the document stays portrait.
+  - **Each table** — one page per table: the table drawn large with numbered chairs, the dietary line, and the roster underneath, seat numbers matching the drawing.
+  - Either one prints ahead of the lists, or on its own with the new **No list** option.
+- The drawing uses the canvas's own positions and sizes, so the paper looks like the screen. Covered by 14 new checks in `check:seating`.
+
 ## v0.10.3 — [Released] The whole site, offline (`main`, 2026-10-05 14:23)
 
 Austin: the site is installed to the iPhone home screen, and with no internet it does not open. Make the entire site work without internet.

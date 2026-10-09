@@ -163,7 +163,11 @@ export default function SeatingExportModal({ onClose }: { onClose: () => void })
      */
     const fitsOnePage = options.format === 'print'
         && options.detail === 'counts'
-        && !options.pageBreak;
+        && !options.pageBreak
+        && options.plan === 'none';
+    // The height-based count knows nothing about pages the sheet forces — a
+    // drawing, a table per page — so it is only shown when there are none.
+    const countable = options.plan === 'none' && !options.pageBreak;
     const printScale = fitsOnePage ? fitScale(sheetHeight) : 1;
     const printPages = pageCount(sheetHeight, printScale);
     const shrunk = printScale < 1;
@@ -186,7 +190,7 @@ export default function SeatingExportModal({ onClose }: { onClose: () => void })
                             <h2 className="font-serif text-lg font-bold text-gray-800">Export seating chart</h2>
                             <p className="text-xs text-gray-500">
                                 {data ? `${data.tables.length} tables · ${people} people` : 'Loading…'}
-                                {data && options.format === 'print' && sheetHeight > 0 && (
+                                {data && options.format === 'print' && sheetHeight > 0 && countable && (
                                     <span className={overflows ? 'text-amber-700' : 'text-gray-400'}>
                                         {' · '}
                                         {overflows
@@ -212,6 +216,23 @@ export default function SeatingExportModal({ onClose }: { onClose: () => void })
                     <div className="flex-1 min-h-0 flex flex-col md:flex-row">
                         {/* Options */}
                         <div className="md:w-72 shrink-0 border-b md:border-b-0 md:border-r border-gray-100 overflow-y-auto p-5 flex flex-col gap-5">
+                            {options.format === 'print' && (
+                                <Segment
+                                    label="Floor plan drawing"
+                                    value={options.plan}
+                                    onChange={v => setOptions(prev => ({
+                                        ...prev,
+                                        plan: v,
+                                        // "No list" only makes sense with a drawing to print.
+                                        sections: v === 'none' && prev.sections === 'none' ? 'table' : prev.sections,
+                                    }))}
+                                    options={[
+                                        { value: 'none', label: 'None' },
+                                        { value: 'room', label: 'Whole room', hint: '1 page' },
+                                        { value: 'tables', label: 'Each table', hint: '1 page each' },
+                                    ]}
+                                />
+                            )}
                             <Segment
                                 label="What to include"
                                 value={options.sections}
@@ -220,6 +241,9 @@ export default function SeatingExportModal({ onClose }: { onClose: () => void })
                                     { value: 'table', label: 'By table', hint: 'seating order' },
                                     { value: 'list', label: 'Alphabetical list', hint: 'find a name' },
                                     { value: 'both', label: 'Both', hint: '2 sections' },
+                                    ...(options.format === 'print' && options.plan !== 'none'
+                                        ? [{ value: 'none' as const, label: 'No list', hint: 'drawing only' }]
+                                        : []),
                                 ]}
                             />
                             <Segment

@@ -37,7 +37,16 @@ export interface ExportTable {
     name: string;
     table_type: string;
     seat_count: number;
+    /** Where the table sits on the canvas — React Flow's top-left of the node. */
+    x: number;
+    y: number;
     people: ExportPerson[];
+}
+
+/** A corner of the room outline, in the canvas's coordinates. */
+export interface PlanPoint {
+    x: number;
+    y: number;
 }
 
 /**
@@ -67,11 +76,15 @@ export interface SeatingExportData {
     /** Attending households holding no chairs, flattened to people. */
     unseated: ExportPerson[];
     vendors: ExportVendor[];
+    /** The room outline drawn on the canvas, or null when none was drawn. */
+    room: PlanPoint[] | null;
 }
 
 export interface ExportOptions {
-    /** By table, A–Z, or both sections in one document. */
-    sections: 'table' | 'list' | 'both';
+    /** By table, A–Z, both sections, or no list at all (the drawing alone). */
+    sections: 'table' | 'list' | 'both' | 'none';
+    /** The floor plan as a drawing: not at all, the whole room, or a page per table. */
+    plan: 'none' | 'room' | 'tables';
     /** Every name, the counts alone, or both. */
     detail: 'names' | 'counts' | 'both';
     /** Whole-wedding totals on page one. */
@@ -90,6 +103,7 @@ export interface ExportOptions {
 
 export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
     sections: 'table',
+    plan: 'none',
     detail: 'both',
     kitchen: true,
     household: false,
@@ -383,3 +397,148 @@ export function exportFilename(ext: string, now: Date = new Date()): string {
     ].join('-');
     return `seating-chart-${stamp}.${ext}`;
 }
+
+/* ── The floor plan as a drawing ─────────────────────────────────────────── */
+
+/*
+ * The printed drawing is the canvas again, at the canvas's own coordinates: a
+ * table is where it was dropped, the size `TableNode` draws it, with its chairs
+ * where `TableNode` puts them. These numbers are TableNode's — change one and
+ * change the other, or the paper stops looking like the screen.
+ */
+const ROUND_SIZE = 160;
+const ROUND_ORBIT_PAD = 52;
+const ROUND_SEAT_RADIUS = ROUND_SIZE / 2 + 28;
+const RECT_WIDTH = 200;
+const RECT_HEIGHT = 100;
+const HEAD_HEIGHT = 80;
+/** Room for a name chip, which the canvas draws centred on its point. */
+const CHIP_HALF_WIDTH = 60;
+const CHIP_HEIGHT = 22;
+/** How many chips fit across a rectangular table's width, for the rows below it. */
+const CHIP_SLOT = 100;
+
+export interface PlanBox {
+    minX: number;
+    minY: number;
+    maxX: number;
+    maxY: number;
+}
+
+export interface TableGeometry {
+    shape: 'round' | 'rect';
+    /** The table itself. */
+    body: { x: number; y: number; width: number; height: number };
+    /** Round tables: each chair's centre, in seat order. */
+    seats: PlanPoint[];
+    /** Rectangular tables: where the wrapped row of name chips starts. */
+    chipsTop: number | null;
+    /** Everything the table draws, chairs and names included. */
+    box: PlanBox;
+}
+
+/** Where a table and its chairs land, in canvas coordinates. */
+export function tableGeometry(table: Pick<ExportTable, 'table_type' | 'x' | 'y'> & { people: unknown[] }): TableGeometry {
+    const n = table.people.length;
+    if (table.table_type === 'round') {
+        const body = { x: table.x + ROUND_ORBIT_PAD, y: table.y + ROUND_ORBIT_PAD, width: ROUND_SIZE, height: ROUND_SIZE };
+        const cx = body.x + ROUND_SIZE / 2;
+        const cy = body.y + ROUND_SIZE / 2;
+        const seats = Array.from({ length: n }, (_, i) => {
+            const angle = (2 * Math.PI * i) / n - Math.PI / 2;
+            return { x: cx + ROUND_SEAT_RADIUS * Math.cos(angle), y: cy + ROUND_SEAT_RADIUS * Math.sin(angle) };
+        });
+        const reach = ROUND_SEAT_RADIUS + CHIP_HEIGHT / 2;
+        return {
+            shape: 'round',
+            body,
+            seats,
+            chipsTop: null,
+            box: {
+                minX: cx - ROUND_SEAT_RADIUS - CHIP_HALF_WIDTH,
+                maxX: cx + ROUND_SEAT_RADIUS + CHIP_HALF_WIDTH,
+                minY: cy - reach,
+                maxY: cy + reach,
+            },
+        };
+    }
+    const isHead = table.table_type === 'head';
+    const width = isHead ? Math.max(240, n * 48) : RECT_WIDTH;
+    const height = isHead ? HEAD_HEIGHT : RECT_HEIGHT;
+    const body = { x: table.x, y: table.y, width, height };
+    const perRow = Math.max(1, Math.floor(width / CHIP_SLOT));
+    const rows = Math.ceil(n / perRow);
+    const chipsTop = n > 0 ? table.y + height + 8 : null;
+    return {
+        shape: 'rect',
+        body,
+        seats: [],
+        chipsTop,
+        box: {
+            // A row of chips can be a little wider than the table it sits under.
+            minX: table.x - CHIP_HALF_WIDTH / 2,
+            maxX: table.x + width + CHIP_HALF_WIDTH / 2,
+            minY: table.y,
+            maxY: table.y + height + (rows > 0 ? 8 + rows * (CHIP_HEIGHT + 4) : 0),
+        },
+    };
+}
+
+/** The box around the room outline and every table on it, with a margin. */
+export function planBounds(
+    tables: (Pick<ExportTable, 'table_type' | 'x' | 'y'> & { people: unknown[] })[],
+    room: PlanPoint[] | null,
+    margin = 24,
+): PlanBox | null {
+    const boxes: PlanBox[] = tables.map(t => tableGeometry(t).box);
+    if (room && room.length > 0) {
+        boxes.push({
+            minX: Math.min(...room.map(p => p.x)),
+            maxX: Math.max(...room.map(p => p.x)),
+            minY: Math.min(...room.map(p => p.y)),
+            maxY: Math.max(...room.map(p => p.y)),
+        });
+    }
+    if (boxes.length === 0) return null;
+    return {
+        minX: Math.min(...boxes.map(b => b.minX)) - margin,
+        minY: Math.min(...boxes.map(b => b.minY)) - margin,
+        maxX: Math.max(...boxes.map(b => b.maxX)) + margin,
+        maxY: Math.max(...boxes.map(b => b.maxY)) + margin,
+    };
+}
+
+/**
+ * How much to scale a drawing so it fits a box on the page.
+ *
+ * Shrinks as far as it must and grows only up to `max` — a single table blown
+ * up to fill a page is easier to read, but past about double the names are
+ * shouting.
+ */
+export function drawingScale(bounds: PlanBox, width: number, height: number, max = 1): number {
+    const w = bounds.maxX - bounds.minX;
+    const h = bounds.maxY - bounds.minY;
+    if (w <= 0 || h <= 0) return 1;
+    return Math.min(max, width / w, height / h);
+}
+
+/**
+ * Whether the whole room prints on its side.
+ *
+ * A reception room is usually wider than it is deep, and on a portrait page a
+ * wide drawing is a thin strip of tiny names. Landscape when it is wider.
+ */
+export function planIsLandscape(bounds: PlanBox): boolean {
+    return bounds.maxX - bounds.minX > bounds.maxY - bounds.minY;
+}
+
+/*
+ * The drawing areas, in CSS pixels at 96dpi. Conservative on purpose: they have
+ * to fit inside the sheet's own padding on A4 *and* on US Letter, whichever the
+ * printer dialog is set to, since a drawing that is 10px too tall prints its
+ * last row of tables on a second page by itself.
+ */
+export const PLAN_PORTRAIT = { width: 630, height: 820 };
+export const PLAN_LANDSCAPE = { width: 880, height: 560 };
+/** One table's page: the drawing on top, its roster below. */
+export const PLAN_TABLE = { width: 630, height: 430 };
