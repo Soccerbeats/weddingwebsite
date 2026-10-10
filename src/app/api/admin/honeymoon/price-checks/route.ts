@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { ensureHoneymoonTables } from '@/lib/honeymoonDb';
 import { priceValue } from '@/lib/honeymoon';
+import { replayable } from '@/lib/outboxReplay';
 
 /**
  * Price checks on a shortlisted stay.
@@ -19,7 +20,8 @@ import { priceValue } from '@/lib/honeymoon';
 
 interface Entry { url?: unknown; price?: unknown; currency?: unknown }
 
-export async function POST(request: Request) {
+/** POST: create. Exported below through `replayable`, so a resend from the offline outbox is applied once. */
+async function create(request: Request) {
     try {
         await ensureHoneymoonTables();
         const body = await request.json().catch(() => ({}));
@@ -130,3 +132,5 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: 'Could not read that history' }, { status: 500 });
     }
 }
+
+export const POST = replayable(create);

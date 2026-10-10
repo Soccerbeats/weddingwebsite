@@ -1,7 +1,9 @@
 'use client';
 
-import { useEffect, useState, useSyncExternalStore } from 'react';
-import { getServerState, getState, inFrame, isStandalone, saveForOffline, subscribe } from './offlineStore';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import Link from 'next/link';
+import { describeWrite } from './outbox';
+import { checkForUpdates, dismissFailed, getServerState, getState, inFrame, subscribe } from './offlineStore';
 
 /** "today 14:02", "yesterday 09:15", "Mon 5 Oct". */
 export function savedLabel(at: number, now = Date.now()): string {
@@ -27,6 +29,8 @@ function useOnline(): boolean {
     const [browserOnline, setBrowserOnline] = useState(true);
     const [workerOffline, setWorkerOffline] = useState(false);
     useEffect(() => {
+        // The hidden save-pass frames draw no bar, so they need not ask.
+        if (inFrame()) return;
         const apply = () => setBrowserOnline(navigator.onLine);
         apply();
         window.addEventListener('online', apply);
@@ -72,42 +76,113 @@ function useOnline(): boolean {
     return browserOnline && !workerOffline;
 }
 
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
 /**
  * The site, offline: registered on every page from the app shell.
  *
- * Registers the site-wide worker, says so when there is no connection, and in
- * the installed app saves the whole site in the background whenever the saved
- * copy is missing, from an older version, or over twelve hours old. In an
- * ordinary browser tab it only saves what you visit — a guest's phone should
- * not download the whole site because they opened the RSVP page.
+ * Registers the site-wide worker and says so when there is no connection.
+ * Whenever the page opens, comes back to the foreground or gets its
+ * connection back, it sends any edits made offline and — in the installed app —
+ * asks the server whether anything changed, refreshing the saved copy if so.
+ * In an ordinary browser tab it only saves what you visit.
  */
 export default function OfflineManager() {
     const online = useOnline();
     const offline = useOfflineState();
+    const [showFailed, setShowFailed] = useState(false);
+    const wasOnline = useRef(online);
 
     useEffect(() => {
         if (inFrame() || !('serviceWorker' in navigator)) return;
         navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => undefined);
-        if (!isStandalone()) return;
         // After the page has settled, so the first paint never waits on it.
-        const timer = setTimeout(() => { void saveForOffline({ onlyIfStale: true }); }, 4000);
-        const onOnline = () => { void saveForOffline({ onlyIfStale: true }); };
+        const timer = setTimeout(() => { void checkForUpdates({ force: true }); }, 2500);
+        const onOnline = () => { void checkForUpdates({ force: true }); };
+        // Opening the installed app again from the home screen resumes it
+        // rather than loading it, so "opened" is also "became visible".
+        const onVisible = () => { if (document.visibilityState === 'visible') void checkForUpdates(); };
         window.addEventListener('online', onOnline);
-        return () => { clearTimeout(timer); window.removeEventListener('online', onOnline); };
+        document.addEventListener('visibilitychange', onVisible);
+        return () => {
+            clearTimeout(timer);
+            window.removeEventListener('online', onOnline);
+            document.removeEventListener('visibilitychange', onVisible);
+        };
     }, []);
 
-    if (online || inFrame()) return null;
+    // The server answered again after a spell without it: send and refresh.
+    useEffect(() => {
+        if (online && !wasOnline.current && !inFrame()) void checkForUpdates({ force: true });
+        wasOnline.current = online;
+    }, [online]);
+
+    if (inFrame()) return null;
+    const waiting = offline.pending > 0;
+    const failed = offline.failed.length > 0;
+    if (online && !waiting && !failed) return null;
+
+    let message: React.ReactNode;
+    if (!online) {
+        message = (
+            <>
+                Offline
+                {offline.record ? ` · showing the copy saved ${savedLabel(offline.record.at)}` : ' · showing what this device has saved'}
+                {waiting && ` · ${plural(offline.pending, 'change', 'changes')} saved on this phone, sent when you're back online`}
+            </>
+        );
+    } else if (waiting && offline.needsLogin) {
+        message = (
+            <>
+                {plural(offline.pending, 'change is', 'changes are')} waiting to be sent ·{' '}
+                <Link href="/admin/login" className="underline underline-offset-2">Sign in to send</Link>
+            </>
+        );
+    } else if (waiting) {
+        message = <>Sending {plural(offline.pending, 'change', 'changes')} made offline…</>;
+    }
+
     return (
         <div
             role="status"
             data-offline-banner
-            className="pointer-events-none fixed inset-x-0 z-[95] flex justify-center px-4"
+            data-pending={offline.pending}
+            className="pointer-events-none fixed inset-x-0 z-[95] flex flex-col items-center gap-2 px-4"
             style={{ top: 'calc(env(safe-area-inset-top, 0px) + 0.5rem)' }}
         >
-            <p className="pointer-events-auto rounded-full bg-gray-900/90 px-4 py-1.5 text-xs font-medium text-white shadow-lg backdrop-blur">
-                Offline
-                {offline.record ? ` · showing the copy saved ${savedLabel(offline.record.at)}` : ' · showing what this device has saved'}
-            </p>
+            {message && (
+                <p className="pointer-events-auto max-w-md rounded-full bg-gray-900/90 px-4 py-1.5 text-center text-xs font-medium text-white shadow-lg backdrop-blur">
+                    {message}
+                </p>
+            )}
+            {failed && (
+                <div data-offline-failed className="pointer-events-auto max-w-md rounded-2xl bg-red-700/95 px-4 py-2 text-xs text-white shadow-lg backdrop-blur">
+                    <div className="flex items-center gap-3">
+                        <span className="font-medium">
+                            {plural(offline.failed.length, 'change made offline', 'changes made offline')} couldn&apos;t be saved
+                        </span>
+                        <button type="button" onClick={() => setShowFailed((v) => !v)} className="min-h-[44px] underline underline-offset-2">
+                            {showFailed ? 'Hide' : 'Details'}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => { setShowFailed(false); void dismissFailed(); }}
+                            className="min-h-[44px] rounded-full bg-white/15 px-3"
+                        >
+                            Dismiss
+                        </button>
+                    </div>
+                    {showFailed && (
+                        <ul className="mt-1 space-y-1 pb-1">
+                            {offline.failed.map((write) => (
+                                <li key={write.seq}>
+                                    {describeWrite(write.method, write.url)} — {write.error}
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </div>
+            )}
         </div>
     );
 }

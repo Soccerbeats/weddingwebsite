@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { replayable } from '@/lib/outboxReplay';
 
 // Columns returned by every endpoint so the client always gets the same shape.
 const RETURNING = `id, guest_id, guest_name, amount::float8 AS amount, gift,
@@ -51,7 +52,8 @@ export async function GET() {
   }
 }
 
-export async function POST(request: Request) {
+/** POST: create. Exported below through `replayable`, so a resend from the offline outbox is applied once. */
+async function create(request: Request) {
   try {
     await ensureTable();
     const body = await request.json();
@@ -147,3 +149,5 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'Failed to delete donation' }, { status: 500 });
   }
 }
+
+export const POST = replayable(create);

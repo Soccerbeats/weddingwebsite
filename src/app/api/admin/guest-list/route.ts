@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { cleanNameSql } from '@/lib/names';
 import { renamesBetween } from '@/lib/seating';
+import { replayable } from '@/lib/outboxReplay';
 
 export async function GET() {
   try {
@@ -30,7 +31,8 @@ export async function GET() {
   }
 }
 
-export async function POST(request: Request) {
+/** POST: create. Exported below through `replayable`, so a resend from the offline outbox is applied once. */
+async function create(request: Request) {
   try {
     const { guest_name, email, phone, party_size, notes, invited, party_members, address, flag, relationship, plus_one_name, upsert, kind, rsvp_status } = await request.json();
 
@@ -285,3 +287,5 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'Failed to delete guest' }, { status: 500 });
   }
 }
+
+export const POST = replayable(create);

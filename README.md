@@ -221,11 +221,28 @@ that steps through them, and warnings that matter at a desk — a passport with
 under six months left after you come home, a policy that ends mid-trip. Every
 file is kept on the device for offline use, and the page says how many are.
 
-**Offline, all of it.** Install the site to a phone's home screen and it saves
-itself — every page, its data and its photos — so it opens on a plane or at a
-border with no signal, showing what it last saw. A small bar says when you are
-offline and how old the copy is; a change made offline says plainly that it was
-not saved.
+**Offline, all of it — and editable.** Install the site to a phone's home
+screen and it saves itself — every page, its data, the photos the site shows
+(not the rest of the photo library), the map tiles and hotel photos you looked
+at — so it opens on a plane or at a border with no signal. Every time you open
+the app it asks the server whether anything changed and brings its copy up to
+date on its own.
+
+With no signal you can keep editing. Changes are kept on the phone, shown
+straight away (the honeymoon portal and the site settings show them exactly as
+they will land), and sent by themselves, in order, the next time the app opens
+with a connection — "Sending 3 changes made offline…". To use it:
+
+1. Install the site to the home screen and open it once with a connection
+   (sign in to the admin, so the admin pages are saved too).
+2. Offline, use it as normal. The bar at the top says you are offline and how
+   many changes are waiting.
+3. Back online, open the app. The changes go up; if the session has expired
+   the bar says *Sign in to send* — sign in and they go. Anything the server
+   refuses is listed with the reason, under *Details*.
+
+Uploads, share links, archive restores and outside lookups (weather, driving
+times, flight details) still need a connection and say so.
 
 **Taking it with you.** A Today view built for one thumb, cached by a service
 worker so it opens with no signal; an emergency card with the local numbers as

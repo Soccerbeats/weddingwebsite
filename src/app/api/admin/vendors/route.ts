@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import type { DietaryEntry } from '@/lib/dietary';
+import { replayable } from '@/lib/outboxReplay';
 
 /**
  * Vendors — the photographer, the DJ, the planner.
@@ -54,7 +55,8 @@ export async function GET() {
     }
 }
 
-export async function POST(request: Request) {
+/** POST: create. Exported below through `replayable`, so a resend from the offline outbox is applied once. */
+async function create(request: Request) {
     try {
         const body = await request.json();
         const name = text(body.name);
@@ -137,3 +139,5 @@ export async function DELETE(request: Request) {
         return NextResponse.json({ error: 'Failed to delete vendor' }, { status: 500 });
     }
 }
+
+export const POST = replayable(create);

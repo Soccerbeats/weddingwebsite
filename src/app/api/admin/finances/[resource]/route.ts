@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { ensureFinanceTables } from '@/lib/financeDb';
+import { replayable } from '@/lib/outboxReplay';
 
 /**
  * Generic CRUD for the finance tables.
@@ -253,7 +254,8 @@ async function updateSettings(body: Record<string, unknown>) {
 
 type Params = { params: Promise<{ resource: string }> };
 
-export async function POST(request: Request, { params }: Params) {
+/** POST: create. Exported below through `replayable`, so a resend from the offline outbox is applied once. */
+async function create(request: Request, { params }: Params) {
     const { resource } = await params;
     try {
         await ensureFinanceTables();
@@ -407,3 +409,5 @@ export async function DELETE(request: Request, { params }: Params) {
         return NextResponse.json({ error: `Failed to delete ${resource}` }, { status: 500 });
     }
 }
+
+export const POST = replayable(create);

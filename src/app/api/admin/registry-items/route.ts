@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSiteConfig, updateSiteConfig } from '@/lib/config';
+import { replayable } from '@/lib/outboxReplay';
 
 export interface RegistryItem {
     id: string;
@@ -22,7 +23,8 @@ export async function GET() {
 
 // POST — add a new item. Read-modify-write happens inside the config queue so
 // two adds in the same second cannot each save a list missing the other's.
-export async function POST(req: Request) {
+// Exported below through `replayable`, so a resend from the offline outbox is applied once.
+async function create(req: Request) {
     try {
         const item: RegistryItem = await req.json();
         if (!item || typeof item.id !== 'string' || typeof item.title !== 'string') {
@@ -69,3 +71,5 @@ export async function DELETE(req: Request) {
         return NextResponse.json({ error: 'Failed to delete' }, { status: 500 });
     }
 }
+
+export const POST = replayable(create);

@@ -11,6 +11,30 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.10.5 — [Released] Edit offline, and an app that keeps itself current (`main`, 2026-10-10 19:43)
+
+Austin: the site is on my iPhone as an app. When I open it, the entire site should be saved on the phone — the public site and all the admin data, not the photos that aren't used anywhere. Offline I want to be able to make changes in the admin, especially the honeymoon section, and have them pushed to the server when I have a connection. And opening the app should automatically check whether anything on the server changed and update its saved copy.
+
+### Added
+- **Edit with no connection.** Every admin save made offline is kept on the phone (an outbox) instead of failing, and sent by itself, in the order it was made, the next time the app opens or the connection comes back. Something created offline gets a temporary id; when the server hands back the real one, every later change that used it is rewritten before it is sent — add a place, put it on a day, rename it, all on a plane, and it lands as one place on one day.
+- **Offline edits show straight away.** The honeymoon portal shows the saved trip with the waiting changes applied on top, the way the server will apply them — the same field rules, a new day's number, a new stop's position, a leg filed onto the day its date falls on, what a delete takes with it. They stay on screen through closing and reopening the app. Site settings (everything that saves through the site config) show their waiting changes too.
+- **The bar says what is waiting**: "Offline · … · 3 changes saved on this phone", then "Sending 3 changes made offline…" once the connection is back. If the session has expired (it lasts two hours) it says *Sign in to send*, and the changes go after signing in. Anything the server refuses is listed with its reason under *Details*; signing out never throws waiting changes away.
+- **The installed app checks for changes every time it opens** — and every time it comes back to the front. The server answers with a fingerprint of everything the site shows; when it differs from the saved copy's, the app re-fetches what it has saved (seconds), then opens each page once in the background to pick up anything new. Nothing changed, nothing downloaded.
+- **Pictures from other sites, kept as seen**: hotel photos from booking pages and the map tiles you looked at stay available offline (capped, oldest first — never a bulk download, which OpenStreetMap forbids).
+
+### Changed
+- **Only the photos the site shows are saved.** The photo library's own page is never saved, and each background save drops any saved photo no page asked for. Every photo in the gallery is saved now, not just the first screenful — they load lazily, and the hidden page never scrolled.
+- **A photo saved at one size answers for another** offline (the lightbox's full size when only the thumbnail was saved).
+- **A save made twice is applied once.** Every save from the outbox carries a key; the routes that create things answer a repeat with the first answer instead of creating a second row. On bad Wi-Fi a save can reach the server and lose its answer on the way back — the browser itself retries it (Chromium twice), and the outbox may send it again later.
+- A save that hangs on a weak signal gives up after 20 seconds and is kept for later instead of spinning; a send from the outbox gives up after 30 and is retried.
+- The honeymoon tables' field rules moved from the save route into `src/lib/honeymoonResources.ts`, shared by the route and the offline view.
+
+### Notes
+- Still needing a connection, and saying so: uploads, share links, restoring an archive, and lookups against other services (weather, driving times, flights, link previews). Outside the honeymoon portal and site settings — the guest list, finances, seating — an offline change is kept and sent the same way, but the page shows it only once it has been sent.
+- Last write wins: a change made offline overwrites the same field changed on the server meanwhile.
+- **`npm run check:offline`**: 38 → 126 checks — which writes may wait, temporary ids and their rewriting, a pretend server replaying an outbox, what a failed send means, repeats applied once, the update rule, and 29 checks of the honeymoon portal edited offline (creates, moves, reorders, ranks, bulk edits, deletes and what they take with them).
+- **`npm run check:offline:ui`**: 49 → 72 checks — add a to-do with the network cut, see it, reopen the page, reconnect and find it on the server exactly once with its real id; a create-then-tick chain; a site setting; a save whose answer is lost on the way back; the map keeping its tiles; only used photos saved; and the installed app noticing a change made on the server.
+
 ## v0.10.4 — [Released] Seating chart: page breaks that break, and the floor plan on paper (`main`, 2026-10-09 03:59)
 
 Austin: "New page per table" draws where each page starts, but the print is one long run of tables. Also needs a way to print the visual seating chart — the whole floor plan, or each table on its own page.

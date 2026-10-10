@@ -72,6 +72,36 @@ export const STALE_AFTER_MS = 12 * 60 * 60 * 1000;
 export interface WarmRecord {
     at: number;
     buildId: string;
+    /** The server's data fingerprint when this copy was saved (v0.10.5). */
+    data?: string;
+    /** Admin pages were part of it (a signed-in save). */
+    admin?: boolean;
+}
+
+/** What `/api/offline/manifest` says about the server right now. */
+export interface ServerVersion {
+    buildId: string;
+    data: string;
+    admin: boolean;
+}
+
+/**
+ * What the saved copy needs, given what the server says now.
+ *
+ * - `full` — nothing saved yet, a new release of the site (new code to save),
+ *   or a signed-in phone holding a signed-out copy: save everything.
+ * - `data` — same release, but something on the server changed (or the copy is
+ *   over twelve hours old): re-ask for what is saved, then open each page again
+ *   to pick up anything new.
+ * - `null` — up to date.
+ */
+export function updateNeeded(
+    record: WarmRecord | null, server: ServerVersion, now: number,
+): 'full' | 'data' | null {
+    if (!record || typeof record.at !== 'number' || record.buildId !== server.buildId) return 'full';
+    if (server.admin && !record.admin) return 'full';
+    if (isWarmStale(record, server.buildId, now) || record.data !== server.data) return 'data';
+    return null;
 }
 
 /** Same rule as the worker's `isStale`; `check:offline` holds the two together. */

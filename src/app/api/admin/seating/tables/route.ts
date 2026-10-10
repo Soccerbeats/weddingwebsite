@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { replayable } from '@/lib/outboxReplay';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: Request) {
+/** POST: create. Exported below through `replayable`, so a resend from the offline outbox is applied once. */
+async function create(request: Request) {
   const client = await pool.connect();
   try {
     const {
@@ -41,3 +43,5 @@ export async function POST(request: Request) {
     client.release();
   }
 }
+
+export const POST = replayable(create);

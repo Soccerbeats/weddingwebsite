@@ -4,6 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isDemoClient } from '@/lib/demoClient';
 import { normalizeCategoryKey, setCategoryRegistry, titleCase } from '@/lib/honeymoon';
 import type { Day, HoneymoonPayload, Place } from '@/lib/honeymoon';
+import { applyQueuedWrites } from '@/lib/honeymoonOffline';
+import { readOutbox } from '@/components/offline/outbox';
+import { REFRESHED_EVENT, SYNCED_EVENT } from '@/components/offline/offlineStore';
 
 /** The last delete, and how to put it back. */
 export interface UndoOffer {
@@ -20,6 +23,9 @@ const UNDO_DEPTH = 10;
 
 const BASE = '/api/admin/honeymoon';
 
+/** The worker kept this write for later (no connection) and answered for the server. */
+const wasQueued = (res: Response) => res.headers.get('X-Offline-Queued') === '1';
+
 /**
  * Owns the honeymoon portal's data and every mutation.
  *
@@ -27,6 +33,11 @@ const BASE = '/api/admin/honeymoon';
  * patching local state: moving a stop changes the map's route, the day's hop
  * distances and the place's scheduled badge all at once, and one request that
  * cannot drift beats three optimistic updates that can.
+ *
+ * Offline, a write is kept in the worker's outbox and answered with a stand-in
+ * (`wasQueued`). What is shown is then the last payload the server gave —
+ * live or saved — with the outbox applied on top (`applyQueuedWrites`), so an
+ * edit made on the beach is on screen at once and stays there until it is sent.
  */
 export function useHoneymoon() {
     const [data, setData] = useState<HoneymoonPayload | null>(null);
@@ -42,6 +53,8 @@ export function useHoneymoon() {
      * taps in the same tick would both read the same stale closure otherwise.
      */
     const dataRef = useRef<HoneymoonPayload | null>(null);
+    /** The payload as the server (or the saved copy) gave it, before the outbox. */
+    const baseRef = useRef<HoneymoonPayload | null>(null);
     const commit = useCallback((next: HoneymoonPayload | null) => {
         dataRef.current = next;
         setData(next);
@@ -62,7 +75,9 @@ export function useHoneymoon() {
         try {
             const res = await fetch(BASE, { cache: 'no-store' });
             if (!res.ok) throw new Error('Failed to load honeymoon data');
-            const payload: HoneymoonPayload = await res.json();
+            const base: HoneymoonPayload = await res.json();
+            baseRef.current = base;
+            const payload = applyQueuedWrites(base, await readOutbox());
             // Publish before the state update so the first render that sees the
             // new places already resolves their colours and labels correctly.
             setCategoryRegistry(payload.categories);
@@ -77,6 +92,30 @@ export function useHoneymoon() {
     }, []);
 
     useEffect(() => { refresh(); }, [refresh]);
+
+    // Edits made offline were sent, or the saved copy was brought up to date.
+    useEffect(() => {
+        const again = () => { void refresh(); };
+        window.addEventListener(SYNCED_EVENT, again);
+        window.addEventListener(REFRESHED_EVENT, again);
+        return () => {
+            window.removeEventListener(SYNCED_EVENT, again);
+            window.removeEventListener(REFRESHED_EVENT, again);
+        };
+    }, [refresh]);
+
+    /**
+     * Show a write that was just queued: the last payload plus the outbox, with
+     * no network request — offline, a refetch would only wait to be told no.
+     */
+    const showQueued = useCallback(async () => {
+        const base = baseRef.current;
+        if (!base) return;
+        const payload = applyQueuedWrites(base, await readOutbox());
+        setCategoryRegistry(payload.categories);
+        dataRef.current = payload;
+        setData(payload);
+    }, []);
 
     const run = useCallback(async (fn: () => Promise<Response>) => {
         inFlight.current += 1;
@@ -93,6 +132,10 @@ export function useHoneymoon() {
             if (!res.ok) {
                 const body = await res.json().catch(() => ({}));
                 throw new Error(body.error || 'Save failed');
+            }
+            if (wasQueued(res)) {
+                await showQueued();
+                return true;
             }
             /*
              * On the demo instance, don't refetch.
@@ -116,7 +159,7 @@ export function useHoneymoon() {
             inFlight.current -= 1;
             setBusy(inFlight.current);
         }
-    }, [refresh]);
+    }, [refresh, showQueued]);
 
     const create = useCallback((resource: Resource, body: Record<string, unknown>) => run(
         () => fetch(`${BASE}/${resource}`, {
@@ -171,6 +214,10 @@ export function useHoneymoon() {
                 return false;
             }
             if (!res.ok) throw new Error('Save failed');
+            if (wasQueued(res)) {
+                await showQueued();
+                return true;
+            }
             // The demo drops writes, so a refetch there would snap the pill back.
             if (!(await isDemoClient())) await refresh();
             return true;
@@ -179,7 +226,7 @@ export function useHoneymoon() {
             setError(e instanceof Error ? e.message : 'Save failed');
             return false;
         }
-    }, [commit, refresh]);
+    }, [commit, refresh, showQueued]);
 
     /*
      * The hot paths, each as one call that patches locally and saves behind.

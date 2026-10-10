@@ -58,8 +58,8 @@ image:
 | `npm run check:finance` | Budget arithmetic |
 | `npm run check:finance:db` | The same against a live database |
 | `npm run check:finance:ui` | The finance UI's contracts (needs a browser; fetches Playwright on demand) |
-| `npm run check:offline` | 38 checks with no browser, in CI: the offline worker's routing and saving rules, staleness, and that every page in `src/app` is in the offline lists |
-| `npm run check:offline:ui` | The whole site offline in a real browser, 49 checks: save, cut the server off (through a proxy), open every page, follow a link, try a save, sign out. Needs a **production build** (`BASE=… ADMIN_PASSWORD=…`) |
+| `npm run check:offline` | 126 checks with no browser, in CI: the offline worker's routing and saving rules, staleness and the update rule, which writes the outbox keeps, temporary-id rewriting, repeats applied once, the honeymoon portal's offline view, and that every page in `src/app` is in the offline lists |
+| `npm run check:offline:ui` | The whole site offline in a real browser, 72 checks: save, cut the server off (through a proxy), open every page, edit offline and reconnect, lose a save's answer, let the installed app notice a server change, sign out. Needs a **production build** (`BASE=… ADMIN_PASSWORD=…`) and writes (cleans up after itself) |
 | `npm run check:honeymoon:ui` | The honeymoon portal in a real browser, 53 checks (none of them write): the same place panel and sections from every entry point, the itinerary toolbar staying on screen, travel on both timeline shapes, overview cards never overlapping, and at 390×844 no sideways scroll and no control under 44px on any of its pages. Needs a browser and a server with honeymoon data (`BASE=… ADMIN_PASSWORD=…`, or `DEMO=1` against the demo) |
 | `npm run check:hero` | The home page's hero collapse in a real browser, at five viewport-and-input pairings — phone portrait, **phone landscape**, tablet portrait, tablet landscape, desktop — each driven by the input that device actually sends. Needs a browser and a server whose site config has a hero photo, or every case reports the placeholder instead of a pass |
 | `npm run audit:finance` | A deeper sweep over the finance logic |
@@ -142,6 +142,28 @@ idempotent — matches on place name, never reverts an edit) and
    (`check:offline:ui` puts a proxy in front of it): Playwright's offline switch
    does not reach a service worker's own requests, so a test that only flips it
    passes with the network still there.
+10. **Admin writes made offline wait in an outbox and are replayed (v0.10.5).**
+    `public/sw.js` keeps every queueable admin write (JSON, under `/api/admin/`,
+    not in `NOT_QUEUED`) in IndexedDB (`site-outbox`) and answers `202` with
+    `X-Offline-Queued: 1`; anything it creates gets a temporary **negative** id,
+    rewritten to the real one before every later send. So:
+    - **A new route that creates rows exports `POST = replayable(create)`**
+      (`src/lib/outboxReplay.ts`): the outbox sends an `X-Outbox-Key`, and a
+      resend after a lost answer must not make a second row.
+    - **A new write that only makes sense online** (a lookup against another
+      service, anything whose answer the page needs from the server) goes in
+      `NOT_QUEUED`, or it will be "saved" offline and replayed days later.
+    - **The honeymoon portal shows the outbox on top of the saved payload** via
+      `applyQueuedWrites()` (`src/lib/honeymoonOffline.ts`), which mirrors the
+      `[resource]` route: same field rules (`honeymoonResources.ts`, shared),
+      same defaults, the schema's `ON DELETE` rules. **Change the route's
+      semantics or a foreign key and change that file too** — `check:offline`
+      covers it.
+    - A create's answer must carry the new row's `id` (or `created: [{ id }]`
+      for an array), or later writes keep the temporary id and are refused.
+    - The update check is the manifest's `data` fingerprint (Postgres's write
+      counters plus the config files). A table written on *read* — like
+      `finance_snapshots` — goes in its `NOT_CONTENT`, or every open re-downloads.
 
 ### Changelog entry format
 

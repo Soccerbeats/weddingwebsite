@@ -34,6 +34,11 @@ export default function OfflineStatus() {
                     {saving ? 'Saving…' : state.record ? 'Save again' : 'Save now'}
                 </button>
             </div>
+            {state.pending > 0 && (
+                <p data-offline-pending className="mt-1 text-amber-700">
+                    {state.pending === 1 ? '1 change' : `${state.pending} changes`} made offline, waiting to be sent
+                </p>
+            )}
             {saving && (
                 <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-gray-200">
                     <div className="h-full bg-accent transition-[width]" style={{ width: `${pct}%` }} />
