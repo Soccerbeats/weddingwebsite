@@ -51,11 +51,12 @@ const WIDE_QUERY = '(min-width: 1024px)';
  * the pins inside it are the same gesture, so the lasso hands its loop back and
  * saving it as an area is one control in the lasso's own menu.
  *
- * Split view (the ⊞ button) puts the itinerary down the left and the place
- * library down the right, each a single column, with the map still holding the
- * middle. It is the three tabs at once for the planning you can only do with all
- * three in view — dragging a place onto a day while watching where it actually
- * is. Both dividers drag, so any one of the three can be given the room.
+ * Split view (the ⊞ button) puts the itinerary down the left, with the map
+ * holding the rest. The place library is a second column on the right that only
+ * slides in when its own Places button asks for it — every split starts with it
+ * closed, so split is two columns unless you want three. It is for the planning
+ * you can only do with all three in view — dragging a place onto a day while
+ * watching where it actually is. Both dividers drag.
  */
 export default function MapTab({ api }: { api: HoneymoonApi }) {
     const { data } = api;
@@ -212,6 +213,15 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
     // than truncating it, and a place row fits its chips on two lines.
     const [widths, setWidths] = useState({ left: 400, right: 340 });
     const [wide, setWide] = useState(false);
+    /*
+     * The places column: closed until asked for, never remembered. `placesMounted`
+     * keeps it rendered after the first open so sliding it out is animated rather
+     * than a cut, and `placesSliding` turns the width transition on only for the
+     * slide — left on, it would make dragging the divider lag behind the pointer.
+     */
+    const [placesOpen, setPlacesOpen] = useState(false);
+    const [placesMounted, setPlacesMounted] = useState(false);
+    const [placesSliding, setPlacesSliding] = useState(false);
     const areaRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
@@ -240,11 +250,23 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
     }, []);
 
     const showPanels = split && wide;
+    const placesShown = showPanels && placesOpen;
 
-    const toggleSplit = () => setSplit((on) => {
-        localStorage.setItem(SPLIT_KEY, on ? '0' : '1');
-        return !on;
-    });
+    const toggleSplit = () => {
+        setPlacesOpen(false);
+        setSplit((on) => {
+            localStorage.setItem(SPLIT_KEY, on ? '0' : '1');
+            return !on;
+        });
+    };
+
+    const togglePlaces = () => {
+        setPlacesSliding(true);
+        if (placesMounted) { setPlacesOpen((on) => !on); return; }
+        // First open: render it closed for one frame so it has a width to slide from.
+        setPlacesMounted(true);
+        requestAnimationFrame(() => requestAnimationFrame(() => setPlacesOpen(true)));
+    };
 
     /**
      * Drag one divider.
@@ -255,7 +277,7 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
      */
     const resize = (side: 'left' | 'right', dx: number) => setWidths((prev) => {
         const total = areaRef.current?.clientWidth ?? 1280;
-        const other = side === 'left' ? prev.right : prev.left;
+        const other = side === 'left' ? (placesShown ? prev.right : 0) : prev.left;
         // Two dividers' worth of gutter, so the clamp matches what is on screen.
         const max = Math.max(MIN_PANEL, total - other - MIN_MAP - 24);
         const next = Math.min(max, Math.max(MIN_PANEL, prev[side] + (side === 'left' ? dx : -dx)));
@@ -995,10 +1017,24 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                         {wide && (
                             <button
                                 onClick={toggleSplit}
-                                title="Itinerary on the left, places on the right, map in the middle — drag the dividers to resize"
+                                title="Itinerary on the left, map beside it — drag the divider to resize"
+                                aria-pressed={split}
                                 className={toolClass(split)}
                             >
                                 {split ? '⊞ Split on' : '⊞ Split'}
+                            </button>
+                        )}
+                        {/* Only in split: the places column is a third column you
+                            ask for, not part of the split itself. */}
+                        {showPanels && (
+                            <button
+                                onClick={togglePlaces}
+                                title={placesOpen ? 'Slide the places column away' : 'Slide in the places column on the right'}
+                                aria-pressed={placesOpen}
+                                aria-controls="map-places-column"
+                                className={toolClass(placesOpen)}
+                            >
+                                {placesOpen ? 'Places ›' : '‹ Places'}
                             </button>
                         )}
                         {/* On a phone, adding is the floating button above the tab bar. */}
@@ -1316,20 +1352,36 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
                 )}
                 </div>
 
-                {showPanels && (
-                    <>
-                        <ColumnDivider
-                            label="Resize the places column"
-                            onDrag={(dx) => resize('right', dx)}
-                        />
-                        <SidePanel
-                            title="Places"
-                            href="/admin/honeymoon/places"
-                            width={widths.right}
-                        >
-                            <PlacesTab api={api} panel />
-                        </SidePanel>
-                    </>
+                {/* Slides in from the right edge: the outer box animates its
+                    width (so the map gives way rather than being covered), the
+                    inner one keeps its full width so nothing reflows mid-slide. */}
+                {showPanels && placesMounted && (
+                    <div
+                        id="map-places-column"
+                        aria-hidden={!placesOpen}
+                        inert={!placesOpen}
+                        style={{ width: placesOpen ? widths.right + 12 : 0 }}
+                        onTransitionEnd={(e) => {
+                            if (e.target === e.currentTarget) setPlacesSliding(false);
+                        }}
+                        className={`shrink-0 h-full overflow-hidden flex justify-start
+                            ${placesSliding ? 'transition-[width] duration-300 ease-out motion-reduce:transition-none' : ''}`}
+                    >
+                        <div className="h-full flex shrink-0" style={{ width: widths.right + 12 }}>
+                            <ColumnDivider
+                                label="Resize the places column"
+                                onDrag={(dx) => resize('right', dx)}
+                            />
+                            <SidePanel
+                                title="Places"
+                                href="/admin/honeymoon/places"
+                                width={widths.right}
+                                onClose={togglePlaces}
+                            >
+                                <PlacesTab api={api} panel />
+                            </SidePanel>
+                        </div>
+                    </div>
                 )}
             </div>
 
@@ -1345,10 +1397,11 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
  * label, a way out to the full tab, and its own scrollbar — the columns scroll
  * independently, which is the whole point of having the map pinned between them.
  */
-function SidePanel({ title, href, width, children }: {
+function SidePanel({ title, href, width, onClose, children }: {
     title: string;
     href: string;
     width: number;
+    onClose?: () => void;
     children: React.ReactNode;
 }) {
     return (
@@ -1357,17 +1410,28 @@ function SidePanel({ title, href, width, children }: {
             className="shrink-0 min-w-0 h-full flex flex-col"
             aria-label={title}
         >
-            <header className="shrink-0 flex items-baseline justify-between gap-2 px-1 pb-1.5">
+            <header className="shrink-0 flex items-baseline gap-2 px-1 pb-1.5">
                 <h2 className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold">
                     {title}
                 </h2>
                 <Link
                     href={href}
-                    className="text-[11px] text-gray-400 hover:text-gray-700 shrink-0"
+                    className="ml-auto text-[11px] text-gray-400 hover:text-gray-700 shrink-0"
                     title={`Open the full ${title.toLowerCase()} tab`}
                 >
                     Full tab ↗
                 </Link>
+                {onClose && (
+                    <button
+                        onClick={onClose}
+                        title={`Hide the ${title.toLowerCase()} column`}
+                        aria-label={`Hide the ${title.toLowerCase()} column`}
+                        className="-my-1 -mr-1 shrink-0 rounded-full px-2 py-1 text-xs leading-none
+                            text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                    >
+                        ✕
+                    </button>
+                )}
             </header>
             <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-0.5 pb-1">
                 {children}

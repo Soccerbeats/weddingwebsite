@@ -11,6 +11,15 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.10.26 — [Released] Split map shows the itinerary; places slide in on request (`main`, 2026-10-27 09:40)
+
+### Changed
+- **Split on the Map tab is now just the itinerary and the map.** The places column no
+  longer opens with it. While split is on, a **‹ Places** button sits beside Split in the
+  map's tools; press it and the places column slides in from the right, press it again
+  (or the ✕ on the column) and it slides away. Every split starts with it closed. The
+  divider still resizes it while it is open.
+
 ## v0.10.25 — [Released] Copy a day to send by text (`main`, 2026-10-24 17:11)
 
 ### Added
