@@ -6,7 +6,9 @@ import { safeFetch } from '@/lib/safeFetch';
  *
  * Three input styles, all through one endpoint because the admin has one box:
  *   1. A place name        -> forward geocode via Nominatim
- *   2. A Google Maps link  -> pull the coordinates straight out of the URL
+ *   2. A Google Maps link  -> pull the coordinates straight out of the URL, or,
+ *                             when it has none (a phone's Share → Copy link),
+ *                             look up the name and address it carries instead
  *   3. A raw "lat, lng"    -> parsed directly
  *
  * Nominatim is proxied server-side rather than called from the browser: their
@@ -49,6 +51,15 @@ export interface GeocodeHit {
     address?: string;
     /** The link that was pasted, so the editor can keep it on the place. */
     url?: string;
+    /**
+     * The pin is the town or island the place is in, not the place itself.
+     *
+     * A link copied from Google Maps on a phone carries a name and an address
+     * but no coordinates, and OSM rarely knows a small business by name — so the
+     * best a lookup can do is the most specific part of the address it does
+     * know. Flagged so the editor keeps the place marked for review.
+     */
+    approximate?: boolean;
     /** Nominatim's own classification, e.g. "aeroway/aerodrome". */
     kind?: string;
     /**
@@ -160,6 +171,93 @@ export function nameFromMapsUrl(input: string): string | null {
     } catch {
         return null;
     }
+}
+
+/**
+ * The name-and-address text a coordinate-less Google Maps link carries.
+ *
+ * Google Maps on a phone shares a maps.app.goo.gl link that expands to
+ * `maps.google.com/?q=Name,+Street,+Town,+…,+Country&ftid=…` — the place's
+ * name and address, and an id only Google can read, but no coordinates. A
+ * /place/Name/ path without an @ is the same thing in another shape.
+ */
+export function placeTextFromMapsUrl(input: string): string | null {
+    try {
+        const url = new URL(input);
+        const q = url.searchParams.get('q') ?? url.searchParams.get('query');
+        const text = q ?? nameFromMapsUrlFull(url.pathname);
+        const trimmed = text?.trim();
+        if (!trimmed || coordsFromPair(trimmed)) return null;
+        return trimmed;
+    } catch {
+        return null;
+    }
+}
+
+function nameFromMapsUrlFull(path: string): string | null {
+    const match = path.match(/\/place\/([^/@?]+)/);
+    if (!match) return null;
+    try {
+        return decodeURIComponent(match[1].replace(/\+/g, ' '));
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * What to search for, most specific first, for a "Name, Street, Town, …,
+ * Country" string.
+ *
+ * The whole string and the name finish the job when OSM knows the place, and
+ * then the pin is the place. OSM mostly does not know a snorkelling trip, so
+ * after those come the address's parts, each with the country, narrowest
+ * first: "Gili Trawangan, Indonesia" finds the island where the full address,
+ * with its abbreviated province and postcode, finds nothing at all. Those are
+ * marked approximate. Postcodes are dropped — they confuse more than they help.
+ */
+export function placeSearchTerms(text: string): { term: string; approximate: boolean }[] {
+    const parts = text.split(',')
+        .map((part) => part.replace(/\b\d{4,6}\b/g, '').replace(/\s+/g, ' ').trim())
+        .filter(Boolean);
+    if (!parts.length) return [];
+    const name = parts[0];
+    const country = parts.length > 1 ? parts[parts.length - 1] : '';
+    const address = parts.slice(1, -1);
+    const withCountry = (part: string) => (country ? `${part}, ${country}` : part);
+
+    const terms = [
+        { term: parts.join(', '), approximate: false },
+        { term: withCountry(name), approximate: false },
+        ...address.slice(0, 3).map((part) => ({ term: withCountry(part), approximate: true })),
+    ];
+    const seen = new Set<string>();
+    return terms.filter(({ term }) => {
+        const key = term.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+}
+
+/**
+ * Look up a coordinate-less link's text, one term at a time, Nominatim first.
+ *
+ * Spaced a second apart, because that is Nominatim's published limit and this
+ * can ask it five times for one paste. Photon goes over the address parts only
+ * if Nominatim found nothing for any of it: it matches fuzzily, and handed the
+ * whole string it answers with a street of a similar name on another island.
+ */
+async function geocodePlaceText(text: string): Promise<{ hits: GeocodeHit[]; approximate: boolean } | null> {
+    const terms = placeSearchTerms(text);
+    for (const search of [searchNominatim, searchPhoton]) {
+        for (const [i, { term, approximate }] of terms.entries()) {
+            if (search === searchPhoton && !approximate) continue;
+            if (search === searchNominatim && i > 0) await new Promise((r) => setTimeout(r, 1000));
+            const { hits } = await search(term);
+            if (hits.length) return { hits: approximate ? hits.slice(0, 1) : hits.slice(0, 3), approximate };
+        }
+    }
+    return null;
 }
 
 /**
@@ -391,10 +489,32 @@ export async function GET(request: Request) {
                     }],
                 } satisfies { results: GeocodeHit[] });
             }
+            // No coordinates, but a name and address: look those up.
+            const placeText = placeTextFromMapsUrl(target);
+            const found = placeText ? await geocodePlaceText(placeText) : null;
+            if (placeText && found) {
+                const [name, ...rest] = placeText.split(',').map((part) => part.trim());
+                const address = rest.join(', ');
+                return NextResponse.json({
+                    results: found.hits.map((hit) => ({
+                        ...hit,
+                        // Google's own name and address beat OSM's for the place
+                        // the link was copied from; OSM's say where the pin is.
+                        label: found.approximate ? `${name} — near ${hit.label}` : hit.label,
+                        name,
+                        ...(address ? { address } : {}),
+                        url: raw,
+                        ...(found.approximate ? { approximate: true } : {}),
+                    })),
+                } satisfies { results: GeocodeHit[] });
+            }
             return NextResponse.json({
                 results: [],
-                error: 'No coordinates in that link. Open the place in Google Maps, right-click the pin, '
-                    + 'and copy the "lat, lng" numbers instead.',
+                error: placeText
+                    ? `Couldn't find "${placeText}" on the map. Open the place in Google Maps, `
+                        + 'long-press the pin, and paste the "lat, lng" numbers instead.'
+                    : 'No coordinates in that link. Open the place in Google Maps, right-click the pin, '
+                        + 'and copy the "lat, lng" numbers instead.',
             });
         }
 

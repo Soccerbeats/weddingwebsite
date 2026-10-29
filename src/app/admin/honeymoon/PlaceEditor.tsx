@@ -53,6 +53,8 @@ interface GeocodeHit {
     website?: string;
     /** Which geocoder answered; the fallback matches fuzzily. */
     source?: 'nominatim' | 'photon';
+    /** The pin is the area the place is in, not the place (a phone's share link). */
+    approximate?: boolean;
 }
 
 /**
@@ -215,8 +217,9 @@ export function PlaceForm({ api, place, defaults, onDone, onCancel, registerGuar
     const applyHit = (hit: GeocodeHit) => {
         setLat(hit.lat);
         setLng(hit.lng);
-        // Placing a pin deliberately is exactly what clears the review flag.
-        setNeedsReview(false);
+        // Placing a pin deliberately is exactly what clears the review flag —
+        // unless the pin is only the town the place is in.
+        setNeedsReview(!!hit.approximate);
 
         if (!name.trim() && hit.name) setName(hit.name);
         if (!address.trim()) {
@@ -475,7 +478,11 @@ export function PlaceForm({ api, place, defaults, onDone, onCancel, registerGuar
                                             <div className="text-sm text-gray-800 line-clamp-2">{hit.label}</div>
                                             <div className="text-[11px] text-gray-400 tabular-nums">
                                                 {hit.lat.toFixed(5)}, {hit.lng.toFixed(5)}
-                                                {hit.source === 'photon' && (
+                                                {hit.approximate ? (
+                                                    <span className="text-amber-700">
+                                                        {' '}· area only, drag the pin to the spot
+                                                    </span>
+                                                ) : hit.source === 'photon' && (
                                                     <span className="text-amber-700">
                                                         {' '}· fuzzy match, check it
                                                     </span>

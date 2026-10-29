@@ -10,6 +10,9 @@ interface Hit {
     label: string; lat: number; lng: number; kind?: string;
     /** Which geocoder answered — see the route for why it matters. */
     source?: 'nominatim' | 'photon';
+    /** From a pasted link: the place's own name, and whether the pin is only its area. */
+    name?: string;
+    approximate?: boolean;
 }
 
 /**
@@ -75,7 +78,7 @@ export default function LegEnd({ leg, end, api }: {
              * would put a confident wrong pin on the map. So a single hit is
              * auto-applied only when its name actually contains what was typed.
              */
-            const confident = found.length === 1
+            const confident = found.length === 1 && !found[0].approximate
                 && (found[0].source !== 'photon'
                     || found[0].label.toLowerCase().includes(term.toLowerCase()));
             if (confident) applyHit(found[0]);
@@ -90,7 +93,7 @@ export default function LegEnd({ leg, end, api }: {
     const applyHit = (hit: Hit) => {
         const isLink = /^https?:\/\//i.test(draft.trim());
         // Nominatim's display_name is an address; its first segment is the name.
-        const name = hit.label.split(',')[0]?.trim() || draft.trim();
+        const name = hit.name || hit.label.split(',')[0]?.trim() || draft.trim();
         const label = isLink || !draft.trim() ? name : draft.trim();
         setDraft(label);
         setHits([]);

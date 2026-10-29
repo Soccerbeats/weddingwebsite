@@ -11,6 +11,18 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.10.27 — [Released] Google Maps share links from a phone find the place (`main`, 2026-10-29 23:55)
+
+### Fixed
+- **Pasting a link from Google Maps' Share → Copy on a phone now finds the place.** Those
+  links (maps.app.goo.gl/…) carry the place's name and address but no coordinates, so they
+  used to fail with "No coordinates in that link". The lookup now reads the name and address
+  out of the link and searches for them: the place itself when the map knows it, otherwise
+  the most specific part of the address it does know — the island or town. Works in a new
+  or existing place and in a travel leg's From/To. An area-only answer says **area only,
+  drag the pin to the spot**, fills in Google's name and address, keeps the link, and leaves
+  the place marked for review.
+
 ## v0.10.26 — [Released] Split map shows the itinerary; places slide in on request (`main`, 2026-10-27 09:40)
 
 ### Changed

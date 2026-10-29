@@ -54,7 +54,7 @@ import {
     bucketTodos, conflictsOf, dueSoon, packingSuggestions, stayStretches,
 } from '../src/lib/honeymoonChecks';
 import {
-    coordsFromMapsUrl, coordsFromPair, nameFromMapsUrl,
+    coordsFromMapsUrl, coordsFromPair, nameFromMapsUrl, placeSearchTerms, placeTextFromMapsUrl,
 } from '../src/app/api/admin/honeymoon/geocode/route';
 import { SEED_PLACES, SEED_REGIONS, SEED_NOTES } from '../src/lib/honeymoonSeed';
 import { pricePatch, priceText, sheetSections } from '../src/lib/honeymoonPlaceSheet';
@@ -223,6 +223,32 @@ console.log('\nCoordinate parsing');
     // 0,0 is in the Atlantic; accepting it would drag fitBounds across the world.
     check('rejects null island', coordsFromPair('0, 0') === null);
     check('rejects an out-of-range latitude', coordsFromPair('130.5, 20.0') === null);
+}
+
+console.log('\nA phone share link (name and address, no coordinates)');
+{
+    // What maps.app.goo.gl/…?g_st=ic expands to: Google's name and address, no point.
+    const shared = 'https://maps.google.com/?q=Gili+Private+Snorkeling+Trip,+Gili+Trawangan,+Gili+Indah,'
+        + '+Kec.+Pemenang,+Mataram,+Nusa+Tenggara+Bar.+83325,+Indonesia&ftid=0x2dcd:0xf0d4&entry=gps&g_st=ic';
+    const text = placeTextFromMapsUrl(shared);
+    check('reads the name and address out of ?q=',
+        text === 'Gili Private Snorkeling Trip, Gili Trawangan, Gili Indah, Kec. Pemenang, Mataram, '
+            + 'Nusa Tenggara Bar. 83325, Indonesia', `got ${text}`);
+    check('a ?q= coordinate query is not place text',
+        placeTextFromMapsUrl('https://maps.google.com/?q=-8.5069,115.2625') === null);
+    check('a /place/ path without an @ is place text',
+        placeTextFromMapsUrl('https://www.google.com/maps/place/Ubud+Palace') === 'Ubud Palace');
+
+    const terms = placeSearchTerms(text ?? '');
+    check('tries the whole thing first, as exact',
+        terms[0]?.term.startsWith('Gili Private Snorkeling Trip, Gili Trawangan') && !terms[0].approximate);
+    check('drops the postcode', !terms.some((t) => /83325/.test(t.term)));
+    check('then the name with the country',
+        terms[1]?.term === 'Gili Private Snorkeling Trip, Indonesia' && !terms[1].approximate);
+    check('then the narrowest address part with the country, as approximate',
+        terms[2]?.term === 'Gili Trawangan, Indonesia' && terms[2].approximate === true,
+        `got ${JSON.stringify(terms[2])}`);
+    check('asks at most five things', terms.length <= 5);
 }
 
 console.log('\nName from a Maps link');
