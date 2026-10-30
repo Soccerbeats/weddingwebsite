@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import {
     STATUSES, categoriesOf, categoryMeta, countriesInUse, dayColor, effectiveCountry, formatDayDate,
-    hasCoords, legEnds, reviewToggleFor, sourceLabel, sourcesOf, travelModeMeta,
+    dayMapPoints, hasCoords, legEnds, reviewToggleFor, sourceLabel, sourcesOf, travelModeMeta,
     type Day, type PlaceStatus,
 } from '@/lib/honeymoon';
 import { useTripIntel } from './useTripIntel';
@@ -589,18 +589,33 @@ export default function MapTab({ api }: { api: HoneymoonApi }) {
 
     /*
      * Arriving from a place panel's "Show on the map": open that place and fly
-     * to it. Read once, from the URL, after the data is in — `useSearchParams`
-     * would need a Suspense boundary for a value only the first render wants.
+     * to it. Or from a day's "Show on map" (`?day=`): switch the itinerary on
+     * and frame the whole day — stops, where you sleep, travel. Read once, from
+     * the URL, after the data is in — `useSearchParams` would need a Suspense
+     * boundary for a value only the first render wants.
      */
     const arrived = useRef(false);
     useEffect(() => {
         if (arrived.current || !api.data) return;
         arrived.current = true;
-        const id = Number(new URLSearchParams(window.location.search).get('place'));
+        const params = new URLSearchParams(window.location.search);
+        const dayId = Number(params.get('day'));
+        const day = dayId ? api.data.days.find((d) => d.id === dayId) : undefined;
+        if (day) {
+            const points = dayMapPoints(day, api.placeById);
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setDayFilter('');
+            setShowItinerary(true);
+            if (points.length) {
+                setFitPoints(points);
+                setFitSignal((n) => n + 1);
+            }
+            return;
+        }
+        const id = Number(params.get('place'));
         const target = id ? api.placeById.get(id) : undefined;
         if (!target || !hasCoords(target)) return;
         sheet.openPlace(target.id);
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setFitPoints([{ lat: target.lat, lng: target.lng }]);
         setFitSignal((n) => n + 1);
     }, [api.data, api.placeById, sheet]);

@@ -12,7 +12,7 @@ import { CSS } from '@dnd-kit/utilities';
 import {
     SPREAD_WARNING_KM, arrivalsOn, calendarMonths, dayHops, daysBeyondRange,
     dateForDay, daysBetween, isoOf, stayBookedOn, todayIso,
-    formatDate, formatDayDate, formatDistance, hasCoords, legIsOvernight,
+    dayMapPoints, formatDate, formatDayDate, formatDistance, hasCoords, legIsOvernight,
     travelModeMeta,
     type CalendarCell, type Day, type Place, type Stop, type TravelLeg,
 } from '@/lib/honeymoon';
@@ -40,6 +40,7 @@ import { TabToolbar } from './kit/TabToolbar';
 import { useIsPhone } from './kit/Sheet';
 import { useSwipePager } from './kit/useSwipePager';
 import { Icon } from './kit/icons';
+import { goTab } from './kit/navigate';
 import PrintSheet, { DEFAULT_PRINT_OPTIONS, type PrintOptions } from './PrintSheet';
 import TravelLegCard from './TravelLeg';
 import {
@@ -218,6 +219,10 @@ export default function ItineraryTab({ api, panel = false, onFocusDay, revealDay
      */
     const phone = useIsPhone();
     const oneDay = phone && !panel && shownView !== 'calendar';
+    /** A day's "Show on map": the Map tab, itinerary on, framed on that day. */
+    const showDayOnMap = (day: Day) => {
+        goTab(`/admin/honeymoon/map?day=${day.id}`);
+    };
     const [phoneDayId, setPhoneDayId] = useState<number | null>(null);
     const todayNumber = data?.trip ? dayNumberFor(data.trip, todayIso(), days.length) : null;
     const phoneDay = days.find((d) => d.id === (phoneDayId ?? reveal?.id))
@@ -571,6 +576,7 @@ export default function ItineraryTab({ api, panel = false, onFocusDay, revealDay
                                     onEditPlace={showPlace}
                                     onViewPlace={showPlace}
                                     onFocusDay={onFocusDay}
+                                    onShowOnMap={phone && !panel ? showDayOnMap : undefined}
                                     beyondRange={beyond.has(day.day_number)}
                                     flash={flashDay === day.id}
                                     arrivals={arrivalsOn(days, day.day_number)}
@@ -815,7 +821,7 @@ function CalendarCellBox({ cell, day, api, beyondRange, arrivals, onOpen }: {
 }
 
 function DayCard({
-    day, api, intel, onEditPlace, onFocusDay, beyondRange = false, arrivals = [],
+    day, api, intel, onEditPlace, onFocusDay, onShowOnMap, beyondRange = false, arrivals = [],
     compact = false, flash = false, onViewPlace, shape = null,
 }: {
     day: Day;
@@ -833,6 +839,8 @@ function DayCard({
     /** Rendered in the map's split view, in a column rather than a page. */
     compact?: boolean;
     onFocusDay?: (day: Day) => void;
+    /** On a phone's Itinerary tab: open the Map tab framed on this day. */
+    onShowOnMap?: (day: Day) => void;
     /** This day is numbered past the end of the trip's dates. */
     beyondRange?: boolean;
     /** Just scrolled to, from a pin on the map — briefly ringed so it is findable. */
@@ -888,6 +896,7 @@ function DayCard({
         const place = stop.place_id == null ? undefined : api.placeById.get(stop.place_id);
         return place != null && hasCoords(place);
     });
+    const mappable = dayMapPoints(day, api.placeById).length > 0;
     const hops = dayHops(day.stops, api.placeById);
     const longest = hops.reduce((max, hop) => Math.max(max, hop.km), 0);
 
@@ -1259,6 +1268,25 @@ function DayCard({
                     ]}
                 />
             </div>
+
+            {/* ---- Show on map (phone) ----
+                The Map tab with the itinerary on, framed on this whole day —
+                stops, where you sleep and travel. Disabled, and saying why,
+                when nothing on the day has a pin yet. */}
+            {onShowOnMap && (
+                <button
+                    type="button"
+                    onClick={() => onShowOnMap(day)}
+                    disabled={!mappable}
+                    className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-full
+                        border border-gray-200 bg-gray-50 px-4 text-sm font-medium text-gray-700
+                        transition active:scale-[0.98] active:bg-gray-100 motion-reduce:active:scale-100
+                        disabled:opacity-50"
+                >
+                    <Icon name="map" className="size-5" />
+                    {mappable ? 'Show on map' : 'Nothing on this day is pinned yet'}
+                </button>
+            )}
 
             {/* ---- Day notes ---- */}
             {/* The column has been in the schema since day one with nothing to

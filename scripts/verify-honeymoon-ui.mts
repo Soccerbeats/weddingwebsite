@@ -272,6 +272,20 @@ console.log('\nPhone (390×844)');
     const cells = await p.locator('[data-calendar-day]').evaluateAll((els) => els.map((el) => el.getBoundingClientRect().right <= innerWidth));
     check('the phone calendar fits the screen', cells.length > 0 && cells.every(Boolean), `${cells.length} days`);
 
+    // A day's Show on map: the Map tab, the itinerary on, framed on the day.
+    await go(p, '/itinerary');
+    await p.getByRole('button', { name: /Days/ }).first().click().catch(() => undefined);
+    const showOnMap = p.getByRole('button', { name: 'Show on map', exact: true }).first();
+    if (await showOnMap.count()) {
+        await showOnMap.click();
+        await p.waitForTimeout(1200);
+        check('Show on map opens the Map tab on that day', /\/admin\/honeymoon\/map\?day=\d+$/.test(p.url()), p.url());
+        check('with the itinerary turned on',
+            (await p.getByRole('button', { name: /Itinerary/ }).and(p.locator('[aria-pressed="true"]')).count()) > 0);
+    } else {
+        check('a phone day has a Show on map button', false, 'none found — is any day pinned?');
+    }
+
     await go(p, '/places');
     if (await clickFirst(p, '[data-place-row] button')) {
         await p.waitForTimeout(500);

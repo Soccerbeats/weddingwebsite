@@ -767,6 +767,32 @@ export function legEnds(leg: TravelLeg): {
 }
 
 /**
+ * Everything on a day the map can frame: its pinned stops, where you sleep, and
+ * both ends of each looked-up travel leg.
+ *
+ * "Show on map" from a day frames all of it, so a day that is a flight and a
+ * hotel — no stops — still has somewhere to go, and the itinerary decides
+ * whether to offer the button from the same list the map then fits.
+ */
+export function dayMapPoints(
+    day: Pick<Day, 'stops' | 'travel' | 'base_place_id'>,
+    placeById: Map<number, Pick<Place, 'lat' | 'lng'>>,
+): { lat: number; lng: number }[] {
+    const points: { lat: number; lng: number }[] = [];
+    const add = (id: number | null) => {
+        const place = id == null ? undefined : placeById.get(id);
+        if (place && hasCoords(place)) points.push({ lat: place.lat, lng: place.lng });
+    };
+    for (const stop of day.stops) add(stop.place_id);
+    add(day.base_place_id);
+    for (const leg of day.travel) {
+        const ends = legEnds(leg);
+        if (ends) points.push(ends.from, ends.to);
+    }
+    return points;
+}
+
+/**
  * A leg as a curve, not a straight line.
  *
  * A quadratic Bézier whose control point is pushed out perpendicular to the

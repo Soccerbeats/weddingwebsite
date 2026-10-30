@@ -10,7 +10,7 @@
 import {
     arcPoints, arrivalsOn, legArrivalDay, legEnds, legIsOvernight, travelModeMeta,
     boundsOf, dateForDay, distanceKm, formatDayDate, formatDistance, formatTime,
-    dayHops, hasCoords, categoryMeta, CATEGORIES,
+    dayHops, dayMapPoints, hasCoords, categoryMeta, CATEGORIES,
     sourceLabel, sourcesOf, SOURCE_AMY, SOURCE_MANUAL, SOURCE_YOUTUBE,
     categoriesOf, normalizeCategoryKey,
     pointInPolygon, placesInPolygon, nameFromStayUrl, stayUrlsFromText, isStayUrl, cleanListingTitle, formatPerNight,
@@ -224,6 +224,26 @@ console.log('\nCoordinate parsing');
     // 0,0 is in the Atlantic; accepting it would drag fitBounds across the world.
     check('rejects null island', coordsFromPair('0, 0') === null);
     check('rejects an out-of-range latitude', coordsFromPair('130.5, 20.0') === null);
+}
+
+console.log('\nA day on the map');
+{
+    const byId = new Map<number, { lat: number | null; lng: number | null }>([
+        [1, { lat: -8.5, lng: 115.2 }], [2, { lat: null, lng: null }], [3, { lat: -8.7, lng: 115.1 }],
+    ]);
+    const leg = (from: number | null, to: number | null) => ({
+        from_lat: from, from_lng: from, to_lat: to, to_lng: to,
+    }) as unknown as Parameters<typeof dayMapPoints>[0]['travel'][number];
+    const stops = (ids: (number | null)[]) => ids.map((place_id) => ({ place_id })) as unknown as
+        Parameters<typeof dayMapPoints>[0]['stops'];
+    check('frames pinned stops, the stay and both ends of a leg',
+        dayMapPoints({ stops: stops([1, 2, null]), base_place_id: 3, travel: [leg(1, 2)] }, byId).length === 4);
+    check('a travel day with no stops still has somewhere to go',
+        dayMapPoints({ stops: [], base_place_id: null, travel: [leg(1, 2)] }, byId).length === 2);
+    check('a leg with one end unknown adds nothing',
+        dayMapPoints({ stops: [], base_place_id: null, travel: [leg(1, null)] }, byId).length === 0);
+    check('a day of unpinned stops has nothing to show',
+        dayMapPoints({ stops: stops([2]), base_place_id: 2, travel: [] }, byId).length === 0);
 }
 
 console.log('\nA phone share link (name and address, no coordinates)');

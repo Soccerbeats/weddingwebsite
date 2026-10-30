@@ -11,6 +11,14 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.10.31 — [Released] Show a day on the map from the phone itinerary (`main`, 2026-10-30 01:37)
+
+### Added
+- **A Show on map button on each day of the itinerary, on a phone.** It switches to the Map
+  tab with the itinerary turned on and zooms to that whole day: its stops, where you sleep and
+  both ends of its travel, so a day that is only a flight and a hotel still has somewhere to
+  go. When nothing on the day has a pin yet, the button says so instead.
+
 ## v0.10.30 — [Released] A phone's panel is easy to grab (`main`, 2026-10-30 00:13)
 
 ### Fixed
