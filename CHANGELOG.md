@@ -11,6 +11,14 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.10.32 — [Released] The admin menu folds to a rail of icons (`main`, 2026-10-30 13:40)
+
+### Changed
+- On a desktop the admin panel's menu is now a slim column of icons, so pages get nearly all the width. The button at its top widens it to show the names, and back again; each device remembers which way you left it.
+- Opening or closing it is animated: the column slides wider, the names glide in one after another, and a soft gold highlight slides to whichever page you open.
+- With the menu folded, hovering an icon shows its name beside it. The offline status and the version number appear when the menu is open.
+- On a phone the menu is the same slide-out drawer as before, now with an icon beside every name.
+
 ## v0.10.31 — [Released] Show a day on the map from the phone itinerary (`main`, 2026-10-30 01:37)
 
 ### Added

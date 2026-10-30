@@ -574,7 +574,8 @@ order, before the commit:
 **New public page** — 1) `src/app/<page>/page.tsx`, 2) add to the links array
 in `src/components/Navigation.tsx`, 3) add to `publicPages` in
 `src/app/admin/wip-control/page.tsx`, 4) editor page in
-`src/app/admin/<page>/page.tsx`, 5) nav item in `src/app/admin/layout.tsx`.
+`src/app/admin/<page>/page.tsx`, 5) nav item (with an icon) in
+`NAV_GROUPS` in `src/app/admin/AdminSidebar.tsx`.
 
 **New file-based config** — JSON file in `public/config/`, an API route under
 `src/app/admin/` that reads/writes it with `fs`, ensure the directory exists

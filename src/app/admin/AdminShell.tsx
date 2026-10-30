@@ -1,8 +1,7 @@
 'use client';
 
-import Link from 'next/link';
 import Changelog from '@/components/admin/Changelog';
-import OfflineStatus from '@/components/offline/OfflineStatus';
+import AdminSidebar from './AdminSidebar';
 import PullToRefresh from '@/components/offline/PullToRefresh';
 import { clearOffline, inFrame, isStandalone } from '@/components/offline/offlineStore';
 import { usePathname, useRouter } from 'next/navigation';
@@ -102,9 +101,6 @@ export default function AdminShell({
         router.refresh();
     };
 
-    // Grouped by what you're actually doing, because a flat list of sixteen
-    // gave no clue that Finances and Seating are the same kind of job as RSVPs
-    // while Colour and WIP are not.
     const isFullBleed = pathname?.startsWith('/admin/seating')
         || pathname?.startsWith('/admin/honeymoon')
         // The changelog owns its own scrolling: its version nav is sticky and
@@ -114,46 +110,6 @@ export default function AdminShell({
     // Pages whose content is tabular and wants the width: 32px of gutter either
     // side is breathing room on a form and lost column on a budget.
     const isWideGutter = pathname?.startsWith('/admin/finances');
-
-    const navGroups: { title?: string; items: { href: string; label: string }[] }[] = [
-        { items: [{ href: '/admin/dashboard', label: '⌂ Dashboard' }] },
-        {
-            // Running the wedding — the live, day-to-day work.
-            title: 'Planning',
-            items: [
-                { href: '/admin/rsvps', label: 'RSVPs' },
-                { href: '/admin/finances', label: 'Finances' },
-                { href: '/admin/seating', label: 'Seating Chart' },
-                { href: '/admin/honeymoon', label: 'Honeymoon' },
-            ],
-        },
-        {
-            // Page editors, in the order the pages appear in the public nav bar.
-            // Nav Cards and Q&A sit under Home Page and About Page because
-            // that's where those sections render.
-            title: 'Pages',
-            items: [
-                { href: '/admin/home', label: 'Home Page' },
-                { href: '/admin/nav-cards', label: 'Nav Cards' },
-                { href: '/admin/about', label: 'About Page' },
-                { href: '/admin/faqs', label: 'Q&A' },
-                { href: '/admin/timeline', label: 'Our Story' },
-                { href: '/admin/wedding-party', label: 'Wedding Party' },
-                { href: '/admin/schedule', label: 'Schedule' },
-                { href: '/admin/photos', label: 'Photos' },
-                { href: '/admin/registry', label: 'Registry' },
-            ],
-        },
-        {
-            // Set once, rarely touched again.
-            title: 'Settings',
-            items: [
-                { href: '/admin/settings', label: 'General Settings' },
-                { href: '/admin/color', label: 'Color' },
-                { href: '/admin/wip-control', label: 'Work in Progress' },
-            ],
-        },
-    ];
 
     if (pathname === '/admin/login') {
         return <>{children}</>;
@@ -211,58 +167,13 @@ export default function AdminShell({
                         />
                     )}
 
-                    {/* Sidebar — drawer on mobile, static on desktop */}
-                    <aside data-admin-sidebar className={`
-                        fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 flex flex-col overflow-y-auto
-                        transition-transform duration-300 ease-in-out
-                        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-                        md:relative md:translate-x-0 md:shrink-0
-                    `}>
-                        <div className="h-16 flex items-center justify-center gap-2 border-b
-                            border-gray-200 px-4 shrink-0">
-                            <span className="text-lg font-serif font-bold text-gray-800 text-center">
-                                Admin Panel
-                            </span>
-                            {/* The release notes belong where the panel is named,
-                                not only in the repository. */}
-                            <Changelog />
-                        </div>
-                        <nav className="p-4 flex-1">
-                            {navGroups.map((group, i) => (
-                                <div key={group.title ?? 'top'} className={i > 0 ? 'mt-6' : ''}>
-                                    {group.title && (
-                                        <p className="px-4 mb-2 text-[11px] font-semibold uppercase tracking-widest text-gray-400">
-                                            {group.title}
-                                        </p>
-                                    )}
-                                    <div className="space-y-1">
-                                        {group.items.map((item) => (
-                                            <Link
-                                                key={item.href}
-                                                href={item.href}
-                                                onClick={() => setSidebarOpen(false)}
-                                                className={`block px-4 py-2 rounded-md text-sm font-medium transition-colors ${pathname?.startsWith(item.href)
-                                                    ? 'bg-accent/10 text-accent'
-                                                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                                                    }`}
-                                            >
-                                                {item.label}
-                                            </Link>
-                                        ))}
-                                    </div>
-                                </div>
-                            ))}
-                            <div className="mt-8 px-1">
-                                <OfflineStatus />
-                            </div>
-                            <button
-                                onClick={handleLogout}
-                                className="w-full text-left px-4 py-2 rounded-md text-sm font-medium text-red-600 hover:bg-red-50 transition-colors mt-2"
-                            >
-                                Logout
-                            </button>
-                        </nav>
-                    </aside>
+                    {/* Drawer on a phone; on a desktop a rail of icons that widens. */}
+                    <AdminSidebar
+                        pathname={pathname}
+                        open={sidebarOpen}
+                        onClose={() => setSidebarOpen(false)}
+                        onLogout={handleLogout}
+                    />
 
                     {/* Main Content — full-bleed pages (seating, honeymoon) own their
                         own padding and scrolling so a map can fill the viewport

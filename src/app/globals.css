@@ -637,3 +637,9 @@ html.admin-fullscreen [data-demo-banner] {
 .hm-scroll-row::-webkit-scrollbar {
   display: none;
 }
+
+/* The admin rail's hover label (AdminSidebar). */
+@keyframes admin-tip-in {
+  from { opacity: 0; transform: translate(-4px, -50%); }
+  to { opacity: 1; transform: translate(0, -50%); }
+}
