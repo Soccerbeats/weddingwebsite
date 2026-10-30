@@ -28,7 +28,12 @@ export default function AdminShell({
     }, [pathname]);
 
     /*
-     * Reopen the installed app where you left it.
+     * Reopen the installed app where you left it — the fallback.
+     *
+     * Normally the offline worker does this before anything draws (it answers
+     * the launch's `/admin` with a redirect; see the effect below and
+     * `launchTarget` in sw.js). This covers a launch the worker did not answer:
+     * the very first one, or a phone that has not got the worker yet.
      *
      * The phone opens the app at its front door (`/admin`, which is the
      * dashboard) whenever it had been closed in the background. Once per launch,
@@ -71,6 +76,14 @@ export default function AdminShell({
             window.localStorage.setItem(LAST_ADMIN_PAGE_KEY, pathname + window.location.search);
         } catch {
             // Storage refused: signing in falls back to the page asked for.
+        }
+        // The worker answers the next launch with it, so the app opens on this
+        // page instead of drawing the dashboard first (`launchTarget` in sw.js).
+        // Only from the installed app: a browser tab opening /admin means it.
+        if (isStandalone()) {
+            navigator.serviceWorker?.controller?.postMessage({
+                type: 'site-sw:last-page', path: pathname + window.location.search,
+            });
         }
     }, [pathname]);
 

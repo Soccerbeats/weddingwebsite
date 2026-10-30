@@ -36,6 +36,7 @@ const sw = sandbox.module.exports as unknown as {
     isCacheablePage: (requestUrl: string, res: { status: number; redirected: boolean; url: string; contentType: string }) => boolean;
     isCacheableData: (res: { status: number; redirected: boolean }) => boolean;
     redirectTarget: (requestUrl: string, res: { status: number; redirected: boolean; url: string; contentType: string }) => string | null;
+    launchTarget: (requestUrl: string, lastPage: string | null, origin: string) => string | null;
     isStale: (record: { at: number; buildId: string } | null, buildId: string, now: number) => boolean;
     OFFLINE_WRITE_MESSAGE: string;
     isQueueable: (req: { url: string; method?: string; contentType?: string }, origin: string) => boolean;
@@ -105,6 +106,18 @@ check('a redirect to another site is never kept',
     sw.redirectTarget(`${O}/x`, { status: 200, redirected: true, url: 'https://evil.example/x', contentType: html }) === null);
 check('data that loaded is saved', sw.isCacheableData({ status: 200, redirected: false }));
 check('a refused request (401) is not', !sw.isCacheableData({ status: 401, redirected: false }));
+
+console.log('\nOpening the installed app where it was left');
+check('the front door goes to the last page',
+    sw.launchTarget(`${O}/admin`, '/admin/honeymoon/map', O) === '/admin/honeymoon/map');
+check('with its query', sw.launchTarget(`${O}/admin/`, '/admin/rsvps?tab=guests', O) === '/admin/rsvps?tab=guests');
+check('any other page loads as asked', sw.launchTarget(`${O}/admin/dashboard`, '/admin/rsvps', O) === null);
+check('the front door with a query is a link, not a launch', sw.launchTarget(`${O}/admin?x=1`, '/admin/rsvps', O) === null);
+check('nothing recorded, nothing to do', sw.launchTarget(`${O}/admin`, null, O) === null);
+check('never to the login', sw.launchTarget(`${O}/admin`, '/admin/login?next=%2Fadmin', O) === null);
+check('never back to the front door', sw.launchTarget(`${O}/admin`, '/admin', O) === null);
+check('never off the admin', sw.launchTarget(`${O}/admin`, '/about', O) === null);
+check('never to another site', sw.launchTarget(`${O}/admin`, '//evil.example/admin/x', O) === null);
 
 console.log('\nWhen the saved copy is stale');
 const now = Date.UTC(2026, 9, 5, 12);

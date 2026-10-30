@@ -11,6 +11,17 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.10.28 — [Released] The installed admin app opens straight on the page you left (`main`, 2026-10-30 00:03)
+
+### Changed
+- **Opening the admin app on a phone goes straight to the page you were on.** It used to
+  draw the dashboard first and then jump. The phone always starts the app at the admin's
+  front door, including when it has quietly closed an app left in the background for a
+  while, so the offline worker now answers that first request itself and sends it to the
+  last page you had open, from the saved copy. Only the installed app does this; opening
+  /admin in a browser tab still shows the dashboard. Signed out, you land on the sign-in and
+  then that page.
+
 ## v0.10.27 — [Released] Google Maps share links from a phone find the place (`main`, 2026-10-29 23:55)
 
 ### Fixed

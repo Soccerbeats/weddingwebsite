@@ -66,6 +66,8 @@ const REVALIDATE_AFTER_MS = 15000;
 const RSC_TIMEOUT_MS = 3000;
 /** Where the worker keeps `freshAfter`, so a worker iOS restarted still knows it. */
 const FRESH_AFTER_KEY = '/__sw/fresh-after';
+/** Where the worker keeps the installed app's last admin page (`launchTarget`). */
+const LAST_PAGE_KEY = '/__sw/last-admin-page';
 /** The header a stored data copy carries: when it was saved. */
 const SAVED_AT_HEADER = 'X-Saved-At';
 /** Photos are saved as they are viewed; past this, the oldest go first. */
@@ -335,12 +337,38 @@ function mergeSiteConfig(config, bodies) {
     return next;
 }
 
+/**
+ * Where opening the installed app should land, or null to load what was asked.
+ *
+ * The phone opens the admin app at its `start_url`, `/admin`, every time it
+ * starts it — including after iOS quietly ended an app left in the background.
+ * That used to draw the dashboard and *then* jump to the page you were on. The
+ * worker answers that first request itself with a redirect to the last page,
+ * so the dashboard never draws. Only `/admin` exactly — a link to any other
+ * page is a choice — and only to a page inside the admin, never the login.
+ * The page reports itself only from the installed app, so a browser tab
+ * opening /admin is left alone.
+ */
+function launchTarget(requestUrl, lastPage, origin) {
+    let url;
+    try { url = new URL(requestUrl); } catch { return null; }
+    if (url.origin !== origin || url.search || url.pathname.replace(/\/$/, '') !== '/admin') return null;
+    if (typeof lastPage !== 'string' || !lastPage.startsWith('/admin/') || lastPage.startsWith('//') || lastPage.includes('\\')) {
+        return null;
+    }
+    let target;
+    try { target = new URL(lastPage, origin); } catch { return null; }
+    if (target.origin !== origin || target.pathname.startsWith('/admin/login')) return null;
+    return target.pathname + target.search;
+}
+
 /* Under Node (check:offline) only the rules above are wanted. */
 if (typeof module === 'object' && module.exports) {
     module.exports = {
         routeFor, isCacheablePage, isCacheableData, isStale, redirectTarget, OFFLINE_WRITE_MESSAGE, fallbackWait,
         NETWORK_TIMEOUT_MS, FALLBACK_AFTER_MS, OFFLINE_HOLD_MS, REVALIDATE_AFTER_MS, RSC_TIMEOUT_MS, readPlan, rscBudget,
         isQueueable, tempIdCount, queuedResponseBody, remapIds, remapUrl, createdIds, outcomeFor, mergeSiteConfig,
+        launchTarget,
     };
 }
 
@@ -882,7 +910,22 @@ if (typeof self !== 'undefined' && typeof self.addEventListener === 'function' &
         }
     }
 
+    async function lastAdminPage() {
+        try {
+            const saved = await (await caches.open(DATA)).match(LAST_PAGE_KEY);
+            return saved ? await saved.text() : null;
+        } catch {
+            return null;
+        }
+    }
+
     async function page(request, event) {
+        // Opening the installed app: straight to the page it was last on.
+        const launch = request.mode === 'navigate'
+            ? launchTarget(request.url, await lastAdminPage(), self.location.origin)
+            : null;
+        if (launch) return Response.redirect(new URL(launch, self.location.origin).href, 302);
+
         const cache = await caches.open(PAGES);
         const url = new URL(request.url);
         const key = url.pathname + url.search;
@@ -1162,7 +1205,8 @@ if (typeof self !== 'undefined' && typeof self.addEventListener === 'function' &
         const jobs = [];
         const dataCache = await caches.open(DATA);
         for (const request of await dataCache.keys()) {
-            if (new URL(request.url).pathname === FRESH_AFTER_KEY) continue;
+            const path = new URL(request.url).pathname;
+            if (path === FRESH_AFTER_KEY || path === LAST_PAGE_KEY) continue;
             jobs.push(async () => {
                 const startedAt = Date.now();
                 const response = await withTimeout(fetch(request.url, { credentials: 'same-origin', cache: 'no-store' }), 20000);
@@ -1211,6 +1255,12 @@ if (typeof self !== 'undefined' && typeof self.addEventListener === 'function' &
         if (type === 'site-sw:fresh-after') {
             // Pull-to-refresh: every copy saved before now asks the server first.
             event.waitUntil(bumpFreshAfter().then(() => event.source && event.source.postMessage({ type: 'site-sw:fresh-after-done' })));
+            return;
+        }
+        if (type === 'site-sw:last-page') {
+            if (typeof data.path === 'string' && launchTarget(`${self.location.origin}/admin`, data.path, self.location.origin)) {
+                event.waitUntil(caches.open(DATA).then((cache) => cache.put(LAST_PAGE_KEY, new Response(data.path))).catch(() => undefined));
+            }
             return;
         }
         if (type === 'site-sw:refresh') {
