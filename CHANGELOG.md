@@ -11,6 +11,18 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.10.30 — [Released] A phone's panel is easy to grab (`main`, 2026-10-30 00:13)
+
+### Fixed
+- **The panel that slides up when you open a place on a phone is easy to grab now.** The
+  grip was a small bar a thumb often missed, and dragging it up did nothing visible, so it
+  felt like it had not caught. The whole top of the panel is now the grip, the handle and the
+  place's title row, and the bar's strip is full width and 44px tall. The panel follows your
+  finger up and down and settles at the nearest of full height, half height or closed; a
+  quick flick goes one step that way. Pulling down from full height stops at half instead of
+  closing. A tap on the handle still switches between half and full, and the buttons in the
+  title row still take a tap.
+
 ## v0.10.29 — [Released] A phone's Google Maps link puts the pin on the exact spot (`main`, 2026-10-30 00:11)
 
 ### Fixed

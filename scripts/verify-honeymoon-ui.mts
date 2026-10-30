@@ -275,6 +275,28 @@ console.log('\nPhone (390×844)');
     await go(p, '/places');
     if (await clickFirst(p, '[data-place-row] button')) {
         await p.waitForTimeout(500);
+        const sheetHeight = async () => (await p.locator('[data-sheet-panel]').boundingBox())?.height ?? 0;
+        const pull = async (selector: string, dy: number, atY = 0.5) => {
+            const box = await p.locator(selector).first().boundingBox();
+            if (!box) return;
+            await p.mouse.move(box.x + box.width / 2, box.y + box.height * atY);
+            await p.mouse.down();
+            await p.mouse.move(box.x + box.width / 2, box.y + box.height * atY + dy, { steps: 8 });
+            await p.mouse.up();
+            await p.waitForTimeout(450);
+        };
+        const half = await sheetHeight();
+        // The title row is part of the grip, not only the little bar.
+        await pull('[data-sheet-grip]', -220, 0.8);
+        check('dragging the title row up expands the panel', (await sheetHeight()) > half + 150,
+            `${Math.round(half)} → ${Math.round(await sheetHeight())}`);
+        await pull('[data-sheet-handle]', 120);
+        check('a pull down from full height stops at half rather than closing',
+            (await p.locator('[data-sheet-panel]').count()) === 1 && Math.abs((await sheetHeight()) - half) < 30,
+            `${Math.round(await sheetHeight())} vs ${Math.round(half)}`);
+        const handleBox = await p.locator('[data-sheet-handle]').boundingBox();
+        check('the handle is a thumb-sized target', !!handleBox && handleBox.height >= 44 && handleBox.width >= 200,
+            JSON.stringify(handleBox));
         const handle = await p.locator('[data-sheet-handle]').boundingBox();
         if (handle) {
             await p.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);

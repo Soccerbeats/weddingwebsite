@@ -94,29 +94,67 @@ export function Sheet({
     useEffect(() => { setTall(open && startTall); }, [open, startTall]);
 
     /*
-     * Pull the handle down to close, up to expand — the gesture every phone
-     * sheet has taught people. A short tap still toggles the height. The drag
-     * follows the finger so it reads as moving the sheet, not as a button.
+     * Drag the top of the sheet: down to shrink or close, up to expand — the
+     * gesture every phone sheet has taught people.
+     *
+     * The whole top is the grip, not just the little bar: the bar is 40px wide
+     * and a thumb missed it as often as it hit it. A press only becomes a drag
+     * once it has moved, so the buttons up there still take a tap, and the
+     * click that would follow a drag is swallowed. The sheet follows the finger
+     * both ways (it used to move only downwards, so dragging up looked like it
+     * had not caught), then snaps to the nearest of closed, half and full — a
+     * quick flick goes one step that way whatever the distance.
      */
-    const drag = useRef<{ y: number; id: number } | null>(null);
-    const [pull, setPull] = useState(0);
-    const onHandleDown = (event: React.PointerEvent<HTMLButtonElement>) => {
-        drag.current = { y: event.clientY, id: event.pointerId };
-        event.currentTarget.setPointerCapture(event.pointerId);
+    const drag = useRef<{
+        id: number; y: number; startH: number; lastY: number; lastT: number; v: number; active: boolean;
+    } | null>(null);
+    const swallowClick = useRef(false);
+    const [dragH, setDragH] = useState<number | null>(null);
+
+    const onGripDown = (event: React.PointerEvent<HTMLDivElement>) => {
+        swallowClick.current = false;
+        if (event.button > 0 || !panel.current || !window.matchMedia('(max-width: 767px)').matches) return;
+        drag.current = {
+            id: event.pointerId, y: event.clientY, lastY: event.clientY, lastT: event.timeStamp, v: 0,
+            startH: panel.current.getBoundingClientRect().height, active: false,
+        };
     };
-    const onHandleMove = (event: React.PointerEvent<HTMLButtonElement>) => {
-        if (!drag.current) return;
-        setPull(Math.max(0, event.clientY - drag.current.y));
+    const onGripMove = (event: React.PointerEvent<HTMLDivElement>) => {
+        const d = drag.current;
+        if (!d || d.id !== event.pointerId) return;
+        const dy = event.clientY - d.y;
+        if (!d.active) {
+            if (Math.abs(dy) < 6) return;
+            d.active = true;
+            event.currentTarget.setPointerCapture(event.pointerId);
+        }
+        const dt = event.timeStamp - d.lastT;
+        if (dt > 0) d.v = (event.clientY - d.lastY) / dt;
+        d.lastY = event.clientY;
+        d.lastT = event.timeStamp;
+        setDragH(Math.min(window.innerHeight * 0.94, Math.max(0, d.startH - dy)));
     };
-    const onHandleUp = (event: React.PointerEvent<HTMLButtonElement>) => {
-        const start = drag.current;
+    const endDrag = (event: React.PointerEvent<HTMLDivElement>, cancelled: boolean) => {
+        const d = drag.current;
         drag.current = null;
-        setPull(0);
-        if (!start) return;
-        const dy = event.clientY - start.y;
-        if (dy > 80) { if (!guard || guard()) onClose(); return; }
-        if (dy < -40) { setTall(true); return; }
-        if (Math.abs(dy) < 8) setTall((v) => !v);
+        if (!d || !d.active) return;
+        // Cleared by the next press, not a timer: when the click lands varies.
+        swallowClick.current = true;
+        setDragH(null);
+        if (cancelled) return;
+        const vh = window.innerHeight;
+        const half = vh * 0.62;
+        const full = vh * 0.94;
+        const height = Math.min(full, Math.max(0, d.startH - (event.clientY - d.y)));
+        // A flick that stopped before lifting is not a flick.
+        const v = event.timeStamp - d.lastT > 120 ? 0 : d.v;
+        let next: 'closed' | 'half' | 'full';
+        if (v > 0.5) next = tall ? 'half' : 'closed';
+        else if (v < -0.5) next = 'full';
+        else if (height < half * 0.6) next = 'closed';
+        else next = height > (half + full) / 2 ? 'full' : 'half';
+        if (next === 'closed') { if (!guard || guard()) onClose(); return; }
+        setTall(next === 'full');
     };
 
     if (!open || typeof document === 'undefined') return null;
@@ -143,27 +181,40 @@ export function Sheet({
                 role="dialog"
                 aria-modal={modal}
                 {...dataAttrs}
-                style={pull ? { transform: `translateY(${pull}px)` } : undefined}
+                style={dragH != null ? { height: dragH } : undefined}
                 className={`fixed inset-x-0 bottom-0 z-[56] flex flex-col bg-white shadow-2xl
-                    rounded-t-3xl border border-gray-200/70 transition-[height]
+                    rounded-t-3xl border border-gray-200/70
+                    ${dragH != null ? '' : 'transition-[height] duration-300 ease-out motion-reduce:transition-none'}
                     ${tall ? 'h-[94dvh]' : 'h-[62dvh]'} md:h-auto ${shape}`}
             >
-                {/* The grab handle: a tap toggles half and full height, which is
-                    the whole of what a phone sheet needs without a gesture library. */}
+                {/* The grip: the handle and the title row together. `touch-none`
+                    so the browser hands the finger to us instead of scrolling. */}
+                <div
+                    data-sheet-grip
+                    onPointerDown={onGripDown}
+                    onPointerMove={onGripMove}
+                    onPointerUp={(e) => endDrag(e, false)}
+                    onPointerCancel={(e) => endDrag(e, true)}
+                    onClickCapture={(e) => {
+                        if (!swallowClick.current) return;
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }}
+                    className="shrink-0 max-md:touch-none max-md:select-none"
+                >
+                {/* A tap on the handle toggles half and full height. Full width and
+                    44px tall, so a thumb cannot miss it. */}
                 <button
                     type="button"
                     data-sheet-handle
-                    onPointerDown={onHandleDown}
-                    onPointerMove={onHandleMove}
-                    onPointerUp={onHandleUp}
-                    onPointerCancel={() => { drag.current = null; setPull(0); }}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setTall((v) => !v); } }}
+                    onClick={() => setTall((v) => !v)}
                     aria-label={tall ? 'Shrink the panel (drag down to close)' : 'Expand the panel (drag down to close)'}
-                    className="md:hidden mx-auto mt-1 flex h-8 w-24 touch-none items-center justify-center"
+                    className="md:hidden flex h-11 w-full items-center justify-center rounded-t-3xl
+                        cursor-grab active:cursor-grabbing"
                 >
-                    <span className="h-1.5 w-10 rounded-full bg-gray-300" />
+                    <span className="h-1.5 w-12 rounded-full bg-gray-300" />
                 </button>
-                <div className="flex shrink-0 items-start gap-2 border-b border-gray-100 px-4 pb-3 pt-1 md:pt-4">
+                <div className="flex shrink-0 items-start gap-2 border-b border-gray-100 px-4 pb-3 pt-0 md:pt-4">
                     <div className="min-w-0 flex-1">{title}</div>
                     {actions && <div className="flex shrink-0 items-center gap-1.5">{actions}</div>}
                     <button
@@ -175,6 +226,7 @@ export function Sheet({
                     >
                         ×
                     </button>
+                </div>
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4
                     pb-[calc(1rem+env(safe-area-inset-bottom))]">
