@@ -211,8 +211,8 @@ export function PlaceForm({ api, place, defaults, onDone, onCancel, registerGuar
      *
      * A pasted Google Maps link carries a name, an address and the link itself —
      * retyping all three when they arrived in one paste is busywork. Existing
-     * values are never clobbered: if you already typed a name, the link's name
-     * loses.
+     * values are never clobbered — if you already typed a name, the link's name
+     * loses — except the address, below.
      */
     const applyHit = (hit: GeocodeHit) => {
         setLat(hit.lat);
@@ -222,7 +222,10 @@ export function PlaceForm({ api, place, defaults, onDone, onCancel, registerGuar
         setNeedsReview(!!hit.approximate);
 
         if (!name.trim() && hit.name) setName(hit.name);
-        if (!address.trim()) {
+        // A pasted link carries Google's own address, and pasting it is asking
+        // for it — an older guess must not outrank it.
+        if (hit.url && hit.address) setAddress(hit.address);
+        else if (!address.trim()) {
             if (hit.address) setAddress(hit.address);
             else if (hit.precision === 'geocoded') setAddress(hit.label);
         }

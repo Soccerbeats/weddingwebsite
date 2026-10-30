@@ -54,7 +54,8 @@ import {
     bucketTodos, conflictsOf, dueSoon, packingSuggestions, stayStretches,
 } from '../src/lib/honeymoonChecks';
 import {
-    coordsFromMapsUrl, coordsFromPair, nameFromMapsUrl, placeSearchTerms, placeTextFromMapsUrl,
+    coordsFromMapsUrl, coordsFromPair, ftidFromMapsUrl, nameFromMapsUrl, parseGooglePlace, placeSearchTerms,
+    placeTextFromMapsUrl,
 } from '../src/app/api/admin/honeymoon/geocode/route';
 import { SEED_PLACES, SEED_REGIONS, SEED_NOTES } from '../src/lib/honeymoonSeed';
 import { pricePatch, priceText, sheetSections } from '../src/lib/honeymoonPlaceSheet';
@@ -249,6 +250,35 @@ console.log('\nA phone share link (name and address, no coordinates)');
         terms[2]?.term === 'Gili Trawangan, Indonesia' && terms[2].approximate === true,
         `got ${JSON.stringify(terms[2])}`);
     check('asks at most five things', terms.length <= 5);
+}
+
+console.log('\nThe exact pin for a share link, from Google');
+{
+    const shared = 'https://maps.google.com?q=Gili+Private+Snorkeling+Trip,+Indonesia'
+        + '&ftid=0x2dcddfe4a40c163b:0xf0d4d941434c0af0&entry=gps&g_st=ic';
+    check('reads the ftid', ftidFromMapsUrl(shared) === '0x2dcddfe4a40c163b:0xf0d4d941434c0af0');
+    check('no ftid, no lookup', ftidFromMapsUrl('https://maps.google.com/?q=Ubud') === null);
+    check('a malformed ftid is refused', ftidFromMapsUrl('https://maps.google.com/?ftid=x:y') === null);
+
+    // Google's place answer, trimmed to the fields read: index 6 is the place.
+    const place: unknown[] = [];
+    place[2] = ['Gili Trawangan', 'Gili Indah', 'Kec. Pemenang', 'Mataram, Nusa Tenggara Bar. 83325, Indonesia'];
+    place[7] = ['/url?q=http://www.gilifishing.weebly.com/&opi=79508299&sa=U', 'gilifishing.weebly.com'];
+    place[9] = [null, null, -8.345999899999999, 116.0419256];
+    place[11] = 'Gili Private Snorkeling Trip';
+    place[39] = 'Gili Trawangan, Gili Indah, Kec. Pemenang, Mataram, Nusa Tenggara Bar. 83325, Indonesia';
+    const body = `)]}'\n${JSON.stringify([null, null, null, null, null, null, place])}`;
+    const got = parseGooglePlace(body);
+    check('the pin is the place', got?.lat === -8.345999899999999 && got?.lng === 116.0419256, JSON.stringify(got));
+    check("Google's name", got?.name === 'Gili Private Snorkeling Trip');
+    check("Google's address, without the name", got?.address === place[39]);
+    check('the website, unwrapped from the redirect', got?.website === 'http://www.gilifishing.weebly.com/');
+    place[39] = null;
+    check('the address from its parts when the joined one is missing',
+        parseGooglePlace(`)]}'\n${JSON.stringify([0, 0, 0, 0, 0, 0, place])}`)?.address
+            === 'Gili Trawangan, Gili Indah, Kec. Pemenang, Mataram, Nusa Tenggara Bar. 83325, Indonesia');
+    check('an unexpected shape is null, not a wrong pin', parseGooglePlace(`)]}'\n[1,2,3]`) === null);
+    check('not JSON is null', parseGooglePlace('<!DOCTYPE html>') === null);
 }
 
 console.log('\nName from a Maps link');

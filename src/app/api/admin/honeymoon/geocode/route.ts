@@ -205,6 +205,76 @@ function nameFromMapsUrlFull(path: string): string | null {
 }
 
 /**
+ * The `ftid` a phone's share link carries — Google's own id for the place.
+ *
+ * Two hex numbers, `0x2dcd…:0xf0d4…`. It is what lets the exact pin be asked
+ * for, where the name and address alone only find the island.
+ */
+export function ftidFromMapsUrl(input: string): string | null {
+    try {
+        const ftid = new URL(input).searchParams.get('ftid');
+        return ftid && /^0x[0-9a-f]+:0x[0-9a-f]+$/i.test(ftid) ? ftid : null;
+    } catch {
+        return null;
+    }
+}
+
+export interface GooglePlace {
+    lat: number; lng: number; name: string | null; address: string | null; website: string | null;
+}
+
+/**
+ * Read the place out of Google Maps' own place-details answer.
+ *
+ * The answer is the JSON Google's map page fetches for itself, behind a `)]}'`
+ * guard line, with the place at index 6: `[9]` is `[_, _, lat, lng]`, `[11]` the
+ * name, `[39]` the address without the name (`[2]` the same in parts), `[7][0]`
+ * the website wrapped in a `/url?q=` redirect. Positional and undocumented, so
+ * every read is checked and anything unexpected is null — the caller falls
+ * back to looking the address up.
+ */
+export function parseGooglePlace(body: string): GooglePlace | null {
+    try {
+        const json = JSON.parse(body.slice(body.indexOf('\n') + 1));
+        const place = Array.isArray(json) ? json[6] : null;
+        if (!Array.isArray(place) || !Array.isArray(place[9])) return null;
+        const lat = Number(place[9][2]);
+        const lng = Number(place[9][3]);
+        if (!valid(lat, lng)) return null;
+        const text = (value: unknown) => (typeof value === 'string' && value.trim() ? value.trim() : null);
+        const address = text(place[39])
+            ?? (Array.isArray(place[2]) ? text(place[2].filter((p: unknown) => typeof p === 'string').join(', ')) : null);
+        let website: string | null = null;
+        const rawSite = Array.isArray(place[7]) ? text(place[7][0]) : null;
+        if (rawSite) {
+            const unwrapped = rawSite.startsWith('/url?')
+                ? new URL(rawSite, 'https://www.google.com').searchParams.get('q')
+                : rawSite;
+            website = unwrapped && /^https?:\/\//i.test(unwrapped) ? unwrapped : null;
+        }
+        return { lat, lng, name: text(place[11]), address, website };
+    } catch {
+        return null;
+    }
+}
+
+/** Ask Google Maps where an `ftid` is. Null on any failure — never load-bearing. */
+async function googlePlace(ftid: string): Promise<GooglePlace | null> {
+    const url = new URL('https://www.google.com/maps/preview/place');
+    url.searchParams.set('hl', 'en');
+    url.searchParams.set('pb', `!1m1!1s${ftid}`);
+    try {
+        const res = await fetch(url, {
+            headers: { 'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'en' },
+            signal: AbortSignal.timeout(8000),
+        });
+        return res.ok ? parseGooglePlace(await res.text()) : null;
+    } catch {
+        return null;
+    }
+}
+
+/**
  * What to search for, most specific first, for a "Name, Street, Town, …,
  * Country" string.
  *
@@ -489,7 +559,24 @@ export async function GET(request: Request) {
                     }],
                 } satisfies { results: GeocodeHit[] });
             }
-            // No coordinates, but a name and address: look those up.
+            // No coordinates, but Google's id for the place: ask Google for the pin.
+            const ftid = ftidFromMapsUrl(target);
+            const google = ftid ? await googlePlace(ftid) : null;
+            if (google) {
+                return NextResponse.json({
+                    results: [{
+                        label: google.name ?? google.address ?? 'Pasted location',
+                        lat: google.lat,
+                        lng: google.lng,
+                        precision: 'exact',
+                        ...(google.name ? { name: google.name } : {}),
+                        ...(google.address ? { address: google.address } : {}),
+                        ...(google.website ? { website: google.website } : {}),
+                        url: raw,
+                    }],
+                } satisfies { results: GeocodeHit[] });
+            }
+            // No pin from Google, but a name and address: look those up.
             const placeText = placeTextFromMapsUrl(target);
             const found = placeText ? await geocodePlaceText(placeText) : null;
             if (placeText && found) {

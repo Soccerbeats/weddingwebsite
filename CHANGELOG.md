@@ -11,6 +11,18 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.10.29 — [Released] A phone's Google Maps link puts the pin on the exact spot (`main`, 2026-10-30 00:11)
+
+### Fixed
+- **A link from Google Maps' Share on a phone now lands on the exact place, not the island.**
+  Those links carry Google's id for the place but no coordinates, so v0.10.27 could only
+  look the address up and pin the town or island it names — which also sent Directions
+  there. The lookup now asks Google for the place by that id and gets its real pin, name,
+  address and website. The address-only search is still there if Google does not answer.
+- **Pasting a Google Maps link replaces the place's address with Google's.** It used to
+  fill the address only when it was empty, so a place that already had one kept the old
+  guess.
+
 ## v0.10.28 — [Released] The installed admin app opens straight on the page you left (`main`, 2026-10-30 00:03)
 
 ### Changed
