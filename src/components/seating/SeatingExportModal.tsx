@@ -9,6 +9,7 @@ import {
     type ExportOptions, type SeatingExportData,
 } from '@/lib/seatingExport';
 import SeatingExportSheet from './SeatingExportSheet';
+import { Drawer } from '@/components/admin/Drawer';
 
 /**
  * Export the seating chart — as paper, or as a spreadsheet.
@@ -177,42 +178,33 @@ export default function SeatingExportModal({ onClose }: { onClose: () => void })
 
     return (
         <>
-            <div
-                className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 print:hidden"
-                role="dialog"
-                aria-modal="true"
-                aria-label="Export seating chart"
-                onClick={e => { if (e.target === e.currentTarget) onClose(); }}
-            >
-                <div className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden">
-                    <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-3">
-                        <div>
-                            <h2 className="font-serif text-lg font-bold text-gray-800">Export seating chart</h2>
-                            <p className="text-xs text-gray-500">
-                                {data ? `${data.tables.length} tables · ${people} people` : 'Loading…'}
-                                {data && options.format === 'print' && sheetHeight > 0 && countable && (
-                                    <span className={overflows ? 'text-amber-700' : 'text-gray-400'}>
-                                        {' · '}
-                                        {overflows
-                                            ? `${printPages} pages — too much for one, even shrunk`
-                                            : printPages === 1
-                                                ? shrunk
-                                                    ? `fits one page, shrunk to ${Math.round(printScale * 100)}%`
-                                                    : 'fits one page'
-                                                : `${printPages} pages`}
-                                    </span>
-                                )}
-                            </p>
-                        </div>
-                        <button
-                            onClick={onClose}
-                            className="ml-auto w-8 h-8 rounded-full bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-                            aria-label="Close"
-                        >
-                            ✕
-                        </button>
+            <Drawer
+                open
+                onClose={onClose}
+                width="xl"
+                title={
+                    <div className="pt-0.5">
+                        <h2 className="font-serif text-lg font-bold text-gray-800">Export seating chart</h2>
+                        <p className="text-xs text-gray-500">
+                            {data ? `${data.tables.length} tables · ${people} people` : 'Loading…'}
+                            {data && options.format === 'print' && sheetHeight > 0 && countable && (
+                                <span className={overflows ? 'text-amber-700' : 'text-gray-400'}>
+                                    {' · '}
+                                    {overflows
+                                        ? `${printPages} pages — too much for one, even shrunk`
+                                        : printPages === 1
+                                            ? shrunk
+                                                ? `fits one page, shrunk to ${Math.round(printScale * 100)}%`
+                                                : 'fits one page'
+                                            : `${printPages} pages`}
+                                </span>
+                            )}
+                        </p>
                     </div>
-
+                }
+            >
+                {/* Fills the drawer: the options and the preview scroll on their own. */}
+                <div className="-mx-4 -my-4 md:-mx-5 flex h-[calc(100%+2rem)] flex-col">
                     <div className="flex-1 min-h-0 flex flex-col md:flex-row">
                         {/* Options */}
                         <div className="md:w-72 shrink-0 border-b md:border-b-0 md:border-r border-gray-100 overflow-y-auto p-5 flex flex-col gap-5">
@@ -348,7 +340,7 @@ export default function SeatingExportModal({ onClose }: { onClose: () => void })
                         </button>
                     </div>
                 </div>
-            </div>
+            </Drawer>
 
             {/* The copy that actually prints: a direct child of <body>, because the
                 admin shell is a fixed, overflow-hidden box that would clip it to one

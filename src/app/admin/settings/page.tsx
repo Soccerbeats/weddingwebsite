@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { AutosaveHeader, useAutosave } from '@/components/admin/useAutosave';
 import { DEFAULT_ROOM_BLOCK_MESSAGE } from '@/lib/roomBlock';
 import { effectiveRsvpMode, type RsvpModeSetting } from '@/lib/rsvpMode';
+import DrawerModeSetting from '@/components/admin/DrawerModeSetting';
 
 const RSVP_MODE_LABEL: Record<'link' | 'verify' | 'simple', string> = {
     link: 'Email link',
@@ -189,6 +190,12 @@ export default function AdminSettings() {
                         onChange={(e) => setConfig({ ...config, weddingLocation: e.target.value })}
                         className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border"
                     />
+                </div>
+
+                {/* How the admin's panels open — this device only, so not autosaved with the rest. */}
+                <div className="pt-6 border-t border-gray-100 max-md:hidden">
+                    <h2 className="text-xl font-semibold text-gray-900 mb-3">Admin Panels</h2>
+                    <DrawerModeSetting />
                 </div>
 
                 <div className="pt-6 border-t border-gray-100">

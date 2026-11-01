@@ -13,6 +13,7 @@ import { cleanName } from '@/lib/names';
 import DietaryPills from '@/components/admin/DietaryPills';
 import Under21Pill from '@/components/admin/Under21Pill';
 import VendorsTab from './VendorsTab';
+import { Drawer } from '@/components/admin/Drawer';
 
 // Guest-table columns to drop as horizontal space runs out, in order (first dropped → last).
 // Name + Party/Invited/RSVP/Actions are never in this list, so they always stay.
@@ -2019,159 +2020,158 @@ export default function RSVPDashboard() {
             )}
 
             {/* Log Donation Modal */}
-            {showDonationModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={resetDonationModal} />
-                    <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 z-10">
-                        <h2 className="text-lg font-bold text-gray-900 mb-4">{editingDonationId ? 'Edit Donation' : 'Log a Donation'}</h2>
-
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Who donated?</label>
-                        {donationDonor ? (
-                            <div className="flex items-center justify-between border border-gray-200 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all mb-4">
-                                <span>{donationDonor.guest_name}</span>
-                                <button type="button" onClick={() => { setDonationDonor(null); setDonationDonorSearch(''); }} className="text-gray-400 hover:text-gray-600">✕</button>
-                            </div>
-                        ) : (
-                            <div className="mb-4">
-                                <input
-                                    type="text"
-                                    value={donationDonorSearch}
-                                    onChange={e => setDonationDonorSearch(e.target.value)}
-                                    placeholder="Search guest list..."
-                                    className="w-full border border-gray-200 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
-                                />
-                                {donationDonorSearch.trim() && (
-                                    <div className="mt-1 max-h-40 overflow-y-auto border border-gray-200 rounded-2xl">
-                                        {donationPeople
-                                            .filter(p => p.name.toLowerCase().includes(donationDonorSearch.toLowerCase()))
-                                            .slice(0, 8)
-                                            .map(p => (
-                                                <button
-                                                    key={p.key}
-                                                    type="button"
-                                                    onClick={() => { setDonationDonor({ id: p.id ?? 0, guest_name: p.name }); setDonationDonorSearch(''); }}
-                                                    className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-100"
-                                                >
-                                                    {p.name}
-                                                </button>
-                                            ))}
-                                        {donationPeople.filter(p => p.name.toLowerCase().includes(donationDonorSearch.toLowerCase())).length === 0 && (
-                                            <p className="px-3 py-2 text-sm text-gray-400">No matching guest</p>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Co-givers (optional)</label>
-                        {coGivers.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mb-2">
-                                {coGivers.map(c => (
-                                    <span key={c.name} className="inline-flex items-center gap-1 bg-gray-100 rounded-full px-2 py-1 text-xs">
-                                        {c.name}
-                                        <button type="button" onClick={() => removeCoGiver(c.name)} className="text-gray-400 hover:text-gray-600">✕</button>
-                                    </span>
-                                ))}
-                            </div>
-                        )}
-                        <input
-                            type="text"
-                            value={coGiverSearch}
-                            onChange={e => setCoGiverSearch(e.target.value)}
-                            onKeyDown={e => { if (e.key === 'Enter' && coGiverSearch.trim()) { e.preventDefault(); addCoGiver({ id: null, name: coGiverSearch }); } }}
-                            placeholder="Add a co-giver (type & Enter, or pick below)"
-                            className="w-full border border-gray-200 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all mb-4"
-                        />
-                        {coGiverSearch.trim() && (
-                            <div className="-mt-3 mb-4 max-h-32 overflow-y-auto border border-gray-200 rounded-2xl">
-                                {donationPeople
-                                    .filter(p => p.name.toLowerCase().includes(coGiverSearch.toLowerCase()))
-                                    .slice(0, 8)
-                                    .map(p => (
-                                        <button key={p.key} type="button" onClick={() => addCoGiver({ id: p.id, name: p.name })}
-                                            className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-100">
-                                            {p.name}
-                                        </button>
-                                    ))}
-                            </div>
-                        )}
-
-                        <p className="text-xs text-gray-400 mb-3">Log money, a gift, or both — at least one is required.</p>
-
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Amount received ($)</label>
-                        <input
-                            type="number"
-                            value={donationAmount}
-                            onChange={e => setDonationAmount(e.target.value)}
-                            placeholder="Leave blank for a gift only"
-                            className="w-full border border-gray-200 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all mb-4"
-                        />
-
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Gift</label>
-                        <input
-                            type="text"
-                            value={donationGift}
-                            onChange={e => setDonationGift(e.target.value)}
-                            placeholder="e.g. Stand mixer, hand-made quilt"
-                            className="w-full border border-gray-200 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all mb-4"
-                        />
-
-                        {/* A fund only applies to money — a gift-only entry has nothing to allocate. */}
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Fund {donationAmount.trim() ? '' : <span className="text-gray-400 font-normal">(money only)</span>}
-                        </label>
-                        <select
-                            value={donationFundId}
-                            onChange={e => setDonationFundId(e.target.value)}
-                            disabled={!donationAmount.trim()}
-                            className="w-full border border-gray-200 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all mb-4 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            <option value="">Select a fund...</option>
-                            {(config?.registry?.items || []).map((f: FundItem) => (
-                                <option key={f.id} value={f.id}>{f.title}</option>
-                            ))}
-                        </select>
-
-                        <label className="block text-sm font-medium text-gray-700 mb-1">From what event?</label>
-                        <select
-                            value={donationEvent}
-                            onChange={e => setDonationEvent(e.target.value)}
-                            className="w-full border border-gray-200 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all mb-3"
-                        >
-                            <option>Bridal Shower</option>
-                            <option>Engagement Party</option>
-                            <option>Wedding Day</option>
-                            <option>Other</option>
-                        </select>
-                        {donationEvent === 'Other' && (
+            <Drawer
+                open={showDonationModal}
+                onClose={resetDonationModal}
+                title={<h2 className="pt-1.5 text-lg font-bold text-gray-900">{editingDonationId ? 'Edit Donation' : 'Log a Donation'}</h2>}
+            >
+                {showDonationModal && (<>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Who donated?</label>
+                    {donationDonor ? (
+                        <div className="flex items-center justify-between border border-gray-200 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all mb-4">
+                            <span>{donationDonor.guest_name}</span>
+                            <button type="button" onClick={() => { setDonationDonor(null); setDonationDonorSearch(''); }} className="text-gray-400 hover:text-gray-600">✕</button>
+                        </div>
+                    ) : (
+                        <div className="mb-4">
                             <input
                                 type="text"
-                                value={donationOtherEvent}
-                                onChange={e => setDonationOtherEvent(e.target.value)}
-                                placeholder="Name the event"
-                                className="w-full border border-gray-200 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all mb-4"
+                                value={donationDonorSearch}
+                                onChange={e => setDonationDonorSearch(e.target.value)}
+                                placeholder="Search guest list..."
+                                className="w-full border border-gray-200 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
                             />
-                        )}
-
-                        <div className="flex gap-2 mt-2">
-                            <button
-                                onClick={saveDonation}
-                                disabled={
-                                    savingDonation || !donationDonor ||
-                                    (!donationAmount.trim() && !donationGift.trim()) ||
-                                    (!!donationAmount.trim() && !donationFundId)
-                                }
-                                className="flex-1 bg-accent text-white py-2.5 rounded-full text-sm font-medium disabled:opacity-40"
-                            >
-                                {savingDonation ? 'Saving...' : 'Save'}
-                            </button>
-                            <button onClick={resetDonationModal} className="flex-1 bg-gray-100 text-gray-700 py-2.5 rounded-full text-sm">
-                                Cancel
-                            </button>
+                            {donationDonorSearch.trim() && (
+                                <div className="mt-1 max-h-40 overflow-y-auto border border-gray-200 rounded-2xl">
+                                    {donationPeople
+                                        .filter(p => p.name.toLowerCase().includes(donationDonorSearch.toLowerCase()))
+                                        .slice(0, 8)
+                                        .map(p => (
+                                            <button
+                                                key={p.key}
+                                                type="button"
+                                                onClick={() => { setDonationDonor({ id: p.id ?? 0, guest_name: p.name }); setDonationDonorSearch(''); }}
+                                                className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-100"
+                                            >
+                                                {p.name}
+                                            </button>
+                                        ))}
+                                    {donationPeople.filter(p => p.name.toLowerCase().includes(donationDonorSearch.toLowerCase())).length === 0 && (
+                                        <p className="px-3 py-2 text-sm text-gray-400">No matching guest</p>
+                                    )}
+                                </div>
+                            )}
                         </div>
+                    )}
+
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Co-givers (optional)</label>
+                    {coGivers.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mb-2">
+                            {coGivers.map(c => (
+                                <span key={c.name} className="inline-flex items-center gap-1 bg-gray-100 rounded-full px-2 py-1 text-xs">
+                                    {c.name}
+                                    <button type="button" onClick={() => removeCoGiver(c.name)} className="text-gray-400 hover:text-gray-600">✕</button>
+                                </span>
+                            ))}
+                        </div>
+                    )}
+                    <input
+                        type="text"
+                        value={coGiverSearch}
+                        onChange={e => setCoGiverSearch(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter' && coGiverSearch.trim()) { e.preventDefault(); addCoGiver({ id: null, name: coGiverSearch }); } }}
+                        placeholder="Add a co-giver (type & Enter, or pick below)"
+                        className="w-full border border-gray-200 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all mb-4"
+                    />
+                    {coGiverSearch.trim() && (
+                        <div className="-mt-3 mb-4 max-h-32 overflow-y-auto border border-gray-200 rounded-2xl">
+                            {donationPeople
+                                .filter(p => p.name.toLowerCase().includes(coGiverSearch.toLowerCase()))
+                                .slice(0, 8)
+                                .map(p => (
+                                    <button key={p.key} type="button" onClick={() => addCoGiver({ id: p.id, name: p.name })}
+                                        className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-100">
+                                        {p.name}
+                                    </button>
+                                ))}
+                        </div>
+                    )}
+
+                    <p className="text-xs text-gray-400 mb-3">Log money, a gift, or both — at least one is required.</p>
+
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Amount received ($)</label>
+                    <input
+                        type="number"
+                        value={donationAmount}
+                        onChange={e => setDonationAmount(e.target.value)}
+                        placeholder="Leave blank for a gift only"
+                        className="w-full border border-gray-200 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all mb-4"
+                    />
+
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Gift</label>
+                    <input
+                        type="text"
+                        value={donationGift}
+                        onChange={e => setDonationGift(e.target.value)}
+                        placeholder="e.g. Stand mixer, hand-made quilt"
+                        className="w-full border border-gray-200 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all mb-4"
+                    />
+
+                    {/* A fund only applies to money — a gift-only entry has nothing to allocate. */}
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Fund {donationAmount.trim() ? '' : <span className="text-gray-400 font-normal">(money only)</span>}
+                    </label>
+                    <select
+                        value={donationFundId}
+                        onChange={e => setDonationFundId(e.target.value)}
+                        disabled={!donationAmount.trim()}
+                        className="w-full border border-gray-200 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all mb-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <option value="">Select a fund...</option>
+                        {(config?.registry?.items || []).map((f: FundItem) => (
+                            <option key={f.id} value={f.id}>{f.title}</option>
+                        ))}
+                    </select>
+
+                    <label className="block text-sm font-medium text-gray-700 mb-1">From what event?</label>
+                    <select
+                        value={donationEvent}
+                        onChange={e => setDonationEvent(e.target.value)}
+                        className="w-full border border-gray-200 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all mb-3"
+                    >
+                        <option>Bridal Shower</option>
+                        <option>Engagement Party</option>
+                        <option>Wedding Day</option>
+                        <option>Other</option>
+                    </select>
+                    {donationEvent === 'Other' && (
+                        <input
+                            type="text"
+                            value={donationOtherEvent}
+                            onChange={e => setDonationOtherEvent(e.target.value)}
+                            placeholder="Name the event"
+                            className="w-full border border-gray-200 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all mb-4"
+                        />
+                    )}
+
+                    <div className="flex gap-2 mt-2">
+                        <button
+                            onClick={saveDonation}
+                            disabled={
+                                savingDonation || !donationDonor ||
+                                (!donationAmount.trim() && !donationGift.trim()) ||
+                                (!!donationAmount.trim() && !donationFundId)
+                            }
+                            className="flex-1 bg-accent text-white py-2.5 rounded-full text-sm font-medium disabled:opacity-40"
+                        >
+                            {savingDonation ? 'Saving...' : 'Save'}
+                        </button>
+                        <button onClick={resetDonationModal} className="flex-1 bg-gray-100 text-gray-700 py-2.5 rounded-full text-sm">
+                            Cancel
+                        </button>
                     </div>
-                </div>
-            )}
+                </>)}
+            </Drawer>
 
             {/* Delete Donation Modal */}
             {deletingDonation && (
@@ -2238,425 +2238,413 @@ export default function RSVPDashboard() {
             )}
 
             {/* Add/Edit Guest Modal */}
-            {(isAddingGuest || editingGuest) && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-                    <div className="bg-white rounded-3xl max-w-3xl w-full max-h-[92vh] overflow-y-auto shadow-2xl">
-                        {/* Header */}
-                        <div className="px-6 sm:px-8 pt-7 pb-5 border-b border-gray-100 sticky top-0 bg-white/95 backdrop-blur z-10 rounded-t-3xl">
-                            <h3 className="text-2xl font-bold text-gray-900">
-                                {editingGuest ? 'Edit Guest' : 'Add Guest'}
-                            </h3>
-                            <p className="text-sm text-gray-400 mt-1">
-                                {editingGuest
-                                    ? `Update details for ${guestForm.guest_name || 'this guest'}.`
-                                    : 'Add a new guest to your list.'}
-                            </p>
-                        </div>
-
-                        <div className="px-6 sm:px-8 py-6 space-y-6">
-                            {/* Guest + party names */}
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                                        Guest Name <span className="text-accent">*</span>
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={guestForm.guest_name}
-                                        onChange={(e) => setGuestForm({ ...guestForm, guest_name: e.target.value })}
-                                        className="w-full px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-gray-900 placeholder-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
-                                        placeholder="First Last"
-                                        required
-                                    />
-                                    <DietaryPills
-                                        entry={guestForm.dietary[0] ?? {}}
-                                        onChange={entry => {
-                                            const dietary = [...guestForm.dietary];
-                                            dietary[0] = entry;
-                                            setGuestForm({ ...guestForm, dietary });
-                                        }}
-                                    />
-                                    {/* Its own row, below the restrictions, because it is not one:
-                                        it changes the bar charge on the budget, never the plate. */}
-                                    <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                                        <Under21Pill
-                                            on={guestForm.under_21}
-                                            onChange={under_21 => setGuestForm({ ...guestForm, under_21 })}
-                                        />
-                                    </div>
-                                </div>
-
-                                {Array.from({ length: Math.max(0, guestForm.party_size - 1) }, (_, i) => (
-                                    <div key={i}>
-                                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                                            Guest {i + 2} Name <span className="text-gray-400 font-normal">(leave blank if unknown)</span>
-                                        </label>
-                                        <div className="flex gap-2">
-                                            <input
-                                                type="text"
-                                                value={guestForm.party_members[i]?.name ?? ''}
-                                                onChange={(e) => {
-                                                    const updated = [...guestForm.party_members];
-                                                    while (updated.length <= i) updated.push({ name: null, attending: null, under21: false });
-                                                    updated[i] = { ...updated[i], name: e.target.value || null };
-                                                    setGuestForm({ ...guestForm, party_members: updated });
-                                                }}
-                                                className="flex-1 min-w-0 px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-gray-900 placeholder-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
-                                                placeholder="Optional"
-                                            />
-                                            {/* Per-person answer. The RSVP form sets this; it is editable here for
-                                                the people who answer by phone. The seating chart reads it: someone
-                                                marked Not coming is not given a chair. */}
-                                            <select
-                                                value={guestForm.party_members[i]?.attending === true ? 'yes' : guestForm.party_members[i]?.attending === false ? 'no' : ''}
-                                                onChange={(e) => {
-                                                    const updated = [...guestForm.party_members];
-                                                    while (updated.length <= i) updated.push({ name: null, attending: null, under21: false });
-                                                    updated[i] = {
-                                                        ...updated[i],
-                                                        attending: e.target.value === 'yes' ? true : e.target.value === 'no' ? false : null,
-                                                    };
-                                                    setGuestForm({ ...guestForm, party_members: updated });
-                                                }}
-                                                className="w-32 shrink-0 px-3 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-sm text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
-                                                title="Is this person coming?"
-                                            >
-                                                <option value="">No answer</option>
-                                                <option value="yes">Coming</option>
-                                                <option value="no">Not coming</option>
-                                            </select>
-                                        </div>
-                                        {guestForm.party_members[i]?.attending !== false && (
-                                            <>
-                                                <DietaryPills
-                                                    entry={guestForm.dietary[i + 1] ?? {}}
-                                                    onChange={entry => {
-                                                        const dietary = [...guestForm.dietary];
-                                                        while (dietary.length <= i + 1) dietary.push({});
-                                                        dietary[i + 1] = entry;
-                                                        setGuestForm({ ...guestForm, dietary });
-                                                    }}
-                                                />
-                                                <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                                                    <Under21Pill
-                                                        on={!!guestForm.party_members[i]?.under21}
-                                                        onChange={under21 => {
-                                                            const updated = [...guestForm.party_members];
-                                                            while (updated.length <= i) updated.push({ name: null, attending: null, under21: false });
-                                                            updated[i] = { ...updated[i], under21 };
-                                                            setGuestForm({ ...guestForm, party_members: updated });
-                                                        }}
-                                                    />
-                                                </div>
-                                            </>
-                                        )}
-                                    </div>
-                                ))}
-
-                                {/* Saving a restriction for a household that never
-                                    answered has to create their RSVP — say so before
-                                    it happens, not after. */}
-                                {!rsvpFor(guestForm.guest_name) && guestForm.dietary.some(e => !isEmptyEntry(e)) && (
-                                    <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-2xl px-4 py-3">
-                                        No RSVP on file for this household. Saving a restriction creates one, so they
-                                        start counting as having answered — on the dashboard, in the budget headcount,
-                                        and on the RSVP page if they visit it.
-                                    </p>
-                                )}
-                            </div>
-
-                            {/* Contact + details */}
-                            <div className="grid sm:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Email</label>
-                                    <input
-                                        type="email"
-                                        value={guestForm.email}
-                                        onChange={(e) => setGuestForm({ ...guestForm, email: e.target.value })}
-                                        className="w-full px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-gray-900 placeholder-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
-                                        placeholder="name@example.com"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Phone</label>
-                                    <input
-                                        type="tel"
-                                        value={guestForm.phone}
-                                        onChange={(e) => setGuestForm({ ...guestForm, phone: e.target.value })}
-                                        className="w-full px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-gray-900 placeholder-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
-                                        placeholder="(555) 555-5555"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Party Size</label>
-                                    <input
-                                        type="number"
-                                        min="1"
-                                        value={guestForm.party_size}
-                                        onChange={(e) => {
-                                            const size = parseInt(e.target.value) || 1;
-                                            const slots = Array.from({ length: Math.max(0, size - 1) }, (_, i) => ({
-                                                name: guestForm.party_members[i]?.name ?? null,
-                                                attending: guestForm.party_members[i]?.attending ?? null,
-                                            }));
-                                            setGuestForm({ ...guestForm, party_size: size, party_members: slots });
-                                        }}
-                                        className="w-full px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Side</label>
-                                    <select
-                                        value={guestForm.side}
-                                        onChange={(e) => setGuestForm({ ...guestForm, side: e.target.value })}
-                                        className="w-full px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
-                                    >
-                                        <option value="">Not Specified</option>
-                                        <option value="bride">{config?.brideName || "Bride"}&apos;s Side</option>
-                                        <option value="groom">{config?.groomName || "Groom"}&apos;s Side</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            {/* Relationship */}
+            <Drawer
+                open={!!(isAddingGuest || editingGuest)}
+                onClose={() => { setIsAddingGuest(false); setEditingGuest(null); }}
+                title={<div className="pt-1"><h3 className="text-2xl font-bold text-gray-900">{editingGuest ? 'Edit Guest' : 'Add Guest'}</h3><p className="mt-1 text-sm text-gray-400">{editingGuest ? `Update details for ${guestForm.guest_name || 'this guest'}.` : 'Add a new guest to your list.'}</p></div>}
+                width="lg"
+            >
+                {(isAddingGuest || editingGuest) && (<>
+                    <div className="space-y-6">
+                        {/* Guest + party names */}
+                        <div className="space-y-4">
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Relationship</label>
+                                <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                                    Guest Name <span className="text-accent">*</span>
+                                </label>
                                 <input
                                     type="text"
-                                    value={guestForm.relationship}
-                                    onChange={(e) => setGuestForm({ ...guestForm, relationship: e.target.value })}
+                                    value={guestForm.guest_name}
+                                    onChange={(e) => setGuestForm({ ...guestForm, guest_name: e.target.value })}
                                     className="w-full px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-gray-900 placeholder-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
-                                    placeholder="e.g. Family, Friend, Bride's cousin"
+                                    placeholder="First Last"
+                                    required
                                 />
+                                <DietaryPills
+                                    entry={guestForm.dietary[0] ?? {}}
+                                    onChange={entry => {
+                                        const dietary = [...guestForm.dietary];
+                                        dietary[0] = entry;
+                                        setGuestForm({ ...guestForm, dietary });
+                                    }}
+                                />
+                                {/* Its own row, below the restrictions, because it is not one:
+                                    it changes the bar charge on the budget, never the plate. */}
+                                <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                                    <Under21Pill
+                                        on={guestForm.under_21}
+                                        onChange={under_21 => setGuestForm({ ...guestForm, under_21 })}
+                                    />
+                                </div>
                             </div>
 
-                            {/* Flag */}
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Flag</label>
-                                <div className="flex flex-wrap gap-2">
-                                    {([
-                                        { v: '', l: 'None', on: 'bg-gray-800 text-white', off: 'bg-gray-100 text-gray-600 hover:bg-gray-200' },
-                                        { v: 'issue', l: '⚠️ Issue', on: 'bg-red-500 text-white', off: 'bg-red-50 text-red-600 hover:bg-red-100' },
-                                        { v: 'need', l: '📌 Need', on: 'bg-amber-500 text-white', off: 'bg-amber-50 text-amber-700 hover:bg-amber-100' },
-                                    ] as { v: string; l: string; on: string; off: string }[]).map(opt => (
-                                        <button
-                                            key={opt.v || 'none'}
-                                            type="button"
-                                            onClick={() => setGuestForm({ ...guestForm, flag: opt.v })}
-                                            className={`px-4 py-2 rounded-full text-sm font-semibold transition-all shadow-sm ${(guestForm.flag || '') === opt.v ? opt.on + ' shadow-md' : opt.off}`}
+                            {Array.from({ length: Math.max(0, guestForm.party_size - 1) }, (_, i) => (
+                                <div key={i}>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                                        Guest {i + 2} Name <span className="text-gray-400 font-normal">(leave blank if unknown)</span>
+                                    </label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            value={guestForm.party_members[i]?.name ?? ''}
+                                            onChange={(e) => {
+                                                const updated = [...guestForm.party_members];
+                                                while (updated.length <= i) updated.push({ name: null, attending: null, under21: false });
+                                                updated[i] = { ...updated[i], name: e.target.value || null };
+                                                setGuestForm({ ...guestForm, party_members: updated });
+                                            }}
+                                            className="flex-1 min-w-0 px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-gray-900 placeholder-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
+                                            placeholder="Optional"
+                                        />
+                                        {/* Per-person answer. The RSVP form sets this; it is editable here for
+                                            the people who answer by phone. The seating chart reads it: someone
+                                            marked Not coming is not given a chair. */}
+                                        <select
+                                            value={guestForm.party_members[i]?.attending === true ? 'yes' : guestForm.party_members[i]?.attending === false ? 'no' : ''}
+                                            onChange={(e) => {
+                                                const updated = [...guestForm.party_members];
+                                                while (updated.length <= i) updated.push({ name: null, attending: null, under21: false });
+                                                updated[i] = {
+                                                    ...updated[i],
+                                                    attending: e.target.value === 'yes' ? true : e.target.value === 'no' ? false : null,
+                                                };
+                                                setGuestForm({ ...guestForm, party_members: updated });
+                                            }}
+                                            className="w-32 shrink-0 px-3 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-sm text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
+                                            title="Is this person coming?"
                                         >
-                                            {opt.l}
-                                        </button>
-                                    ))}
+                                            <option value="">No answer</option>
+                                            <option value="yes">Coming</option>
+                                            <option value="no">Not coming</option>
+                                        </select>
+                                    </div>
+                                    {guestForm.party_members[i]?.attending !== false && (
+                                        <>
+                                            <DietaryPills
+                                                entry={guestForm.dietary[i + 1] ?? {}}
+                                                onChange={entry => {
+                                                    const dietary = [...guestForm.dietary];
+                                                    while (dietary.length <= i + 1) dietary.push({});
+                                                    dietary[i + 1] = entry;
+                                                    setGuestForm({ ...guestForm, dietary });
+                                                }}
+                                            />
+                                            <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                                                <Under21Pill
+                                                    on={!!guestForm.party_members[i]?.under21}
+                                                    onChange={under21 => {
+                                                        const updated = [...guestForm.party_members];
+                                                        while (updated.length <= i) updated.push({ name: null, attending: null, under21: false });
+                                                        updated[i] = { ...updated[i], under21 };
+                                                        setGuestForm({ ...guestForm, party_members: updated });
+                                                    }}
+                                                />
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
-                                <p className="text-xs text-gray-400 mt-1.5">Adds a colored pill to the guest&apos;s row so you can spot it at a glance.</p>
-                            </div>
+                            ))}
 
-                            {/* Notes */}
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Notes</label>
-                                <textarea
-                                    value={guestForm.notes}
-                                    onChange={(e) => setGuestForm({ ...guestForm, notes: e.target.value })}
-                                    className="w-full px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-gray-900 placeholder-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all resize-y"
-                                    rows={3}
-                                    placeholder="Anything worth remembering about this guest…"
-                                />
-                                <p className="text-xs text-gray-400 mt-1.5">Guests with a note get a 📝 pill and can be found via the &quot;Noted&quot; filter.</p>
-                            </div>
-
-                            {/* Address */}
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Address</label>
-                                <textarea
-                                    value={guestForm.address}
-                                    onChange={(e) => setGuestForm({ ...guestForm, address: e.target.value })}
-                                    className="w-full px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-gray-900 placeholder-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all resize-y"
-                                    rows={2}
-                                    placeholder="123 Main St, City, ST 12345"
-                                />
-                            </div>
-
-                            {/* Invited toggle */}
-                            <label className="flex items-center gap-3 cursor-pointer bg-gray-50 rounded-2xl px-4 py-3 border border-gray-200 hover:bg-gray-100 transition-colors">
-                                <input
-                                    type="checkbox"
-                                    checked={guestForm.invited}
-                                    onChange={(e) => setGuestForm({ ...guestForm, invited: e.target.checked })}
-                                    className="h-5 w-5 text-accent border-gray-300 rounded-md focus:ring-accent"
-                                />
-                                <span className="text-sm font-medium text-gray-700">Invited</span>
-                            </label>
-
-                            {editingGuest && (
-                                <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">RSVP Status (Admin)</label>
-                                    <select
-                                        value={guestForm.rsvp_status}
-                                        onChange={(e) => setGuestForm({ ...guestForm, rsvp_status: e.target.value })}
-                                        className="w-full px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
-                                    >
-                                        <option value="">No Response</option>
-                                        <option value="attending">Attending</option>
-                                        <option value="declined">Declined</option>
-                                        <option value="likely_not_coming">Likely Not Coming</option>
-                                    </select>
-                                    <p className="text-xs text-gray-400 mt-1.5">Admin-only. &quot;Likely Not Coming&quot; excludes this guest from expected headcount and seating chart.</p>
-                                </div>
+                            {/* Saving a restriction for a household that never
+                                answered has to create their RSVP — say so before
+                                it happens, not after. */}
+                            {!rsvpFor(guestForm.guest_name) && guestForm.dietary.some(e => !isEmptyEntry(e)) && (
+                                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-2xl px-4 py-3">
+                                    No RSVP on file for this household. Saving a restriction creates one, so they
+                                    start counting as having answered — on the dashboard, in the budget headcount,
+                                    and on the RSVP page if they visit it.
+                                </p>
                             )}
                         </div>
 
-                        {/* Footer */}
-                        <div className="px-6 sm:px-8 py-5 border-t border-gray-100 flex justify-end gap-3 sticky bottom-0 bg-white/95 backdrop-blur rounded-b-3xl">
-                            <button
-                                onClick={() => {
-                                    setIsAddingGuest(false);
-                                    setEditingGuest(null);
-                                }}
-                                className="px-6 py-2.5 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-full hover:bg-gray-50 transition-all duration-300 shadow-sm hover:shadow-md"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleSaveGuest}
-                                disabled={!guestForm.guest_name}
-                                className="px-7 py-2.5 text-sm font-semibold text-white bg-accent rounded-full hover:bg-accent/90 disabled:opacity-50 transition-all duration-300 shadow-md hover:shadow-lg"
-                            >
-                                {editingGuest ? 'Update' : 'Add'} Guest
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Bulk Edit Modal — applies only the fields that were actually set */}
-            {showBulkModal && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
-                        <div className="px-6 sm:px-8 pt-6 pb-4 border-b border-gray-100 sticky top-0 bg-white/95 backdrop-blur rounded-t-3xl">
-                            <h3 className="text-2xl font-bold text-gray-900">Edit {selectedGuests.length} Guest{selectedGuests.length === 1 ? '' : 's'}</h3>
-                            <p className="text-sm text-gray-500 mt-1">Anything left on <span className="font-semibold">Leave unchanged</span> is not touched.</p>
-                        </div>
-
-                        <div className="px-6 sm:px-8 py-6 space-y-6">
-                            {/* Flag */}
+                        {/* Contact + details */}
+                        <div className="grid sm:grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Flag</label>
-                                <div className="flex flex-wrap gap-2">
-                                    {([
-                                        { v: '', l: 'Leave unchanged', on: 'bg-gray-800 text-white', off: 'bg-gray-100 text-gray-600 hover:bg-gray-200' },
-                                        { v: 'issue', l: '⚠️ Issue', on: 'bg-red-600 text-white', off: 'bg-red-50 text-red-700 hover:bg-red-100' },
-                                        { v: 'need', l: '📌 Need', on: 'bg-amber-500 text-white', off: 'bg-amber-50 text-amber-700 hover:bg-amber-100' },
-                                        { v: 'clear', l: 'Clear flag', on: 'bg-gray-600 text-white', off: 'bg-gray-100 text-gray-600 hover:bg-gray-200' },
-                                    ]).map(opt => (
-                                        <button
-                                            key={opt.v || 'none'}
-                                            type="button"
-                                            onClick={() => setBulkFlag(opt.v)}
-                                            className={`px-4 py-2 rounded-full text-sm font-semibold transition-all shadow-sm ${bulkFlag === opt.v ? opt.on + ' shadow-md' : opt.off}`}
-                                        >
-                                            {opt.l}
-                                        </button>
-                                    ))}
-                                </div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Email</label>
+                                <input
+                                    type="email"
+                                    value={guestForm.email}
+                                    onChange={(e) => setGuestForm({ ...guestForm, email: e.target.value })}
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-gray-900 placeholder-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
+                                    placeholder="name@example.com"
+                                />
                             </div>
-
-                            {/* Note */}
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Note</label>
-                                <div className="flex flex-wrap gap-2 mb-2">
-                                    {([
-                                        { v: 'append', l: 'Add to existing' },
-                                        { v: 'replace', l: 'Replace' },
-                                        { v: 'clear', l: 'Clear notes' },
-                                    ] as { v: 'append' | 'replace' | 'clear'; l: string }[]).map(opt => (
-                                        <button
-                                            key={opt.v}
-                                            type="button"
-                                            onClick={() => setBulkNoteMode(opt.v)}
-                                            className={`px-4 py-2 rounded-full text-sm font-semibold transition-all shadow-sm ${
-                                                bulkNoteMode === opt.v ? 'bg-accent text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                            }`}
-                                        >
-                                            {opt.l}
-                                        </button>
-                                    ))}
-                                </div>
-                                {bulkNoteMode !== 'clear' ? (
-                                    <>
-                                        <textarea
-                                            value={bulkNote}
-                                            onChange={(e) => setBulkNote(e.target.value)}
-                                            className="w-full px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-gray-900 placeholder-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all resize-y"
-                                            rows={3}
-                                            placeholder={bulkNoteMode === 'append' ? 'Added on its own line to every selected guest…' : 'Overwrites the note on every selected guest…'}
-                                        />
-                                        <p className="text-xs text-gray-400 mt-1.5">
-                                            {bulkNoteMode === 'append'
-                                                ? 'Existing notes are kept — this goes on a new line underneath. Leave blank to skip.'
-                                                : '⚠️ Replaces whatever note each selected guest already has. Leave blank to skip.'}
-                                        </p>
-                                    </>
-                                ) : (
-                                    <p className="text-xs text-red-600 font-semibold">⚠️ Wipes the note on all {selectedGuests.length} selected guest{selectedGuests.length === 1 ? '' : 's'}.</p>
-                                )}
+                                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Phone</label>
+                                <input
+                                    type="tel"
+                                    value={guestForm.phone}
+                                    onChange={(e) => setGuestForm({ ...guestForm, phone: e.target.value })}
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-gray-900 placeholder-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
+                                    placeholder="(555) 555-5555"
+                                />
                             </div>
-
-                            {/* Side */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Party Size</label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    value={guestForm.party_size}
+                                    onChange={(e) => {
+                                        const size = parseInt(e.target.value) || 1;
+                                        const slots = Array.from({ length: Math.max(0, size - 1) }, (_, i) => ({
+                                            name: guestForm.party_members[i]?.name ?? null,
+                                            attending: guestForm.party_members[i]?.attending ?? null,
+                                        }));
+                                        setGuestForm({ ...guestForm, party_size: size, party_members: slots });
+                                    }}
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
+                                />
+                            </div>
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">Side</label>
                                 <select
-                                    value={bulkSide}
-                                    onChange={(e) => setBulkSide(e.target.value)}
+                                    value={guestForm.side}
+                                    onChange={(e) => setGuestForm({ ...guestForm, side: e.target.value })}
                                     className="w-full px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
                                 >
-                                    <option value="">Leave unchanged</option>
-                                    <option value="bride">{config?.brideName || 'Bride'}&apos;s Side</option>
-                                    <option value="groom">{config?.groomName || 'Groom'}&apos;s Side</option>
-                                    <option value="clear">Clear side</option>
+                                    <option value="">Not Specified</option>
+                                    <option value="bride">{config?.brideName || "Bride"}&apos;s Side</option>
+                                    <option value="groom">{config?.groomName || "Groom"}&apos;s Side</option>
                                 </select>
                             </div>
+                        </div>
 
-                            {/* RSVP Status */}
+                        {/* Relationship */}
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-1.5">Relationship</label>
+                            <input
+                                type="text"
+                                value={guestForm.relationship}
+                                onChange={(e) => setGuestForm({ ...guestForm, relationship: e.target.value })}
+                                className="w-full px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-gray-900 placeholder-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
+                                placeholder="e.g. Family, Friend, Bride's cousin"
+                            />
+                        </div>
+
+                        {/* Flag */}
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-1.5">Flag</label>
+                            <div className="flex flex-wrap gap-2">
+                                {([
+                                    { v: '', l: 'None', on: 'bg-gray-800 text-white', off: 'bg-gray-100 text-gray-600 hover:bg-gray-200' },
+                                    { v: 'issue', l: '⚠️ Issue', on: 'bg-red-500 text-white', off: 'bg-red-50 text-red-600 hover:bg-red-100' },
+                                    { v: 'need', l: '📌 Need', on: 'bg-amber-500 text-white', off: 'bg-amber-50 text-amber-700 hover:bg-amber-100' },
+                                ] as { v: string; l: string; on: string; off: string }[]).map(opt => (
+                                    <button
+                                        key={opt.v || 'none'}
+                                        type="button"
+                                        onClick={() => setGuestForm({ ...guestForm, flag: opt.v })}
+                                        className={`px-4 py-2 rounded-full text-sm font-semibold transition-all shadow-sm ${(guestForm.flag || '') === opt.v ? opt.on + ' shadow-md' : opt.off}`}
+                                    >
+                                        {opt.l}
+                                    </button>
+                                ))}
+                            </div>
+                            <p className="text-xs text-gray-400 mt-1.5">Adds a colored pill to the guest&apos;s row so you can spot it at a glance.</p>
+                        </div>
+
+                        {/* Notes */}
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-1.5">Notes</label>
+                            <textarea
+                                value={guestForm.notes}
+                                onChange={(e) => setGuestForm({ ...guestForm, notes: e.target.value })}
+                                className="w-full px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-gray-900 placeholder-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all resize-y"
+                                rows={3}
+                                placeholder="Anything worth remembering about this guest…"
+                            />
+                            <p className="text-xs text-gray-400 mt-1.5">Guests with a note get a 📝 pill and can be found via the &quot;Noted&quot; filter.</p>
+                        </div>
+
+                        {/* Address */}
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-1.5">Address</label>
+                            <textarea
+                                value={guestForm.address}
+                                onChange={(e) => setGuestForm({ ...guestForm, address: e.target.value })}
+                                className="w-full px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-gray-900 placeholder-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all resize-y"
+                                rows={2}
+                                placeholder="123 Main St, City, ST 12345"
+                            />
+                        </div>
+
+                        {/* Invited toggle */}
+                        <label className="flex items-center gap-3 cursor-pointer bg-gray-50 rounded-2xl px-4 py-3 border border-gray-200 hover:bg-gray-100 transition-colors">
+                            <input
+                                type="checkbox"
+                                checked={guestForm.invited}
+                                onChange={(e) => setGuestForm({ ...guestForm, invited: e.target.checked })}
+                                className="h-5 w-5 text-accent border-gray-300 rounded-md focus:ring-accent"
+                            />
+                            <span className="text-sm font-medium text-gray-700">Invited</span>
+                        </label>
+
+                        {editingGuest && (
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-1.5">RSVP Status</label>
+                                <label className="block text-sm font-semibold text-gray-700 mb-1.5">RSVP Status (Admin)</label>
                                 <select
-                                    value={bulkRsvp}
-                                    onChange={(e) => setBulkRsvp(e.target.value)}
+                                    value={guestForm.rsvp_status}
+                                    onChange={(e) => setGuestForm({ ...guestForm, rsvp_status: e.target.value })}
                                     className="w-full px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
                                 >
-                                    <option value="">Leave unchanged</option>
-                                    <option value="likely_not_coming">Likely Not Coming</option>
+                                    <option value="">No Response</option>
                                     <option value="attending">Attending</option>
                                     <option value="declined">Declined</option>
-                                    <option value="clear">Clear to No Response</option>
+                                    <option value="likely_not_coming">Likely Not Coming</option>
                                 </select>
-                                <p className="text-xs text-gray-400 mt-1.5">Admin-only override. This is what guests actually replied, so change it in bulk with care.</p>
+                                <p className="text-xs text-gray-400 mt-1.5">Admin-only. &quot;Likely Not Coming&quot; excludes this guest from expected headcount and seating chart.</p>
                             </div>
+                        )}
+                    </div>
 
-                            {bulkResult && (
-                                <p className="text-sm font-semibold text-red-600">{bulkResult}</p>
+                    {/* Footer */}
+                    <div className="sticky -bottom-4 -mb-4 mt-6 py-4 border-t border-gray-100 flex justify-end gap-3 bg-white/95 backdrop-blur">
+                        <button
+                            onClick={() => {
+                                setIsAddingGuest(false);
+                                setEditingGuest(null);
+                            }}
+                            className="px-6 py-2.5 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-full hover:bg-gray-50 transition-all duration-300 shadow-sm hover:shadow-md"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={handleSaveGuest}
+                            disabled={!guestForm.guest_name}
+                            className="px-7 py-2.5 text-sm font-semibold text-white bg-accent rounded-full hover:bg-accent/90 disabled:opacity-50 transition-all duration-300 shadow-md hover:shadow-lg"
+                        >
+                            {editingGuest ? 'Update' : 'Add'} Guest
+                        </button>
+                    </div>
+                </>)}
+            </Drawer>
+
+            {/* Bulk Edit Modal — applies only the fields that were actually set */}
+            <Drawer
+                open={showBulkModal}
+                onClose={() => setShowBulkModal(false)}
+                title={<div className="pt-1"><h3 className="text-2xl font-bold text-gray-900">Edit {selectedGuests.length} Guest{selectedGuests.length === 1 ? '' : 's'}</h3><p className="mt-1 text-sm text-gray-500">Anything left on <span className="font-semibold">Leave unchanged</span> is not touched.</p></div>}
+            >
+                {showBulkModal && (<>
+                    <div className="space-y-6">
+                        {/* Flag */}
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-1.5">Flag</label>
+                            <div className="flex flex-wrap gap-2">
+                                {([
+                                    { v: '', l: 'Leave unchanged', on: 'bg-gray-800 text-white', off: 'bg-gray-100 text-gray-600 hover:bg-gray-200' },
+                                    { v: 'issue', l: '⚠️ Issue', on: 'bg-red-600 text-white', off: 'bg-red-50 text-red-700 hover:bg-red-100' },
+                                    { v: 'need', l: '📌 Need', on: 'bg-amber-500 text-white', off: 'bg-amber-50 text-amber-700 hover:bg-amber-100' },
+                                    { v: 'clear', l: 'Clear flag', on: 'bg-gray-600 text-white', off: 'bg-gray-100 text-gray-600 hover:bg-gray-200' },
+                                ]).map(opt => (
+                                    <button
+                                        key={opt.v || 'none'}
+                                        type="button"
+                                        onClick={() => setBulkFlag(opt.v)}
+                                        className={`px-4 py-2 rounded-full text-sm font-semibold transition-all shadow-sm ${bulkFlag === opt.v ? opt.on + ' shadow-md' : opt.off}`}
+                                    >
+                                        {opt.l}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Note */}
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-1.5">Note</label>
+                            <div className="flex flex-wrap gap-2 mb-2">
+                                {([
+                                    { v: 'append', l: 'Add to existing' },
+                                    { v: 'replace', l: 'Replace' },
+                                    { v: 'clear', l: 'Clear notes' },
+                                ] as { v: 'append' | 'replace' | 'clear'; l: string }[]).map(opt => (
+                                    <button
+                                        key={opt.v}
+                                        type="button"
+                                        onClick={() => setBulkNoteMode(opt.v)}
+                                        className={`px-4 py-2 rounded-full text-sm font-semibold transition-all shadow-sm ${
+                                            bulkNoteMode === opt.v ? 'bg-accent text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                        }`}
+                                    >
+                                        {opt.l}
+                                    </button>
+                                ))}
+                            </div>
+                            {bulkNoteMode !== 'clear' ? (
+                                <>
+                                    <textarea
+                                        value={bulkNote}
+                                        onChange={(e) => setBulkNote(e.target.value)}
+                                        className="w-full px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-gray-900 placeholder-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all resize-y"
+                                        rows={3}
+                                        placeholder={bulkNoteMode === 'append' ? 'Added on its own line to every selected guest…' : 'Overwrites the note on every selected guest…'}
+                                    />
+                                    <p className="text-xs text-gray-400 mt-1.5">
+                                        {bulkNoteMode === 'append'
+                                            ? 'Existing notes are kept — this goes on a new line underneath. Leave blank to skip.'
+                                            : '⚠️ Replaces whatever note each selected guest already has. Leave blank to skip.'}
+                                    </p>
+                                </>
+                            ) : (
+                                <p className="text-xs text-red-600 font-semibold">⚠️ Wipes the note on all {selectedGuests.length} selected guest{selectedGuests.length === 1 ? '' : 's'}.</p>
                             )}
                         </div>
 
-                        <div className="px-6 sm:px-8 py-5 border-t border-gray-100 flex justify-end gap-3 sticky bottom-0 bg-white/95 backdrop-blur rounded-b-3xl">
-                            <button
-                                onClick={() => setShowBulkModal(false)}
-                                className="px-6 py-2.5 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-full hover:bg-gray-50 transition-all duration-300 shadow-sm hover:shadow-md"
+                        {/* Side */}
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-1.5">Side</label>
+                            <select
+                                value={bulkSide}
+                                onChange={(e) => setBulkSide(e.target.value)}
+                                className="w-full px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
                             >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleBulkEdit}
-                                disabled={bulkSaving}
-                                className="px-6 py-2.5 text-sm font-semibold text-white bg-accent rounded-full hover:bg-accent/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-300 shadow-md hover:shadow-lg"
-                            >
-                                {bulkSaving ? 'Applying…' : `Apply to ${selectedGuests.length}`}
-                            </button>
+                                <option value="">Leave unchanged</option>
+                                <option value="bride">{config?.brideName || 'Bride'}&apos;s Side</option>
+                                <option value="groom">{config?.groomName || 'Groom'}&apos;s Side</option>
+                                <option value="clear">Clear side</option>
+                            </select>
                         </div>
+
+                        {/* RSVP Status */}
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-1.5">RSVP Status</label>
+                            <select
+                                value={bulkRsvp}
+                                onChange={(e) => setBulkRsvp(e.target.value)}
+                                className="w-full px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
+                            >
+                                <option value="">Leave unchanged</option>
+                                <option value="likely_not_coming">Likely Not Coming</option>
+                                <option value="attending">Attending</option>
+                                <option value="declined">Declined</option>
+                                <option value="clear">Clear to No Response</option>
+                            </select>
+                            <p className="text-xs text-gray-400 mt-1.5">Admin-only override. This is what guests actually replied, so change it in bulk with care.</p>
+                        </div>
+
+                        {bulkResult && (
+                            <p className="text-sm font-semibold text-red-600">{bulkResult}</p>
+                        )}
                     </div>
-                </div>
-            )}
+
+                    <div className="sticky -bottom-4 -mb-4 mt-6 py-4 border-t border-gray-100 flex justify-end gap-3 bg-white/95 backdrop-blur">
+                        <button
+                            onClick={() => setShowBulkModal(false)}
+                            className="px-6 py-2.5 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-full hover:bg-gray-50 transition-all duration-300 shadow-sm hover:shadow-md"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={handleBulkEdit}
+                            disabled={bulkSaving}
+                            className="px-6 py-2.5 text-sm font-semibold text-white bg-accent rounded-full hover:bg-accent/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-300 shadow-md hover:shadow-lg"
+                        >
+                            {bulkSaving ? 'Applying…' : `Apply to ${selectedGuests.length}`}
+                        </button>
+                    </div>
+                </>)}
+            </Drawer>
 
             {/* Address Reconcile Modal */}
             {showReconcileModal && (
@@ -2668,107 +2656,108 @@ export default function RSVPDashboard() {
             )}
 
             {/* CSV Import Modal */}
-            {showImportModal && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-6">
-                        <h3 className="text-2xl font-bold text-gray-900 mb-4">Import Guests from CSV</h3>
+            <Drawer
+                open={showImportModal}
+                onClose={() => { setShowImportModal(false); setCsvFile(null); setImportResults(null); }}
+                title={<h3 className="pt-1 text-2xl font-bold text-gray-900">Import Guests from CSV</h3>}
+                width="lg"
+            >
+                {showImportModal && (<>
+                    {!importResults ? (
+                        <>
+                            <div className="mb-6">
+                                <p className="text-sm text-gray-600 mb-4">
+                                    Upload a CSV file with guest information. The CSV should have a header row with the following columns:
+                                </p>
+                                <div className="bg-gray-50 p-4 rounded-2xl">
+                                    <code className="text-sm text-gray-800">
+                                        name,email,phone,party_size,side,notes,plus_one_name,address
+                                    </code>
+                                </div>
+                                <p className="text-xs text-gray-500 mt-2">
+                                    Example: John Doe,john@email.com,555-1234,2,bride,Vegan meal,Jane Doe,&quot;123 Main St, Milwaukee, WI 53201&quot;
+                                </p>
+                            </div>
 
-                        {!importResults ? (
-                            <>
-                                <div className="mb-6">
-                                    <p className="text-sm text-gray-600 mb-4">
-                                        Upload a CSV file with guest information. The CSV should have a header row with the following columns:
-                                    </p>
-                                    <div className="bg-gray-50 p-4 rounded-2xl">
-                                        <code className="text-sm text-gray-800">
-                                            name,email,phone,party_size,side,notes,plus_one_name,address
-                                        </code>
+                            <div className="mb-6">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Select CSV File
+                                </label>
+                                <input
+                                    type="file"
+                                    accept=".csv"
+                                    onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
+                                    className="w-full text-sm text-gray-600 file:mr-3 file:px-4 file:py-2 file:rounded-full file:border-0 file:bg-accent file:text-white file:font-semibold file:cursor-pointer border border-gray-200 bg-gray-50 rounded-2xl px-3 py-2.5"
+                                />
+                            </div>
+
+                            <div className="flex justify-end gap-3">
+                                <button
+                                    onClick={() => {
+                                        setShowImportModal(false);
+                                        setCsvFile(null);
+                                        setImportResults(null);
+                                    }}
+                                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-full hover:bg-gray-50 transition-all duration-300 shadow-md hover:shadow-lg"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleImportCSV}
+                                    disabled={!csvFile || importing}
+                                    className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-full hover:bg-green-700 disabled:opacity-50 transition-all duration-300 shadow-md hover:shadow-lg"
+                                >
+                                    {importing ? 'Importing...' : 'Import'}
+                                </button>
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <div className="mb-6">
+                                <h4 className="text-lg font-semibold text-gray-900 mb-3">Import Results</h4>
+                                <div className="grid grid-cols-3 gap-4 mb-4">
+                                    <div className="bg-green-50 p-4 rounded-2xl">
+                                        <p className="text-sm text-gray-600">Added</p>
+                                        <p className="text-2xl font-bold text-green-600">{importResults.added}</p>
                                     </div>
-                                    <p className="text-xs text-gray-500 mt-2">
-                                        Example: John Doe,john@email.com,555-1234,2,bride,Vegan meal,Jane Doe,&quot;123 Main St, Milwaukee, WI 53201&quot;
-                                    </p>
-                                </div>
-
-                                <div className="mb-6">
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Select CSV File
-                                    </label>
-                                    <input
-                                        type="file"
-                                        accept=".csv"
-                                        onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
-                                        className="w-full text-sm text-gray-600 file:mr-3 file:px-4 file:py-2 file:rounded-full file:border-0 file:bg-accent file:text-white file:font-semibold file:cursor-pointer border border-gray-200 bg-gray-50 rounded-2xl px-3 py-2.5"
-                                    />
-                                </div>
-
-                                <div className="flex justify-end gap-3">
-                                    <button
-                                        onClick={() => {
-                                            setShowImportModal(false);
-                                            setCsvFile(null);
-                                            setImportResults(null);
-                                        }}
-                                        className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-full hover:bg-gray-50 transition-all duration-300 shadow-md hover:shadow-lg"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        onClick={handleImportCSV}
-                                        disabled={!csvFile || importing}
-                                        className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-full hover:bg-green-700 disabled:opacity-50 transition-all duration-300 shadow-md hover:shadow-lg"
-                                    >
-                                        {importing ? 'Importing...' : 'Import'}
-                                    </button>
-                                </div>
-                            </>
-                        ) : (
-                            <>
-                                <div className="mb-6">
-                                    <h4 className="text-lg font-semibold text-gray-900 mb-3">Import Results</h4>
-                                    <div className="grid grid-cols-3 gap-4 mb-4">
-                                        <div className="bg-green-50 p-4 rounded-2xl">
-                                            <p className="text-sm text-gray-600">Added</p>
-                                            <p className="text-2xl font-bold text-green-600">{importResults.added}</p>
-                                        </div>
-                                        <div className="bg-blue-50 p-4 rounded-2xl">
-                                            <p className="text-sm text-gray-600">Updated</p>
-                                            <p className="text-2xl font-bold text-blue-600">{importResults.updated}</p>
-                                        </div>
-                                        <div className="bg-red-50 p-4 rounded-2xl">
-                                            <p className="text-sm text-gray-600">Failed</p>
-                                            <p className="text-2xl font-bold text-red-600">{importResults.failed}</p>
-                                        </div>
+                                    <div className="bg-blue-50 p-4 rounded-2xl">
+                                        <p className="text-sm text-gray-600">Updated</p>
+                                        <p className="text-2xl font-bold text-blue-600">{importResults.updated}</p>
                                     </div>
-
-                                    {importResults.errors.length > 0 && (
-                                        <div className="bg-red-50 p-4 rounded-2xl max-h-48 overflow-y-auto">
-                                            <p className="text-sm font-semibold text-red-800 mb-2">Errors:</p>
-                                            <ul className="text-xs text-red-700 space-y-1">
-                                                {importResults.errors.map((error, idx) => (
-                                                    <li key={idx}>• {error}</li>
-                                                ))}
-                                            </ul>
-                                        </div>
-                                    )}
+                                    <div className="bg-red-50 p-4 rounded-2xl">
+                                        <p className="text-sm text-gray-600">Failed</p>
+                                        <p className="text-2xl font-bold text-red-600">{importResults.failed}</p>
+                                    </div>
                                 </div>
 
-                                <div className="flex justify-end">
-                                    <button
-                                        onClick={() => {
-                                            setShowImportModal(false);
-                                            setCsvFile(null);
-                                            setImportResults(null);
-                                        }}
-                                        className="px-4 py-2 text-sm font-medium text-white bg-accent rounded-full hover:bg-accent/90 transition-all duration-300 shadow-md hover:shadow-lg"
-                                    >
-                                        Close
-                                    </button>
-                                </div>
-                            </>
-                        )}
-                    </div>
-                </div>
-            )}
+                                {importResults.errors.length > 0 && (
+                                    <div className="bg-red-50 p-4 rounded-2xl max-h-48 overflow-y-auto">
+                                        <p className="text-sm font-semibold text-red-800 mb-2">Errors:</p>
+                                        <ul className="text-xs text-red-700 space-y-1">
+                                            {importResults.errors.map((error, idx) => (
+                                                <li key={idx}>• {error}</li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="flex justify-end">
+                                <button
+                                    onClick={() => {
+                                        setShowImportModal(false);
+                                        setCsvFile(null);
+                                        setImportResults(null);
+                                    }}
+                                    className="px-4 py-2 text-sm font-medium text-white bg-accent rounded-full hover:bg-accent/90 transition-all duration-300 shadow-md hover:shadow-lg"
+                                >
+                                    Close
+                                </button>
+                            </div>
+                        </>
+                    )}
+                </>)}
+            </Drawer>
         </div>
     );
 }

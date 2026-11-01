@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
+import { Drawer } from './Drawer';
 
 interface ReconcileGuest {
     id: number;
@@ -214,19 +215,22 @@ export default function AddressReconcileModal({ guests, onClose, onApplied }: Pr
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl max-h-[92vh] flex flex-col">
-                <div className="p-5 border-b border-gray-200 flex items-start justify-between gap-4">
-                    <div>
-                        <h3 className="text-xl font-bold text-gray-900">Compare Addresses from CSV</h3>
-                        <p className="text-sm text-gray-500 mt-1">
-                            Upload your spreadsheet to compare each guest&apos;s address against what&apos;s on the site,
-                            then choose which to keep.
-                        </p>
-                    </div>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+        <Drawer
+            open
+            onClose={onClose}
+            width="xl"
+            title={
+                <div className="pt-0.5">
+                    <h3 className="text-xl font-bold text-gray-900">Compare Addresses from CSV</h3>
+                    <p className="text-sm text-gray-500 mt-1">
+                        Upload your spreadsheet to compare each guest&apos;s address against what&apos;s on the site,
+                        then choose which to keep.
+                    </p>
                 </div>
-
+            }
+        >
+            {/* Fills the drawer: the rows scroll, the footer stays put. */}
+            <div className="-mx-4 -my-4 md:-mx-5 flex h-[calc(100%+2rem)] flex-col">
                 {/* Body */}
                 <div className="flex-1 overflow-y-auto p-5">
                     {!rows ? (
@@ -361,6 +365,6 @@ export default function AddressReconcileModal({ guests, onClose, onApplied }: Pr
                     </div>
                 )}
             </div>
-        </div>
+        </Drawer>
     );
 }

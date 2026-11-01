@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { formatMoney } from '@/lib/finance';
+import { Modal as AdminModal } from '@/components/admin/Modal';
 
 export { formatMoney };
 
@@ -325,30 +326,13 @@ export function RowDate(props: React.InputHTMLAttributes<HTMLInputElement>) {
     );
 }
 
+/** The finance dialogs: rendered as the admin's one kind of panel, a drawer (v0.10.33). */
 export function Modal({ title, onClose, children }: {
     title: string;
     onClose: () => void;
     children: React.ReactNode;
 }) {
-    useEffect(() => {
-        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-        window.addEventListener('keydown', onKey);
-        return () => window.removeEventListener('keydown', onKey);
-    }, [onClose]);
-
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-gray-900/20 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 z-10">
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-semibold text-gray-900">{title}</h3>
-                    <button onClick={onClose} aria-label="Close"
-                        className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
-                </div>
-                {children}
-            </div>
-        </div>
-    );
+    return <AdminModal open onClose={onClose} title={title}>{children}</AdminModal>;
 }
 
 /** Low-emphasis "+ add" action, sized as a real touch target on mobile. */

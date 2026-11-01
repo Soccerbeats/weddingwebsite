@@ -21,6 +21,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import PhotoLightbox from '@/components/PhotoLightbox';
+import { Drawer } from '@/components/admin/Drawer';
 
 interface Photo {
     id: number;
@@ -607,56 +608,56 @@ export default function AdminPhotos() {
             />
 
             {/* Edit Photo Modal */}
-            {editingPhoto && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50">
-                    <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
-                        <h3 className="text-lg font-bold text-gray-900 mb-4">Edit Photo Details</h3>
-
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Title
-                                </label>
-                                <input
-                                    type="text"
-                                    value={editForm.title}
-                                    onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent"
-                                    placeholder="Photo title"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Description
-                                </label>
-                                <textarea
-                                    value={editForm.description}
-                                    onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                                    rows={3}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent"
-                                    placeholder="Photo description"
-                                />
-                            </div>
+            <Drawer
+                open={!!editingPhoto}
+                onClose={() => setEditingPhoto(null)}
+                title={<h3 className="pt-1.5 text-lg font-bold text-gray-900">Edit Photo Details</h3>}
+            >
+                {editingPhoto && (<>
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Title
+                            </label>
+                            <input
+                                type="text"
+                                value={editForm.title}
+                                onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent"
+                                placeholder="Photo title"
+                            />
                         </div>
 
-                        <div className="flex gap-3 mt-6">
-                            <button
-                                onClick={() => setEditingPhoto(null)}
-                                className="flex-1 px-4 py-2 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-all duration-300 shadow-md hover:shadow-lg"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleSaveEdit}
-                                className="flex-1 px-4 py-2 bg-accent text-white rounded-xl hover:bg-accent-dark transition-all duration-300 shadow-md hover:shadow-lg"
-                            >
-                                Save
-                            </button>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Description
+                            </label>
+                            <textarea
+                                value={editForm.description}
+                                onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                                rows={3}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent"
+                                placeholder="Photo description"
+                            />
                         </div>
                     </div>
-                </div>
-            )}
+
+                    <div className="flex gap-3 mt-6">
+                        <button
+                            onClick={() => setEditingPhoto(null)}
+                            className="flex-1 px-4 py-2 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-all duration-300 shadow-md hover:shadow-lg"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={handleSaveEdit}
+                            className="flex-1 px-4 py-2 bg-accent text-white rounded-xl hover:bg-accent-dark transition-all duration-300 shadow-md hover:shadow-lg"
+                        >
+                            Save
+                        </button>
+                    </div>
+                </>)}
+            </Drawer>
 
             {/* Scroll to top */}
             <button

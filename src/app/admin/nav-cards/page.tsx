@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
+import { Drawer } from '@/components/admin/Drawer';
 
 interface PageConfig {
   slug: string;
@@ -197,55 +198,51 @@ export default function AdminNavCards() {
       </div>
 
       {/* Photo picker modal */}
-      {pickerSlug && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
-            <div className="flex items-center justify-between p-6 border-b border-gray-100">
-              <h2 className="text-lg font-bold text-gray-900">
-                Pick from site photos — {PAGE_DEFS.find(p => p.slug === pickerSlug)?.label}
-              </h2>
-              <button
-                onClick={() => setPickerSlug(null)}
-                className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 transition-colors"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="overflow-y-auto flex-1 p-6">
-              {photosLoading ? (
-                <div className="text-center text-gray-400 py-12">Loading photos…</div>
-              ) : sitePhotos.length === 0 ? (
-                <div className="text-center text-gray-400 py-12">
-                  No photos uploaded yet. Upload photos in the Photos section first.
-                </div>
-              ) : (
-                <div className="grid grid-cols-3 gap-3">
-                  {sitePhotos.map(photo => (
-                    <button
-                      key={photo.id}
-                      onClick={() => handlePickPhoto(pickerSlug, photo.filename)}
-                      className="group relative aspect-video rounded-xl overflow-hidden border-2 border-transparent hover:border-accent transition-all"
-                    >
-                      <Image
-                        src={`/api/photos/${photo.filename}/thumb`}
-                        alt={photo.alt || photo.filename}
-                        fill
-                        unoptimized
-                        className="object-cover group-hover:scale-105 transition-transform duration-200"
-                      />
-                      {photo.title && (
-                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2">
-                          <p className="text-white text-xs truncate">{photo.title}</p>
-                        </div>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+      <Drawer
+        open={!!pickerSlug}
+        onClose={() => setPickerSlug(null)}
+        width="lg"
+        title={
+          <h2 className="pt-1.5 text-lg font-bold text-gray-900">
+            Pick from site photos — {PAGE_DEFS.find(p => p.slug === pickerSlug)?.label}
+          </h2>
+        }
+      >
+        {pickerSlug && (
+          <div>
+            {photosLoading ? (
+              <div className="text-center text-gray-400 py-12">Loading photos…</div>
+            ) : sitePhotos.length === 0 ? (
+              <div className="text-center text-gray-400 py-12">
+                No photos uploaded yet. Upload photos in the Photos section first.
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-3">
+                {sitePhotos.map(photo => (
+                  <button
+                    key={photo.id}
+                    onClick={() => handlePickPhoto(pickerSlug, photo.filename)}
+                    className="group relative aspect-video rounded-xl overflow-hidden border-2 border-transparent hover:border-accent transition-all"
+                  >
+                    <Image
+                      src={`/api/photos/${photo.filename}/thumb`}
+                      alt={photo.alt || photo.filename}
+                      fill
+                      unoptimized
+                      className="object-cover group-hover:scale-105 transition-transform duration-200"
+                    />
+                    {photo.title && (
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2">
+                        <p className="text-white text-xs truncate">{photo.title}</p>
+                      </div>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        )}
+      </Drawer>
     </div>
   );
 }

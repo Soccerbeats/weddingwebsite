@@ -11,6 +11,18 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.10.33 — [Released] Every panel slides in from the right, side by side (`main`, 2026-10-31 09:33)
+
+### Changed
+- There are no pop-ups in the middle of the screen any more. Everything that opened one now opens a panel from the right: a day on the itinerary calendar, Print the trip, search, the shortcuts list, the honeymoon forms for stays, travel and excursions, and across the admin the guest, vendor, donation, gift, milestone, photo, wedding party, nav card photo, room size, add table, seat order, seating export and address comparison windows.
+- Panels opened from one another line up side by side. Open a day, then a place in it: the place slides in on the right and pushes the day over to the left, so both stay readable. When there is no room for another in full, the oldest folds into a thin strip with its name on it; click the strip to go back to it.
+- Prefer one panel at a time? **Settings → Panels → One panel** (in the honeymoon portal or the admin's General Settings) makes everything open inside the same panel, with a back arrow and a trail of where you came from. Saved on each device.
+- Escape closes only the newest panel. Clicking the dimmed page closes them all. Picking a different day in a day panel closes what was opened from the old one.
+- Delete confirmations, the sign-in prompt and the full-screen photo viewer still pop up, on purpose. On a phone, panels are the same slide-up sheets as before.
+
+### Fixed
+- A place opened from a day on the itinerary calendar slid in underneath the day's pop-up, so the pop-up had to be closed before the place could be seen.
+
 ## v0.10.32 — [Released] The admin menu folds to a rail of icons (`main`, 2026-10-30 13:40)
 
 ### Changed

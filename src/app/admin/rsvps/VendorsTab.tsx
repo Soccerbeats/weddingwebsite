@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import DietaryPills from '@/components/admin/DietaryPills';
 import { DIET_CODES, dietCodes, dietNote, isEmptyEntry, type DietaryEntry } from '@/lib/dietary';
 import { DIET_LABELS } from '@/lib/dietary';
+import { Drawer } from '@/components/admin/Drawer';
 
 /**
  * Vendors — the photographer, the DJ, the planner.
@@ -262,142 +263,125 @@ export default function VendorsTab() {
                 </div>
             )}
 
-            {form && (
-                <div
-                    className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
-                    role="dialog"
-                    aria-modal="true"
-                    aria-label={form.id === null ? 'Add vendor' : 'Edit vendor'}
-                    onClick={e => { if (e.target === e.currentTarget) setForm(null); }}
-                >
-                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
-                        <div className="px-6 py-4 border-b border-gray-100 flex items-center">
-                            <h3 className="font-serif text-lg font-bold text-gray-800">
-                                {form.id === null ? 'Add vendor' : form.name || 'Edit vendor'}
-                            </h3>
-                            <button
-                                onClick={() => setForm(null)}
-                                className="ml-auto w-8 h-8 rounded-full bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-                                aria-label="Close"
-                            >
-                                ✕
-                            </button>
-                        </div>
+            <Drawer
+                open={!!form}
+                onClose={() => setForm(null)}
+                title={<h3 className="pt-1.5 font-serif text-lg font-bold text-gray-800">{!form || form.id === null ? 'Add vendor' : form.name || 'Edit vendor'}</h3>}
+            >
+                {form && (<>
+                    <div className="flex flex-col gap-4">
+                        <Field label="Name">
+                            <input
+                                autoFocus
+                                className={INPUT}
+                                value={form.name}
+                                onChange={e => setForm({ ...form, name: e.target.value })}
+                                placeholder="Who they are"
+                            />
+                        </Field>
 
-                        <div className="p-6 flex flex-col gap-4">
-                            <Field label="Name">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <Field label="Role">
                                 <input
-                                    autoFocus
                                     className={INPUT}
-                                    value={form.name}
-                                    onChange={e => setForm({ ...form, name: e.target.value })}
-                                    placeholder="Who they are"
+                                    list="vendor-roles"
+                                    value={form.role}
+                                    onChange={e => setForm({ ...form, role: e.target.value })}
+                                    placeholder="Photographer"
+                                />
+                                <datalist id="vendor-roles">
+                                    {COMMON_ROLES.map(role => <option key={role} value={role} />)}
+                                </datalist>
+                            </Field>
+                            <Field label="Company">
+                                <input
+                                    className={INPUT}
+                                    value={form.company}
+                                    onChange={e => setForm({ ...form, company: e.target.value })}
+                                    placeholder="Who they work for"
                                 />
                             </Field>
+                        </div>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <Field label="Role">
-                                    <input
-                                        className={INPUT}
-                                        list="vendor-roles"
-                                        value={form.role}
-                                        onChange={e => setForm({ ...form, role: e.target.value })}
-                                        placeholder="Photographer"
-                                    />
-                                    <datalist id="vendor-roles">
-                                        {COMMON_ROLES.map(role => <option key={role} value={role} />)}
-                                    </datalist>
-                                </Field>
-                                <Field label="Company">
-                                    <input
-                                        className={INPUT}
-                                        value={form.company}
-                                        onChange={e => setForm({ ...form, company: e.target.value })}
-                                        placeholder="Who they work for"
-                                    />
-                                </Field>
-                            </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <Field label="Email">
+                                <input
+                                    type="email"
+                                    className={INPUT}
+                                    value={form.email}
+                                    onChange={e => setForm({ ...form, email: e.target.value })}
+                                />
+                            </Field>
+                            <Field label="Phone">
+                                <input
+                                    className={INPUT}
+                                    value={form.phone}
+                                    onChange={e => setForm({ ...form, phone: e.target.value })}
+                                />
+                            </Field>
+                        </div>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <Field label="Email">
-                                    <input
-                                        type="email"
-                                        className={INPUT}
-                                        value={form.email}
-                                        onChange={e => setForm({ ...form, email: e.target.value })}
-                                    />
-                                </Field>
-                                <Field label="Phone">
-                                    <input
-                                        className={INPUT}
-                                        value={form.phone}
-                                        onChange={e => setForm({ ...form, phone: e.target.value })}
-                                    />
-                                </Field>
-                            </div>
-
-                            <div>
-                                <label className="flex items-start gap-2.5 cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={form.needs_meal}
-                                        onChange={e => setForm({ ...form, needs_meal: e.target.checked })}
-                                        className="mt-0.5 accent-gray-900"
-                                    />
-                                    <span className="text-sm text-gray-700">
-                                        Needs a meal
-                                        <span className="block text-xs text-gray-400">
-                                            Only these count toward the vendor plates on the seating export.
-                                        </span>
+                        <div>
+                            <label className="flex items-start gap-2.5 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={form.needs_meal}
+                                    onChange={e => setForm({ ...form, needs_meal: e.target.checked })}
+                                    className="mt-0.5 accent-gray-900"
+                                />
+                                <span className="text-sm text-gray-700">
+                                    Needs a meal
+                                    <span className="block text-xs text-gray-400">
+                                        Only these count toward the vendor plates on the seating export.
                                     </span>
-                                </label>
-                            </div>
+                                </span>
+                            </label>
+                        </div>
 
-                            {form.needs_meal && (
-                                <div>
-                                    <label className={LABEL}>Food preference</label>
-                                    <DietaryPills
-                                        entry={form.dietary}
-                                        codes={DIET_CODES}
-                                        onChange={entry => setForm({ ...form, dietary: entry })}
-                                    />
-                                    {isEmptyEntry(form.dietary) && (
-                                        <p className="mt-2 text-xs text-gray-400">
-                                            Nothing selected means the standard plate — the chicken.
-                                        </p>
-                                    )}
-                                </div>
-                            )}
-
-                            <Field label="Notes">
-                                <textarea
-                                    rows={2}
-                                    className={INPUT}
-                                    value={form.notes}
-                                    onChange={e => setForm({ ...form, notes: e.target.value })}
-                                    placeholder="Arrival time, where they set up, anything the planner needs"
+                        {form.needs_meal && (
+                            <div>
+                                <label className={LABEL}>Food preference</label>
+                                <DietaryPills
+                                    entry={form.dietary}
+                                    codes={DIET_CODES}
+                                    onChange={entry => setForm({ ...form, dietary: entry })}
                                 />
-                            </Field>
-                        </div>
+                                {isEmptyEntry(form.dietary) && (
+                                    <p className="mt-2 text-xs text-gray-400">
+                                        Nothing selected means the standard plate — the chicken.
+                                    </p>
+                                )}
+                            </div>
+                        )}
 
-                        <div className="px-6 py-4 border-t border-gray-100 flex gap-3 justify-end">
-                            <button
-                                onClick={() => setForm(null)}
-                                className="px-5 py-2.5 rounded-full text-sm font-medium text-gray-600 hover:bg-gray-100 transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={save}
-                                disabled={saving || !form.name.trim()}
-                                className="px-5 py-2.5 rounded-full bg-gray-900 text-white text-sm font-medium hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                            >
-                                {saving ? 'Saving…' : 'Save'}
-                            </button>
-                        </div>
+                        <Field label="Notes">
+                            <textarea
+                                rows={2}
+                                className={INPUT}
+                                value={form.notes}
+                                onChange={e => setForm({ ...form, notes: e.target.value })}
+                                placeholder="Arrival time, where they set up, anything the planner needs"
+                            />
+                        </Field>
                     </div>
-                </div>
-            )}
+
+                    <div className="px-6 py-4 border-t border-gray-100 flex gap-3 justify-end">
+                        <button
+                            onClick={() => setForm(null)}
+                            className="px-5 py-2.5 rounded-full text-sm font-medium text-gray-600 hover:bg-gray-100 transition-colors"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={save}
+                            disabled={saving || !form.name.trim()}
+                            className="px-5 py-2.5 rounded-full bg-gray-900 text-white text-sm font-medium hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >
+                            {saving ? 'Saving…' : 'Save'}
+                        </button>
+                    </div>
+                </>)}
+            </Drawer>
         </div>
     );
 }

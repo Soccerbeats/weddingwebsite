@@ -50,6 +50,7 @@ import {
     placesToKml, providerOf, regionForPlace, suggestDay,
 } from '../src/lib/honeymoonPlaces';
 import { markdownToText, parseInline, parseMarkdown } from '../src/lib/honeymoonMarkdown';
+import { drawerLayout, PAGE_KEPT, SPINE } from '../src/lib/drawerLayout';
 import {
     bucketTodos, conflictsOf, dueSoon, packingSuggestions, stayStretches,
 } from '../src/lib/honeymoonChecks';
@@ -244,6 +245,30 @@ console.log('\nA day on the map');
         dayMapPoints({ stops: [], base_place_id: null, travel: [leg(1, null)] }, byId).length === 0);
     check('a day of unpinned stops has nothing to show',
         dayMapPoints({ stops: stops([2]), base_place_id: 2, travel: [] }, byId).length === 0);
+}
+
+console.log('\nDrawers side by side');
+{
+    const one = drawerLayout([480], 1440, 'stack');
+    check('one drawer sits against the right edge', one[0].x === 960 && !one[0].behind && !one[0].folded);
+    const two = drawerLayout([480, 480], 1440, 'stack');
+    check('a second pushes the first left by its own width',
+        two[1].x === 960 && two[0].x === 480 && two[0].behind && !two[0].folded);
+    const three = drawerLayout([480, 480, 480], 1440, 'stack');
+    check('with no room for a third in full, the oldest folds to a strip behind the next',
+        three[2].x === 960 && three[1].x === 480 && three[0].folded && three[0].x === 480 - SPINE);
+    check('the page keeps its share before anything folds',
+        Math.min(...two.map((s) => s.x)) >= PAGE_KEPT && three.filter((s) => !s.folded).every((s) => s.x >= PAGE_KEPT));
+    const many = drawerLayout([480, 480, 480, 480], 1440, 'stack');
+    check('older strips step further left', many[0].x === many[1].x - SPINE && many[0].folded && many[1].folded);
+    const wide = drawerLayout([480, 1040], 1280, 'stack');
+    check('a drawer wider than the room left still shows the newest in full', wide[1].x === 240 && wide[0].folded);
+    const narrow = drawerLayout([640], 500, 'stack');
+    check('never wider than the window', narrow[0].width === 500 && narrow[0].x === 0);
+    const single = drawerLayout([480, 640, 480], 1440, 'single');
+    check('one drawer at a time shows only the newest',
+        single[2].x === 960 && !single[2].hidden && single[0].hidden && single[1].hidden);
+    check('nothing open lays out nothing', drawerLayout([], 1440, 'stack').length === 0);
 }
 
 console.log('\nA phone share link (name and address, no coordinates)');

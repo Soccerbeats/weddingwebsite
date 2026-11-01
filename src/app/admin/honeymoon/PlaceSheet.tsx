@@ -121,11 +121,14 @@ function SheetTitle({ place }: { place: Place }) {
             <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                 {meta.icon} {meta.label}{region ? ` · ${region}` : ''}
             </p>
-            <InlineText
-                value={place.name}
-                className="-ml-2 text-lg font-semibold text-gray-900"
-                onCommit={(name) => { if (name.trim()) api.update('places', { id: place.id, name: name.trim() }); }}
-            />
+            {/* The drawer's name: what its strip and the back arrow say. */}
+            <div data-drawer-name>
+                <InlineText
+                    value={place.name}
+                    className="-ml-2 text-lg font-semibold text-gray-900"
+                    onCommit={(name) => { if (name.trim()) api.update('places', { id: place.id, name: name.trim() }); }}
+                />
+            </div>
         </div>
     );
 }

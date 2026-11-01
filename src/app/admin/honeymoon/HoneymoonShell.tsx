@@ -14,6 +14,7 @@ import { UndoToast } from './ui';
 import { useHoneymoon } from './useHoneymoon';
 import TabView from './TabView';
 import { goTab } from './kit/navigate';
+import { Sheet } from './kit/Sheet';
 
 const BASE = '/admin/honeymoon';
 
@@ -435,44 +436,33 @@ export default function HoneymoonShell({ children }: { children: React.ReactNode
                 </div>
             )}
 
-            {showKeys && (
-                <div className="fixed inset-0 z-[85] flex items-center justify-center p-4
-                    bg-gray-900/40 backdrop-blur-sm">
-                    <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
-                        <div className="flex items-baseline justify-between gap-2">
-                            <h2 className="text-base font-semibold text-gray-900">Shortcuts</h2>
-                            <button
-                                onClick={() => setShowKeys(false)}
-                                className="text-xl leading-none text-gray-400 hover:text-gray-700"
-                                aria-label="Close"
-                            >
-                                ×
-                            </button>
+            <Sheet
+                open={showKeys}
+                onClose={() => setShowKeys(false)}
+                title={<h2 className="pt-1.5 text-base font-semibold text-gray-900">Shortcuts</h2>}
+            >
+                <dl className="space-y-1.5 text-sm">
+                    {[
+                        ['⌘K or /', 'Find anything'],
+                        ['⌘Z', 'Undo the last delete'],
+                        ['g then d/t/m/i/v/p/s/e/c/f/u/g', 'Jump to a tab'],
+                        ['n', 'New place'],
+                        ['[ ]', 'Previous / next day on Today'],
+                        ['Esc', 'Leave full screen'],
+                        ['?', 'This list'],
+                    ].map(([keys, what]) => (
+                        <div key={keys} className="flex items-baseline justify-between gap-3">
+                            <dt className="shrink-0 font-mono text-xs text-gray-500">
+                                {keys}
+                            </dt>
+                            <dd className="text-right text-gray-800">{what}</dd>
                         </div>
-                        <dl className="mt-3 space-y-1.5 text-sm">
-                            {[
-                                ['⌘K or /', 'Find anything'],
-                                ['⌘Z', 'Undo the last delete'],
-                                ['g then d/t/m/i/v/p/s/e/c/f/u/g', 'Jump to a tab'],
-                                ['n', 'New place'],
-                                ['[ ]', 'Previous / next day on Today'],
-                                ['Esc', 'Leave full screen'],
-                                ['?', 'This list'],
-                            ].map(([keys, what]) => (
-                                <div key={keys} className="flex items-baseline justify-between gap-3">
-                                    <dt className="shrink-0 font-mono text-xs text-gray-500">
-                                        {keys}
-                                    </dt>
-                                    <dd className="text-right text-gray-800">{what}</dd>
-                                </div>
-                            ))}
-                        </dl>
-                        <p className="mt-3 text-[11px] text-gray-400">
-                            Bare keys are ignored while you are typing in a field.
-                        </p>
-                    </div>
-                </div>
-            )}
+                    ))}
+                </dl>
+                <p className="mt-3 text-[11px] text-gray-400">
+                    Bare keys are ignored while you are typing in a field.
+                </p>
+            </Sheet>
 
             {/* One offer at a time, above everything, wherever you are — deleting
                 on the map and undoing from the itinerary is fine. */}

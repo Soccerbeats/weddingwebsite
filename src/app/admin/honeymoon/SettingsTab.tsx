@@ -13,6 +13,7 @@ import DateRangePicker from './DateRangePicker';
 import MoneySettings from './MoneySettings';
 import ShareLinks from './ShareLinks';
 import TripArchives from './TripArchives';
+import DrawerModeSetting from '@/components/admin/DrawerModeSetting';
 import { Button, Card, SelectField, TextArea, TextField, MiniSelect } from './ui';
 
 /** The handful anyone planning from the US actually prices in. */
@@ -266,6 +267,8 @@ export default function SettingsTab({ api }: { api: HoneymoonApi }) {
                         </SelectField>
                     </div>
                 </div>
+
+                <DrawerModeSetting />
 
                 <div>
                     <label className="block text-xs font-semibold text-gray-500 mb-1">

@@ -20,6 +20,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { Drawer } from '@/components/admin/Drawer';
 
 interface WeddingPartyMember {
   id: string;
@@ -682,13 +683,13 @@ export default function AdminWeddingPartyPage() {
 
       {/* Save Button */}
       {/* Edit Modal */}
-      {editingParty && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <h3 className="text-2xl font-bold mb-6">
-              {editingIndex === null ? 'Add' : 'Edit'} Member
-            </h3>
-
+      <Drawer
+          open={!!editingParty}
+          onClose={() => { if (uploading) return; setEditingParty(null); setSelectedFile(null); setOldPhoto(null); }}
+          title={<h3 className="pt-1 text-2xl font-bold">{editingIndex === null ? 'Add' : 'Edit'} Member</h3>}
+          width="lg"
+      >
+          {editingParty && (<>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -872,9 +873,8 @@ export default function AdminWeddingPartyPage() {
                 {uploading ? 'Saving...' : (editingParty === 'officiant' ? (config.weddingParty?.officiant ? 'Update' : 'Add') : (editingIndex === null ? 'Add' : 'Update')) + ' ' + (editingParty === 'officiant' ? 'Officiant' : 'Member')}
               </button>
             </div>
-          </div>
-        </div>
-      )}
+          </>)}
+      </Drawer>
     </div>
   );
 }

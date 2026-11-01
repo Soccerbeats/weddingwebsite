@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { createPortal } from 'react-dom';
+import { Drawer } from '@/components/admin/Drawer';
 import { Handle, Position } from '@xyflow/react';
 import {
   DndContext,
@@ -192,30 +192,18 @@ function ReorderModal({
   };
 
   const modal = (
-    <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center"
-      style={{ zIndex: 99999 }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div className="bg-white rounded-xl shadow-2xl w-80 max-h-[80vh] flex flex-col">
-        {/* Header */}
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-          <div>
-            <h3 className="text-base font-semibold text-gray-800">{table.name}</h3>
-            <p className="text-xs text-gray-400 mt-0.5">Drag to set seating order</p>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
+    <Drawer
+      open
+      onClose={onClose}
+      title={
+        <div className="pt-1">
+          <h3 className="text-base font-semibold text-gray-800">{table.name}</h3>
+          <p className="text-xs text-gray-400 mt-0.5">Drag to set seating order</p>
         </div>
-
+      }
+    >
         {/* Sortable list */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div>
           {seats.length === 0 ? (
             <p className="text-center text-gray-400 text-sm py-6">No one seated here yet.</p>
           ) : (
@@ -232,7 +220,7 @@ function ReorderModal({
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3 border-t border-gray-100 flex gap-2">
+        <div className="mt-4 pt-3 border-t border-gray-100 flex gap-2">
           <button
             onClick={() => onSave(seats)}
             className="flex-1 text-sm font-medium text-white py-2 rounded-lg"
@@ -247,12 +235,11 @@ function ReorderModal({
             Cancel
           </button>
         </div>
-      </div>
-    </div>
+    </Drawer>
   );
 
   if (!mounted) return null;
-  return createPortal(modal, document.body);
+  return modal;
 }
 
 // ── Table controls (rendered inside table on hover) ────────────────────────

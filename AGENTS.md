@@ -64,7 +64,7 @@ image:
 | `npm run check:hero` | The home page's hero collapse in a real browser, at five viewport-and-input pairings — phone portrait, **phone landscape**, tablet portrait, tablet landscape, desktop — each driven by the input that device actually sends. Needs a browser and a server whose site config has a hero photo, or every case reports the placeholder instead of a pass |
 | `npm run audit:finance` | A deeper sweep over the finance logic |
 | `npm run check:seating` | 238 assertions with no database or browser: who takes a chair (a party member who declined takes none), seat-index allocation, moves, swaps, gathering a split party, auto-seating, the plan's own warnings, and the export — tallies, vendor plates, the grand total, the spreadsheet's columns, the one-page fit maths, and the floor plan drawing's geometry |
-| `npm run check:honeymoon` | 749 assertions with no database or network: distances, date maths, URL parsing, the calendar grid, `.ics` output, search ranking, seed integrity, the trip-mode day resolution and the day as text to send, sunrise/sunset, OSM opening hours, the day timeline, time zones on legs, the budget, conflicts, imports/exports, markdown, the flight parser, and journeys (layovers, day placement, door-to-door time) |
+| `npm run check:honeymoon` | 780 assertions with no database or network: where open drawers sit side by side, distances, date maths, URL parsing, the calendar grid, `.ics` output, search ranking, seed integrity, the trip-mode day resolution and the day as text to send, sunrise/sunset, OSM opening hours, the day timeline, time zones on legs, the budget, conflicts, imports/exports, markdown, the flight parser, and journeys (layovers, day placement, door-to-door time) |
 
 Seeds: `npm run seed:honeymoon` (bundles the Bali/Singapore travel guide,
 idempotent — matches on place name, never reverts an edit) and
@@ -117,7 +117,16 @@ idempotent — matches on place name, never reverts an edit) and
    image. **Do not build and push it by hand** — two builds of the same commit
    both writing `:latest` leaves no answer to "which build is deployed". Do not
    wait to be asked.
-8. **Never render your own place window — call `openPlace(id)`.** Every
+8. **No pop-ups: every panel is a `Drawer` (v0.10.33).** `src/components/admin/Drawer.tsx`
+   — `Modal` and the portal's `Sheet` are wrappers over it. Never draw a
+   `fixed inset-0` dialog of your own: drawers opened from one another line up
+   side by side on a laptop (or one at a time — the **Panels** setting, saved per
+   device), and a home-made overlay lands on top of or underneath them. Where they
+   sit is `drawerLayout()` (`src/lib/drawerLayout.ts`, covered by
+   `check:honeymoon`); Escape closes only the newest; a drawer whose heading
+   changes closes the ones opened from it. The deliberate exceptions are the
+   delete confirmations, the sign-in prompt and the photo viewer.
+9. **Never render your own place window — call `openPlace(id)`.** Every
    surface in the honeymoon portal opens a place through `usePlaceSheet()`
    (`PlaceSheetContext.tsx`), and the shell draws the one `PlaceSheet`. Until
    v0.10.0 there were five different windows depending on where you clicked, each
@@ -140,7 +149,7 @@ idempotent — matches on place name, never reverts an edit) and
    `TAB_PATHS` and `TabView` as well as its `page.tsx`**, or links to it fall back
    to a normal, server-backed navigation.
    `npm run check:honeymoon:ui` covers the entry points and the phone layout.
-9. **Every new page goes in `src/lib/offline.ts`.** The whole site works offline
+10. **Every new page goes in `src/lib/offline.ts`.** The whole site works offline
    (v0.10.3): `public/sw.js` keeps a copy of every page, its data, its photos and
    the build's code, and the installed app saves everything in the background by
    opening each listed page once in a hidden frame (the worker refuses every
@@ -162,7 +171,7 @@ idempotent — matches on place name, never reverts an edit) and
    (`check:offline:ui` puts a proxy in front of it): Playwright's offline switch
    does not reach a service worker's own requests, so a test that only flips it
    passes with the network still there.
-10. **Admin writes made offline wait in an outbox and are replayed (v0.10.5).**
+11. **Admin writes made offline wait in an outbox and are replayed (v0.10.5).**
     `public/sw.js` keeps every queueable admin write (JSON, under `/api/admin/`,
     not in `NOT_QUEUED`) in IndexedDB (`site-outbox`) and answers `202` with
     `X-Offline-Queued: 1`; anything it creates gets a temporary **negative** id,

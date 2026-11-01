@@ -22,6 +22,7 @@ import RoomEditor, { RoomShape, Vertex } from '@/components/seating/RoomEditor';
 import SeatingListView from '@/components/seating/SeatingListView';
 import { SeatingTableData, GuestListEntry, FloorPlan, OffListRsvp, SeatTransferPayload, ColorMode } from '@/components/seating/types';
 import { buildPartySeats, headcount, splitPartyGroupIds as computeSplitParties } from '@/lib/seating';
+import { Drawer } from '@/components/admin/Drawer';
 
 const nodeTypes = { tableNode: TableNode };
 
@@ -584,10 +585,12 @@ function SeatingCanvas({
       </div>
 
       {/* Room Settings Modal */}
-      {showRoomSettings && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl p-6 w-80">
-            <h3 className="text-base font-semibold text-gray-800 mb-4">Room Dimensions</h3>
+      <Drawer
+          open={showRoomSettings}
+          onClose={() => setShowRoomSettings(false)}
+          title={<h3 className="pt-1.5 text-base font-semibold text-gray-800">Room Dimensions</h3>}
+      >
+          {showRoomSettings && (<>
             <p className="text-sm text-gray-500 mb-4">
               Optional. Sets the bounding box of the canvas to match your venue.
             </p>
@@ -628,9 +631,8 @@ function SeatingCanvas({
                 Cancel
               </button>
             </div>
-          </div>
-        </div>
-      )}
+          </>)}
+      </Drawer>
 
     </div>
   );

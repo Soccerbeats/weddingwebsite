@@ -2,6 +2,7 @@
 
 import Changelog from '@/components/admin/Changelog';
 import AdminSidebar from './AdminSidebar';
+import { DrawerProvider } from '@/components/admin/Drawer';
 import PullToRefresh from '@/components/offline/PullToRefresh';
 import { clearOffline, inFrame, isStandalone } from '@/components/offline/offlineStore';
 import { usePathname, useRouter } from 'next/navigation';
@@ -116,7 +117,7 @@ export default function AdminShell({
     }
 
     return (
-        <>
+        <DrawerProvider>
             <style dangerouslySetInnerHTML={{
                 __html: `
                     :root {
@@ -187,6 +188,6 @@ export default function AdminShell({
                     </main>
                 </div>
             </div>
-        </>
+        </DrawerProvider>
     );
 }

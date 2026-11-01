@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { TableType } from './types';
+import { Drawer } from '@/components/admin/Drawer';
 
 interface AddTableModalProps {
   defaultName?: string;
@@ -68,26 +69,12 @@ export default function AddTableModal({ defaultName = 'Table', onAdd, onClose }:
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={onClose}>
-      <div
-        className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 overflow-hidden"
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h2 className="text-base font-semibold text-gray-800">Add Table</h2>
-          <button
-            className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-md hover:bg-gray-100"
-            onClick={onClose}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+    <Drawer
+      open
+      onClose={onClose}
+      title={<h2 className="pt-1.5 text-base font-semibold text-gray-800">Add Table</h2>}
+    >
+        <form onSubmit={handleSubmit} className="space-y-5">
           {/* Table Name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Table Name</label>
@@ -143,7 +130,6 @@ export default function AddTableModal({ defaultName = 'Table', onAdd, onClose }:
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Drawer>
   );
 }

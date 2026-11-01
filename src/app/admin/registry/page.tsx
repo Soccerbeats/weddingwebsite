@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { SaveStatus, useAutosave } from '@/components/admin/useAutosave';
 import type { FundItem } from '@/lib/config';
 import type { RegistryItem } from '@/app/api/admin/registry-items/route';
+import { Drawer } from '@/components/admin/Drawer';
 
 interface PaymentEntry { handle: string; label: string; }
 
@@ -932,124 +933,124 @@ export default function AdminRegistryPage() {
             )}
 
             {/* Log contribution modal */}
-            {contributingItem && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-black/40" onClick={() => { setContributingItem(null); setDonorSearch(''); setSelectedDonor(null); setDonationEvent('Wedding Day'); setOtherEvent(''); setCoGivers([]); setCoGiverSearch(''); }} />
-                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 z-10">
-                        <h2 className="text-lg font-bold text-gray-900 mb-1">Log a Gift</h2>
-                        <p className="text-sm text-gray-500 mb-4">{contributingItem.emoji} {contributingItem.title}</p>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Amount received ($)</label>
-                        <input
-                            type="number"
-                            value={contributionAmount}
-                            onChange={e => setContributionAmount(e.target.value)}
-                            placeholder={`up to $${(contributingItem.price - contributingItem.funded).toLocaleString()} remaining`}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4"
-                            autoFocus
-                        />
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Who donated?</label>
-                        {selectedDonor ? (
-                            <div className="flex items-center justify-between border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4">
-                                <span>{selectedDonor.guest_name}</span>
-                                <button type="button" onClick={() => { setSelectedDonor(null); setDonorSearch(''); }} className="text-gray-400 hover:text-gray-600">✕</button>
-                            </div>
-                        ) : (
-                            <div className="mb-4">
-                                <input
-                                    type="text"
-                                    value={donorSearch}
-                                    onChange={e => setDonorSearch(e.target.value)}
-                                    placeholder="Search guest list..."
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                                />
-                                {donorSearch.trim() && (
-                                    <div className="mt-1 max-h-40 overflow-y-auto border border-gray-200 rounded-lg">
-                                        {donorPeople
-                                            .filter(p => p.name.toLowerCase().includes(donorSearch.toLowerCase()))
-                                            .slice(0, 8)
-                                            .map(p => (
-                                                <button
-                                                    key={p.key}
-                                                    type="button"
-                                                    onClick={() => { setSelectedDonor({ id: p.id, guest_name: p.name }); setDonorSearch(''); }}
-                                                    className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-100"
-                                                >
-                                                    {p.name}
-                                                </button>
-                                            ))}
-                                        {donorPeople.filter(p => p.name.toLowerCase().includes(donorSearch.toLowerCase())).length === 0 && (
-                                            <p className="px-3 py-2 text-sm text-gray-400">No matching guest</p>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Co-givers (optional)</label>
-                        {coGivers.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mb-2">
-                                {coGivers.map(c => (
-                                    <span key={c.name} className="inline-flex items-center gap-1 bg-gray-100 rounded-full px-2 py-1 text-xs">
-                                        {c.name}
-                                        <button type="button" onClick={() => removeCoGiver(c.name)} className="text-gray-400 hover:text-gray-600">✕</button>
-                                    </span>
-                                ))}
-                            </div>
-                        )}
-                        <input
-                            type="text"
-                            value={coGiverSearch}
-                            onChange={e => setCoGiverSearch(e.target.value)}
-                            onKeyDown={e => { if (e.key === 'Enter' && coGiverSearch.trim()) { e.preventDefault(); addCoGiver({ id: null, name: coGiverSearch }); } }}
-                            placeholder="Add a co-giver (type & Enter, or pick below)"
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                        />
-                        {coGiverSearch.trim() && (
-                            <div className="mt-1 max-h-32 overflow-y-auto border border-gray-200 rounded-lg mb-4">
-                                {donorPeople
-                                    .filter(p => p.name.toLowerCase().includes(coGiverSearch.toLowerCase()))
-                                    .slice(0, 8)
-                                    .map(p => (
-                                        <button key={p.key} type="button" onClick={() => addCoGiver({ id: p.id, name: p.name })}
-                                            className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-100">
-                                            {p.name}
-                                        </button>
-                                    ))}
-                            </div>
-                        )}
-                        {!coGiverSearch.trim() && <div className="mb-4" />}
-                        <label className="block text-sm font-medium text-gray-700 mb-1">From what event?</label>
-                        <select
-                            value={donationEvent}
-                            onChange={e => setDonationEvent(e.target.value)}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-3"
-                        >
-                            <option>Bridal Shower</option>
-                            <option>Engagement Party</option>
-                            <option>Wedding Day</option>
-                            <option>Other</option>
-                        </select>
-                        {donationEvent === 'Other' && (
+            <Drawer
+                open={!!contributingItem}
+                onClose={() => { setContributingItem(null); setDonorSearch(''); setSelectedDonor(null); setDonationEvent('Wedding Day'); setOtherEvent(''); setCoGivers([]); setCoGiverSearch(''); }}
+                title={<h2 className="pt-1.5 text-lg font-bold text-gray-900">Log a Gift</h2>}
+            >
+                {contributingItem && (<>
+                    <p className="text-sm text-gray-500 mb-4">{contributingItem.emoji} {contributingItem.title}</p>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Amount received ($)</label>
+                    <input
+                        type="number"
+                        value={contributionAmount}
+                        onChange={e => setContributionAmount(e.target.value)}
+                        placeholder={`up to $${(contributingItem.price - contributingItem.funded).toLocaleString()} remaining`}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4"
+                        autoFocus
+                    />
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Who donated?</label>
+                    {selectedDonor ? (
+                        <div className="flex items-center justify-between border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4">
+                            <span>{selectedDonor.guest_name}</span>
+                            <button type="button" onClick={() => { setSelectedDonor(null); setDonorSearch(''); }} className="text-gray-400 hover:text-gray-600">✕</button>
+                        </div>
+                    ) : (
+                        <div className="mb-4">
                             <input
                                 type="text"
-                                value={otherEvent}
-                                onChange={e => setOtherEvent(e.target.value)}
-                                placeholder="Name the event"
-                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4"
+                                value={donorSearch}
+                                onChange={e => setDonorSearch(e.target.value)}
+                                placeholder="Search guest list..."
+                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                             />
-                        )}
-                        <div className="flex gap-2">
-                            <button onClick={logContribution} disabled={!contributionAmount}
-                                className="flex-1 bg-accent text-white py-2 rounded-lg text-sm font-medium disabled:opacity-40">
-                                Save
-                            </button>
-                            <button onClick={() => { setContributingItem(null); setDonorSearch(''); setSelectedDonor(null); setDonationEvent('Wedding Day'); setOtherEvent(''); setCoGivers([]); setCoGiverSearch(''); }}
-                                className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg text-sm">
-                                Cancel
-                            </button>
+                            {donorSearch.trim() && (
+                                <div className="mt-1 max-h-40 overflow-y-auto border border-gray-200 rounded-lg">
+                                    {donorPeople
+                                        .filter(p => p.name.toLowerCase().includes(donorSearch.toLowerCase()))
+                                        .slice(0, 8)
+                                        .map(p => (
+                                            <button
+                                                key={p.key}
+                                                type="button"
+                                                onClick={() => { setSelectedDonor({ id: p.id, guest_name: p.name }); setDonorSearch(''); }}
+                                                className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-100"
+                                            >
+                                                {p.name}
+                                            </button>
+                                        ))}
+                                    {donorPeople.filter(p => p.name.toLowerCase().includes(donorSearch.toLowerCase())).length === 0 && (
+                                        <p className="px-3 py-2 text-sm text-gray-400">No matching guest</p>
+                                    )}
+                                </div>
+                            )}
                         </div>
+                    )}
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Co-givers (optional)</label>
+                    {coGivers.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mb-2">
+                            {coGivers.map(c => (
+                                <span key={c.name} className="inline-flex items-center gap-1 bg-gray-100 rounded-full px-2 py-1 text-xs">
+                                    {c.name}
+                                    <button type="button" onClick={() => removeCoGiver(c.name)} className="text-gray-400 hover:text-gray-600">✕</button>
+                                </span>
+                            ))}
+                        </div>
+                    )}
+                    <input
+                        type="text"
+                        value={coGiverSearch}
+                        onChange={e => setCoGiverSearch(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter' && coGiverSearch.trim()) { e.preventDefault(); addCoGiver({ id: null, name: coGiverSearch }); } }}
+                        placeholder="Add a co-giver (type & Enter, or pick below)"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    />
+                    {coGiverSearch.trim() && (
+                        <div className="mt-1 max-h-32 overflow-y-auto border border-gray-200 rounded-lg mb-4">
+                            {donorPeople
+                                .filter(p => p.name.toLowerCase().includes(coGiverSearch.toLowerCase()))
+                                .slice(0, 8)
+                                .map(p => (
+                                    <button key={p.key} type="button" onClick={() => addCoGiver({ id: p.id, name: p.name })}
+                                        className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-100">
+                                        {p.name}
+                                    </button>
+                                ))}
+                        </div>
+                    )}
+                    {!coGiverSearch.trim() && <div className="mb-4" />}
+                    <label className="block text-sm font-medium text-gray-700 mb-1">From what event?</label>
+                    <select
+                        value={donationEvent}
+                        onChange={e => setDonationEvent(e.target.value)}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-3"
+                    >
+                        <option>Bridal Shower</option>
+                        <option>Engagement Party</option>
+                        <option>Wedding Day</option>
+                        <option>Other</option>
+                    </select>
+                    {donationEvent === 'Other' && (
+                        <input
+                            type="text"
+                            value={otherEvent}
+                            onChange={e => setOtherEvent(e.target.value)}
+                            placeholder="Name the event"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4"
+                        />
+                    )}
+                    <div className="flex gap-2">
+                        <button onClick={logContribution} disabled={!contributionAmount}
+                            className="flex-1 bg-accent text-white py-2 rounded-lg text-sm font-medium disabled:opacity-40">
+                            Save
+                        </button>
+                        <button onClick={() => { setContributingItem(null); setDonorSearch(''); setSelectedDonor(null); setDonationEvent('Wedding Day'); setOtherEvent(''); setCoGivers([]); setCoGiverSearch(''); }}
+                            className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg text-sm">
+                            Cancel
+                        </button>
                     </div>
-                </div>
-            )}
+                </>)}
+            </Drawer>
         </div>
     );
 }

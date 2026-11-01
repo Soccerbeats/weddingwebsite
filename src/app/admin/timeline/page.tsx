@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { SaveStatus, useAutosave } from '@/components/admin/useAutosave';
+import { Drawer } from '@/components/admin/Drawer';
 import Image from 'next/image';
 
 interface Milestone {
@@ -307,342 +308,290 @@ export default function AdminTimeline() {
             </div>
 
             {/* Add Milestone Modal */}
-            {showAddModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-                    <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
-                        <h3 className="text-lg font-bold text-gray-900 mb-4">Add New Milestone</h3>
+            <Drawer
+                open={showAddModal}
+                onClose={() => setShowAddModal(false)}
+                title={<h3 className="pt-1.5 text-lg font-bold text-gray-900">Add New Milestone</h3>}
+            >
+                {showAddModal && (<>
+                    <form onSubmit={handleAddMilestone} className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Title *
+                            </label>
+                            <input
+                                type="text"
+                                value={formData.title}
+                                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent"
+                                placeholder="e.g., We Met"
+                                required
+                            />
+                        </div>
 
-                        <form onSubmit={handleAddMilestone} className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Title *
-                                </label>
-                                <input
-                                    type="text"
-                                    value={formData.title}
-                                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent"
-                                    placeholder="e.g., We Met"
-                                    required
-                                />
-                            </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Date Format *
+                            </label>
+                            <select
+                                value={formData.dateFormat}
+                                onChange={(e) => setFormData({ ...formData, dateFormat: e.target.value as 'exact' | 'month-year' })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent text-gray-900"
+                            >
+                                <option value="exact">Exact Date (e.g., March 6, 2015)</option>
+                                <option value="month-year">Month & Year (e.g., March 2015)</option>
+                            </select>
+                        </div>
 
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Date Format *
-                                </label>
-                                <select
-                                    value={formData.dateFormat}
-                                    onChange={(e) => setFormData({ ...formData, dateFormat: e.target.value as 'exact' | 'month-year' })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent text-gray-900"
-                                >
-                                    <option value="exact">Exact Date (e.g., March 6, 2015)</option>
-                                    <option value="month-year">Month & Year (e.g., March 2015)</option>
-                                </select>
-                            </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Date *
+                            </label>
+                            <input
+                                type="date"
+                                value={formData.date}
+                                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent text-gray-900"
+                                required
+                            />
+                            <p className="mt-1 text-xs text-gray-500">
+                                {formData.dateFormat === 'month-year'
+                                    ? 'Select any day in the month (only month and year will be displayed)'
+                                    : 'Select the exact date'}
+                            </p>
+                        </div>
 
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Date *
-                                </label>
-                                <input
-                                    type="date"
-                                    value={formData.date}
-                                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent text-gray-900"
-                                    required
-                                />
-                                <p className="mt-1 text-xs text-gray-500">
-                                    {formData.dateFormat === 'month-year'
-                                        ? 'Select any day in the month (only month and year will be displayed)'
-                                        : 'Select the exact date'}
-                                </p>
-                            </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Description *
+                            </label>
+                            <textarea
+                                value={formData.description}
+                                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                                rows={4}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent"
+                                placeholder="Tell the story of this milestone..."
+                                required
+                            />
+                        </div>
 
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Description *
-                                </label>
-                                <textarea
-                                    value={formData.description}
-                                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                    rows={4}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent"
-                                    placeholder="Tell the story of this milestone..."
-                                    required
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Photo 1 (optional)
-                                </label>
-                                <input
-                                    ref={fileInputRef1}
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={(e) => setFormData({ ...formData, file1: e.target.files?.[0] || null })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                                />
-                                {formData.file1 && (
-                                    <div className="mt-2">
-                                        <label className="block text-xs font-medium text-gray-600 mb-1">
-                                            Photo 1 Vertical Alignment
-                                        </label>
-                                        <select
-                                            value={formData.photo1Align}
-                                            onChange={(e) => setFormData({ ...formData, photo1Align: e.target.value as 'top' | 'top-center' | 'center' | 'center-bottom' | 'bottom' })}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent text-sm"
-                                        >
-                                            <option value="top">Top Align</option>
-                                            <option value="top-center">Top-Center Align</option>
-                                            <option value="center">Center Align (Default)</option>
-                                            <option value="center-bottom">Center-Bottom Align</option>
-                                            <option value="bottom">Bottom Align</option>
-                                        </select>
-                                    </div>
-                                )}
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Photo 2 (optional)
-                                </label>
-                                <input
-                                    ref={fileInputRef2}
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={(e) => setFormData({ ...formData, file2: e.target.files?.[0] || null })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                                />
-                                {formData.file2 && (
-                                    <div className="mt-2">
-                                        <label className="block text-xs font-medium text-gray-600 mb-1">
-                                            Photo 2 Vertical Alignment
-                                        </label>
-                                        <select
-                                            value={formData.photo2Align}
-                                            onChange={(e) => setFormData({ ...formData, photo2Align: e.target.value as 'top' | 'top-center' | 'center' | 'center-bottom' | 'bottom' })}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent text-sm"
-                                        >
-                                            <option value="top">Top Align</option>
-                                            <option value="top-center">Top-Center Align</option>
-                                            <option value="center">Center Align (Default)</option>
-                                            <option value="center-bottom">Center-Bottom Align</option>
-                                            <option value="bottom">Bottom Align</option>
-                                        </select>
-                                    </div>
-                                )}
-                            </div>
-
-                            <div className="flex gap-3 mt-6">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setShowAddModal(false);
-                                        setFormData({ title: '', date: '', dateFormat: 'exact', description: '', file1: null, file2: null, photo1Align: 'center', photo2Align: 'center' });
-                                        if (fileInputRef1.current) fileInputRef1.current.value = '';
-                                        if (fileInputRef2.current) fileInputRef2.current.value = '';
-                                    }}
-                                    className="flex-1 px-4 py-2 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-all duration-300 shadow-md hover:shadow-lg"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={uploading}
-                                    className="flex-1 px-4 py-2 bg-accent text-white rounded-xl hover:bg-accent-dark disabled:opacity-50 transition-all duration-300 shadow-md hover:shadow-lg"
-                                >
-                                    {uploading ? 'Adding...' : 'Add Milestone'}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-
-            {/* Edit Milestone Modal */}
-            {editingMilestone && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-                    <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
-                        <h3 className="text-lg font-bold text-gray-900 mb-4">Edit Milestone</h3>
-
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Title
-                                </label>
-                                <input
-                                    type="text"
-                                    value={editingMilestone.title}
-                                    onChange={(e) => setEditingMilestone({ ...editingMilestone, title: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Date Format
-                                </label>
-                                <select
-                                    value={editingMilestone.dateFormat || 'exact'}
-                                    onChange={(e) => setEditingMilestone({ ...editingMilestone, dateFormat: e.target.value as 'exact' | 'month-year' })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent text-gray-900"
-                                >
-                                    <option value="exact">Exact Date (e.g., March 6, 2015)</option>
-                                    <option value="month-year">Month & Year (e.g., March 2015)</option>
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Date
-                                </label>
-                                <input
-                                    type="date"
-                                    value={editingMilestone.date}
-                                    onChange={(e) => setEditingMilestone({ ...editingMilestone, date: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent text-gray-900"
-                                />
-                                <p className="mt-1 text-xs text-gray-500">
-                                    {(editingMilestone.dateFormat || 'exact') === 'month-year'
-                                        ? 'Select any day in the month (only month and year will be displayed)'
-                                        : 'Select the exact date'}
-                                </p>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Description
-                                </label>
-                                <textarea
-                                    value={editingMilestone.description}
-                                    onChange={(e) => setEditingMilestone({ ...editingMilestone, description: e.target.value })}
-                                    rows={4}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent"
-                                />
-                            </div>
-
-                            {/* Existing Photos */}
-                            {editingMilestone.photos && editingMilestone.photos.length > 0 && (
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Current Photos
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Photo 1 (optional)
+                            </label>
+                            <input
+                                ref={fileInputRef1}
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => setFormData({ ...formData, file1: e.target.files?.[0] || null })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                            />
+                            {formData.file1 && (
+                                <div className="mt-2">
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                                        Photo 1 Vertical Alignment
                                     </label>
-                                    <div className="space-y-3">
-                                        {editingMilestone.photos.map((photo, idx) => (
-                                            <div key={idx} className="space-y-2">
-                                                <div className="flex gap-2 items-center">
-                                                    <div className="relative w-24 h-24 rounded-lg overflow-hidden border border-gray-200">
-                                                        <Image
-                                                            src={`/api/photos/${photo}`}
-                                                            alt={`Photo ${idx + 1}`}
-                                                            fill
-                                                            unoptimized
-                                                            className="object-cover"
-                                                        />
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleDeletePhoto(photo)}
-                                                            className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
-                                                        >
-                                                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                                                            </svg>
-                                                        </button>
-                                                    </div>
-                                                    <div className="flex-1">
-                                                        <label className="block text-xs font-medium text-gray-600 mb-1">
-                                                            Photo {idx + 1} Vertical Alignment
-                                                        </label>
-                                                        <select
-                                                            value={editingMilestone.photoAligns?.[idx] || 'center'}
-                                                            onChange={(e) => {
-                                                                const newAligns = [...(editingMilestone.photoAligns || [])];
-                                                                newAligns[idx] = e.target.value as 'top' | 'top-center' | 'center' | 'center-bottom' | 'bottom';
-                                                                setEditingMilestone({ ...editingMilestone, photoAligns: newAligns });
-                                                            }}
-                                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent text-sm"
-                                                        >
-                                                            <option value="top">Top Align</option>
-                                                            <option value="top-center">Top-Center Align</option>
-                                                            <option value="center">Center Align (Default)</option>
-                                                            <option value="center-bottom">Center-Bottom Align</option>
-                                                            <option value="bottom">Bottom Align</option>
-                                                        </select>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
+                                    <select
+                                        value={formData.photo1Align}
+                                        onChange={(e) => setFormData({ ...formData, photo1Align: e.target.value as 'top' | 'top-center' | 'center' | 'center-bottom' | 'bottom' })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent text-sm"
+                                    >
+                                        <option value="top">Top Align</option>
+                                        <option value="top-center">Top-Center Align</option>
+                                        <option value="center">Center Align (Default)</option>
+                                        <option value="center-bottom">Center-Bottom Align</option>
+                                        <option value="bottom">Bottom Align</option>
+                                    </select>
                                 </div>
                             )}
+                        </div>
 
-                            {/* Add New Photos */}
-                            {(!editingMilestone.photos || editingMilestone.photos.length < 2) && (
-                                <div className="space-y-3">
-                                    <label className="block text-sm font-medium text-gray-700">
-                                        Add Photos (up to 2 total)
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Photo 2 (optional)
+                            </label>
+                            <input
+                                ref={fileInputRef2}
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => setFormData({ ...formData, file2: e.target.files?.[0] || null })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                            />
+                            {formData.file2 && (
+                                <div className="mt-2">
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                                        Photo 2 Vertical Alignment
                                     </label>
-                                    {(!editingMilestone.photos || editingMilestone.photos.length === 0) && (
-                                        <>
-                                            <div>
-                                                <input
-                                                    ref={editFileInputRef1}
-                                                    type="file"
-                                                    accept="image/*"
-                                                    onChange={(e) => setEditFiles({ ...editFiles, file1: e.target.files?.[0] || null })}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                                                />
-                                                {editFiles.file1 && (
-                                                    <div className="mt-2">
-                                                        <label className="block text-xs font-medium text-gray-600 mb-1">
-                                                            New Photo 1 Vertical Alignment
-                                                        </label>
-                                                        <select
-                                                            value={editPhotoAligns.photo1Align}
-                                                            onChange={(e) => setEditPhotoAligns({ ...editPhotoAligns, photo1Align: e.target.value as 'top' | 'top-center' | 'center' | 'center-bottom' | 'bottom' })}
-                                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent text-sm"
-                                                        >
-                                                            <option value="top">Top Align</option>
-                                                            <option value="top-center">Top-Center Align</option>
-                                                            <option value="center">Center Align (Default)</option>
-                                                            <option value="center-bottom">Center-Bottom Align</option>
-                                                            <option value="bottom">Bottom Align</option>
-                                                        </select>
-                                                    </div>
-                                                )}
+                                    <select
+                                        value={formData.photo2Align}
+                                        onChange={(e) => setFormData({ ...formData, photo2Align: e.target.value as 'top' | 'top-center' | 'center' | 'center-bottom' | 'bottom' })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent text-sm"
+                                    >
+                                        <option value="top">Top Align</option>
+                                        <option value="top-center">Top-Center Align</option>
+                                        <option value="center">Center Align (Default)</option>
+                                        <option value="center-bottom">Center-Bottom Align</option>
+                                        <option value="bottom">Bottom Align</option>
+                                    </select>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="flex gap-3 mt-6">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setShowAddModal(false);
+                                    setFormData({ title: '', date: '', dateFormat: 'exact', description: '', file1: null, file2: null, photo1Align: 'center', photo2Align: 'center' });
+                                    if (fileInputRef1.current) fileInputRef1.current.value = '';
+                                    if (fileInputRef2.current) fileInputRef2.current.value = '';
+                                }}
+                                className="flex-1 px-4 py-2 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-all duration-300 shadow-md hover:shadow-lg"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={uploading}
+                                className="flex-1 px-4 py-2 bg-accent text-white rounded-xl hover:bg-accent-dark disabled:opacity-50 transition-all duration-300 shadow-md hover:shadow-lg"
+                            >
+                                {uploading ? 'Adding...' : 'Add Milestone'}
+                            </button>
+                        </div>
+                    </form>
+                </>)}
+            </Drawer>
+
+            {/* Edit Milestone Modal */}
+            <Drawer
+                open={!!editingMilestone}
+                onClose={() => {
+                    setEditingMilestone(null);
+                    setEditFiles({ file1: null, file2: null });
+                    setEditPhotoAligns({ photo1Align: 'center', photo2Align: 'center' });
+                }}
+                title={<h3 className="pt-1.5 text-lg font-bold text-gray-900">Edit Milestone</h3>}
+            >
+                {editingMilestone && (<>
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Title
+                            </label>
+                            <input
+                                type="text"
+                                value={editingMilestone.title}
+                                onChange={(e) => setEditingMilestone({ ...editingMilestone, title: e.target.value })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Date Format
+                            </label>
+                            <select
+                                value={editingMilestone.dateFormat || 'exact'}
+                                onChange={(e) => setEditingMilestone({ ...editingMilestone, dateFormat: e.target.value as 'exact' | 'month-year' })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent text-gray-900"
+                            >
+                                <option value="exact">Exact Date (e.g., March 6, 2015)</option>
+                                <option value="month-year">Month & Year (e.g., March 2015)</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Date
+                            </label>
+                            <input
+                                type="date"
+                                value={editingMilestone.date}
+                                onChange={(e) => setEditingMilestone({ ...editingMilestone, date: e.target.value })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent text-gray-900"
+                            />
+                            <p className="mt-1 text-xs text-gray-500">
+                                {(editingMilestone.dateFormat || 'exact') === 'month-year'
+                                    ? 'Select any day in the month (only month and year will be displayed)'
+                                    : 'Select the exact date'}
+                            </p>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Description
+                            </label>
+                            <textarea
+                                value={editingMilestone.description}
+                                onChange={(e) => setEditingMilestone({ ...editingMilestone, description: e.target.value })}
+                                rows={4}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-accent focus:border-accent"
+                            />
+                        </div>
+
+                        {/* Existing Photos */}
+                        {editingMilestone.photos && editingMilestone.photos.length > 0 && (
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Current Photos
+                                </label>
+                                <div className="space-y-3">
+                                    {editingMilestone.photos.map((photo, idx) => (
+                                        <div key={idx} className="space-y-2">
+                                            <div className="flex gap-2 items-center">
+                                                <div className="relative w-24 h-24 rounded-lg overflow-hidden border border-gray-200">
+                                                    <Image
+                                                        src={`/api/photos/${photo}`}
+                                                        alt={`Photo ${idx + 1}`}
+                                                        fill
+                                                        unoptimized
+                                                        className="object-cover"
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleDeletePhoto(photo)}
+                                                        className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                                                    >
+                                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                                <div className="flex-1">
+                                                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                                                        Photo {idx + 1} Vertical Alignment
+                                                    </label>
+                                                    <select
+                                                        value={editingMilestone.photoAligns?.[idx] || 'center'}
+                                                        onChange={(e) => {
+                                                            const newAligns = [...(editingMilestone.photoAligns || [])];
+                                                            newAligns[idx] = e.target.value as 'top' | 'top-center' | 'center' | 'center-bottom' | 'bottom';
+                                                            setEditingMilestone({ ...editingMilestone, photoAligns: newAligns });
+                                                        }}
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent text-sm"
+                                                    >
+                                                        <option value="top">Top Align</option>
+                                                        <option value="top-center">Top-Center Align</option>
+                                                        <option value="center">Center Align (Default)</option>
+                                                        <option value="center-bottom">Center-Bottom Align</option>
+                                                        <option value="bottom">Bottom Align</option>
+                                                    </select>
+                                                </div>
                                             </div>
-                                            <div>
-                                                <input
-                                                    ref={editFileInputRef2}
-                                                    type="file"
-                                                    accept="image/*"
-                                                    onChange={(e) => setEditFiles({ ...editFiles, file2: e.target.files?.[0] || null })}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                                                />
-                                                {editFiles.file2 && (
-                                                    <div className="mt-2">
-                                                        <label className="block text-xs font-medium text-gray-600 mb-1">
-                                                            New Photo 2 Vertical Alignment
-                                                        </label>
-                                                        <select
-                                                            value={editPhotoAligns.photo2Align}
-                                                            onChange={(e) => setEditPhotoAligns({ ...editPhotoAligns, photo2Align: e.target.value as 'top' | 'top-center' | 'center' | 'center-bottom' | 'bottom' })}
-                                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent text-sm"
-                                                        >
-                                                            <option value="top">Top Align</option>
-                                                            <option value="top-center">Top-Center Align</option>
-                                                            <option value="center">Center Align (Default)</option>
-                                                            <option value="center-bottom">Center-Bottom Align</option>
-                                                            <option value="bottom">Bottom Align</option>
-                                                        </select>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </>
-                                    )}
-                                    {editingMilestone.photos && editingMilestone.photos.length === 1 && (
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Add New Photos */}
+                        {(!editingMilestone.photos || editingMilestone.photos.length < 2) && (
+                            <div className="space-y-3">
+                                <label className="block text-sm font-medium text-gray-700">
+                                    Add Photos (up to 2 total)
+                                </label>
+                                {(!editingMilestone.photos || editingMilestone.photos.length === 0) && (
+                                    <>
                                         <div>
                                             <input
                                                 ref={editFileInputRef1}
@@ -654,7 +603,7 @@ export default function AdminTimeline() {
                                             {editFiles.file1 && (
                                                 <div className="mt-2">
                                                     <label className="block text-xs font-medium text-gray-600 mb-1">
-                                                        New Photo Vertical Alignment
+                                                        New Photo 1 Vertical Alignment
                                                     </label>
                                                     <select
                                                         value={editPhotoAligns.photo1Align}
@@ -670,33 +619,89 @@ export default function AdminTimeline() {
                                                 </div>
                                             )}
                                         </div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="flex gap-3 mt-6">
-                            <button
-                                onClick={() => {
-                                    setEditingMilestone(null);
-                                    setEditFiles({ file1: null, file2: null });
-                                    setEditPhotoAligns({ photo1Align: 'center', photo2Align: 'center' });
-                                }}
-                                className="flex-1 px-4 py-2 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-all duration-300 shadow-md hover:shadow-lg"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleSaveEdit}
-                                disabled={uploading}
-                                className="flex-1 px-4 py-2 bg-accent text-white rounded-xl hover:bg-accent-dark disabled:opacity-50 transition-all duration-300 shadow-md hover:shadow-lg"
-                            >
-                                {uploading ? 'Saving...' : 'Save Changes'}
-                            </button>
-                        </div>
+                                        <div>
+                                            <input
+                                                ref={editFileInputRef2}
+                                                type="file"
+                                                accept="image/*"
+                                                onChange={(e) => setEditFiles({ ...editFiles, file2: e.target.files?.[0] || null })}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                            />
+                                            {editFiles.file2 && (
+                                                <div className="mt-2">
+                                                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                                                        New Photo 2 Vertical Alignment
+                                                    </label>
+                                                    <select
+                                                        value={editPhotoAligns.photo2Align}
+                                                        onChange={(e) => setEditPhotoAligns({ ...editPhotoAligns, photo2Align: e.target.value as 'top' | 'top-center' | 'center' | 'center-bottom' | 'bottom' })}
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent text-sm"
+                                                    >
+                                                        <option value="top">Top Align</option>
+                                                        <option value="top-center">Top-Center Align</option>
+                                                        <option value="center">Center Align (Default)</option>
+                                                        <option value="center-bottom">Center-Bottom Align</option>
+                                                        <option value="bottom">Bottom Align</option>
+                                                    </select>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </>
+                                )}
+                                {editingMilestone.photos && editingMilestone.photos.length === 1 && (
+                                    <div>
+                                        <input
+                                            ref={editFileInputRef1}
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={(e) => setEditFiles({ ...editFiles, file1: e.target.files?.[0] || null })}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                        />
+                                        {editFiles.file1 && (
+                                            <div className="mt-2">
+                                                <label className="block text-xs font-medium text-gray-600 mb-1">
+                                                    New Photo Vertical Alignment
+                                                </label>
+                                                <select
+                                                    value={editPhotoAligns.photo1Align}
+                                                    onChange={(e) => setEditPhotoAligns({ ...editPhotoAligns, photo1Align: e.target.value as 'top' | 'top-center' | 'center' | 'center-bottom' | 'bottom' })}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent text-sm"
+                                                >
+                                                    <option value="top">Top Align</option>
+                                                    <option value="top-center">Top-Center Align</option>
+                                                    <option value="center">Center Align (Default)</option>
+                                                    <option value="center-bottom">Center-Bottom Align</option>
+                                                    <option value="bottom">Bottom Align</option>
+                                                </select>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
-                </div>
-            )}
+
+                    <div className="flex gap-3 mt-6">
+                        <button
+                            onClick={() => {
+                                setEditingMilestone(null);
+                                setEditFiles({ file1: null, file2: null });
+                                setEditPhotoAligns({ photo1Align: 'center', photo2Align: 'center' });
+                            }}
+                            className="flex-1 px-4 py-2 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-all duration-300 shadow-md hover:shadow-lg"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={handleSaveEdit}
+                            disabled={uploading}
+                            className="flex-1 px-4 py-2 bg-accent text-white rounded-xl hover:bg-accent-dark disabled:opacity-50 transition-all duration-300 shadow-md hover:shadow-lg"
+                        >
+                            {uploading ? 'Saving...' : 'Save Changes'}
+                        </button>
+                    </div>
+                </>)}
+            </Drawer>
         </div>
     );
 }
