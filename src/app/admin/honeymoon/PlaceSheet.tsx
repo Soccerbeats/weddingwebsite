@@ -122,7 +122,7 @@ function SheetTitle({ place }: { place: Place }) {
                 {meta.icon} {meta.label}{region ? ` · ${region}` : ''}
             </p>
             {/* The drawer's name: what its strip and the back arrow say. */}
-            <div data-drawer-name>
+            <div data-drawer-name={place.name}>
                 <InlineText
                     value={place.name}
                     className="-ml-2 text-lg font-semibold text-gray-900"

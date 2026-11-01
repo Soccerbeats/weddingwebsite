@@ -232,7 +232,9 @@ export function Drawer({
         // The heading (or `data-drawer-name`), when there is one: a subtitle that counts things changes
         // under you, and a new name closes what was opened from this drawer.
         const node = titleRef.current;
-        const text = (node?.querySelector('[data-drawer-name], h1, h2, h3, h4') ?? node)?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+        // An editable name is an input, which has no text: it says its name.
+        const nameNode = node?.querySelector('[data-drawer-name], h1, h2, h3, h4') ?? node;
+        const text = (nameNode?.getAttribute('data-drawer-name') || nameNode?.textContent || '').replace(/\s+/g, ' ').trim();
         setLabel((was) => (was === text ? was : text));
     }, [title, open]);
 

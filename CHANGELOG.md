@@ -11,6 +11,11 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.10.34 — [Released] A place's panel knows its own name (`main`, 2026-11-01 05:50)
+
+### Fixed
+- A place's panel had no name, so a folded place showed a blank strip and the back arrow over it said "Back to" with nothing after it. It now shows the place's name.
+
 ## v0.10.33 — [Released] Every panel slides in from the right, side by side (`main`, 2026-10-31 09:33)
 
 ### Changed
