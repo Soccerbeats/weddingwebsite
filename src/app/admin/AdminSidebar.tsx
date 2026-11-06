@@ -296,9 +296,9 @@ export default function AdminSidebar({ pathname, open, onClose, onLogout }: {
             {tip?.label && (
                 <div
                     role="tooltip"
-                    className="pointer-events-none fixed z-[60] hidden -translate-y-1/2 rounded-full bg-gray-900 px-3 py-1.5
+                    className="pointer-events-none fixed z-[60] hidden rounded-full bg-gray-900 px-3 py-1.5
                         text-xs font-medium text-white shadow-lg md:block"
-                    style={{ top: tip.top, left: tip.left, animation: 'admin-tip-in 180ms ease-out' }}
+                    style={{ top: tip.top, left: tip.left, transform: 'translateY(-50%)', animation: 'admin-tip-in 180ms ease-out' }}
                 >
                     {tip.label}
                 </div>

@@ -364,7 +364,7 @@ export default function DashboardTab({ api }: { api: HoneymoonApi }) {
                         <TripMap
                             places={mapPlaces}
                             routes={mapRoutes}
-                            className="h-72 xl:h-80 w-full"
+                            className="h-72 w-full xl:h-auto xl:min-h-80 xl:flex-1"
                         />
                     )}
                     <p className="text-[11px] text-gray-400 mt-2">

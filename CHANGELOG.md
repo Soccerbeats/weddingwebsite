@@ -11,6 +11,12 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.10.38 — [Released] The overview map fills its card; the rail's tooltip lands once (`main`, 2026-11-06 23:14)
+
+### Fixed
+- **Honeymoon overview, wide windows:** the "Where it all is" map now stretches to the bottom of its card. It had a fixed height, so when the itinerary beside it made the card taller, the map filled only the top part.
+- **Admin menu, collapsed:** hovering an icon showed its name a little too high, then jumped it level with the icon. The entrance animation applied a second upward shift on top of the tooltip's own centring. Now the tooltip appears level with the icon straight away.
+
 ## v0.10.37 — [Released] Gifts: see what someone has already given (`main`, 2026-11-06 21:30)
 
 ### Added
