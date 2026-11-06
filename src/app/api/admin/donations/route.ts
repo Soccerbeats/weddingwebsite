@@ -5,7 +5,7 @@ import { replayable } from '@/lib/outboxReplay';
 // Columns returned by every endpoint so the client always gets the same shape.
 const RETURNING = `id, guest_id, guest_name, amount::float8 AS amount, gift,
                    fund_item_id, fund_item_title, event, created_at,
-                   thank_you_sent, thank_you_sent_at,
+                   thank_you_sent, thank_you_sent_at, method,
                    COALESCE(co_donors, '[]'::jsonb) AS co_donors`;
 
 async function ensureTable() {
@@ -28,6 +28,19 @@ async function ensureTable() {
   await pool.query(`ALTER TABLE donations ADD COLUMN IF NOT EXISTS thank_you_sent_at TIMESTAMP`);
   await pool.query(`ALTER TABLE donations ALTER COLUMN amount SET DEFAULT 0`);
   await pool.query(`ALTER TABLE donations ALTER COLUMN amount DROP NOT NULL`);
+  // How the money came: 'digital' (Venmo, Zelle, a registry fund), or a card
+  // holding 'cash' or a 'check'. Null for a gift with no money, and for rows
+  // logged before this column existed.
+  await pool.query(`ALTER TABLE donations ADD COLUMN IF NOT EXISTS method TEXT`);
+}
+
+const METHODS = new Set(['digital', 'cash', 'check']);
+function cleanMethod(raw: unknown): string | null {
+  return typeof raw === 'string' && METHODS.has(raw) ? raw : null;
+}
+/** undefined = leave the flag alone; a boolean = set it. */
+function cleanThanked(raw: unknown): boolean | null {
+  return typeof raw === 'boolean' ? raw : null;
 }
 
 // A donation must carry something: a dollar amount, a gift, or both.
@@ -65,12 +78,14 @@ async function create(request: Request) {
         { status: 400 }
       );
     }
+    const thanked = cleanThanked(body.thank_you_sent) ?? false;
     const result = await pool.query(
-      `INSERT INTO donations (guest_id, guest_name, amount, gift, fund_item_id, fund_item_title, event, co_donors)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO donations (guest_id, guest_name, amount, gift, fund_item_id, fund_item_title, event, co_donors,
+                              method, thank_you_sent, thank_you_sent_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CASE WHEN $10 THEN NOW() ELSE NULL END)
        RETURNING ${RETURNING}`,
       [guest_id ?? null, guest_name, amount, gift, fund_item_id ?? null, fund_item_title ?? null, event ?? null,
-       JSON.stringify(Array.isArray(co_donors) ? co_donors : [])]
+       JSON.stringify(Array.isArray(co_donors) ? co_donors : []), cleanMethod(body.method), thanked]
     );
     return NextResponse.json(result.rows[0]);
   } catch (error) {
@@ -94,11 +109,17 @@ export async function PUT(request: Request) {
     const result = await pool.query(
       `UPDATE donations
        SET guest_id = $1, guest_name = $2, amount = $3, gift = $4, fund_item_id = $5,
-           fund_item_title = $6, event = $7, co_donors = $8
+           fund_item_title = $6, event = $7, co_donors = $8, method = $10,
+           thank_you_sent = COALESCE($11, thank_you_sent),
+           thank_you_sent_at = CASE
+             WHEN $11 IS NULL THEN thank_you_sent_at
+             WHEN $11 THEN COALESCE(thank_you_sent_at, NOW())
+             ELSE NULL END
        WHERE id = $9
        RETURNING ${RETURNING}`,
       [guest_id ?? null, guest_name, amount, gift, fund_item_id ?? null, fund_item_title ?? null, event ?? null,
-       JSON.stringify(Array.isArray(co_donors) ? co_donors : []), id]
+       JSON.stringify(Array.isArray(co_donors) ? co_donors : []), id, cleanMethod(body.method),
+       cleanThanked(body.thank_you_sent)]
     );
     if (result.rowCount === 0) {
       return NextResponse.json({ error: 'Donation not found' }, { status: 404 });

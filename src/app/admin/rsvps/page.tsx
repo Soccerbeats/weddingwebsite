@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { FundItem, SiteConfig } from '@/lib/config';
+import type { SiteConfig } from '@/lib/config';
 import AddressReconcileModal from '@/components/admin/AddressReconcileModal';
 import { MAILING_HEADERS, mailingRows, toCsv } from '@/lib/mailing';
 import { SaveStatus, useAutosave } from '@/components/admin/useAutosave';
@@ -97,7 +97,7 @@ interface Donation {
     co_donors?: { id: number | null; name: string }[];
 }
 
-type Tab = 'rsvps' | 'guestlist' | 'vendors' | 'donations';
+type Tab = 'rsvps' | 'guestlist' | 'vendors';
 type GuestFilter = 'all' | 'no_response' | 'attending' | 'declined' | 'likely_not_coming' | 'invited' | 'not_invited' | 'bride' | 'groom' | 'noted' | 'issue' | 'need' | 'kids_meal';
 
 export default function RSVPDashboard() {
@@ -107,22 +107,6 @@ export default function RSVPDashboard() {
     const [rsvps, setRsvps] = useState<RSVP[]>([]);
     const [guests, setGuests] = useState<Guest[]>([]);
     const [donations, setDonations] = useState<Donation[]>([]);
-    const [showDonationModal, setShowDonationModal] = useState(false);
-    const [donationDonorSearch, setDonationDonorSearch] = useState('');
-    const [donationDonor, setDonationDonor] = useState<{ id: number; guest_name: string } | null>(null);
-    const [donationAmount, setDonationAmount] = useState('');
-    const [donationGift, setDonationGift] = useState('');
-    const [donationFundId, setDonationFundId] = useState('');
-    const [selectedDonations, setSelectedDonations] = useState<number[]>([]);
-    const [markingThanks, setMarkingThanks] = useState(false);
-    const [donationEvent, setDonationEvent] = useState('Wedding Day');
-    const [donationOtherEvent, setDonationOtherEvent] = useState('');
-    const [savingDonation, setSavingDonation] = useState(false);
-    const [coGivers, setCoGivers] = useState<{ id: number | null; name: string }[]>([]);
-    const [coGiverSearch, setCoGiverSearch] = useState('');
-    const [editingDonationId, setEditingDonationId] = useState<number | null>(null);
-    const [origDonation, setOrigDonation] = useState<{ amount: number; fund_item_id: string | null } | null>(null);
-    const [deletingDonation, setDeletingDonation] = useState<Donation | null>(null);
     const [loading, setLoading] = useState(true);
     const [deletingRsvp, setDeletingRsvp] = useState<RSVP | null>(null);
     const [confirmName, setConfirmName] = useState('');
@@ -197,7 +181,12 @@ export default function RSVPDashboard() {
         fetchDonations();
         const params = new URLSearchParams(window.location.search);
         const tab = params.get('tab');
-        if (tab === 'donations' || tab === 'guestlist' || tab === 'rsvps' || tab === 'vendors') {
+        // Gifts moved to Finances in v0.10.35; an old bookmark follows them there.
+        if (tab === 'donations') {
+            window.location.replace('/admin/finances?tab=gifts');
+            return;
+        }
+        if (tab === 'guestlist' || tab === 'rsvps' || tab === 'vendors') {
             setActiveTab(tab as Tab);
         }
     }, []);
@@ -344,173 +333,6 @@ export default function RSVPDashboard() {
             setDonations(Array.isArray(data) ? data : []);
         } catch (error) {
             console.error('Error fetching donations:', error);
-        }
-    };
-
-    const resetDonationModal = () => {
-        setShowDonationModal(false);
-        setDonationDonorSearch('');
-        setDonationDonor(null);
-        setDonationAmount('');
-        setDonationGift('');
-        setDonationFundId('');
-        setDonationEvent('Wedding Day');
-        setDonationOtherEvent('');
-        setCoGivers([]);
-        setCoGiverSearch('');
-        setEditingDonationId(null);
-        setOrigDonation(null);
-    };
-
-    const addCoGiver = (person: { id: number | null; name: string }) => {
-        const name = person.name.trim();
-        if (!name) return;
-        if (coGivers.some(c => c.name.toLowerCase() === name.toLowerCase())) { setCoGiverSearch(''); return; }
-        setCoGivers([...coGivers, { id: person.id, name }]);
-        setCoGiverSearch('');
-    };
-    const removeCoGiver = (name: string) => setCoGivers(coGivers.filter(c => c.name !== name));
-
-    const openEditDonation = (d: Donation) => {
-        setEditingDonationId(d.id);
-        setOrigDonation({ amount: d.amount, fund_item_id: d.fund_item_id });
-        setDonationDonor(d.guest_id != null ? { id: d.guest_id, guest_name: d.guest_name } : { id: 0, guest_name: d.guest_name });
-        setDonationAmount(d.amount ? String(d.amount) : '');
-        setDonationGift(d.gift || '');
-        setDonationFundId(d.fund_item_id || '');
-        const presets = ['Bridal Shower', 'Engagement Party', 'Wedding Day'];
-        if (d.event && presets.includes(d.event)) { setDonationEvent(d.event); setDonationOtherEvent(''); }
-        else { setDonationEvent('Other'); setDonationOtherEvent(d.event || ''); }
-        setCoGivers(Array.isArray(d.co_donors) ? d.co_donors : []);
-        setCoGiverSearch('');
-        setShowDonationModal(true);
-    };
-
-    const saveDonation = async () => {
-        // A donation can be money, a physical gift, or both — but not nothing.
-        const amount = donationAmount.trim() ? parseFloat(donationAmount) : 0;
-        const gift = donationGift.trim();
-        if (!donationDonor || isNaN(amount) || amount < 0) return;
-        if (!amount && !gift) return;
-        // A fund only matters for money — a gift-only entry needs no fund.
-        if (amount && !donationFundId) return;
-        const funds: FundItem[] = config?.registry?.items || [];
-        const fund = amount ? funds.find(f => f.id === donationFundId) : null;
-        if (amount && !fund) return;
-        const eventValue = donationEvent === 'Other' ? (donationOtherEvent.trim() || 'Other') : donationEvent;
-        setSavingDonation(true);
-        try {
-            // Build per-fund delta map (edit reverses the original first)
-            const delta: Record<string, number> = {};
-            if (editingDonationId && origDonation?.fund_item_id) {
-                delta[origDonation.fund_item_id] = (delta[origDonation.fund_item_id] || 0) - origDonation.amount;
-            }
-            if (fund) delta[fund.id] = (delta[fund.id] || 0) + amount;
-            await applyFundDeltas(delta);
-            // Write the donation row
-            const body = {
-                guest_id: donationDonor.id || null,
-                guest_name: donationDonor.guest_name,
-                amount,
-                gift: gift || null,
-                fund_item_id: fund?.id ?? null,
-                fund_item_title: fund?.title ?? null,
-                event: eventValue,
-                co_donors: coGivers,
-            };
-            if (editingDonationId) {
-                await fetch('/api/admin/donations', {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ...body, id: editingDonationId }),
-                });
-            } else {
-                await fetch('/api/admin/donations', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(body),
-                });
-            }
-            await fetchDonations();
-            await fetchConfig();
-            resetDonationModal();
-        } catch (e) {
-            console.error('Failed to save donation:', e);
-        } finally {
-            setSavingDonation(false);
-        }
-    };
-
-    // Fetch fresh config, apply per-fund funded deltas clamped to [0, price], POST it back.
-    const applyFundDeltas = async (delta: Record<string, number>) => {
-        const configRes = await fetch('/api/admin/site-config');
-        const freshConfig = await configRes.json();
-        const items: FundItem[] = (freshConfig.registry?.items || []).map((i: FundItem) => {
-            const d = delta[i.id];
-            if (!d) return i;
-            return { ...i, funded: Math.max(0, Math.min(i.price, i.funded + d)) };
-        });
-        // Only the registry key: posting the whole config back would overwrite
-        // anything another admin tab saved in the meantime.
-        await fetch('/api/admin/site-config', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ registry: { ...(freshConfig.registry || {}), items } }),
-        });
-    };
-
-    const toggleDonationSelection = (id: number) => {
-        setSelectedDonations(prev =>
-            prev.includes(id) ? prev.filter(dId => dId !== id) : [...prev, id]
-        );
-    };
-
-    const toggleSelectAllDonations = () => {
-        if (donations.length > 0 && selectedDonations.length === donations.length) {
-            setSelectedDonations([]);
-        } else {
-            setSelectedDonations(donations.map(d => d.id));
-        }
-    };
-
-    const setThankYouSent = async (sent: boolean) => {
-        if (selectedDonations.length === 0) return;
-        setMarkingThanks(true);
-        try {
-            await fetch('/api/admin/donations', {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ids: selectedDonations, thank_you_sent: sent }),
-            });
-            await fetchDonations();
-            setSelectedDonations([]);
-        } catch (e) {
-            console.error('Failed to update thank-you status:', e);
-        } finally {
-            setMarkingThanks(false);
-        }
-    };
-
-    const confirmDeleteDonation = async () => {
-        if (!deletingDonation) return;
-        setSavingDonation(true);
-        try {
-            if (deletingDonation.fund_item_id) {
-                await applyFundDeltas({ [deletingDonation.fund_item_id]: -deletingDonation.amount });
-            }
-            await fetch('/api/admin/donations', {
-                method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: deletingDonation.id }),
-            });
-            setSelectedDonations(prev => prev.filter(id => id !== deletingDonation.id));
-            await fetchDonations();
-            await fetchConfig();
-            setDeletingDonation(null);
-        } catch (e) {
-            console.error('Failed to delete donation:', e);
-        } finally {
-            setSavingDonation(false);
         }
     };
 
@@ -1081,24 +903,6 @@ export default function RSVPDashboard() {
         URL.revokeObjectURL(url);
     };
 
-    // People selectable as a donor / co-giver: every primary guest PLUS their
-    // plus-ones and party members (which are names nested on the guest row, not
-    // their own guest-list entries). id is null for non-primary people.
-    const donationPeople = guests.flatMap(g => {
-        const people: { id: number | null; name: string; key: string }[] = [
-            { id: g.id, name: g.guest_name, key: `g-${g.id}` },
-        ];
-        const seen = new Set([g.guest_name.trim().toLowerCase()]);
-        const addPerson = (raw: string | null | undefined, suffix: string) => {
-            const name = (raw || '').trim();
-            if (!name || seen.has(name.toLowerCase())) return;
-            seen.add(name.toLowerCase());
-            people.push({ id: null, name, key: `g-${g.id}-${suffix}` });
-        };
-        (g.party_members || []).forEach((m, i) => addPerson(m.name, `m${i}`));
-        addPerson(g.plus_one_name, 'plus');
-        return people;
-    });
 
     const donationTotalByGuestId = donations.reduce<Record<number, number>>((acc, d) => {
         if (d.guest_id != null) acc[d.guest_id] = (acc[d.guest_id] || 0) + d.amount;
@@ -1251,9 +1055,8 @@ export default function RSVPDashboard() {
                     <p className="text-gray-600">Track RSVPs and manage your guest list</p>
                 </div>
 
-                {/* Tab Buttons — equal columns on mobile. Four of them no longer fit
-                    on one phone row, so they wrap to two rather than shrink to
-                    illegibility or scroll sideways. */}
+                {/* Tab Buttons — equal columns on mobile; they wrap rather than
+                    shrink to illegibility or scroll sideways. */}
                 <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                     <button
                         onClick={() => setActiveTab('rsvps')}
@@ -1286,16 +1089,6 @@ export default function RSVPDashboard() {
                         }`}
                     >
                         Vendors
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('donations')}
-                        className={`flex-1 sm:flex-none min-w-0 px-3 sm:px-4 py-2 rounded-full text-sm sm:text-base font-medium text-center whitespace-nowrap transition-colors duration-300 shadow-md ${
-                            activeTab === 'donations'
-                                ? 'bg-accent text-white shadow-lg'
-                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300 hover:shadow-lg'
-                        }`}
-                    >
-                        Donations
                     </button>
                 </div>
             </div>
@@ -1911,291 +1704,6 @@ export default function RSVPDashboard() {
             {activeTab === 'vendors' && (
                 <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6">
                     <VendorsTab />
-                </div>
-            )}
-
-            {activeTab === 'donations' && (
-                <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
-                    <div className="px-6 py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3">
-                        <p className="text-sm text-gray-500">
-                            {donations.length} donation{donations.length === 1 ? '' : 's'} · Total ${donations.reduce((s, d) => s + d.amount, 0).toLocaleString()}
-                            {donations.filter(d => d.gift).length > 0 && ` · ${donations.filter(d => d.gift).length} gift${donations.filter(d => d.gift).length === 1 ? '' : 's'}`}
-                            {' · '}{donations.filter(d => d.thank_you_sent).length}/{donations.length} thanked
-                        </p>
-                        <div className="flex flex-wrap items-center gap-2">
-                            {selectedDonations.length > 0 && (
-                                <>
-                                    <span className="text-sm text-gray-600">{selectedDonations.length} selected</span>
-                                    <button
-                                        onClick={() => setThankYouSent(true)}
-                                        disabled={markingThanks}
-                                        className="bg-green-600 text-white px-4 py-2 rounded-full text-sm hover:bg-green-700 disabled:opacity-40 transition-all duration-300 shadow-md hover:shadow-lg"
-                                    >
-                                        {markingThanks ? 'Saving...' : 'Mark Thank You Sent'}
-                                    </button>
-                                    <button
-                                        onClick={() => setThankYouSent(false)}
-                                        disabled={markingThanks}
-                                        className="bg-gray-500 text-white px-4 py-2 rounded-full text-sm hover:bg-gray-600 disabled:opacity-40 transition-all duration-300 shadow-md hover:shadow-lg"
-                                    >
-                                        Unmark
-                                    </button>
-                                </>
-                            )}
-                            <button
-                                onClick={() => setShowDonationModal(true)}
-                                className="bg-accent text-white px-4 py-2.5 rounded-full text-sm font-medium hover:opacity-90"
-                            >
-                                + Log Donation
-                            </button>
-                        </div>
-                    </div>
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
-                                <tr>
-                                    <th className="w-10 px-6 py-3 text-left">
-                                        <input
-                                            type="checkbox"
-                                            checked={donations.length > 0 && selectedDonations.length === donations.length}
-                                            onChange={toggleSelectAllDonations}
-                                            className="rounded border-gray-300 text-accent focus:ring-accent"
-                                        />
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Guest</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Gift</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fund</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Event</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Thank You</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                                {donations.length === 0 ? (
-                                    <tr><td colSpan={9} className="px-6 py-8 text-center text-sm text-gray-400">No donations recorded yet.</td></tr>
-                                ) : donations.map(d => (
-                                    <tr key={d.id} className="hover:bg-gray-50">
-                                        <td className="px-6 py-4">
-                                            <input
-                                                type="checkbox"
-                                                checked={selectedDonations.includes(d.id)}
-                                                onChange={() => toggleDonationSelection(d.id)}
-                                                className="rounded border-gray-300 text-accent focus:ring-accent"
-                                            />
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
-                                            {[d.guest_name, ...((d.co_donors || []).map(c => c.name))].join(', ')}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{d.amount ? `$${d.amount.toLocaleString()}` : '-'}</td>
-                                        <td className="px-6 py-4 text-sm text-gray-500 max-w-[220px] truncate" title={d.gift || ''}>{d.gift || '-'}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{d.fund_item_title || '-'}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{d.event || '-'}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                            {d.thank_you_sent ? (
-                                                <span
-                                                    className="inline-flex items-center gap-1 bg-green-100 text-green-700 text-xs font-medium px-2.5 py-1 rounded-full"
-                                                    title={d.thank_you_sent_at ? `Sent ${new Date(d.thank_you_sent_at).toLocaleDateString()}` : undefined}
-                                                >
-                                                    ✓ Thank you sent
-                                                </span>
-                                            ) : (
-                                                <span className="inline-flex items-center bg-gray-100 text-gray-500 text-xs font-medium px-2.5 py-1 rounded-full">
-                                                    Not sent
-                                                </span>
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(d.created_at).toLocaleDateString()}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                                            <button onClick={() => openEditDonation(d)} className="text-accent hover:text-accent-dark mr-3">Edit</button>
-                                            <button onClick={() => setDeletingDonation(d)} className="text-red-600 hover:text-red-800">Delete</button>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            )}
-
-            {/* Log Donation Modal */}
-            <Drawer
-                open={showDonationModal}
-                onClose={resetDonationModal}
-                title={<h2 className="pt-1.5 text-lg font-bold text-gray-900">{editingDonationId ? 'Edit Donation' : 'Log a Donation'}</h2>}
-            >
-                {showDonationModal && (<>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Who donated?</label>
-                    {donationDonor ? (
-                        <div className="flex items-center justify-between border border-gray-200 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all mb-4">
-                            <span>{donationDonor.guest_name}</span>
-                            <button type="button" onClick={() => { setDonationDonor(null); setDonationDonorSearch(''); }} className="text-gray-400 hover:text-gray-600">✕</button>
-                        </div>
-                    ) : (
-                        <div className="mb-4">
-                            <input
-                                type="text"
-                                value={donationDonorSearch}
-                                onChange={e => setDonationDonorSearch(e.target.value)}
-                                placeholder="Search guest list..."
-                                className="w-full border border-gray-200 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
-                            />
-                            {donationDonorSearch.trim() && (
-                                <div className="mt-1 max-h-40 overflow-y-auto border border-gray-200 rounded-2xl">
-                                    {donationPeople
-                                        .filter(p => p.name.toLowerCase().includes(donationDonorSearch.toLowerCase()))
-                                        .slice(0, 8)
-                                        .map(p => (
-                                            <button
-                                                key={p.key}
-                                                type="button"
-                                                onClick={() => { setDonationDonor({ id: p.id ?? 0, guest_name: p.name }); setDonationDonorSearch(''); }}
-                                                className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-100"
-                                            >
-                                                {p.name}
-                                            </button>
-                                        ))}
-                                    {donationPeople.filter(p => p.name.toLowerCase().includes(donationDonorSearch.toLowerCase())).length === 0 && (
-                                        <p className="px-3 py-2 text-sm text-gray-400">No matching guest</p>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Co-givers (optional)</label>
-                    {coGivers.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mb-2">
-                            {coGivers.map(c => (
-                                <span key={c.name} className="inline-flex items-center gap-1 bg-gray-100 rounded-full px-2 py-1 text-xs">
-                                    {c.name}
-                                    <button type="button" onClick={() => removeCoGiver(c.name)} className="text-gray-400 hover:text-gray-600">✕</button>
-                                </span>
-                            ))}
-                        </div>
-                    )}
-                    <input
-                        type="text"
-                        value={coGiverSearch}
-                        onChange={e => setCoGiverSearch(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter' && coGiverSearch.trim()) { e.preventDefault(); addCoGiver({ id: null, name: coGiverSearch }); } }}
-                        placeholder="Add a co-giver (type & Enter, or pick below)"
-                        className="w-full border border-gray-200 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all mb-4"
-                    />
-                    {coGiverSearch.trim() && (
-                        <div className="-mt-3 mb-4 max-h-32 overflow-y-auto border border-gray-200 rounded-2xl">
-                            {donationPeople
-                                .filter(p => p.name.toLowerCase().includes(coGiverSearch.toLowerCase()))
-                                .slice(0, 8)
-                                .map(p => (
-                                    <button key={p.key} type="button" onClick={() => addCoGiver({ id: p.id, name: p.name })}
-                                        className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-100">
-                                        {p.name}
-                                    </button>
-                                ))}
-                        </div>
-                    )}
-
-                    <p className="text-xs text-gray-400 mb-3">Log money, a gift, or both — at least one is required.</p>
-
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Amount received ($)</label>
-                    <input
-                        type="number"
-                        value={donationAmount}
-                        onChange={e => setDonationAmount(e.target.value)}
-                        placeholder="Leave blank for a gift only"
-                        className="w-full border border-gray-200 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all mb-4"
-                    />
-
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Gift</label>
-                    <input
-                        type="text"
-                        value={donationGift}
-                        onChange={e => setDonationGift(e.target.value)}
-                        placeholder="e.g. Stand mixer, hand-made quilt"
-                        className="w-full border border-gray-200 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all mb-4"
-                    />
-
-                    {/* A fund only applies to money — a gift-only entry has nothing to allocate. */}
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Fund {donationAmount.trim() ? '' : <span className="text-gray-400 font-normal">(money only)</span>}
-                    </label>
-                    <select
-                        value={donationFundId}
-                        onChange={e => setDonationFundId(e.target.value)}
-                        disabled={!donationAmount.trim()}
-                        className="w-full border border-gray-200 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all mb-4 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        <option value="">Select a fund...</option>
-                        {(config?.registry?.items || []).map((f: FundItem) => (
-                            <option key={f.id} value={f.id}>{f.title}</option>
-                        ))}
-                    </select>
-
-                    <label className="block text-sm font-medium text-gray-700 mb-1">From what event?</label>
-                    <select
-                        value={donationEvent}
-                        onChange={e => setDonationEvent(e.target.value)}
-                        className="w-full border border-gray-200 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all mb-3"
-                    >
-                        <option>Bridal Shower</option>
-                        <option>Engagement Party</option>
-                        <option>Wedding Day</option>
-                        <option>Other</option>
-                    </select>
-                    {donationEvent === 'Other' && (
-                        <input
-                            type="text"
-                            value={donationOtherEvent}
-                            onChange={e => setDonationOtherEvent(e.target.value)}
-                            placeholder="Name the event"
-                            className="w-full border border-gray-200 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all mb-4"
-                        />
-                    )}
-
-                    <div className="flex gap-2 mt-2">
-                        <button
-                            onClick={saveDonation}
-                            disabled={
-                                savingDonation || !donationDonor ||
-                                (!donationAmount.trim() && !donationGift.trim()) ||
-                                (!!donationAmount.trim() && !donationFundId)
-                            }
-                            className="flex-1 bg-accent text-white py-2.5 rounded-full text-sm font-medium disabled:opacity-40"
-                        >
-                            {savingDonation ? 'Saving...' : 'Save'}
-                        </button>
-                        <button onClick={resetDonationModal} className="flex-1 bg-gray-100 text-gray-700 py-2.5 rounded-full text-sm">
-                            Cancel
-                        </button>
-                    </div>
-                </>)}
-            </Drawer>
-
-            {/* Delete Donation Modal */}
-            {deletingDonation && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setDeletingDonation(null)} />
-                    <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 z-10">
-                        <h2 className="text-lg font-bold text-gray-900 mb-2">Delete donation?</h2>
-                        <p className="text-sm text-gray-500 mb-4">
-                            {deletingDonation.guest_name} — {[
-                                deletingDonation.amount ? `$${deletingDonation.amount.toLocaleString()} toward ${deletingDonation.fund_item_title || 'a fund'}` : null,
-                                deletingDonation.gift ? `gift: ${deletingDonation.gift}` : null,
-                            ].filter(Boolean).join(' · ')}
-                            . {deletingDonation.amount ? 'This subtracts the amount from that fund’s progress and ' : 'This '}cannot be undone.
-                        </p>
-                        <div className="flex gap-2">
-                            <button onClick={confirmDeleteDonation} disabled={savingDonation}
-                                className="flex-1 bg-red-600 text-white py-2.5 rounded-full text-sm font-medium disabled:opacity-40">
-                                {savingDonation ? 'Deleting...' : 'Delete'}
-                            </button>
-                            <button onClick={() => setDeletingDonation(null)} className="flex-1 bg-gray-100 text-gray-700 py-2.5 rounded-full text-sm">
-                                Cancel
-                            </button>
-                        </div>
-                    </div>
                 </div>
             )}
 

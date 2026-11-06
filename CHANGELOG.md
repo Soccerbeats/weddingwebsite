@@ -11,6 +11,20 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.10.35 — [Released] Gifts: a thank-you tracker under Finances (`main`, 2026-11-06 19:29)
+
+### Added
+- **Finances → Gifts**: every card, check, cash gift, digital payment and present in one place. At the top: the total received, a bar splitting it into digital, cash and check, and a ring showing how many thank-you notes are sent, with a "Show who to thank" shortcut.
+- Each gift records **how it came**: *Digital*, or *In a card* with *Cash* or *Check* inside. Filter by any of them, by money or presents, by event and by fund, search by name or gift, and sort by date, amount, name, how it came, or "still to thank first" (oldest waiting at the top). Click a column heading to sort by it.
+- **Press Enter anywhere on the tab** to log a gift: the cursor lands in the name. Type, press Enter to take the top match (or the name as typed, for someone not on the guest list), and the cursor moves to the amount; Enter again saves. "Save & add another" keeps the event for the next card.
+- One click on a gift's thank-you badge marks it sent (with the date) or not; select several to mark them together.
+- **CSV** downloads what is on screen, with each guest's address, ready for writing the notes.
+- On a phone, gifts are cards and the add button floats in the corner.
+
+### Changed
+- The Donations tab on the RSVPs page has moved here. Old links to it open Gifts, and the registry's "View gifts" button goes there too.
+- A money gift no longer has to go toward a registry fund. Choose one to count it toward that fund's progress, or leave it as "Not toward a fund".
+
 ## v0.10.34 — [Released] A place's panel knows its own name (`main`, 2026-11-01 05:50)
 
 ### Fixed

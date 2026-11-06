@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import BudgetTab from './BudgetTab';
 import ContributionsTab from './ContributionsTab';
+import GiftsTab from './GiftsTab';
 import OverviewTab from './OverviewTab';
 import PurchasesTab from './PurchasesTab';
 import ScheduleTab from './ScheduleTab';
@@ -17,6 +18,7 @@ const TABS = [
     { key: 'schedule', label: 'Schedule' },
     { key: 'purchases', label: 'Purchases' },
     { key: 'contributions', label: 'Gift Money' },
+    { key: 'gifts', label: 'Gifts' },
     { key: 'settings', label: 'Settings' },
 ] as const;
 
@@ -25,7 +27,22 @@ type TabKey = typeof TABS[number]['key'];
 export default function AdminFinancesPage() {
     const api = useFinances();
     const { data, loading, error, saving } = api;
-    const [tab, setTab] = useState<TabKey>('overview');
+    const [tab, setTabState] = useState<TabKey>('overview');
+
+    // `?tab=gifts` opens a tab directly (the registry links there), and the
+    // address follows the tab so a refresh lands back on it.
+    useEffect(() => {
+        const wanted = new URLSearchParams(window.location.search).get('tab');
+        const match = TABS.find((t) => t.key === wanted);
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        if (match) setTabState(match.key);
+    }, []);
+    const setTab = (next: TabKey) => {
+        setTabState(next);
+        const url = new URL(window.location.href);
+        if (next === 'overview') url.searchParams.delete('tab'); else url.searchParams.set('tab', next);
+        window.history.replaceState(window.history.state, '', url);
+    };
 
     if (loading) {
         return (
@@ -84,7 +101,8 @@ export default function AdminFinancesPage() {
                 </div>
             )}
 
-            <div className="my-3 flex gap-1 overflow-x-auto rounded-full border border-gray-200
+            {/* Passive to the Gifts tab's Enter-to-log: clicking a tab leaves focus here. */}
+            <div data-enter-passive className="my-3 flex gap-1 overflow-x-auto rounded-full border border-gray-200
                 bg-white p-1 print:hidden md:w-fit">
                 {TABS.map((t) => (
                     <button
@@ -112,6 +130,7 @@ export default function AdminFinancesPage() {
             {tab === 'schedule' && <ScheduleTab data={data} api={api} />}
             {tab === 'purchases' && <PurchasesTab data={data} api={api} />}
             {tab === 'contributions' && <ContributionsTab data={data} api={api} />}
+            {tab === 'gifts' && <GiftsTab />}
             {tab === 'settings' && <SettingsTab data={data} api={api} />}
 
             <UndoBar api={api} />

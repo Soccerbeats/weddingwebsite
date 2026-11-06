@@ -89,6 +89,9 @@ ALTER TABLE donations ADD COLUMN IF NOT EXISTS thank_you_sent BOOLEAN DEFAULT FA
 ALTER TABLE donations ADD COLUMN IF NOT EXISTS thank_you_sent_at TIMESTAMP;
 ALTER TABLE donations ALTER COLUMN amount SET DEFAULT 0;
 ALTER TABLE donations ALTER COLUMN amount DROP NOT NULL;
+-- How the money came: 'digital', or a card holding 'cash' or a 'check'. Null
+-- for a gift with no money and for rows that predate the column.
+ALTER TABLE donations ADD COLUMN IF NOT EXISTS method TEXT;
 
 -- One guest-list row per household name. The RSVP form and the CSV import both
 -- upsert on this. Guarded: an existing database with duplicate names must not

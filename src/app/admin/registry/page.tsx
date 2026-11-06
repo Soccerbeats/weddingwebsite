@@ -352,10 +352,10 @@ export default function AdminRegistryPage() {
                 <div className="flex items-center gap-4">
                     <SaveStatus state={state} onRetry={retry} />
                     <a
-                        href="/admin/rsvps?tab=donations"
+                        href="/admin/finances?tab=gifts"
                         className="px-4 py-2 rounded-xl text-sm font-medium bg-gray-200 text-gray-700 hover:bg-gray-300 shadow-md hover:shadow-lg transition-all duration-300"
                     >
-                        View donations →
+                        View gifts →
                     </a>
                     <a
                         href="/registry"
