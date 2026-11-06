@@ -131,28 +131,58 @@ export async function PUT(request: Request) {
   }
 }
 
-// Bulk-set the thank-you flag on the selected rows.
+/**
+ * Bulk edit the selected rows. Only the keys present in the body change:
+ *   thank_you_sent — boolean
+ *   method         — 'digital' | 'cash' | 'check' | null
+ *   event          — string | null
+ *   fund_item_id / fund_item_title — string | null
+ * How it came and the fund describe money, so they only land on rows that
+ * have an amount; a present-only row in the selection keeps neither.
+ */
 export async function PATCH(request: Request) {
   try {
     await ensureTable();
-    const { ids, thank_you_sent } = await request.json();
-    const cleanIds = (Array.isArray(ids) ? ids : []).map(Number).filter(n => Number.isInteger(n));
+    const body = await request.json();
+    const cleanIds = (Array.isArray(body.ids) ? body.ids : [])
+      .map(Number).filter((n: number) => Number.isInteger(n));
     if (cleanIds.length === 0) {
       return NextResponse.json({ error: 'ids must be a non-empty array' }, { status: 400 });
     }
-    const sent = thank_you_sent !== false;
+    const sets: string[] = [];
+    const params: unknown[] = [cleanIds];
+    const param = (v: unknown) => { params.push(v); return `$${params.length}`; };
+    if (typeof body.thank_you_sent === 'boolean') {
+      const p = param(body.thank_you_sent);
+      sets.push(`thank_you_sent = ${p}::boolean`,
+        `thank_you_sent_at = CASE WHEN ${p}::boolean THEN COALESCE(thank_you_sent_at, NOW()) ELSE NULL END`);
+    }
+    if ('method' in body) {
+      sets.push(`method = CASE WHEN COALESCE(amount, 0) > 0 THEN ${param(cleanMethod(body.method))}::text ELSE method END`);
+    }
+    if ('event' in body) {
+      const ev = typeof body.event === 'string' && body.event.trim() ? body.event.trim() : null;
+      sets.push(`event = ${param(ev)}::text`);
+    }
+    if ('fund_item_id' in body) {
+      const fid = typeof body.fund_item_id === 'string' && body.fund_item_id ? body.fund_item_id : null;
+      const title = fid && typeof body.fund_item_title === 'string' ? body.fund_item_title : null;
+      sets.push(`fund_item_id = CASE WHEN COALESCE(amount, 0) > 0 THEN ${param(fid)}::text ELSE fund_item_id END`,
+        `fund_item_title = CASE WHEN COALESCE(amount, 0) > 0 THEN ${param(title)}::text ELSE fund_item_title END`);
+    }
+    if (sets.length === 0) {
+      return NextResponse.json({ error: 'nothing to change' }, { status: 400 });
+    }
     const result = await pool.query(
-      `UPDATE donations
-       SET thank_you_sent = $1,
-           thank_you_sent_at = CASE WHEN $1 THEN COALESCE(thank_you_sent_at, NOW()) ELSE NULL END
-       WHERE id = ANY($2::int[])
+      `UPDATE donations SET ${sets.join(', ')}
+       WHERE id = ANY($1::int[])
        RETURNING ${RETURNING}`,
-      [sent, cleanIds]
+      params
     );
     return NextResponse.json({ success: true, updated: result.rowCount, rows: result.rows });
   } catch (error) {
-    console.error('Error updating thank-you status:', error);
-    return NextResponse.json({ error: 'Failed to update thank-you status' }, { status: 500 });
+    console.error('Error bulk-editing donations:', error);
+    return NextResponse.json({ error: 'Failed to update donations' }, { status: 500 });
   }
 }
 

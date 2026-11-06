@@ -227,6 +227,16 @@ interface Draft {
     orig: { amount: number; fund_item_id: string | null } | null;
 }
 
+/** The bulk editor: 'keep' on a field means the selection keeps its own values. */
+interface BulkDraft {
+    thanked: 'keep' | 'yes' | 'no';
+    method: 'keep' | GiftMethod | 'clear';
+    event: string;
+    otherEvent: string;
+    /** 'keep', '' for no fund, or a fund id. */
+    fund: string;
+}
+
 /** A new gift. The event carries over from the last one saved — a stack of cards is all one event. */
 function blankDraft(sticky?: Pick<Draft, 'event' | 'otherEvent'>): Draft {
     return {
@@ -381,6 +391,7 @@ export default function GiftsTab() {
     const [saving, setSaving] = useState(false);
     const [formError, setFormError] = useState('');
     const [deleting, setDeleting] = useState<Gift | null>(null);
+    const [bulk, setBulk] = useState<BulkDraft | null>(null);
     const [flash, setFlash] = useState('');
 
     const personRef = useRef<HTMLInputElement>(null);
@@ -541,7 +552,7 @@ export default function GiftsTab() {
     // real button or a drawer already open keeps Enter's usual meaning; the
     // tab bar and this tab's filter chips are marked passive, because clicking
     // "Gifts" leaves focus on that button and Enter would only click it again.
-    const formOpen = !!draft || !!deleting;
+    const formOpen = !!draft || !!deleting || !!bulk;
     useEffect(() => {
         if (formOpen) return;
         const onKey = (e: KeyboardEvent) => {
@@ -633,6 +644,47 @@ export default function GiftsTab() {
         }
     };
 
+    const openBulk = () => setBulk({ thanked: 'keep', method: 'keep', event: 'keep', otherEvent: '', fund: 'keep' });
+
+    const applyBulk = async () => {
+        if (!bulk || saving) return;
+        const ids = [...selected];
+        const patch: Record<string, unknown> = { ids };
+        if (bulk.thanked !== 'keep') patch.thank_you_sent = bulk.thanked === 'yes';
+        if (bulk.method !== 'keep') patch.method = bulk.method === 'clear' ? null : bulk.method;
+        if (bulk.event !== 'keep') patch.event = bulk.event === 'Other' ? (bulk.otherEvent.trim() || 'Other') : bulk.event;
+        const fund = bulk.fund !== 'keep' && bulk.fund ? funds.find((f) => f.id === bulk.fund) ?? null : null;
+        if (bulk.fund !== 'keep') { patch.fund_item_id = fund?.id ?? null; patch.fund_item_title = fund?.title ?? null; }
+        if (Object.keys(patch).length === 1) { setBulk(null); return; }
+        setSaving(true);
+        try {
+            const res = await fetch('/api/admin/donations', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(patch),
+            });
+            if (!res.ok) throw new Error();
+            // Moving money between funds moves each fund's progress with it.
+            if (bulk.fund !== 'keep') {
+                const delta: Record<string, number> = {};
+                for (const g of gifts) {
+                    if (!selected.has(g.id) || !g.amount) continue;
+                    if (g.fund_item_id) delta[g.fund_item_id] = (delta[g.fund_item_id] || 0) - g.amount;
+                    if (fund) delta[fund.id] = (delta[fund.id] || 0) + g.amount;
+                }
+                await applyFundDeltas(delta);
+            }
+            await Promise.all([loadGifts(), loadFunds()]);
+            setFlash(`Updated ${ids.length} gift${ids.length === 1 ? '' : 's'}`);
+            setBulk(null);
+            setSelected(new Set());
+        } catch {
+            setFlash('Couldn’t save that — try again');
+        } finally {
+            setSaving(false);
+        }
+    };
+
     const setThanked = async (ids: number[], sent: boolean) => {
         if (ids.length === 0) return;
         const now = new Date().toISOString();
@@ -701,11 +753,27 @@ export default function GiftsTab() {
 
     /* ---- selection */
     const allVisibleSelected = visible.length > 0 && visible.every((g) => selected.has(g.id));
-    const toggleOne = (id: number) => setSelected((s) => {
-        const n = new Set(s);
-        if (n.has(id)) n.delete(id); else n.add(id);
-        return n;
-    });
+    // Shift-click selects (or clears) everything between the last box you
+    // clicked and this one, in the order on screen — the clicked box decides
+    // which, so a shift-click can narrow a selection as well as widen it.
+    const anchor = useRef<number | null>(null);
+    const clickBox = (id: number, shift: boolean) => {
+        const at = visible.findIndex((g) => g.id === id);
+        const from = anchor.current == null ? -1 : visible.findIndex((g) => g.id === anchor.current);
+        setSelected((s) => {
+            const n = new Set(s);
+            const on = !s.has(id);
+            const [lo, hi] = shift && from >= 0 && at >= 0 ? [Math.min(from, at), Math.max(from, at)] : [at, at];
+            for (let i = lo; i <= hi; i++) {
+                const gid = visible[i]?.id ?? id;
+                if (on) n.add(gid); else n.delete(gid);
+            }
+            return n;
+        });
+        anchor.current = id;
+    };
+    // A shift-click would otherwise highlight the text of every row it crosses.
+    const noTextSelect = (e: React.MouseEvent) => { if (e.shiftKey) e.preventDefault(); };
     const toggleAll = () => setSelected(allVisibleSelected ? new Set() : new Set(visible.map((g) => g.id)));
     const headerSort = (asc: SortKey, desc: SortKey) => setSort(sort === desc ? asc : desc);
     const sortArrow = (asc: SortKey, desc: SortKey) => (sort === asc ? ' ↑' : sort === desc ? ' ↓' : '');
@@ -970,7 +1038,8 @@ export default function GiftsTab() {
                                         <tr key={g.id} onClick={() => openEdit(g)}
                                             className={`group cursor-pointer text-sm transition-colors ${isSel ? 'bg-accent/5' : 'hover:bg-gray-50/80'}`}>
                                             <td className="py-3 pl-5" onClick={(e) => e.stopPropagation()}>
-                                                <input type="checkbox" checked={isSel} onChange={() => toggleOne(g.id)} aria-label={`Select ${g.guest_name}`}
+                                                <input type="checkbox" checked={isSel} readOnly onMouseDown={noTextSelect}
+                                                    onClick={(e) => clickBox(g.id, e.shiftKey)} aria-label={`Select ${g.guest_name}`}
                                                     className="size-4 rounded border-gray-300 text-accent focus:ring-accent" />
                                             </td>
                                             <td className="max-w-[16rem] px-3 py-3">
@@ -1015,7 +1084,8 @@ export default function GiftsTab() {
                                 const isSel = selected.has(g.id);
                                 return (
                                     <li key={g.id} className={`flex gap-3 px-4 py-3.5 ${isSel ? 'bg-accent/5' : ''}`}>
-                                        <input type="checkbox" checked={isSel} onChange={() => toggleOne(g.id)} aria-label={`Select ${g.guest_name}`}
+                                        <input type="checkbox" checked={isSel} readOnly onMouseDown={noTextSelect}
+                                            onClick={(e) => clickBox(g.id, e.shiftKey)} aria-label={`Select ${g.guest_name}`}
                                             className="mt-1 size-5 shrink-0 rounded border-gray-300 text-accent focus:ring-accent" />
                                         <button type="button" onClick={() => openEdit(g)} className="min-w-0 flex-1 text-left">
                                             <div className="flex items-baseline justify-between gap-3">
@@ -1050,8 +1120,12 @@ export default function GiftsTab() {
                 <div className="fixed inset-x-0 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-30 flex justify-center px-4">
                     <div className="flex items-center gap-1.5 rounded-full border border-white/10 bg-gray-900/90 p-1.5 pl-4 text-sm text-white shadow-2xl backdrop-blur-md">
                         <span className="mr-1 tabular-nums">{selected.size} selected</span>
+                        <button type="button" onClick={openBulk}
+                            className="inline-flex h-9 items-center gap-1.5 rounded-full bg-accent px-4 text-sm font-medium text-white hover:opacity-90">
+                            <Icon name="pen" className="size-3.5" /> Edit
+                        </button>
                         <button type="button" onClick={() => { setThanked([...selected], true); setSelected(new Set()); }}
-                            className="h-9 rounded-full bg-white px-4 text-sm font-medium text-gray-900 hover:bg-gray-100">
+                            className="h-9 whitespace-nowrap rounded-full bg-white px-4 text-sm font-medium text-gray-900 hover:bg-gray-100">
                             Mark thanked
                         </button>
                         <button type="button" onClick={() => { setThanked([...selected], false); setSelected(new Set()); }}
@@ -1293,6 +1367,114 @@ export default function GiftsTab() {
                         </div>
                     </form>
                 )}
+            </Drawer>
+
+            {/* ------------------------------------------------ bulk edit */}
+            <Drawer
+                open={!!bulk}
+                onClose={() => setBulk(null)}
+                title={
+                    <div>
+                        <h2 className="pt-1.5 text-lg font-semibold text-gray-900">Edit {selected.size} gift{selected.size === 1 ? '' : 's'}</h2>
+                        <p className="text-xs text-gray-400">Only what you change is changed — everything else stays as it is.</p>
+                    </div>
+                }
+            >
+                {bulk && (() => {
+                    const sel = gifts.filter((g) => selected.has(g.id));
+                    const same = <T,>(f: (g: Gift) => T) => (sel.length && sel.every((g) => f(g) === f(sel[0])) ? f(sel[0]) : undefined);
+                    const now = (v: string | undefined) => (v === undefined ? 'mixed now' : `all ${v} now`);
+                    const noMoney = sel.filter((g) => !g.amount).length;
+                    const methodNow = same((g) => methodOf(g));
+                    const eventNow = same((g) => g.event || '—');
+                    const fundNow = same((g) => g.fund_item_title || 'no fund');
+                    const thankedNow = same((g) => (g.thank_you_sent ? 'thanked' : 'to thank'));
+                    return (
+                        <form onSubmit={(e) => { e.preventDefault(); applyBulk(); }} className="space-y-5">
+                            <div>
+                                <Label hint={now(methodNow === undefined ? undefined : METHOD_META[methodNow].label.toLowerCase())}>How it came</Label>
+                                <Chips<BulkDraft['method']>
+                                    value={bulk.method}
+                                    onChange={(v) => setBulk((b) => b && { ...b, method: v ?? 'keep' })}
+                                    options={[
+                                        { value: 'keep', label: 'Leave as is' },
+                                        { value: 'digital', label: <><Icon name="digital" className="size-3.5" />Digital</> },
+                                        { value: 'cash', label: <><Icon name="cash" className="size-3.5" />Card · Cash</> },
+                                        { value: 'check', label: <><Icon name="check" className="size-3.5" />Card · Check</> },
+                                        { value: 'clear', label: 'Not recorded' },
+                                    ]}
+                                />
+                                {noMoney > 0 && bulk.method !== 'keep' && (
+                                    <p className="mt-1.5 text-[11px] text-gray-400">
+                                        {noMoney} present{noMoney === 1 ? '' : 's'} with no money keep{noMoney === 1 ? 's' : ''} {noMoney === 1 ? 'its' : 'their'} own.
+                                    </p>
+                                )}
+                            </div>
+
+                            <div>
+                                <Label hint={now(eventNow)}>Event</Label>
+                                <Chips<string>
+                                    value={bulk.event}
+                                    onChange={(v) => setBulk((b) => b && { ...b, event: v ?? 'keep' })}
+                                    options={['keep', ...EVENTS, 'Other'].map((e) => ({ value: e, label: e === 'keep' ? 'Leave as is' : e }))}
+                                />
+                                {bulk.event === 'Other' && (
+                                    <input type="text" value={bulk.otherEvent} placeholder="Name the event"
+                                        onChange={(e) => setBulk((b) => b && { ...b, otherEvent: e.target.value })}
+                                        className={`${FIELD} mt-2`} />
+                                )}
+                            </div>
+
+                            {funds.length > 0 && (
+                                <div>
+                                    <Label hint={now(fundNow)}>Toward a fund</Label>
+                                    <select value={bulk.fund} onChange={(e) => setBulk((b) => b && { ...b, fund: e.target.value })} className={FIELD}>
+                                        <option value="keep">Leave as is</option>
+                                        <option value="">Not toward a fund</option>
+                                        {funds.map((f) => <option key={f.id} value={f.id}>{f.emoji ? `${f.emoji} ` : ''}{f.title}</option>)}
+                                    </select>
+                                    {bulk.fund !== 'keep' && (
+                                        <p className="mt-1.5 text-[11px] text-gray-400">Each fund’s progress moves with the money.</p>
+                                    )}
+                                </div>
+                            )}
+
+                            <div>
+                                <Label hint={now(thankedNow)}>Thank-you note</Label>
+                                <Chips<BulkDraft['thanked']>
+                                    value={bulk.thanked}
+                                    onChange={(v) => setBulk((b) => b && { ...b, thanked: v ?? 'keep' })}
+                                    options={[
+                                        { value: 'keep', label: 'Leave as is' },
+                                        { value: 'yes', label: 'Sent' },
+                                        { value: 'no', label: 'Not sent yet' },
+                                    ]}
+                                />
+                            </div>
+
+                            <div className="rounded-2xl bg-gray-50 px-4 py-3">
+                                <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Editing</div>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {sel.slice(0, 12).map((g) => (
+                                        <span key={g.id} className="rounded-full bg-white px-2.5 py-1 text-xs text-gray-700 ring-1 ring-inset ring-gray-200">
+                                            {g.guest_name}{g.amount ? ` · ${money(g.amount)}` : ''}
+                                        </span>
+                                    ))}
+                                    {sel.length > 12 && <span className="px-1 py-1 text-xs text-gray-400">+{sel.length - 12} more</span>}
+                                </div>
+                            </div>
+
+                            <div className="sticky bottom-0 -mx-4 flex items-center justify-end gap-2 border-t border-gray-100 bg-white/90 px-4 pb-1 pt-3 backdrop-blur md:-mx-5 md:px-5">
+                                <button type="button" onClick={() => setBulk(null)}
+                                    className="h-10 rounded-full px-4 text-sm text-gray-500 hover:bg-gray-100">Cancel</button>
+                                <button type="submit" disabled={saving}
+                                    className="h-10 rounded-full bg-accent px-6 text-sm font-medium text-white shadow-sm shadow-accent/30 transition hover:opacity-90 active:scale-95 disabled:opacity-40">
+                                    {saving ? 'Saving…' : `Apply to ${sel.length}`}
+                                </button>
+                            </div>
+                        </form>
+                    );
+                })()}
             </Drawer>
 
             {/* Delete confirmations stay pop-ups (AGENTS.md, convention 8). */}

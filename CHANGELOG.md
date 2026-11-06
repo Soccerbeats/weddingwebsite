@@ -11,6 +11,13 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.10.36 — [Released] Gifts: shift-click a range, edit many at once (`main`, 2026-11-06 21:22)
+
+### Added
+- **Shift-click** a gift's checkbox to select everything between it and the last one you clicked. Shift-clicking a ticked box clears the range instead, so a selection can shrink as well as grow.
+- **Edit** in the bar at the bottom opens one panel for every selected gift: how it came, the event, the fund and the thank-you note. Each starts on "Leave as is", and only what you change is changed; each heading says whether the selection currently all matches or is mixed.
+- Moving money to a different fund in bulk moves each fund's progress with it. Presents with no money keep their own "how it came" and fund.
+
 ## v0.10.35 — [Released] Gifts: a thank-you tracker under Finances (`main`, 2026-11-06 19:29)
 
 ### Added
