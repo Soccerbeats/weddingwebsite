@@ -568,6 +568,26 @@ export default function GiftsTab() {
         return () => window.removeEventListener('keydown', onKey);
     }, [formOpen, openNew]);
 
+    /**
+     * What this person has already given, for the box beside the amount. Matches
+     * the household row, the name as giver, and the name as a co-giver; the gift
+     * being edited is left out, so its own amount is never counted twice.
+     */
+    const historyFor = (d: Draft) => {
+        if (!d.donor) return null;
+        const name = d.donor.name.trim().toLowerCase();
+        const prior = gifts.filter((g) => g.id !== d.id && (
+            (!!d.donor!.id && g.guest_id === d.donor!.id)
+            || g.guest_name.trim().toLowerCase() === name
+            || (g.co_donors || []).some((c) => c.name.trim().toLowerCase() === name)));
+        if (prior.length === 0) return null;
+        return {
+            gifts: prior,
+            money: prior.reduce((sum, g) => sum + (g.amount || 0), 0),
+            presents: prior.filter((g) => g.gift).length,
+        };
+    };
+
     /* ---- writes */
     const applyFundDeltas = async (delta: Record<string, number>) => {
         if (!Object.values(delta).some(Boolean)) return;
@@ -1221,20 +1241,61 @@ export default function GiftsTab() {
 
                         <div>
                             <Label hint="leave blank for a present only">Amount</Label>
-                            <div className="relative">
-                                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-lg text-gray-400">$</span>
-                                <input
-                                    ref={amountRef}
-                                    type="number"
-                                    inputMode="decimal"
-                                    min="0"
-                                    step="0.01"
-                                    value={draft.amount}
-                                    onChange={(e) => setDraft((d) => d && { ...d, amount: e.target.value })}
-                                    placeholder="0"
-                                    className={`${FIELD} h-14 pl-9 text-2xl font-semibold tabular-nums md:text-2xl`}
-                                />
-                            </div>
+                            {(() => {
+                                const past = historyFor(draft);
+                                const typed = Number(draft.amount) > 0 ? Number(draft.amount) : 0;
+                                return (
+                                    <div className="flex items-stretch gap-2">
+                                        <div className="relative min-w-0 flex-1">
+                                            <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-lg text-gray-400">$</span>
+                                            <input
+                                                ref={amountRef}
+                                                type="number"
+                                                inputMode="decimal"
+                                                min="0"
+                                                step="0.01"
+                                                value={draft.amount}
+                                                onChange={(e) => setDraft((d) => d && { ...d, amount: e.target.value })}
+                                                placeholder="0"
+                                                className={`${FIELD} h-full min-h-14 pl-9 text-2xl font-semibold tabular-nums md:text-2xl`}
+                                            />
+                                        </div>
+                                        {/* Already given: appears once a returning giver is picked, and the
+                                            total follows whatever is typed to its left. */}
+                                        {past && (
+                                            <div
+                                                aria-live="polite"
+                                                title={past.gifts.map((g) => [
+                                                    g.amount ? money(g.amount) : null, g.gift, g.event, shortDate(g.created_at),
+                                                ].filter(Boolean).join(' · ')).join('\n')}
+                                                className="flex w-[46%] max-w-[12.5rem] shrink-0 animate-[gifts-in_.25s_ease-out] flex-col justify-center
+                                                    rounded-2xl border border-accent/25 bg-accent/5 px-3.5 py-2"
+                                            >
+                                                <div className="flex items-baseline justify-between gap-2 text-[11px] text-gray-500">
+                                                    <span>Already given</span>
+                                                    <span className="tabular-nums">
+                                                        {past.gifts.length} gift{past.gifts.length === 1 ? '' : 's'}
+                                                    </span>
+                                                </div>
+                                                <div className="text-sm font-semibold tabular-nums text-gray-800">
+                                                    {past.money > 0 ? money(past.money) : '$0'}
+                                                    {past.presents > 0 && (
+                                                        <span className="ml-1 font-normal text-gray-500">
+                                                            + {past.presents} present{past.presents === 1 ? '' : 's'}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="mt-1 flex items-baseline justify-between gap-2 border-t border-accent/20 pt-1">
+                                                    <span className="text-[11px] font-semibold uppercase tracking-wide text-accent-dark">Total</span>
+                                                    <span className="text-lg font-semibold tabular-nums text-gray-900 transition-all">
+                                                        {money(past.money + typed)}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })()}
                         </div>
 
                         <div>

@@ -11,6 +11,11 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.10.37 — [Released] Gifts: see what someone has already given (`main`, 2026-11-06 21:30)
+
+### Added
+- When logging a gift, picking someone who already has gifts logged shows a box beside the amount: how much they have already given, how many gifts and presents that was, and a **Total** that updates as you type the new amount. It counts gifts they gave alone and ones they went in on with others. Hover it to see each earlier gift. Editing a gift leaves that gift out of "already given", so it is never counted twice.
+
 ## v0.10.36 — [Released] Gifts: shift-click a range, edit many at once (`main`, 2026-11-06 21:22)
 
 ### Added
