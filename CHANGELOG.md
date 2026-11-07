@@ -11,6 +11,16 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.10.51 — [Released] The admin menu fits the screen (`main`, 2026-11-07 15:14)
+
+### Changed
+- **The admin menu fits the window's height instead of scrolling.** Dashboard, RSVPs, Finances, Seating Chart and Honeymoon are always listed. When the rest will not fit, the menu first tightens its spacing, then folds **Settings**, then **Pages**, into one row each — hover or click it for its pages beside the menu, or tap it on a phone to open it in place. A folded row shows how many pages it holds, or the page you are on, highlighted. It re-fits as the window is resized, shows everything again as soon as there is room, and only scrolls on a very short window. The arrangement depends only on the height, so the menu never rearranges itself as you move between pages.
+- Touch screens never get the tighter spacing: a finger needs the full-height row, so they fold a group instead.
+- The submenus work from the keyboard: Enter opens one with the first page focused, the arrow keys move, Escape closes it.
+
+### Added
+- `npm run check:nav` — 21 checks on the fit rule (what is never folded, what folds first, tighter before folding, touch screens, and that a shorter window never shows more than a taller one). Runs in CI.
+
 ## v0.10.50 — [Released] A weekend schedule, a phone hero photo, the time on the home page, and fonts built in (`main`, 2026-11-07 04:00)
 
 The last of the ideas taken from forks of this project: flokaiser's schedule over several days, fnoren17's separate photo for phones, the wedding time beside the date, and Grigorii777's fonts that need no network and offline mode turned off for development.

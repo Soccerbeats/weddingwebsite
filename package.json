@@ -21,6 +21,7 @@
     "check:schedule": "npx --yes tsx scripts/verify-schedule.mts",
     "check:rsvp": "npx --yes tsx scripts/verify-rsvp.mts",
     "check:i18n": "npx --yes tsx scripts/verify-i18n.mts",
+    "check:nav": "npx --yes tsx scripts/verify-admin-nav.mts",
     "seed:honeymoon": "npx --yes tsx scripts/seed-honeymoon.mts",
     "check:types": "tsc --noEmit && tsc --noEmit -p tsconfig.scripts.json",
     "audit:finance": "npx --yes tsx scripts/audit-finance-logic.mts",

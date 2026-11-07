@@ -253,6 +253,12 @@ answers.
 | <img src="docs/images/admin-photos.jpg" alt="Photo management with drag-to-reorder, heart-to-publish and inline editing"> | <img src="docs/images/changelog.jpg" alt="The changelog viewer: a version nav on the left beside a reading pane of release cards"> |
 | Drag to reorder, heart to publish | Every release, read in the panel — see [Versions and the changelog](https://github.com/Soccerbeats/weddingwebsite/wiki/Versions-and-the-Changelog) |
 
+The menu down the left fits your window rather than scrolling. Dashboard, RSVPs,
+Finances, Seating Chart and Honeymoon are always there; on a shorter screen the
+menu tightens up, then folds **Settings** and then **Pages** into a single row
+each — hover or click one for its pages. Make the window taller and everything
+comes back.
+
 ### Seating, and the sheet for the caterer
 
 One plan, two views — a floor plan you drag people onto, or the same plan as a

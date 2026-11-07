@@ -46,7 +46,7 @@ docker compose -f docker/docker-compose.dev.yml up -d
 None need a network except `check:finance:db` (live database) and
 `check:finance:ui` (a browser), so they are cheap to run before a commit — and
 CI runs `check:types`, `lint`, `check:photos`, `check:finance`,
-`check:honeymoon`, `check:seating`, `check:schedule`, `check:rsvp`, `check:i18n` and `check:offline` on every push, so a red one blocks the
+`check:honeymoon`, `check:seating`, `check:schedule`, `check:rsvp`, `check:i18n`, `check:nav` and `check:offline` on every push, so a red one blocks the
 image:
 
 | Command | What it covers |
@@ -65,6 +65,7 @@ image:
 | `npm run audit:finance` | A deeper sweep over the finance logic |
 | `npm run check:seating` | 238 assertions with no database or browser: who takes a chair (a party member who declined takes none), seat-index allocation, moves, swaps, gathering a split party, auto-seating, the plan's own warnings, and the export — tallies, vendor plates, the grand total, the spreadsheet's columns, the one-page fit maths, and the floor plan drawing's geometry |
 | `npm run check:i18n` | 34 assertions with no browser: every language against English — the same keys, the same `{placeholders}`, no empty strings, every plural form the language's rules need — plus filling, plurals (1 гость / 3 гостя / 5 гостей), dates per language and the setting's fallback to English |
+| `npm run check:nav` | 21 assertions with no browser: the admin sidebar's fit-the-height rule — Dashboard and Planning never fold, tighter spacing before folding, Settings folds before Pages, no compact rows on touch, and a shorter window never shows more |
 | `npm run check:rsvp` | 55 assertions with no database or browser: the couple's own RSVP questions (what may be stored, which are asked, what counts as an answer, keeping answers the form did not show, required ones, the Questions tab's tallies, the templates), the entrée counts on the seating export, and the accent-insensitive name fold |
 | `npm run check:honeymoon` | 780 assertions with no database or network: where open drawers sit side by side, distances, date maths, URL parsing, the calendar grid, `.ics` output, search ranking, seed integrity, the trip-mode day resolution and the day as text to send, sunrise/sunset, OSM opening hours, the day timeline, time zones on legs, the budget, conflicts, imports/exports, markdown, the flight parser, and journeys (layovers, day placement, door-to-door time) |
 
@@ -497,6 +498,17 @@ order, before the commit:
   drift apart, and `check:seating` covers it. Every change goes through
   `POST /api/admin/seating/assign`, whose `{ deletes, seats }` shape applies a
   bulk move in one transaction.
+- **The admin sidebar fits its height** (v0.10.51) — `chooseNavLayout()` in
+  `src/lib/adminNavLayout.ts` (`check:nav`) picks the first rung that fits the
+  list's box: everything comfortable, everything compact (fine pointers only),
+  then fold `FOLD_ORDER` (Settings, then Pages) one at a time; Dashboard and
+  Planning are `pinned`. `AdminSidebar` re-asks on a `ResizeObserver` and **sizes
+  its rows from `DENSITY` with inline styles — never put a height class
+  (`h-11`, `space-y-1`, `mt-3`) back on a nav row, title or group**, or the
+  arithmetic and the screen drift apart and the list scrolls when it was meant to
+  fit. A new nav item or group needs nothing else: its shape comes from
+  `NAV_GROUPS`. A folded group opens a menu beside the rail on a desktop (a menu,
+  not a panel — it is not a `Drawer`) and in place on a phone.
 - **The schedule's days** (v0.10.50) — an event's optional `date`
   (`YYYY-MM-DD`); **absent means the wedding day** (the date parsed from
   `site.json` → `weddingDate` by `weddingIsoDate()`), so every older row stays
