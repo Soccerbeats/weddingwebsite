@@ -8,7 +8,6 @@ import {
     type DietCode, type ExportOptions, type ExportPerson, type ExportTable, type ExportVendor,
     type PlanBox, type PlanPoint, type SeatingExportData,
 } from '@/lib/seatingExport';
-import { MIN_CHIP_WIDTH } from '@/lib/tableLayout';
 
 /**
  * The menu's dishes when the sheet counts entrées, else null. A context rather
@@ -429,21 +428,17 @@ function SheetHeader({ data, subtitle }: { data: SeatingExportData; subtitle: st
     );
 }
 
-/**
- * A name at a chair, the way the canvas draws one. `maxWidth` keeps a crowded
- * table's names off each other — the table keeps its size, so they shorten.
- */
-function PlanChip({ person, number, maxWidth }: { person: ExportPerson; number?: number; maxWidth?: number }) {
+/** A name at a chair, the way the canvas draws one. */
+function PlanChip({ person, number }: { person: ExportPerson; number?: number }) {
     const declined = person.rsvp_status === 'declined';
     return (
         <span
             className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border bg-white text-[11px] font-medium whitespace-nowrap leading-4 ${
                 declined ? 'border-gray-300 text-gray-400 line-through' : 'border-gray-400 text-gray-800'
             }`}
-            style={maxWidth ? { maxWidth } : undefined}
         >
             {number !== undefined && <span className="font-mono text-[9px] text-gray-400">{number}</span>}
-            <span className="min-w-0 truncate">{person.name}</span>
+            {person.name}
         </span>
     );
 }
@@ -516,9 +511,7 @@ function PlanDrawing({ tables, room, bounds, scale, numbered = false, textScale 
                                     className="absolute"
                                     style={{ left: pt.x + ox, top: pt.y + oy, transform: `translate(-50%, -50%) scale(${chipZoom})` }}
                                 >
-                                    {/* The chip is scaled by chipZoom, so its width is divided by it to fit the chair's share. */}
-                                    <PlanChip person={table.people[i]} number={numbered ? i + 1 : undefined}
-                                        maxWidth={Math.max(MIN_CHIP_WIDTH, g.chipWidth / chipZoom)} />
+                                    <PlanChip person={table.people[i]} number={numbered ? i + 1 : undefined} />
                                 </div>
                             ))}
                         </div>

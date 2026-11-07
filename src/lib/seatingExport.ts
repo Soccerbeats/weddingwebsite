@@ -8,7 +8,7 @@
  * the same people again, one per row. Covered by `npm run check:seating`.
  */
 
-import { tableLayout, type TableSize } from './tableLayout';
+import { tableLayout } from './tableLayout';
 import {
     ALL_DIET_CODES, DIET_CODES, DIET_LABELS, MEAL_CODES, dietCodes, dietNote,
     type DietCode, type DietaryEntry,
@@ -45,8 +45,6 @@ export interface ExportTable {
     y: number;
     /** Degrees clockwise; long tables only. */
     rotation?: number;
-    /** The size every table of this shape is drawn at (the plan's Table sizes). */
-    size?: TableSize;
     people: ExportPerson[];
 }
 
@@ -481,15 +479,13 @@ export interface TableGeometry {
     seats: PlanPoint[];
     /** Everything the table draws, chairs and names included. */
     box: PlanBox;
-    /** How wide a name may be at this table, as on the canvas. */
-    chipWidth: number;
 }
 
 /** Where a table and its chairs land, in canvas coordinates — `tableLayout()`, moved to where the table sits. */
 export function tableGeometry(
-    table: Pick<ExportTable, 'table_type' | 'x' | 'y' | 'rotation' | 'size'> & { people: unknown[] },
+    table: Pick<ExportTable, 'table_type' | 'x' | 'y' | 'rotation'> & { people: unknown[] },
 ): TableGeometry {
-    const l = tableLayout(table.table_type, table.people.length, table.rotation ?? 0, table.size);
+    const l = tableLayout(table.table_type, table.people.length, table.rotation ?? 0);
     const at = (p: PlanPoint) => ({ x: p.x + table.x, y: p.y + table.y });
     return {
         shape: l.shape === 'round' ? 'round' : 'rect',
@@ -497,13 +493,12 @@ export function tableGeometry(
         rotation: l.rotation,
         seats: l.seats.map(at),
         box: { minX: l.box.minX + table.x, maxX: l.box.maxX + table.x, minY: l.box.minY + table.y, maxY: l.box.maxY + table.y },
-        chipWidth: l.chipWidth,
     };
 }
 
 /** The box around the room outline and every table on it, with a margin. */
 export function planBounds(
-    tables: (Pick<ExportTable, 'table_type' | 'x' | 'y' | 'rotation' | 'size'> & { people: unknown[] })[],
+    tables: (Pick<ExportTable, 'table_type' | 'x' | 'y' | 'rotation'> & { people: unknown[] })[],
     room: PlanPoint[] | null,
     margin = 24,
 ): PlanBox | null {
