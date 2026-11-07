@@ -7,6 +7,8 @@ import { demoStatus } from '@/lib/demo';
 import { getSiteConfig } from '@/lib/config';
 import { cookies } from 'next/headers';
 import { ADMIN_COOKIE, verifyAdminToken } from '@/lib/auth';
+import { I18nProvider } from '@/components/I18nProvider';
+import { getI18n } from '@/lib/i18n/server';
 
 // Force this layout to be dynamic so it re-reads config on every request
 export const dynamic = 'force-dynamic';
@@ -34,12 +36,13 @@ const geistMono = Geist_Mono({
 
 export async function generateMetadata(): Promise<Metadata> {
   const config = getSiteConfig();
+  const { m, fill } = getI18n();
   const couple = config.brideName && config.groomName
     ? `${config.brideName} & ${config.groomName}`
-    : 'Our Wedding';
+    : m.meta.ourWedding;
   return {
-    title: `${couple} | The Wedding`,
-    description: `Join us in celebrating our wedding on ${config.weddingDate}.`,
+    title: fill(m.meta.title, { couple }),
+    description: fill(m.meta.description, { date: config.weddingDate || '' }),
     // Linked explicitly because the manifest is a route handler now, not the
     // `app/manifest.ts` convention — that export gets no request and so could
     // only ever emit one variant. The admin layout overrides this.
@@ -86,6 +89,7 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const config = getSiteConfig();
+  const i18n = getI18n();
   const isAdmin = await getIsAdmin();
   const { demo: isDemo } = demoStatus();
 
@@ -95,7 +99,7 @@ export default async function RootLayout({
   // hydration — React logged a warning on every single admin page, which is
   // noise that hides real ones. The class is the only difference on this element.
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang={i18n.locale} suppressHydrationWarning>
       <head>
         {/*
           Next emits the standardised `mobile-web-app-capable`, but iOS before
@@ -133,6 +137,7 @@ export default async function RootLayout({
         }} />
         {/* Above everything, on every page: which instance this is. */}
         <DemoBanner />
+        <I18nProvider locale={i18n.locale} messages={i18n.m}>
         <AppShell
           isDemo={isDemo}
           brideName={config.brideName}
@@ -146,6 +151,7 @@ export default async function RootLayout({
         >
           {children}
         </AppShell>
+        </I18nProvider>
       </body>
     </html>
   );

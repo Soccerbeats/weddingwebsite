@@ -18,6 +18,10 @@
 </p>
 
 <p align="center">
+  <a href="#languages"><img src="https://img.shields.io/badge/Guest_site_in-English_·_Español_·_Deutsch_·_Svenska_·_Русский-D4AF37" alt="The guest site speaks English, Spanish, German, Swedish and Russian"></a>
+</p>
+
+<p align="center">
   <a href="https://weddingwebsitedemo.com">
     <img src="https://img.shields.io/badge/%F0%9F%8E%AD_Live_demo-weddingwebsitedemo.com-D4AF37?style=for-the-badge" alt="Live demo at weddingwebsitedemo.com" height="28">
   </a>
@@ -44,7 +48,10 @@
 
 **For guests** — a home page with a hero slideshow and a countdown, your story as
 a timeline, the wedding party, the day's schedule, a photo gallery, a registry with
-a honeymoon fund, and an RSVP form that recognises them by name.
+a honeymoon fund, and an RSVP form that recognises them by name (accents and all —
+"Noren" finds "Norén") where each person answers for themself and answers any
+questions you add. **In your guests' language: English, Spanish, German, Swedish
+or Russian** — see [Languages](#languages).
 
 **For you** — an admin panel covering:
 
@@ -101,6 +108,40 @@ optional and each feature says so in the UI when its variable is missing:
 - **[Installation](https://github.com/Soccerbeats/weddingwebsite/wiki/Installation)** — Portainer, plain Compose, or local
 - **[Deployment](https://github.com/Soccerbeats/weddingwebsite/wiki/Deployment)** — what a merge publishes, and how it reaches a running server on its own
 - **[The demo instance](https://github.com/Soccerbeats/weddingwebsite/wiki/The-Demo-Instance)** — how the read-only copy at [weddingwebsitedemo.com](https://weddingwebsitedemo.com) is put together, and how to host your own
+
+## Languages
+
+The guest-facing site speaks five languages:
+
+| | Language | |
+|---|---|---|
+| 🇬🇧 | **English** | the default |
+| 🇪🇸 | **Español** | Spanish |
+| 🇩🇪 | **Deutsch** | German |
+| 🇸🇪 | **Svenska** | Swedish |
+| 🇷🇺 | **Русский** | Russian |
+
+**To change it:** Admin → **Settings** → **Site language**, and pick one. It saves
+itself, and every guest sees the new language from their next page load.
+
+What changes:
+
+- every button, heading and label on the public pages
+- the RSVP form, from the name lookup to the confirmation
+- the emails guests receive: the RSVP link, and the confirmation with their answers
+- dates, written the language's own way ("1. Mai 2027", "1 мая 2027 г.")
+- counts, with each language's plural rules (Russian's four forms included)
+
+What stays as you wrote it: everything you type yourself — your names, your
+story, the FAQs, the schedule, the wedding party, the registry items and your
+RSVP questions. Write those in your guests' language. The admin panel stays in
+English.
+
+**Adding a language** is one file: copy `src/lib/i18n/en.ts` to a new file,
+translate the strings, and register it in `src/lib/i18n/locales.ts` and
+`src/lib/i18n/messages.ts`. TypeScript refuses to build until every message is
+there, and `npm run check:i18n` checks that every `{placeholder}` and every plural
+form the language needs made it across.
 
 ## Email (SMTP)
 

@@ -2,6 +2,8 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { photoSrc } from '@/lib/photoSrc';
+import { useI18n } from '@/components/I18nProvider';
+import { fill as i18nFill } from '@/lib/i18n';
 
 interface HeroCollapseProps {
   images: string[];
@@ -90,6 +92,7 @@ export default function HeroCollapse({
   children,
   interval = 5000,
 }: HeroCollapseProps) {
+  const hero = useI18n().m.hero;
   const srcs = images.length > 0 ? images : (fallbackImage ? [fallbackImage] : []);
 
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -888,7 +891,7 @@ export default function HeroCollapse({
           {srcs.map((src, i) => (
             <img key={src}
                  src={photoSrc(src, mobileHiRes ? 'xl' : 'large')}
-                 alt="Hero"
+                 alt={hero.photoAlt}
                  fetchPriority={i === 0 ? 'high' : 'low'}
                  className="absolute inset-0 w-full h-full object-cover"
                  style={{
@@ -940,7 +943,7 @@ export default function HeroCollapse({
         }}>
           <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
                         animation: 'hint-bounce 1.8s ease-in-out infinite' }}>
-            <span style={{ fontSize: '10px', letterSpacing: '3px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)' }}>scroll</span>
+            <span style={{ fontSize: '10px', letterSpacing: '3px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)' }}>{hero.scroll}</span>
             <span style={{ fontSize: '16px', color: 'rgba(255,255,255,0.4)' }}>↓</span>
           </div>
         </div>
@@ -952,7 +955,7 @@ export default function HeroCollapse({
         }}>
           <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
                         animation: 'hint-bounce 1.8s ease-in-out infinite' }}>
-            <span style={{ fontSize: '10px', letterSpacing: '3px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)' }}>scroll</span>
+            <span style={{ fontSize: '10px', letterSpacing: '3px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)' }}>{hero.scroll}</span>
             <span style={{ fontSize: '16px', color: 'rgba(255,255,255,0.4)' }}>↓</span>
           </div>
         </div>
@@ -1032,7 +1035,7 @@ export default function HeroCollapse({
           <div className="absolute inset-0 bg-gray-800 z-30 transition-opacity duration-700"
                style={{ opacity: firstReady ? 0 : 1, pointerEvents: 'none' }} />
           {srcs.map((src, i) => (
-            <img key={src} src={photoSrc(src, 'xl')} alt="Hero"
+            <img key={src} src={photoSrc(src, 'xl')} alt={hero.photoAlt}
                  fetchPriority={i === 0 ? 'high' : 'low'}
                  style={{
                    position: 'absolute', inset: 0,
@@ -1072,7 +1075,7 @@ export default function HeroCollapse({
                         setCurrentSlide(i);
                         setScatterIdxs(idxs => idxs.map(idx => idx === i ? prev : idx));
                       }}
-                      aria-label={`Slide ${i + 1}`}
+                      aria-label={i18nFill(hero.slide, { n: i + 1 })}
                       style={{
                         width: i === currentSlide ? '24px' : '10px', height: '10px',
                         borderRadius: '9999px', border: 'none', cursor: 'pointer', padding: 0,

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { describeWrite } from './outbox';
+import { useI18n } from '@/components/I18nProvider';
 import { REFRESHED_EVENT, checkForUpdates, dismissFailed, getServerState, getState, hasLive, inFrame, subscribe } from './offlineStore';
 
 /** "today 14:02", "yesterday 09:15", "Mon 5 Oct". */
@@ -145,6 +146,10 @@ function useFreshData(): { updated: boolean; signedOut: boolean } {
 export default function OfflineManager() {
     const online = useOnline();
     const offline = useOfflineState();
+    // Guests read these in the site's language; the admin panel stays English.
+    const guestWords = useI18n().m.offline;
+    const pathname = usePathname();
+    const isGuestPage = !(pathname ?? '').startsWith('/admin');
     const { updated, signedOut } = useFreshData();
     const [showFailed, setShowFailed] = useState(false);
     const wasOnline = useRef(online);
@@ -179,7 +184,18 @@ export default function OfflineManager() {
     if (online && !waiting && !failed && !updated && !signedOut) return null;
 
     let message: React.ReactNode;
-    if (!online) {
+    if (!online && isGuestPage && !waiting) {
+        message = <>{guestWords.offline}</>;
+    } else if (updated && isGuestPage && online && !waiting && !failed && !signedOut) {
+        message = (
+            <>
+                {guestWords.updated} ·{' '}
+                <button type="button" onClick={() => window.location.reload()} className="underline underline-offset-2">
+                    {guestWords.refresh}
+                </button>
+            </>
+        );
+    } else if (!online) {
         message = (
             <>
                 Offline

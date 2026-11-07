@@ -46,7 +46,7 @@ docker compose -f docker/docker-compose.dev.yml up -d
 None need a network except `check:finance:db` (live database) and
 `check:finance:ui` (a browser), so they are cheap to run before a commit — and
 CI runs `check:types`, `lint`, `check:photos`, `check:finance`,
-`check:honeymoon`, `check:seating`, `check:schedule`, `check:rsvp` and `check:offline` on every push, so a red one blocks the
+`check:honeymoon`, `check:seating`, `check:schedule`, `check:rsvp`, `check:i18n` and `check:offline` on every push, so a red one blocks the
 image:
 
 | Command | What it covers |
@@ -64,6 +64,7 @@ image:
 | `npm run check:hero` | The home page's hero collapse in a real browser, at five viewport-and-input pairings — phone portrait, **phone landscape**, tablet portrait, tablet landscape, desktop — each driven by the input that device actually sends. Needs a browser and a server whose site config has a hero photo, or every case reports the placeholder instead of a pass |
 | `npm run audit:finance` | A deeper sweep over the finance logic |
 | `npm run check:seating` | 238 assertions with no database or browser: who takes a chair (a party member who declined takes none), seat-index allocation, moves, swaps, gathering a split party, auto-seating, the plan's own warnings, and the export — tallies, vendor plates, the grand total, the spreadsheet's columns, the one-page fit maths, and the floor plan drawing's geometry |
+| `npm run check:i18n` | 34 assertions with no browser: every language against English — the same keys, the same `{placeholders}`, no empty strings, every plural form the language's rules need — plus filling, plurals (1 гость / 3 гостя / 5 гостей), dates per language and the setting's fallback to English |
 | `npm run check:rsvp` | 55 assertions with no database or browser: the couple's own RSVP questions (what may be stored, which are asked, what counts as an answer, keeping answers the form did not show, required ones, the Questions tab's tallies, the templates), the entrée counts on the seating export, and the accent-insensitive name fold |
 | `npm run check:honeymoon` | 780 assertions with no database or network: where open drawers sit side by side, distances, date maths, URL parsing, the calendar grid, `.ics` output, search ranking, seed integrity, the trip-mode day resolution and the day as text to send, sunrise/sunset, OSM opening hours, the day timeline, time zones on legs, the budget, conflicts, imports/exports, markdown, the flight parser, and journeys (layovers, day placement, door-to-door time) |
 
@@ -492,6 +493,18 @@ order, before the commit:
   drift apart, and `check:seating` covers it. Every change goes through
   `POST /api/admin/seating/assign`, whose `{ deletes, seats }` shape applies a
   bulk move in one transaction.
+- **Languages** (v0.10.49) — the guest-facing site speaks English (default),
+  Spanish, German, Swedish and Russian; the couple picks one in Settings
+  (`site.json` → `siteLanguage`, checked by `resolveLocale()` on write). **Never
+  type guest-visible English into a public page or component** — add a key to
+  `src/lib/i18n/en.ts` and to every other language (TypeScript and
+  `check:i18n` refuse a missing one or a dropped `{placeholder}`). Server code
+  reads `getI18n()` (`src/lib/i18n/server.ts`), client code `useI18n()`
+  (`src/components/I18nProvider.tsx`; the root layout passes down only the
+  chosen language). Counts go through `plural()` (Intl plural rules — Russian has
+  four forms) and dates through `date()`. The couple's own content is never
+  translated, and the admin panel stays English — including the offline banners
+  on admin pages.
 - **RSVP questions** (Admin → RSVPs → Questions, v0.10.45) — the couple's own
   questions, all logic in `src/lib/rsvpQuestions.ts` (`check:rsvp`), drawn by
   one `QuestionField` on the public form *and* in the builder's live preview.

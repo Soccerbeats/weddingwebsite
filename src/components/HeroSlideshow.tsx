@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { photoSrc, photoSrcSet } from '@/lib/photoSrc';
+import { useI18n } from '@/components/I18nProvider';
 
 interface HeroSlideshowProps {
   images: string[];
@@ -10,6 +11,7 @@ interface HeroSlideshowProps {
 }
 
 export default function HeroSlideshow({ images, interval = 5000, fallbackImage }: HeroSlideshowProps) {
+  const { m, fill } = useI18n();
   const [current, setCurrent] = useState(0);
   // firstReady: first image is decoded and can be shown
   const [firstReady, setFirstReady] = useState(false);
@@ -103,7 +105,7 @@ export default function HeroSlideshow({ images, interval = 5000, fallbackImage }
             src={photoSrc(src, 'xl')}
             srcSet={photoSrcSet(src)}
             sizes="100vw"
-            alt="Hero"
+            alt={m.hero.photoAlt}
             fetchPriority={i === 0 ? 'high' : 'low'}
             className="absolute inset-0 h-full w-full object-cover"
             style={{
@@ -122,7 +124,7 @@ export default function HeroSlideshow({ images, interval = 5000, fallbackImage }
             <button
               key={i}
               onClick={() => goTo(i)}
-              aria-label={`Go to slide ${i + 1}`}
+              aria-label={fill(m.hero.slide, { n: i + 1 })}
               className="rounded-full focus:outline-none transition-all duration-300"
               style={{
                 width: i === current ? '24px' : '10px',

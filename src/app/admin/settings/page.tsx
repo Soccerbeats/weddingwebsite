@@ -6,6 +6,7 @@ import { AutosaveHeader, useAutosave } from '@/components/admin/useAutosave';
 import { DEFAULT_ROOM_BLOCK_MESSAGE } from '@/lib/roomBlock';
 import { effectiveRsvpMode, type RsvpModeSetting } from '@/lib/rsvpMode';
 import DrawerModeSetting from '@/components/admin/DrawerModeSetting';
+import { LOCALES, type Locale } from '@/lib/i18n/locales';
 
 const RSVP_MODE_LABEL: Record<'link' | 'verify' | 'simple', string> = {
     link: 'Email link',
@@ -29,6 +30,7 @@ export default function AdminSettings() {
         countdownMode: 'full',
         logoMode: false,
         rsvpMode: 'auto',
+        siteLanguage: 'en',
     });
     const [loaded, setLoaded] = useState(false);
 
@@ -191,6 +193,35 @@ export default function AdminSettings() {
                         onChange={(e) => setConfig({ ...config, weddingLocation: e.target.value })}
                         className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border"
                     />
+                </div>
+
+                {/* The guest-facing site's language. */}
+                <div className="pt-6 border-t border-gray-100">
+                    <h2 className="text-xl font-semibold text-gray-900 mb-1">Site language</h2>
+                    <p className="text-sm text-gray-500 mb-4">
+                        The language your guests see the website in — buttons, the RSVP form, emails and dates.
+                        Everything you write yourself (your story, FAQs, schedule, questions) shows exactly as you wrote it,
+                        and the admin panel stays in English.
+                    </p>
+                    <div role="radiogroup" aria-label="Site language" className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                        {(Object.keys(LOCALES) as Locale[]).map(code => {
+                            const on = (config.siteLanguage || 'en') === code;
+                            return (
+                                <button
+                                    key={code}
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={on}
+                                    onClick={() => setConfig(prev => ({ ...prev, siteLanguage: code }))}
+                                    className={`rounded-2xl border px-3 py-3 text-left transition-all ${
+                                        on ? 'border-accent bg-accent/5 shadow-sm' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'}`}
+                                >
+                                    <span className={`block text-sm font-semibold ${on ? 'text-gray-900' : 'text-gray-700'}`}>{LOCALES[code].native}</span>
+                                    <span className="block text-xs text-gray-500">{LOCALES[code].name}{code === 'en' ? ' · default' : ''}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
                 </div>
 
                 {/* How the admin's panels open — this device only, so not autosaved with the rest. */}

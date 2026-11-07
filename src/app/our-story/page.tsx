@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import FadeIn from '@/components/FadeIn';
 import { photoSrc, photoSrcSet } from '@/lib/photoSrc';
+import { useI18n } from '@/components/I18nProvider';
 
 interface Milestone {
     id: number;
@@ -17,7 +18,11 @@ interface Milestone {
 export default function OurStoryPage() {
     const [milestones, setMilestones] = useState<Milestone[]>([]);
     const [bgColor, setBgColor] = useState('#ffffff');
-    const [timelineSubtitle, setTimelineSubtitle] = useState('The journey of our love');
+    const i18n = useI18n();
+    const story = i18n.m.ourStory;
+    // The couple's own subtitle, once loaded; the site's default until then.
+    const [customSubtitle, setTimelineSubtitle] = useState('');
+    const timelineSubtitle = customSubtitle || story.subtitle;
 
     useEffect(() => {
         // Fetch timeline data
@@ -48,13 +53,13 @@ export default function OurStoryPage() {
         const date = new Date(year, month - 1, day || 1);
 
         if (dateFormat === 'month-year') {
-            return date.toLocaleDateString('en-US', {
+            return date.toLocaleDateString(i18n.intl, {
                 year: 'numeric',
                 month: 'long'
             });
         }
 
-        return date.toLocaleDateString('en-US', {
+        return date.toLocaleDateString(i18n.intl, {
             year: 'numeric',
             month: 'long',
             day: 'numeric'
@@ -82,7 +87,7 @@ export default function OurStoryPage() {
             <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
                 <FadeIn animation="slide-up" className="text-center mb-12">
                     <h1 className="text-4xl font-serif text-gray-900 tracking-tight sm:text-5xl mb-4">
-                        Our Story
+                        {story.title}
                     </h1>
                     <p className="text-xl text-gray-500">
                         {timelineSubtitle}
@@ -170,7 +175,7 @@ export default function OurStoryPage() {
 
                 {milestones.length === 0 && (
                     <div className="text-center py-12">
-                        <p className="text-gray-500">No milestones have been added yet.</p>
+                        <p className="text-gray-500">{story.empty}</p>
                     </div>
                 )}
             </div>

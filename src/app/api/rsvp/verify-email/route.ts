@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
+import { getI18n } from '@/lib/i18n/server';
 import { matchHouseholdByName, matchedSeat, existingRsvpFor, buildVerifiedPayload } from '@/lib/rsvpHousehold';
 
-const INVALID = { error: "That doesn't match our records. Check the spelling, or use the email you gave us when you RSVP'd." };
+const invalid = () => ({ error: getI18n().m.api.emailMismatch });
 
 /**
  * 'verify' mode's second step: exchange a name and the email already on file
@@ -25,26 +26,26 @@ export async function POST(request: Request) {
         try {
             body = await request.json();
         } catch {
-            return NextResponse.json(INVALID, { status: 400 });
+            return NextResponse.json(invalid(), { status: 400 });
         }
         const b = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
         const name = typeof b.name === 'string' ? b.name.trim() : '';
         const email = typeof b.email === 'string' ? b.email.trim().toLowerCase() : '';
-        if (!name || !email) return NextResponse.json(INVALID, { status: 400 });
+        if (!name || !email) return NextResponse.json(invalid(), { status: 400 });
 
         const guest = await matchHouseholdByName(name);
-        if (!guest) return NextResponse.json(INVALID, { status: 400 });
+        if (!guest) return NextResponse.json(invalid(), { status: 400 });
 
         const existingRsvp = await existingRsvpFor(guest.guest_name);
         // Nothing on file: this route is only for confirming an existing RSVP.
-        if (!existingRsvp) return NextResponse.json(INVALID, { status: 400 });
+        if (!existingRsvp) return NextResponse.json(invalid(), { status: 400 });
 
         const onFile = (existingRsvp.email || '').trim().toLowerCase();
-        if (!onFile || onFile !== email) return NextResponse.json(INVALID, { status: 400 });
+        if (!onFile || onFile !== email) return NextResponse.json(invalid(), { status: 400 });
 
         return NextResponse.json(buildVerifiedPayload(guest, matchedSeat(guest, name), existingRsvp));
     } catch (error) {
         console.error('Error verifying RSVP by email:', error);
-        return NextResponse.json(INVALID, { status: 500 });
+        return NextResponse.json(invalid(), { status: 500 });
     }
 }

@@ -5,6 +5,7 @@ import { DEFAULT_SITE_CONFIG, getSiteConfig, updateSiteConfig, type SiteConfig }
 import { isDemoMode } from '@/lib/demo';
 import { publicScheduleEvents } from '@/lib/schedule';
 import { cleanQuestions } from '@/lib/rsvpQuestions';
+import { resolveLocale } from '@/lib/i18n/locales';
 
 const HEX = /^#[0-9a-fA-F]{3,8}$/;
 const COLOR_KEYS = ['accentColor', 'accentLightColor', 'accentDarkColor'] as const;
@@ -60,6 +61,7 @@ export async function POST(request: Request) {
         // The RSVP questions are read by the public form and validate guests'
         // answers, so only well-formed ones are stored.
         if ('rsvpQuestions' in updates) updates.rsvpQuestions = cleanQuestions(updates.rsvpQuestions);
+        if ('siteLanguage' in updates) updates.siteLanguage = resolveLocale(updates.siteLanguage);
 
         const newConfig = await updateSiteConfig((current) => {
             const { pageBgColors, ...rest } = updates;

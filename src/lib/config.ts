@@ -63,6 +63,8 @@ export interface SiteConfig {
     rsvpMode?: 'auto' | 'link' | 'verify' | 'simple';
     /** The couple's own RSVP questions (Admin → RSVPs → Questions). See `src/lib/rsvpQuestions.ts`. */
     rsvpQuestions?: RsvpQuestion[];
+    /** The guest-facing site's language (`src/lib/i18n/locales.ts`); English when unset. */
+    siteLanguage?: string;
     // Accommodations / room block (shown on RSVP confirmation)
     roomBlockHotel?: string;
     roomBlockUrl?: string;

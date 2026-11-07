@@ -11,6 +11,28 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.10.49 — [Released] The guest site speaks Spanish, German, Swedish and Russian (`main`, 2026-11-07 02:36)
+
+Four of the seven forks of this project translated the whole site by hand (into German, Swedish and Russian), so the language is now a setting. English stays the default. The fnoren17 fork's choice that the couple picks the language, not each visitor, is kept.
+
+### Added
+- **Admin → Settings → Site language**: **English** (the default), **Español**, **Deutsch**, **Svenska** or **Русский**. It saves itself, and every guest sees the new language from their next page load.
+- **What's translated:**
+  - every button, heading and label on the public pages (home, Our Story, wedding party, schedule, photos, registry, RSVP, work-in-progress), the menu, the footer, the countdown and the photo viewer
+  - the whole RSVP form, from the name lookup to the confirmation, including the messages the server sends back
+  - the emails guests receive (the RSVP link, and the confirmation with their answers) and your notification email
+  - the browser tab title, and the "offline" and "updated" notices on guest pages
+  - the default wording shown where you haven't written your own
+- **Dates are written the language's own way**: "May 1, 2027", "1. Mai 2027", "1 de mayo de 2027", "1 maj 2027", "1 мая 2027 г.".
+- **Counts follow each language's plural rules**, including Russian's four forms: 1 гость, 3 гостя, 5 гостей, 21 гость.
+- `<html lang>` follows the setting, so screen readers and the browser's translate offer know the page's language.
+- **The README has a Languages section**, with how to change the language and how to add one. Adding a language is one file, and TypeScript won't build until every message is translated.
+- `npm run check:i18n`: 34 checks, now run in CI. Every language is checked against English for the same keys, the same placeholders, no empty strings, and every plural form the language needs. The formatting helpers are checked too.
+
+### Changed
+- **Your own words are never translated**: names, your story, FAQs, the schedule, the wedding party, registry items and RSVP questions show exactly as you wrote them. The admin panel stays in English.
+- The email-link request now matches names the same accent-insensitive way as the rest of the RSVP lookup when it picks who to greet.
+
 ## v0.10.48 — [Released] Names — a person's full name is always shown, never cut off (`main`, 2026-11-07 02:23)
 
 ### Changed

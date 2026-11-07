@@ -1,3 +1,5 @@
+'use client';
+
 interface FooterProps {
     /** Unused for display, kept so the shell's props still type-check. */
     brideName?: string;
@@ -8,6 +10,7 @@ interface FooterProps {
 }
 
 import { parseDateParts } from '@/lib/weddingDate';
+import { useI18n } from '@/components/I18nProvider';
 
 export default function Footer({
     brideName = '',
@@ -18,6 +21,7 @@ export default function Footer({
     // The copyright year is the wedding's year, not a number typed into the
     // template in 2026.
     const year = parseDateParts(weddingDate)?.year ?? new Date().getFullYear();
+    const { m } = useI18n();
     const couple = brideName && groomName ? `${brideName} & ${groomName}` : '';
     const imageUrl = footerHeroImage
         ? `/api/photos/${footerHeroImage}`
@@ -35,7 +39,7 @@ export default function Footer({
                 </div>
                 <div className="mt-0 md:mt-0 md:order-1 w-full">
                     <p className="text-center text-base text-gray-900 font-serif">
-                        &copy; {year}{couple ? ` ${couple}.` : ''} We can&apos;t wait to celebrate with you!
+                        &copy; {year}{couple ? ` ${couple}.` : ''} {m.footer.tagline}
                     </p>
                 </div>
             </div>

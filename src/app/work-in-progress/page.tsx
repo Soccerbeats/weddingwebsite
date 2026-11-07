@@ -1,6 +1,9 @@
 import Link from 'next/link';
+import { getI18n } from '@/lib/i18n/server';
 
 export default function WorkInProgressPage() {
+  const { m } = getI18n();
+  const w = m.wip;
   return (
     <div className="min-h-screen bg-gradient-to-b from-primary/5 to-white flex items-center justify-center px-4">
       <div className="max-w-2xl text-center">
@@ -21,11 +24,11 @@ export default function WorkInProgressPage() {
         </div>
 
         <h1 className="text-4xl font-serif font-bold text-gray-900 mb-4">
-          We&apos;re Working on Something Special
+          {w.title}
         </h1>
 
         <p className="text-lg text-gray-600 mb-8">
-          This page is currently under construction. We&apos;re putting the finishing touches on it to make sure everything is perfect for your experience.
+          {w.body}
         </p>
 
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -33,13 +36,13 @@ export default function WorkInProgressPage() {
             href="/"
             className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-accent hover:bg-accent/90 transition-colors"
           >
-            Return to Home
+            {m.common.backHome}
           </Link>
         </div>
 
         <div className="mt-12 pt-8 border-t border-gray-200">
           <p className="text-sm text-gray-500">
-            Thank you for your patience as we prepare this content.
+            {w.thanks}
           </p>
         </div>
       </div>

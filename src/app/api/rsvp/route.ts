@@ -8,6 +8,7 @@ import { effectiveRsvpMode } from '@/lib/rsvpMode';
 import { existingRsvpFor } from '@/lib/rsvpHousehold';
 import { isPastWeddingDay } from '@/lib/weddingDate';
 import { cleanAnswers, formatAnswer, type Answers } from '@/lib/rsvpQuestions';
+import { getI18n } from '@/lib/i18n/server';
 
 interface RsvpInput {
     guestName: string;
@@ -33,16 +34,17 @@ interface RsvpInput {
  * attendance or a JSON-invalid string into the JSONB column.
  */
 function parseInput(body: unknown): RsvpInput | string {
-    if (!body || typeof body !== 'object') return 'Invalid request body';
+    const api = getI18n().m.api;
+    if (!body || typeof body !== 'object') return api.badRequest;
     const b = body as Record<string, unknown>;
     const guestName = typeof b.guestName === 'string' ? b.guestName.trim() : '';
     const email = typeof b.email === 'string' ? b.email.trim() : '';
     const phone = typeof b.phone === 'string' ? b.phone.trim() : '';
     if (!guestName || !email || !phone || typeof b.attending !== 'boolean') {
-        return 'Missing required fields';
+        return api.missingFields;
     }
-    if (guestName.length > 255 || email.length > 255 || phone.length > 50) return 'A field is too long';
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'That email address does not look right';
+    if (guestName.length > 255 || email.length > 255 || phone.length > 50) return api.tooLong;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return api.badEmail;
 
     const rawCount = Number(b.guestCount);
     const guestCount = Number.isInteger(rawCount) && rawCount >= 0 ? rawCount : (b.attending ? 1 : 0);
@@ -107,7 +109,7 @@ async function saveRsvp(input: RsvpInput): Promise<{ id: number; isUpdate: boole
         const guest = guestRow.rows[0];
         const maxParty = Number(guest.party_size) || 1;
         if (input.attending && input.guestCount > maxParty) {
-            throw Object.assign(new Error(`Party size exceeds maximum of ${maxParty}`), { status: 400 });
+            throw Object.assign(new Error(getI18n().fill(getI18n().m.api.partyTooBig, { n: maxParty })), { status: 400 });
         }
         const count = input.attending ? Math.max(1, input.guestCount) : 0;
 
@@ -246,7 +248,7 @@ function answerLines(input: RsvpInput): string[] {
         const parts = questions
             .filter((q) => q.scope === 'person' && person.answers?.[q.id] !== undefined)
             .map((q) => `${q.label}: ${formatAnswer(q, person.answers![q.id])}`);
-        if (parts.length) lines.push(`${person.name || 'Guest'} — ${parts.join(' · ')}`);
+        if (parts.length) lines.push(`${person.name || getI18n().m.email.guest} — ${parts.join(' · ')}`);
     }
     for (const q of questions) {
         const value = input.savedAnswers.household[q.id];
@@ -260,27 +262,36 @@ async function sendEmails(input: RsvpInput) {
     const couple = getCoupleName();
     try {
         const transporter = createTransporter();
+        const { m, fill } = getI18n();
+        const e = m.email;
         const answers = answerLines(input);
-        const answersText = answers.length ? `\n\nYour answers:\n${answers.map((l) => `- ${l}`).join('\n')}` : '';
+        const answersText = answers.length ? `\n\n${e.yourAnswers}:\n${answers.map((l) => `- ${l}`).join('\n')}` : '';
         const answersHtml = answers.length
-            ? `<p><strong>Your answers</strong></p><ul>${answers.map((l) => `<li>${escapeHtml(l)}</li>`).join('')}</ul>`
+            ? `<p><strong>${escapeHtml(e.yourAnswers)}</strong></p><ul>${answers.map((l) => `<li>${escapeHtml(l)}</li>`).join('')}</ul>`
             : '';
 
-        const status = input.attending ? 'Attending' : 'Not Attending';
+        const status = input.attending ? e.attending : e.notAttending;
         await transporter.sendMail({
             from: `"${couple.replace(/"/g, '')}" <${getMailFrom()}>`,
             to: input.email,
-            subject: 'We received your RSVP!',
-            text: `Hi ${input.guestName},\n\nThank you so much for RSVPing to our wedding. We have confirmed your response: ${status}.${answersText}\n\nWe can't wait to celebrate with you!\n\nBest,\n${couple}`,
-            html: `<h1>RSVP Confirmation</h1><p>Hi ${escapeHtml(input.guestName)},</p><p>Thank you so much for RSVPing to our wedding. We have confirmed your response: <strong>${status}</strong>.</p>${answersHtml}<p>Best,<br>${escapeHtml(couple)}</p>`,
+            subject: e.confirmSubject,
+            text: `${fill(e.hi, { name: input.guestName })}\n\n${fill(e.confirmBody, { status })}${answersText}\n\n${e.cantWait}\n\n${e.signOff}\n${couple}`,
+            html: `<h1>${escapeHtml(e.confirmHeading)}</h1><p>${escapeHtml(fill(e.hi, { name: input.guestName }))}</p><p>${escapeHtml(fill(e.confirmBody, { status: '\u0000' })).replace('\u0000', `<strong>${escapeHtml(status)}</strong>`)}</p>${answersHtml}<p>${escapeHtml(e.cantWait)}</p><p>${escapeHtml(e.signOff)}<br>${escapeHtml(couple)}</p>`,
         });
 
         if (process.env.NOTIFICATION_EMAIL) {
             await transporter.sendMail({
                 from: `"Wedding Bot" <${getMailFrom()}>`,
                 to: process.env.NOTIFICATION_EMAIL,
-                subject: `New RSVP from ${input.guestName}`,
-                text: `Name: ${input.guestName}\nAttending: ${input.attending ? 'Yes' : 'No'}\nGuests: ${input.attending ? input.guestCount : 0}\nEmail: ${input.email}\nPhone: ${input.phone}\nMessage: ${input.message ?? ''}${answers.length ? `\n\nAnswers:\n${answers.join('\n')}` : ''}`,
+                subject: fill(e.notifySubject, { name: input.guestName }),
+                text: [
+                    `${e.nName}: ${input.guestName}`,
+                    `${e.nAttending}: ${input.attending ? e.yes : e.no}`,
+                    `${e.nGuests}: ${input.attending ? input.guestCount : 0}`,
+                    `${e.nEmail}: ${input.email}`,
+                    `${e.nPhone}: ${input.phone}`,
+                    `${e.nMessage}: ${input.message ?? ''}`,
+                ].join('\n') + (answers.length ? `\n\n${e.nAnswers}:\n${answers.join('\n')}` : ''),
             });
         }
     } catch (emailError) {
@@ -307,7 +318,7 @@ async function handle(request: Request, method: 'POST' | 'PUT') {
     // only writing stops.
     if (isPastWeddingDay(getSiteConfig().weddingDate)) {
         return NextResponse.json(
-            { error: "RSVPs are closed — the wedding day has arrived. Please contact us directly if you need to make a change." },
+            { error: getI18n().m.api.closed },
             { status: 403 },
         );
     }
@@ -350,7 +361,7 @@ async function handle(request: Request, method: 'POST' | 'PUT') {
                     const link = await verifyRsvpLink(typeof record.token === 'string' ? record.token : null);
                     if (!link || link.guestListId !== household.id || !sameHousehold) {
                         return NextResponse.json(
-                            { error: 'This RSVP needs a valid link from your email. Ask for a fresh one on the RSVP page.' },
+                            { error: getI18n().m.api.needsLink },
                             { status: 403 }
                         );
                     }
@@ -360,7 +371,7 @@ async function handle(request: Request, method: 'POST' | 'PUT') {
                         const onFile = (existingRsvp.email || '').trim().toLowerCase();
                         if (!onFile || onFile !== input.email.trim().toLowerCase() || !sameHousehold) {
                             return NextResponse.json(
-                                { error: "That doesn't match our records. Go back and verify with the email on file, or ask us for help." },
+                                { error: getI18n().m.api.emailMismatchGoBack },
                                 { status: 403 }
                             );
                         }
@@ -376,7 +387,7 @@ async function handle(request: Request, method: 'POST' | 'PUT') {
         const status = (error as { status?: number }).status;
         if (status === 404) {
             return NextResponse.json(
-                { error: 'We could not find that name on the guest list. Please go back and check the spelling.' },
+                { error: getI18n().m.api.notOnListGoBack },
                 { status: 404 },
             );
         }

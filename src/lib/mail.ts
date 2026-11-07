@@ -1,3 +1,4 @@
+import { getI18n } from '@/lib/i18n/server';
 import nodemailer from 'nodemailer';
 import { getSiteConfig } from '@/lib/config';
 
@@ -101,12 +102,13 @@ export async function sendRsvpLinkMail(to: string, linkUrl: string): Promise<{ o
     if (!isMailConfigured()) return { ok: false, error: 'Email is not configured.' };
     try {
         const couple = getCoupleName();
+        const { m } = getI18n();
         const transporter = createTransporter();
         await transporter.sendMail({
             from: `"${couple.replace(/"/g, '')}" <${getMailFrom()}>`,
             to,
-            subject: 'Your RSVP link',
-            text: `Click the link below to RSVP for your party.\n\n${linkUrl}\n\n— ${couple}`,
+            subject: m.email.linkSubject,
+            text: `${m.email.linkBody}\n\n${linkUrl}\n\n— ${couple}`,
         });
         return { ok: true };
     } catch (error) {

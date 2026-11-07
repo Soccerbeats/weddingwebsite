@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { foldName, foldNameSql } from '@/lib/names';
+import { getI18n } from '@/lib/i18n/server';
 import { isMailConfigured, sendRsvpLinkMail } from '@/lib/mail';
 import { signRsvpLink } from '@/lib/rsvpLink';
 
@@ -22,12 +23,12 @@ export async function POST(request: Request) {
         try {
             body = await request.json();
         } catch {
-            return NextResponse.json({ error: 'Please enter the name you would use to look up your RSVP.' }, { status: 400 });
+            return NextResponse.json({ error: getI18n().m.api.enterName }, { status: 400 });
         }
         const rawName = body && typeof body === 'object' ? (body as { name?: unknown }).name : null;
         const typedName = typeof rawName === 'string' ? rawName.trim() : '';
         if (!typedName || typedName.length > 255) {
-            return NextResponse.json({ error: 'Please enter the name you would use to look up your RSVP.' }, { status: 400 });
+            return NextResponse.json({ error: getI18n().m.api.enterName }, { status: 400 });
         }
 
         const normalized = foldName(typedName);
@@ -57,7 +58,7 @@ export async function POST(request: Request) {
 
         const generic = NextResponse.json({
             ok: true,
-            message: 'If that name is on our list, an RSVP link is on its way to the email we have for it.',
+            message: getI18n().m.api.linkSent,
         });
 
         if (guestResult.rows.length === 0) return generic;
@@ -65,12 +66,12 @@ export async function POST(request: Request) {
 
         // Who actually asked, in the stored spelling — the same logic as
         // `guest-verification`, so the link greets the right seat.
-        const isPrimary = (guest.guest_name || '').trim().toLowerCase() === normalized;
+        const isPrimary = foldName(guest.guest_name) === normalized;
         const members = Array.isArray(guest.party_members) ? guest.party_members : [];
         const matchedMember = members.find(
-            (m: { name?: string | null }) => (m?.name || '').trim().toLowerCase() === normalized
+            (m: { name?: string | null }) => foldName(m?.name) === normalized
         );
-        const matchedPlusOne = (guest.plus_one_name || '').trim().toLowerCase() === normalized
+        const matchedPlusOne = foldName(guest.plus_one_name) === normalized
             ? guest.plus_one_name
             : null;
         const matchedName = isPrimary
@@ -98,7 +99,7 @@ export async function POST(request: Request) {
         // used to tell what is on the list, in any state.
         return NextResponse.json({
             ok: true,
-            message: 'If that name is on our list, an RSVP link is on its way to the email we have for it.',
+            message: getI18n().m.api.linkSent,
         });
     }
 }

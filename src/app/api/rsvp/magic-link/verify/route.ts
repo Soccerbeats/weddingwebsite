@@ -1,3 +1,4 @@
+import { getI18n } from '@/lib/i18n/server';
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { getSiteConfig } from '@/lib/config';
@@ -29,7 +30,7 @@ export async function POST(request: Request) {
 
         const link = await verifyRsvpLink(token);
         const invalid = NextResponse.json(
-            { error: 'That link is not valid, or it has expired. You can ask for a new one from the RSVP page.' },
+            { error: getI18n().m.api.linkInvalid },
             { status: 400 }
         );
         if (!link) return invalid;
@@ -89,7 +90,7 @@ export async function POST(request: Request) {
     } catch (error) {
         console.error('Error verifying RSVP link:', error);
         return NextResponse.json(
-            { error: 'That link is not valid, or it has expired. You can ask for a new one from the RSVP page.' },
+            { error: getI18n().m.api.linkInvalid },
             { status: 500 }
         );
     }

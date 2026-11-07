@@ -1,10 +1,12 @@
 import Link from 'next/link';
 import { getSiteConfig } from '@/lib/config';
+import { getI18n } from '@/lib/i18n/server';
 import { publicScheduleEvents, sortByTime } from '@/lib/schedule';
 import FadeIn from '@/components/FadeIn';
 
 export default function SchedulePage() {
     const config = getSiteConfig();
+    const { m } = getI18n();
     // The admin schedule is the whole run of the day — vendor call times, hair
     // and makeup, breakdown — and only the rows ticked "public" belong here.
     // Sorted here as well as in the editor: the timeline reads by the clock even
@@ -16,9 +18,9 @@ export default function SchedulePage() {
         : [
             {
                 time: config.weddingTime || '4:00 PM',
-                title: 'Ceremony',
-                description: 'We say "I do"!',
-                location: 'Main Venue'
+                title: m.schedule.defaultTitle,
+                description: m.schedule.defaultDescription,
+                location: m.schedule.defaultLocation
             }
         ];
     const bgColor = config.pageBgColors?.schedule || '#ffffff';
@@ -30,7 +32,7 @@ export default function SchedulePage() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <FadeIn animation="slide-up" className="text-center mb-16">
                     <h1 className="text-4xl font-serif text-gray-900 tracking-tight sm:text-5xl">
-                        Schedule of Events
+                        {m.schedule.title}
                     </h1>
                     <p className="mt-4 text-xl text-gray-500 italic font-serif">
                         {config.weddingDate}
@@ -41,20 +43,20 @@ export default function SchedulePage() {
                             href="/rsvp"
                             className="px-8 py-3 bg-accent text-white hover:bg-accent-dark transition-colors rounded-full uppercase tracking-widest text-sm font-bold shadow-lg hover:shadow-xl"
                         >
-                            RSVP Now
+                            {m.common.rsvpNow}
                         </Link>
                         <Link
                             href="/#faqs"
                             className="px-8 py-3 bg-transparent border-2 border-accent text-accent hover:bg-accent hover:text-white transition-colors rounded-full uppercase tracking-widest text-sm font-bold shadow-lg hover:shadow-xl"
                         >
-                            View FAQs
+                            {m.schedule.viewFaqs}
                         </Link>
                     </div>
                 </FadeIn>
 
                 {events.length === 0 ? (
                     <p className="text-center text-gray-400 italic font-serif">
-                        Timings to come.
+                        {m.schedule.empty}
                     </p>
                 ) : (
                 <div className="max-w-3xl mx-auto">
@@ -109,13 +111,13 @@ export default function SchedulePage() {
                     <div className="mt-20 grid gap-8 grid-cols-1 md:grid-cols-2 max-w-4xl mx-auto">
                         {shuttleText && (
                             <FadeIn animation="slide-right" className="bg-gray-900 text-white p-8 rounded-2xl text-center shadow-xl">
-                                <h3 className="text-xl font-serif mb-4">Getting There</h3>
+                                <h3 className="text-xl font-serif mb-4">{m.schedule.gettingThere}</h3>
                                 <p className="text-gray-300 whitespace-pre-line">{shuttleText}</p>
                             </FadeIn>
                         )}
                         {dressCode && (
                             <FadeIn animation="slide-left" delay={80} className="bg-accent/10 p-8 rounded-2xl text-center border-2 border-accent/20 shadow-lg">
-                                <h3 className="text-xl font-serif mb-4 text-gray-900">Dress Code</h3>
+                                <h3 className="text-xl font-serif mb-4 text-gray-900">{m.schedule.dressCode}</h3>
                                 <p className="text-gray-600 whitespace-pre-line">{dressCode}</p>
                             </FadeIn>
                         )}

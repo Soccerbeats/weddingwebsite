@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { useI18n } from '@/components/I18nProvider';
 
 export interface Photo {
     id: number;
@@ -42,6 +43,7 @@ interface PhotoLightboxProps {
 }
 
 export default function PhotoLightbox({ photos, index, onClose, onNavigate, controls }: PhotoLightboxProps) {
+    const lb = useI18n().m.lightbox;
     const [mounted, setMounted] = useState(false);
 
     // Sliding carousel: we mount a 3-slot window [prev, current, next] and
@@ -254,7 +256,7 @@ export default function PhotoLightbox({ photos, index, onClose, onNavigate, cont
             <button
                 className="absolute top-4 right-4 text-white hover:text-gray-300 p-2 z-50"
                 onClick={closeLightbox}
-                aria-label="Close"
+                aria-label={lb.close}
             >
                 <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
@@ -265,7 +267,7 @@ export default function PhotoLightbox({ photos, index, onClose, onNavigate, cont
             <button
                 onClick={(e) => { e.stopPropagation(); handlePrevious(); }}
                 className="absolute left-4 top-1/2 -translate-y-1/2 text-white hover:text-gray-300 p-3 bg-black/50 hover:bg-black/70 rounded-full transition-colors z-50"
-                aria-label="Previous photo"
+                aria-label={lb.previous}
             >
                 <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
@@ -276,7 +278,7 @@ export default function PhotoLightbox({ photos, index, onClose, onNavigate, cont
             <button
                 onClick={(e) => { e.stopPropagation(); handleNext(); }}
                 className="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:text-gray-300 p-3 bg-black/50 hover:bg-black/70 rounded-full transition-colors z-50"
-                aria-label="Next photo"
+                aria-label={lb.next}
             >
                 <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />

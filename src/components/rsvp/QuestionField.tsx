@@ -1,6 +1,7 @@
 'use client';
 
 import type { AnswerValue, RsvpQuestion } from '@/lib/rsvpQuestions';
+import { useI18n } from '@/components/I18nProvider';
 
 /**
  * One of the couple's RSVP questions, as a guest answers it.
@@ -24,6 +25,7 @@ export default function QuestionField({
     /** A required question left blank after trying to send. */
     missing?: boolean;
 }) {
+    const w = useI18n().m.question;
     const id = `${idPrefix}-${question.id}`;
     const labelId = `${id}-label`;
     const options = (question.options ?? []).filter(o => o.label.trim());
@@ -31,8 +33,8 @@ export default function QuestionField({
     return (
         <div>
             <p id={labelId} className="text-sm font-medium text-gray-800">
-                {question.label || <span className="text-gray-400">Your question</span>}
-                {!question.required && <span className="ml-1.5 font-normal text-gray-400">· optional</span>}
+                {question.label || <span className="text-gray-400">{w.untitled}</span>}
+                {!question.required && <span className="ml-1.5 font-normal text-gray-400">· {w.optional}</span>}
             </p>
             {question.help && <p className="mt-0.5 text-xs text-gray-500">{question.help}</p>}
 
@@ -51,7 +53,7 @@ export default function QuestionField({
                                     className={`min-h-9 min-w-20 rounded-full px-4 text-xs font-semibold transition-all duration-200 ${
                                         on ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
                                 >
-                                    {answer ? 'Yes' : 'No'}
+                                    {answer ? w.yes : w.no}
                                 </button>
                             );
                         })}
@@ -120,7 +122,7 @@ export default function QuestionField({
                 )}
             </div>
 
-            {missing && <p className="mt-1.5 text-xs font-medium text-amber-700">Please answer this one.</p>}
+            {missing && <p className="mt-1.5 text-xs font-medium text-amber-700">{w.missing}</p>}
         </div>
     );
 }

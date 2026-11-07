@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSiteConfig } from '@/lib/config';
 import { isMailConfigured } from '@/lib/mail';
 import { effectiveRsvpMode } from '@/lib/rsvpMode';
+import { getI18n } from '@/lib/i18n/server';
 import { matchHouseholdByName, matchedSeat, existingRsvpFor, buildVerifiedPayload } from '@/lib/rsvpHousehold';
 import { isPastWeddingDay } from '@/lib/weddingDate';
 
@@ -30,12 +31,13 @@ import { isPastWeddingDay } from '@/lib/weddingDate';
  * will refuse it regardless of mode.
  */
 export async function POST(request: Request) {
+  const api = getI18n().m.api;
   try {
     const { guest_name } = await request.json();
 
     if (typeof guest_name !== 'string' || !guest_name.trim()) {
       return NextResponse.json(
-        { verified: false, message: 'Guest name is required' },
+        { verified: false, message: api.nameRequired },
         { status: 400 }
       );
     }
@@ -46,7 +48,7 @@ export async function POST(request: Request) {
     if (!guest) {
       return NextResponse.json({
         verified: false,
-        message: 'We could not find your name on our guest list. Please check the spelling or contact us if you believe this is an error.',
+        message: api.notOnList,
       });
     }
 
@@ -73,7 +75,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('Error verifying guest:', error);
     return NextResponse.json(
-      { verified: false, message: 'Error verifying guest' },
+      { verified: false, message: api.lookupError },
       { status: 500 }
     );
   }

@@ -3,6 +3,7 @@ import { getSiteConfig } from '@/lib/config';
 import pool from '@/lib/db';
 import { cookies } from 'next/headers';
 import { ADMIN_COOKIE, verifyAdminToken } from '@/lib/auth';
+import { getI18n } from '@/lib/i18n/server';
 
 async function isAdmin(): Promise<boolean> {
   const cookieStore = await cookies();
@@ -55,6 +56,8 @@ export async function GET() {
     };
 
     const navCards = config.navCards || {};
+    const { explore: _explore, ...words } = getI18n().m.navCards;
+    void _explore;
 
     const cards = ALL_PAGES
       .filter(p => {
@@ -64,6 +67,9 @@ export async function GET() {
       })
       .map(p => ({
         ...p,
+        // The card's own words in the site's language; the subtitle is the couple's.
+        label: (words as Record<string, { label: string; eyebrow: string }>)[p.slug]?.label ?? p.label,
+        eyebrow: (words as Record<string, { label: string; eyebrow: string }>)[p.slug]?.eyebrow ?? p.eyebrow,
         subtitle: subtitleMap[p.slug] || '',
         image: navCards[p.slug] || null,
       }));
