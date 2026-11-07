@@ -11,6 +11,11 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.10.43 — [Released] Changelog — the Fixed pills stay on the page (`main`, 2026-11-07 01:04)
+
+### Fixed
+- **The changelog's Fixed badges no longer float over the page.** A group heading carried its name as a bare class, and `fixed` is also Tailwind's `position: fixed` — so every Fixed pill was lifted out of its entry and stacked in the corner of the screen. The badges are now `cl-group-added` / `cl-group-changed` / `cl-group-fixed`.
+
 ## v0.10.42 — [Released] RSVP: everyone answers for themself, and "Noren" finds "Norén" (`main`, 2026-11-07 01:03)
 
 The ideas come from the fnoren17 fork (2026-09). This is our own version.

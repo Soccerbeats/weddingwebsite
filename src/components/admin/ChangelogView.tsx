@@ -184,14 +184,18 @@ export default function ChangelogView() {
     );
 }
 
-/** Added / Changed / Fixed render as coloured badges; anything else stays plain. */
+/**
+ * Added / Changed / Fixed render as coloured badges; anything else stays plain.
+ * The modifier is prefixed (`cl-group-fixed`): a bare `fixed` class is
+ * Tailwind's `position: fixed`, which pulled every Fixed pill off the page.
+ */
 const BADGED = new Set(['added', 'changed', 'fixed']);
 
 function Group({ group }: { group: ChangelogGroup }) {
     const key = group.heading.toLowerCase();
     return (
         <div>
-            <h3 className={`cl-group${BADGED.has(key) ? ` ${key}` : ''}`}>{group.heading}</h3>
+            <h3 className={`cl-group${BADGED.has(key) ? ` cl-group-${key}` : ''}`}>{group.heading}</h3>
             <ul className="list-disc pl-5 space-y-1.5">
                 {group.entries.map((entry, i) => (
                     <li key={i}>
