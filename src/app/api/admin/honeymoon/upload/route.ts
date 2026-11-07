@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
-import { PHOTOS_DIR, rejectUpload, resolveInPhotos, safeImageFilename } from '@/lib/uploads';
+import { PHOTOS_DIR, cleanImageUpload, rejectUpload, resolveInPhotos, safeImageFilename } from '@/lib/uploads';
 
 /**
  * Uploads for the honeymoon portal: place photos and trip documents.
@@ -57,7 +57,9 @@ export async function POST(request: Request) {
         if (!target) return NextResponse.json({ error: 'Bad filename' }, { status: 400 });
 
         if (!fs.existsSync(PHOTOS_DIR)) fs.mkdirSync(PHOTOS_DIR, { recursive: true });
-        fs.writeFileSync(target, Buffer.from(await file.arrayBuffer()));
+        fs.writeFileSync(target, kind === 'document' && DOC_EXTENSIONS.has(extension)
+            ? Buffer.from(await file.arrayBuffer())
+            : await cleanImageUpload(file));
 
         return NextResponse.json({ success: true, filename });
     } catch (error) {

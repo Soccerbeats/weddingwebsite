@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { cleanImageUpload } from '@/lib/uploads';
 import fs from 'fs';
 import path from 'path';
 import pool from '@/lib/db';
@@ -61,7 +62,7 @@ export async function POST(request: Request) {
         const filename = `purchase-${id}-${Date.now()}.${ext}`;
         fs.writeFileSync(
             path.join(RECEIPTS_DIR, filename),
-            Buffer.from(await file.arrayBuffer()),
+            await cleanImageUpload(file),
         );
 
         deleteStored(existing.rows[0].receipt_path);

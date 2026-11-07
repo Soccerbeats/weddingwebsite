@@ -32,7 +32,8 @@ interface VerifiedGuest {
 
 interface ExistingRsvp {
     id?: number | null;
-    attending?: boolean;
+    /** null: dietary notes the couple typed in; the household has not answered. */
+    attending?: boolean | null;
     guestCount?: number;
     email?: string | null;
     phone?: string | null;
@@ -201,13 +202,16 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
             ? data.existingRsvp.dietaryRestrictions
             : [];
 
-        setCards(buildCards(data.guest.name, data.guest.party_members || [], existingDietary, !!data.existingRsvp));
+        // Notes the couple typed in for a household that has not answered are
+        // prefilled, but the form still starts as a first reply.
+        const answered = data.existingRsvp?.attending === true || data.existingRsvp?.attending === false;
+        setCards(buildCards(data.guest.name, data.guest.party_members || [], existingDietary, answered));
 
         setFormData({
             guestName: data.guest.name,
             email: data.existingRsvp?.email || data.guest.email || '',
             phone: data.existingRsvp?.phone || data.guest.phone || '',
-            attending: data.existingRsvp ? (data.existingRsvp.attending ? 'yes' : 'no') : 'yes',
+            attending: answered ? (data.existingRsvp!.attending ? 'yes' : 'no') : 'yes',
             message: data.existingRsvp?.message || '',
         });
 
@@ -729,10 +733,10 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
                 <h2 className="text-2xl font-serif text-gray-900 mb-2">RSVPs Are Closed</h2>
                 <p className="text-gray-600 max-w-md mx-auto">
                     The wedding day has arrived, so RSVPs can no longer be changed.
-                    {existingRsvp ? " Here's what we have on file for you." : ''}
+                    {existingRsvp && existingRsvp.attending != null ? " Here's what we have on file for you." : ''}
                 </p>
 
-                {existingRsvp ? (
+                {existingRsvp && existingRsvp.attending != null ? (
                     <div className="mt-6 mx-auto max-w-xl text-left bg-gray-50 border border-gray-200 rounded-2xl p-5">
                         <div className="flex items-center justify-between border-b border-dashed border-gray-300 pb-3 mb-3">
                             <span className="text-xs uppercase tracking-widest text-gray-400 font-semibold">On file for {matched?.name || verifiedGuest?.name}</span>

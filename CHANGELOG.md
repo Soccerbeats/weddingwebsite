@@ -11,6 +11,32 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.10.39 — [Released] A stuck query can't take the site down; the guest list and RSVPs agree; photos lose their GPS (`main`, 2026-11-07 00:41)
+
+The first batch of fixes from the review of the site's forks (2026-11-06). The ideas for the database timeouts and the RSVP sync come from the wagnerbastian fork, and the photo cleaning from the flokaiser fork. The code is our own.
+
+### Fixed
+- **A stuck database query can no longer hang the whole site.**
+  - The database connection pool had no time limits and no error handler. Ten hung queries held every connection, so every later request waited forever, and a dropped connection could crash the server.
+  - Now a request waits at most 10 s for a connection, a statement runs for at most 30 s, and a transaction left idle is closed after 60 s.
+  - The limits can be changed with `DB_CONNECTION_TIMEOUT_MS`, `DB_STATEMENT_TIMEOUT_MS` and `DB_IDLE_TRANSACTION_TIMEOUT_MS`.
+- **The public pages' WIP check gives up after 2 s**, and page views that arrive together share one lookup. Before, a hung check hung every public page with it.
+- **Opening a page no longer locks a table.** The WIP status, the dashboard and the WIP toggles ran an `ALTER TABLE` on every request, and the donations route ran seven. The schema now lives in `database/init.sql` alone, and the donations route checks it once per server start.
+- **A dietary note no longer turns a household that hasn't answered into a yes.** Saving a kids' meal for a household that hadn't replied created an RSVP that counted the whole party as attending.
+  - That row now holds the notes with no answer (`rsvps.attending` is NULL), and nothing counts it.
+  - The guest's form opens as a first reply, with the notes already filled in.
+- **Changing a status in the guest list now changes the RSVP too**, for one guest and in bulk edit, in the same transaction:
+  - "Attending" makes it a yes. A household that hadn't answered counts its whole invited party.
+  - "Declined" makes it a no.
+  - "No answer" and "Likely not coming" clear the answer but keep the notes.
+  - A status never creates an RSVP on its own.
+- **Deleting a household removes its RSVP and its seats on the seating chart.** Before, the reply kept counting and the chairs stayed taken. The delete prompt now says so.
+- **On boot, `init.sql` repairs old data once.** RSVPs made into a yes by the dietary editor go back to "no answer", and chairs held by deleted households are freed.
+
+### Changed
+- **Uploaded photos are cleaned before they're saved.** They're turned upright from their EXIF orientation, then saved again without any hidden data, including the GPS position a phone records. This covers the gallery, wedding party, timeline, nav cards, honeymoon photos and receipts. GIF, HEIC and PDF files are stored as sent.
+- **Uploaded files no longer keep their original names.** A stored photo is named by its upload time and a random tag, because photo URLs are public.
+
 ## v0.10.38 — [Released] The overview map fills its card; the rail's tooltip lands once (`main`, 2026-11-06 23:14)
 
 ### Fixed

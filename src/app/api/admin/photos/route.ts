@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import { writeJsonAtomic } from '@/lib/config';
-import { PHOTOS_DIR, rejectUpload, resolveInPhotos, safeImageFilename } from '@/lib/uploads';
+import { PHOTOS_DIR, cleanImageUpload, rejectUpload, resolveInPhotos, safeImageFilename } from '@/lib/uploads';
 
 const CONFIG_PATH = path.join(process.cwd(), 'public/config/photos.json');
 
@@ -80,7 +80,7 @@ export async function POST(request: Request) {
         if (!filename) return NextResponse.json({ error: 'Unsupported image type' }, { status: 400 });
 
         if (!fs.existsSync(PHOTOS_DIR)) fs.mkdirSync(PHOTOS_DIR, { recursive: true });
-        fs.writeFileSync(path.join(PHOTOS_DIR, filename), Buffer.from(await file.arrayBuffer()));
+        fs.writeFileSync(path.join(PHOTOS_DIR, filename), await cleanImageUpload(file));
 
         const newPhoto = await withPhotos((photos) => {
             const photo: Photo = {

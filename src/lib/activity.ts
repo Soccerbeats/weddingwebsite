@@ -106,6 +106,7 @@ export async function buildActivityFeed(
     }>(client, `
         SELECT id, guest_name, attending, number_of_guests, created_at, updated_at
         FROM rsvps
+        WHERE attending IS NOT NULL
         ORDER BY GREATEST(created_at, COALESCE(updated_at, created_at)) DESC
         LIMIT ${SOURCE_LIMIT}
     `);

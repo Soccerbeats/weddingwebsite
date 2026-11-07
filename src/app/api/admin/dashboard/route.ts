@@ -33,7 +33,7 @@ export async function GET() {
     // RSVP stats
     const rsvpResult = await client.query(`
       SELECT
-        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE attending IS NOT NULL)::int AS total,
         COUNT(*) FILTER (WHERE attending = true)::int AS attending,
         COUNT(*) FILTER (WHERE attending = false)::int AS declined,
         COALESCE(SUM(number_of_guests) FILTER (WHERE attending = true), 0)::int AS total_guests
@@ -58,12 +58,10 @@ export async function GET() {
     const recentResult = await client.query(`
       SELECT guest_name, attending, number_of_guests, created_at
       FROM rsvps
+      WHERE attending IS NOT NULL
       ORDER BY created_at DESC
       LIMIT 5
     `);
-
-    // Ensure is_hidden column exists (idempotent)
-    await client.query(`ALTER TABLE wip_toggles ADD COLUMN IF NOT EXISTS is_hidden BOOLEAN DEFAULT false`);
 
     // WIP toggles
     const wipResult = await client.query(`

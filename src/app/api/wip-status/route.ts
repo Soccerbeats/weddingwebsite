@@ -3,11 +3,7 @@ import pool from '@/lib/db';
 
 export async function GET() {
   try {
-    // Ensure is_hidden column exists
-    await pool.query(
-      `ALTER TABLE wip_toggles ADD COLUMN IF NOT EXISTS is_hidden BOOLEAN DEFAULT false`
-    );
-
+    // The schema lives in database/init.sql; an ALTER here locked the table on every page view.
     const result = await pool.query(
       'SELECT page_path, is_wip, COALESCE(is_hidden, false) as is_hidden FROM wip_toggles WHERE is_wip = true OR is_hidden = true'
     );

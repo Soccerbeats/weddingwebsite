@@ -62,19 +62,31 @@ const GATED_PAGES = new Set(['/our-story', '/wedding-party', '/schedule', '/phot
  */
 type WipMap = Record<string, { is_wip: boolean; is_hidden: boolean }>;
 let wipCache: { at: number; value: WipMap } | null = null;
+let wipInFlight: Promise<WipMap> | null = null;
 const WIP_TTL_MS = 15_000;
+/** A hung lookup must not hang every public page with it. */
+const WIP_TIMEOUT_MS = 2_000;
 
 async function wipStatus(origin: string): Promise<WipMap> {
     const now = Date.now();
     if (wipCache && now - wipCache.at < WIP_TTL_MS) return wipCache.value;
-    try {
-        const res = await fetch(`${origin}/api/wip-status`, { cache: 'no-store' });
-        const value = res.ok ? ((await res.json()) as WipMap) : {};
-        wipCache = { at: now, value };
-        return value;
-    } catch {
-        return wipCache?.value ?? {};
-    }
+    // Page views arriving together share one lookup rather than each sending their own.
+    wipInFlight ??= (async () => {
+        try {
+            const res = await fetch(`${origin}/api/wip-status`, {
+                cache: 'no-store',
+                signal: AbortSignal.timeout(WIP_TIMEOUT_MS),
+            });
+            const value = res.ok ? ((await res.json()) as WipMap) : {};
+            wipCache = { at: Date.now(), value };
+            return value;
+        } catch {
+            return wipCache?.value ?? {};
+        } finally {
+            wipInFlight = null;
+        }
+    })();
+    return wipInFlight;
 }
 
 export async function middleware(request: NextRequest) {

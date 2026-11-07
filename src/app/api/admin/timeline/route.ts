@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import { writeJsonAtomic } from '@/lib/config';
-import { PHOTOS_DIR, rejectUpload, resolveInPhotos, safeImageFilename } from '@/lib/uploads';
+import { PHOTOS_DIR, rejectUpload, resolveInPhotos, safeImageFilename, cleanImageUpload } from '@/lib/uploads';
 
 const CONFIG_PATH = path.join(process.cwd(), 'public/config/timeline.json');
 
@@ -25,8 +25,8 @@ function storePhoto(file: File, slot: 1 | 2): Promise<{ filename: string } | { e
     const filename = safeImageFilename(file.name, `${Date.now()}-${slot}-`);
     if (!filename) return Promise.resolve({ error: 'Unsupported image type' });
     if (!fs.existsSync(PHOTOS_DIR)) fs.mkdirSync(PHOTOS_DIR, { recursive: true });
-    return file.arrayBuffer().then((buf) => {
-        fs.writeFileSync(path.join(PHOTOS_DIR, filename), Buffer.from(buf));
+    return cleanImageUpload(file).then((buf) => {
+        fs.writeFileSync(path.join(PHOTOS_DIR, filename), buf);
         return { filename };
     });
 }

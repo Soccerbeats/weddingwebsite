@@ -890,3 +890,32 @@ ALTER TABLE honeymoon_bookings ADD COLUMN IF NOT EXISTS journey_id INTEGER
 
 CREATE INDEX IF NOT EXISTS honeymoon_travel_journey_idx ON honeymoon_travel (journey_id);
 CREATE INDEX IF NOT EXISTS honeymoon_bookings_journey_idx ON honeymoon_bookings (journey_id);
+
+-- ---------------------------------------------------------------------------
+-- v0.10.39: an RSVP can hold notes without an answer.
+--
+-- The guest list's dietary editor stores a household's restrictions on its RSVP
+-- row, because that is where everything reads them. For a household that had
+-- not answered, that row used to be created as a *yes* for the whole party — so
+-- a kids' meal typed in for someone who never replied added them to every count.
+-- `attending` is now NULL for "notes on file, no answer"; every count filters on
+-- `attending = true` / `= false`, so NULL is counted as neither.
+-- ---------------------------------------------------------------------------
+ALTER TABLE rsvps ALTER COLUMN attending DROP NOT NULL;
+
+-- Repair, once: a yes whose household the guest list shows as unanswered (or
+-- "likely not coming") was made by that editor, not by the guest — a real reply
+-- always sets the guest list's status in the same transaction. Idempotent: a
+-- repaired row is NULL and no longer matches.
+UPDATE rsvps r
+   SET attending = NULL, number_of_guests = 0
+  FROM guest_list g
+ WHERE r.attending = TRUE
+   AND LOWER(TRIM(g.guest_name)) = LOWER(TRIM(r.guest_name))
+   AND COALESCE(g.rsvp_status, '') IN ('', 'likely_not_coming');
+
+-- Chairs held by a household that has since been deleted. Deleting a household
+-- now takes its chairs with it; these are the ones left behind before that.
+DELETE FROM seat_assignments sa
+ WHERE sa.party_group_id IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM guest_list g WHERE g.id = sa.party_group_id);

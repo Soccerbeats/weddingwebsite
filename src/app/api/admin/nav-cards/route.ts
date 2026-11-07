@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSiteConfig, updateSiteConfig } from '@/lib/config';
 import fs from 'fs';
 import path from 'path';
-import { extensionOf, IMAGE_EXTENSIONS, PHOTOS_DIR, rejectUpload, resolveInPhotos } from '@/lib/uploads';
+import { extensionOf, IMAGE_EXTENSIONS, PHOTOS_DIR, rejectUpload, resolveInPhotos, cleanImageUpload } from '@/lib/uploads';
 
 const NAV_CARDS_DIR = path.join(PHOTOS_DIR, 'nav-cards');
 
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     const filename = `${slug}.${extensionOf(file.name)}`;
     const filepath = path.join(NAV_CARDS_DIR, filename);
     removeOldVariants(slug, filepath);
-    fs.writeFileSync(filepath, Buffer.from(await file.arrayBuffer()));
+    fs.writeFileSync(filepath, await cleanImageUpload(file));
 
     await record(slug, filename);
     return NextResponse.json({ success: true, filename });

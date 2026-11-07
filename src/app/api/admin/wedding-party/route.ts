@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { writeFile, unlink } from 'fs/promises';
 import fs from 'fs';
 import path from 'path';
-import { PHOTOS_DIR, rejectUpload, resolveInPhotos, safeImageFilename } from '@/lib/uploads';
+import { PHOTOS_DIR, cleanImageUpload, rejectUpload, resolveInPhotos, safeImageFilename } from '@/lib/uploads';
 
 /** Photo uploads for wedding-party members. The member data itself lives in site.json. */
 
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
         if (!filename) return NextResponse.json({ error: 'Unsupported image type' }, { status: 400 });
 
         if (!fs.existsSync(PHOTOS_DIR)) fs.mkdirSync(PHOTOS_DIR, { recursive: true });
-        await writeFile(path.join(PHOTOS_DIR, filename), Buffer.from(await file.arrayBuffer()));
+        await writeFile(path.join(PHOTOS_DIR, filename), await cleanImageUpload(file));
 
         return NextResponse.json({ success: true, filename, message: 'Photo uploaded successfully' });
     } catch (error) {

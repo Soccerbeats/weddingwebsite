@@ -1,4 +1,6 @@
+import { randomBytes } from 'crypto';
 import path from 'path';
+import sharp from 'sharp';
 
 /**
  * Guards shared by every route that writes into or deletes from `public/photos`.
@@ -24,16 +26,48 @@ export function extensionOf(filename: string): string {
 }
 
 /**
- * A filename safe to write under the photos directory: the basename only,
- * lower-risk characters, and a whitelisted image extension. Returns null when
- * the upload is not an image we serve.
+ * A filename safe to write under the photos directory: a timestamp, a random
+ * tag and a whitelisted image extension. Returns null when the upload is not an
+ * image we serve.
+ *
+ * The original name is deliberately dropped (v0.10.39): photo URLs are public,
+ * and a phone's filename can carry a date, a device or a place.
  */
 export function safeImageFilename(original: string, prefix = ''): string | null {
-    const base = path.basename(original || '').replace(/[^a-zA-Z0-9._-]/g, '_');
-    const ext = extensionOf(base);
+    const ext = extensionOf(path.basename(original || ''));
     if (!IMAGE_EXTENSIONS.has(ext)) return null;
-    const stem = base.slice(0, base.length - ext.length - 1).replace(/^\.+/, '') || 'photo';
-    return `${prefix}${Date.now()}-${stem.slice(0, 80)}.${ext}`;
+    return `${prefix}${Date.now()}-${randomBytes(4).toString('hex')}.${ext}`;
+}
+
+/** Formats re-encoded on upload. GIF keeps its animation untouched; HEIC needs a decoder sharp may lack. */
+const CLEANED = new Set(['jpg', 'jpeg', 'png', 'webp', 'avif']);
+
+/**
+ * The bytes to store for an uploaded image: turned upright from its EXIF
+ * orientation, then written again *without* its metadata. A phone photo
+ * carries the GPS position it was taken at, and every photo on the public
+ * pages can be downloaded — so a picture of the couple at home published
+ * their address. (Prompted by the flokaiser fork, 2026-09.)
+ *
+ * The format is kept, so the stored filename's extension stays true. Anything
+ * sharp cannot read is stored as it came rather than refused.
+ */
+export async function cleanImageUpload(file: File): Promise<Buffer> {
+    const original = Buffer.from(await file.arrayBuffer());
+    const ext = extensionOf(file.name);
+    if (!CLEANED.has(ext)) return original;
+    try {
+        // sharp drops all metadata unless asked to keep it; rotate() with no
+        // angle applies the EXIF orientation before that tag is lost.
+        const image = sharp(original, { failOn: 'none' }).rotate();
+        if (ext === 'jpg' || ext === 'jpeg') return await image.jpeg({ quality: 90, mozjpeg: true }).toBuffer();
+        if (ext === 'png') return await image.png().toBuffer();
+        if (ext === 'webp') return await image.webp({ quality: 90 }).toBuffer();
+        return await image.avif({ quality: 70 }).toBuffer();
+    } catch (error) {
+        console.error('Could not clean an uploaded image; storing it as sent:', error);
+        return original;
+    }
 }
 
 /** Reasons an upload is refused, as a message for the client, or null when it is fine. */

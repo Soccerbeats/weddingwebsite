@@ -63,7 +63,8 @@ export function matchedSeat(guest: MatchedHousehold, typedName: string): { name:
 
 export interface ExistingRsvp {
     id: number;
-    attending: boolean;
+    /** null: the couple noted dietary needs, but the household has not answered. */
+    attending: boolean | null;
     guestCount: number;
     email: string;
     phone: string;

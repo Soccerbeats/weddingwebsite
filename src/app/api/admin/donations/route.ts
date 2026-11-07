@@ -8,7 +8,15 @@ const RETURNING = `id, guest_id, guest_name, amount::float8 AS amount, gift,
                    thank_you_sent, thank_you_sent_at, method,
                    COALESCE(co_donors, '[]'::jsonb) AS co_donors`;
 
-async function ensureTable() {
+// Runs once per server process, not per request: each ALTER takes a lock on the
+// whole table. database/init.sql carries the same schema for fresh installs.
+let ensured: Promise<void> | null = null;
+function ensureTable(): Promise<void> {
+  ensured ??= migrate().catch((error) => { ensured = null; throw error; });
+  return ensured;
+}
+
+async function migrate() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS donations (
       id SERIAL PRIMARY KEY,

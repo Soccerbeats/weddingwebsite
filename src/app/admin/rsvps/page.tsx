@@ -29,7 +29,8 @@ interface RSVP {
     plus_one_name?: string;
     email: string;
     phone: string;
-    attending: boolean;
+    /** null: notes on file, no answer yet. */
+    attending: boolean | null;
     number_of_guests: number;
     dietary_restrictions: DietaryEntry[] | string | null;
     message: string;
@@ -400,7 +401,7 @@ export default function RSVPDashboard() {
     };
 
     const handleDeleteGuest = async (id: number) => {
-        if (!confirm('Are you sure you want to delete this guest?')) return;
+        if (!confirm('Delete this guest? Their RSVP and their seats on the seating chart go with them.')) return;
 
         try {
             const response = await fetch('/api/admin/guest-list', {
@@ -646,7 +647,7 @@ export default function RSVPDashboard() {
 
     const handleBulkDelete = async () => {
         if (selectedGuests.length === 0) return;
-        if (!confirm(`Are you sure you want to delete ${selectedGuests.length} guest(s)?`)) return;
+        if (!confirm(`Delete ${selectedGuests.length} guest(s)? Their RSVPs and their seats on the seating chart go with them.`)) return;
 
         try {
             await Promise.all(
@@ -779,14 +780,18 @@ export default function RSVPDashboard() {
     const coupleNames = new Set(
         guests.filter(g => !isGuestRow(g)).map(g => cleanName(g.guest_name).toLowerCase()),
     );
-    const guestRsvps = rsvps.filter(r => !coupleNames.has(cleanName(r.guest_name).toLowerCase()));
+    // A row whose `attending` is null holds dietary notes the couple typed in for
+    // a household that has not answered — notes, not a reply, so it is not listed
+    // or counted here. Its notes are still read by name.
+    const guestRsvps = rsvps.filter(r => r.attending !== null
+        && !coupleNames.has(cleanName(r.guest_name).toLowerCase()));
 
     const totalGuests = guestRsvps.reduce((acc, curr) => acc + (curr.attending ? curr.number_of_guests : 0), 0);
     // A declined RSVP is stored with number_of_guests = 0, so count the household
     // from the guest list (falling back to 1 when the name isn't on it).
     const partySizeByName = new Map(guests.map(g => [g.guest_name.trim().toLowerCase(), g.party_size || 1]));
     const totalDeclinedGuests = guestRsvps
-        .filter(r => !r.attending)
+        .filter(r => r.attending === false)
         .reduce((acc, curr) => acc + (partySizeByName.get(curr.guest_name.trim().toLowerCase()) ?? 1), 0);
     // Every statistic counts guests and only guests. The couple are on this list
     // so they can be seated and fed, but they were not invited to their own

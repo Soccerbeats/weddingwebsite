@@ -3,6 +3,7 @@ import pool from '@/lib/db';
 import { cleanNameSql } from '@/lib/names';
 import { renamesBetween } from '@/lib/seating';
 import { replayable } from '@/lib/outboxReplay';
+import { deleteHousehold, syncRsvpsToStatus } from '@/lib/rsvpSync';
 
 export async function GET() {
   try {
@@ -189,6 +190,8 @@ export async function PUT(request: Request) {
       );
       if (renames.length > 0) await carryRenames(client, id, before.guest_name, renames);
     }
+    // After the renames, so the RSVP is found under the name it now carries.
+    await syncRsvpsToStatus(client, [id]);
 
     await client.query('COMMIT');
     return NextResponse.json(result.rows[0]);
@@ -208,6 +211,7 @@ export async function PUT(request: Request) {
 // The bulk form only touches the fields it was given, so "leave unchanged" is the
 // default for everything and one selection can't quietly reset unrelated columns.
 export async function PATCH(request: Request) {
+  const client = await pool.connect();
   try {
     const body = await request.json();
     const { id, ids, address, flag, side, invited, rsvp_status, notes, noteMode } = body;
@@ -218,7 +222,7 @@ export async function PATCH(request: Request) {
         return NextResponse.json({ error: 'Missing id' }, { status: 400 });
       }
 
-      const result = await pool.query(
+      const result = await client.query(
         `UPDATE guest_list SET address = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
         [address ?? '', id]
       );
@@ -263,28 +267,43 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
     }
 
-    const result = await pool.query(
+    await client.query('BEGIN');
+    const result = await client.query(
       `UPDATE guest_list SET ${sets.join(', ')}, updated_at = NOW()
        WHERE id = ANY(${push(targets)})
        RETURNING id`,
       params
     );
+    if (rsvp_status !== undefined) await syncRsvpsToStatus(client, targets);
+    await client.query('COMMIT');
 
     return NextResponse.json({ success: true, updated: result.rowCount });
   } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error('Error updating guests:', error);
     return NextResponse.json({ error: 'Failed to update guests' }, { status: 500 });
+  } finally {
+    client.release();
   }
 }
 
 export async function DELETE(request: Request) {
+  const client = await pool.connect();
   try {
     const { id } = await request.json();
-    await pool.query('DELETE FROM guest_list WHERE id = $1', [id]);
+    if (!Number.isInteger(id)) {
+      return NextResponse.json({ error: 'id is required' }, { status: 400 });
+    }
+    await client.query('BEGIN');
+    await deleteHousehold(client, id);
+    await client.query('COMMIT');
     return NextResponse.json({ success: true });
   } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error('Error deleting guest:', error);
     return NextResponse.json({ error: 'Failed to delete guest' }, { status: 500 });
+  } finally {
+    client.release();
   }
 }
 

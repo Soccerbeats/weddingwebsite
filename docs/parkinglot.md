@@ -31,8 +31,10 @@ and are not repeated here.
 | SEAT-1 | RSVP / Seating | No entrée choice, so the export cannot count "7 chicken, 3 fish" | Needs a new RSVP question and re-asking everyone who already answered | M |
 | ~~SEAT-3~~ | ~~Seating~~ | ~~The couple and the vendors are on no list, so neither can be seated or counted~~ | **Shipped v0.9.94** | — |
 | SEAT-2 | Seating | The export prints rosters, never the room | The floor plan is a React Flow canvas; printing it is a different job | M |
+| OPS-3 | CI | Images are built for x86 only, so ARM servers (a Raspberry Pi, Apple-chip hosts) cannot run them | Doubles the build time; nobody running it needs it yet | S |
+| RSVP-2 | RSVP | One invitation covering several events (ceremony, reception, rehearsal), each answered per person | A data-model change to RSVPs; wait until custom questions have settled | L |
 
-Effort: XS = minutes, S = under an hour, M = an afternoon.
+Effort: XS = minutes, S = under an hour, M = an afternoon, L = a day or more.
 
 ## Details
 
@@ -195,3 +197,21 @@ stack's environment, redeploy. Every admin session is invalidated once.
 **Note (v0.9.51):** until that release the compose file did not pass
 `JWT_SECRET` through to the container at all, so setting it on the stack would
 have done nothing. It does now.
+
+### OPS-3 — ARM images
+The CI publishes `linux/amd64` only. The flokaiser fork (2026-09) added
+`platforms: linux/amd64,linux/arm64` to `docker/build-push-action` in both
+`ci-cd.yml` and `demo-deploy.yml`, with `docker/setup-qemu-action` first. Under
+QEMU the ARM half of the Next build is several times slower, so it roughly
+doubles the pipeline. **Do it when** someone actually runs the image on ARM.
+
+### RSVP-2 — One RSVP, several events
+The fnoren17 fork answered a City Hall ceremony separately from the dinner, per
+person, with its own toast question. Generalised: the couple lists events in
+Settings (or reuses the schedule), marks which households are invited to which,
+and the RSVP shows one Attending / Not attending per person per event; counts,
+seating and the kitchen export pick the event. **Parked** because it changes what
+"attending" means everywhere it is read (stats, seating, exports, emails) and
+custom RSVP questions (v0.10.x) should settle first — a per-event question may
+cover most of the need.
+

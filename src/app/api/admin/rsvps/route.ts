@@ -75,14 +75,16 @@ export async function PUT(request: Request) {
             return NextResponse.json({ error: 'No such guest' }, { status: 404 });
         }
         const { email, phone, rsvp_status } = household.rows[0];
-        // Every stored entry is a person who is coming — that is what the array
-        // means everywhere else — so it is also the headcount.
-        const attending = rsvp_status !== 'declined' && rsvp_status !== 'likely_not_coming';
+        // A note is not a reply. Only a household the couple already marked as
+        // coming or not becomes one; otherwise `attending` stays NULL — "notes on
+        // file, no answer" — and nothing counts it. (Saving a kids' meal for a
+        // household that had not answered used to turn it into a yes.)
+        const attending = rsvp_status === 'attending' ? true : rsvp_status === 'declined' ? false : null;
 
         await client.query(
             `INSERT INTO rsvps (guest_name, email, phone, attending, number_of_guests, dietary_restrictions, message)
              VALUES ($1, $2, $3, $4, $5, $6::jsonb, '')`,
-            [guest_name.trim(), email ?? '', phone ?? '', attending, attending ? entries.length : 0, JSON.stringify(entries)],
+            [guest_name.trim(), email ?? '', phone ?? '', attending, attending ? Math.max(1, entries.length) : 0, JSON.stringify(entries)],
         );
         return NextResponse.json({ success: true, created: true });
     } catch (error) {
