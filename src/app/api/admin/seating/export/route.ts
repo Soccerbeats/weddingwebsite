@@ -4,6 +4,7 @@ import pool from '@/lib/db';
 import { getSiteConfig } from '@/lib/config';
 import { partyAttendees } from '@/lib/seating';
 import { cleanName, cleanNameSql } from '@/lib/names';
+import { normaliseTableSizes, shapeOf } from '@/lib/tableLayout';
 import { dietCodes, dietNote, type DietaryEntry, type ExportPerson, type ExportTable, type ExportVendor, type PlanPoint, type SeatingExportData } from '@/lib/seatingExport';
 
 export const dynamic = 'force-dynamic';
@@ -188,6 +189,8 @@ export async function GET() {
             byTable.set(row.seating_table_id, list);
         }
 
+        // One size per shape, as the canvas draws them.
+        const tableSizes = normaliseTableSizes(floorPlan.table_sizes);
         const tables: ExportTable[] = tablesResult.rows.map(table => {
             const people = (byTable.get(table.id) ?? []).map(p => ({ ...p, table_name: table.name }));
             return {
@@ -200,6 +203,7 @@ export async function GET() {
                 x: Number(table.x) || 0,
                 y: Number(table.y) || 0,
                 rotation: Number(table.rotation) || 0,
+                size: tableSizes[shapeOf(table.table_type)],
                 people,
             };
         });

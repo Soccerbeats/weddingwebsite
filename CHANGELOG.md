@@ -11,6 +11,17 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.10.46 — [Released] Seating — every table of a shape is the same size (`main`, 2026-11-07 01:46)
+
+### Changed
+- **Tables no longer grow as people sit.** Every round table is the same size, every rectangular table the same size, and every head table the same size — on the canvas and on the printed floor plan alike — however many people are at it. Growing tables (v0.10.40) is removed.
+- **A crowded table shortens its names instead.** Each name gets the room its chair has, so neighbours never sit on each other; hover a name to see it in full. In RSVP view the hover now names the person too.
+
+### Added
+- **Room Settings → Table sizes**: one size per shape for the whole floor plan — the round tables' diameter, and the length and width of the rectangular and head tables. Change it and every table of that shape changes with it. *Reset to defaults* puts back 180 round, 360 × 100 rectangular, 480 × 80 head.
+  - Saved with the floor plan, separately from the room's dimensions, so saving one never clears the other.
+- `check:seating`: tables stay the same size at any number of chairs, names never touch at up to 20 chairs, sizes set by hand are the sizes drawn, and stored sizes are held to their limits (279 checks).
+
 ## v0.10.45 — [Released] RSVP: ask your guests anything — and the kitchen gets the entrée counts (`main`, 2026-11-07 01:44)
 
 Prompted by the forks: wagnerbastian built an entrée choice, and fnoren17 hard-coded a welcome-drink question and a song request. This is a general version of both, and it closes SEAT-1 in the parking lot.

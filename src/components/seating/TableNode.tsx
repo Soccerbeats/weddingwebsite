@@ -19,11 +19,13 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { SeatingTableData, SeatData, SeatTransferPayload, ColorMode } from './types';
-import { normaliseRotation, seatRunDirection, sideCounts, sideName, snapRotation, tableLayout, type TableLayout } from '@/lib/tableLayout';
+import { normaliseRotation, seatRunDirection, sideCounts, sideName, snapRotation, tableLayout, type TableLayout, type TableSize } from '@/lib/tableLayout';
 
 interface TableNodeProps {
   data: {
     table: SeatingTableData;
+    /** This table's shape's size on the plan — the same for every table of the shape. */
+    size: TableSize;
     colorMode: ColorMode;
     onDropGuest: (tableId: number, guestId: string) => void;
     onDropPerson: (tableId: number, payload: string) => void;
@@ -95,17 +97,17 @@ function SeatChip({
         e.dataTransfer.setData('seatTransfer', JSON.stringify(transfer));
         e.stopPropagation();
       }}
-      className={`nodrag relative flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border select-none cursor-grab active:cursor-grabbing ${chipClass}`}
+      className={`nodrag relative flex max-w-full items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border select-none cursor-grab active:cursor-grabbing ${chipClass}`}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       title={hasDeclined
         ? `${name} is not coming — remove them from this table`
         : colorMode === 'rsvp'
-          ? (seat.rsvp_status ? `RSVP: ${seat.rsvp_status}` : 'No RSVP yet')
+          ? (seat.rsvp_status ? `${name} — RSVP: ${seat.rsvp_status}` : `${name} — no RSVP yet`)
           : (isSplit ? 'Party is split — drag to move' : `Drag ${name} to another table`)}
     >
       {colorMode === 'party' && isSplit && <span className="text-yellow-500 mr-0.5">⚠</span>}
-      <span className="truncate max-w-[84px]">{name}</span>
+      <span className="truncate min-w-0 max-w-[84px]">{name}</span>
       {hover && (
         <button
           className="nodrag ml-1 text-gray-400 hover:text-red-500 transition-colors leading-none"
@@ -610,6 +612,8 @@ function SeatsDisplay({
             style={{
               left: spot.x,
               top: spot.y,
+              // A crowded table keeps its size; its names narrow instead.
+              maxWidth: layout.chipWidth,
               transform: 'translate(-50%, -50%)',
               transition: 'left 220ms cubic-bezier(0.22, 1, 0.36, 1), top 220ms cubic-bezier(0.22, 1, 0.36, 1)',
             }}
@@ -632,7 +636,7 @@ function SeatsDisplay({
 // ── Main node export ───────────────────────────────────────────────────────
 
 export default function TableNode({ data }: TableNodeProps) {
-  const { table, colorMode, onDropGuest, onDropPerson, onMoveSeat, onUnassignParty, onUnassignSeat, onReorderSeats, onDeleteTable, onRenameTable, onRotateTable, splitPartyGroupIds } = data;
+  const { table, size, colorMode, onDropGuest, onDropPerson, onMoveSeat, onUnassignParty, onUnassignSeat, onReorderSeats, onDeleteTable, onRenameTable, onRotateTable, splitPartyGroupIds } = data;
 
   // Mid-turn, the table follows the pointer before anything is saved; after a
   // save it shows the new angle until the refreshed table arrives with it.
@@ -640,7 +644,7 @@ export default function TableNode({ data }: TableNodeProps) {
   const [pending, setPending] = useState<number | null>(null);
   const saved = normaliseRotation(table.rotation ?? 0);
   const rotation = live ?? (pending !== null && pending !== saved ? pending : saved);
-  const layout = tableLayout(table.table_type, table.seats.length, rotation);
+  const layout = tableLayout(table.table_type, table.seats.length, rotation, size);
 
   return (
     <div

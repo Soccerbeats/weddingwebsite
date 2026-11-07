@@ -23,6 +23,15 @@ import SeatingListView from '@/components/seating/SeatingListView';
 import { SeatingTableData, GuestListEntry, FloorPlan, OffListRsvp, SeatTransferPayload, ColorMode } from '@/components/seating/types';
 import { buildPartySeats, headcount, splitPartyGroupIds as computeSplitParties } from '@/lib/seating';
 import { Drawer } from '@/components/admin/Drawer';
+import { DEFAULT_TABLE_SIZES, TABLE_SIZE_LIMITS, normaliseTableSizes, shapeOf, type TableSizes } from '@/lib/tableLayout';
+
+/** The size fields as typed — strings, so a field can be empty mid-edit. */
+type SizeDraft = { round: string; rectLength: string; rectDepth: string; headLength: string; headDepth: string };
+const draftOf = (s: TableSizes): SizeDraft => ({
+  round: String(s.round.width),
+  rectLength: String(s.rectangular.width), rectDepth: String(s.rectangular.height),
+  headLength: String(s.head.width), headDepth: String(s.head.height),
+});
 
 const nodeTypes = { tableNode: TableNode };
 
@@ -55,6 +64,9 @@ function SeatingCanvas({
   const [colorMode, setColorMode] = useState<ColorMode>('party');
   const [roomWidth, setRoomWidth] = useState(floorPlan?.room_width ?? '');
   const [roomHeight, setRoomHeight] = useState(floorPlan?.room_height ?? '');
+  const tableSizes = normaliseTableSizes(floorPlan?.table_sizes);
+  const [sizeDraft, setSizeDraft] = useState<SizeDraft>(() => draftOf(tableSizes));
+  const [sizeError, setSizeError] = useState('');
   const [roomEditMode, setRoomEditMode] = useState(false);
   // The guest list is 288px of a 390px phone, which leaves no room to look at.
   // So on a phone the canvas starts full width and the list is a drawer over it;
@@ -290,6 +302,38 @@ function SeatingCanvas({
     onRefresh();
   }, [roomWidth, roomHeight, onRefresh]);
 
+  // Every table of a shape is drawn at the shape's one size — set here, by hand.
+  const handleSaveTableSizes = useCallback(async (draft: SizeDraft) => {
+    const fields: [keyof SizeDraft, { min: number; max: number }, string][] = [
+      ['round', TABLE_SIZE_LIMITS.length, 'Round diameter'],
+      ['rectLength', TABLE_SIZE_LIMITS.length, 'Rectangular length'],
+      ['rectDepth', TABLE_SIZE_LIMITS.depth, 'Rectangular width'],
+      ['headLength', TABLE_SIZE_LIMITS.length, 'Head table length'],
+      ['headDepth', TABLE_SIZE_LIMITS.depth, 'Head table width'],
+    ];
+    for (const [key, { min, max }, label] of fields) {
+      const n = Number(draft[key]);
+      if (!draft[key].trim() || !Number.isFinite(n) || n < min || n > max) {
+        setSizeError(`${label} must be between ${min} and ${max}.`);
+        return;
+      }
+    }
+    setSizeError('');
+    const res = await fetch('/api/admin/seating/floor-plan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        table_sizes: {
+          round: { width: Number(draft.round) },
+          rectangular: { width: Number(draft.rectLength), height: Number(draft.rectDepth) },
+          head: { width: Number(draft.headLength), height: Number(draft.headDepth) },
+        },
+      }),
+    });
+    if (!res.ok) { setSizeError('Could not save the table sizes.'); return; }
+    onRefresh();
+  }, [onRefresh]);
+
   // Node sync effect
   useEffect(() => {
     const split = splitPartyGroupIds();
@@ -299,6 +343,7 @@ function SeatingCanvas({
       position: { x: table.x, y: table.y },
       data: {
         table,
+        size: tableSizes[shapeOf(table.table_type)],
         colorMode,
         onDropGuest: handleDropGuest,
         onDropPerson: handleDropPerson,
@@ -315,7 +360,7 @@ function SeatingCanvas({
     }));
     setNodes(newNodes);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tables, guests, colorMode]);
+  }, [tables, guests, colorMode, floorPlan]);
 
   /** The canvas just changed size; put the room back in view rather than
    *  leaving it half off-screen. */
@@ -405,7 +450,7 @@ function SeatingCanvas({
             Add Table
           </button>
           <button
-            onClick={() => setShowRoomSettings(true)}
+            onClick={() => { setSizeDraft(draftOf(tableSizes)); setSizeError(''); setShowRoomSettings(true); }}
             className="flex items-center gap-1.5 text-gray-600 text-sm font-medium px-3 py-1.5 rounded-md border border-gray-200 hover:bg-gray-50 transition-colors"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -599,7 +644,7 @@ function SeatingCanvas({
       <Drawer
           open={showRoomSettings}
           onClose={() => setShowRoomSettings(false)}
-          title={<h3 className="pt-1.5 text-base font-semibold text-gray-800">Room Dimensions</h3>}
+          title={<h3 className="pt-1.5 text-base font-semibold text-gray-800">Room Settings</h3>}
       >
           {showRoomSettings && (<>
             <p className="text-sm text-gray-500 mb-4">
@@ -642,10 +687,64 @@ function SeatingCanvas({
                 Cancel
               </button>
             </div>
+
+            <div className="mt-8 border-t border-gray-100 pt-6">
+              <h4 className="text-sm font-semibold text-gray-800">Table sizes</h4>
+              <p className="mt-1 mb-4 text-sm text-gray-500">
+                Every table of a shape is the same size, however many sit at it. A crowded table
+                shortens its names instead — hover a name to see it in full.
+              </p>
+              <div className="space-y-3">
+                <SizeField label="Round — diameter" value={sizeDraft.round}
+                  onChange={v => setSizeDraft(d => ({ ...d, round: v }))} />
+                <div className="grid grid-cols-2 gap-3">
+                  <SizeField label="Rectangular — length" value={sizeDraft.rectLength}
+                    onChange={v => setSizeDraft(d => ({ ...d, rectLength: v }))} />
+                  <SizeField label="Rectangular — width" value={sizeDraft.rectDepth}
+                    onChange={v => setSizeDraft(d => ({ ...d, rectDepth: v }))} />
+                  <SizeField label="Head table — length" value={sizeDraft.headLength}
+                    onChange={v => setSizeDraft(d => ({ ...d, headLength: v }))} />
+                  <SizeField label="Head table — width" value={sizeDraft.headDepth}
+                    onChange={v => setSizeDraft(d => ({ ...d, headDepth: v }))} />
+                </div>
+              </div>
+              {sizeError && <p className="mt-3 text-sm text-red-600">{sizeError}</p>}
+              <div className="flex gap-2 mt-5">
+                <button
+                  onClick={() => handleSaveTableSizes(sizeDraft)}
+                  className="flex-1 text-sm font-medium text-white py-2 rounded-md"
+                  style={{ backgroundColor: 'var(--accent)' }}
+                >
+                  Save sizes
+                </button>
+                <button
+                  onClick={() => { const d = draftOf(DEFAULT_TABLE_SIZES); setSizeDraft(d); handleSaveTableSizes(d); }}
+                  className="flex-1 text-sm font-medium text-gray-600 py-2 rounded-md border border-gray-200 hover:bg-gray-50"
+                >
+                  Reset to defaults
+                </button>
+              </div>
+            </div>
           </>)}
       </Drawer>
 
     </div>
+  );
+}
+
+/** One number in Table sizes, in canvas units (a default round table is 180). */
+function SizeField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <label className="block">
+      <span className="block text-xs font-medium text-gray-600 mb-1">{label}</span>
+      <input
+        type="number"
+        inputMode="numeric"
+        className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm outline-none focus:border-blue-400"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+      />
+    </label>
   );
 }
 

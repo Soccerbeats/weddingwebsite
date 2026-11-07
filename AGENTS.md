@@ -548,10 +548,17 @@ order, before the commit:
   - **The floor plan drawing** (`plan: 'room' | 'tables'`) is drawn from
     `tableGeometry()`, and `TableNode` draws the canvas. **Both read
     `tableLayout()` in `src/lib/tableLayout.ts`** (v0.10.40): a table's size,
-    every chair's position (long tables seat both sides, clockwise; round ones
-    grow so names don't touch), and its turn (`seating_tables.rotation`, long
-    tables only, about their centre). Never put a size or a chair position in
-    either view. The whole room turns landscape through the named page
+    every chair's position (long tables seat both sides, clockwise), and its turn
+    (`seating_tables.rotation`, long tables only, about their centre). Never put
+    a size or a chair position in either view.
+    **Tables are uniform (v0.10.46): every table of a shape is that shape's size**
+    — `floor_plans.table_sizes`, set by hand under Room Settings → Table sizes,
+    defaults in `DEFAULT_TABLE_SIZES` — passed to `tableLayout()` as `size` (the
+    canvas from the floor plan, the export as each `ExportTable.size`). **Never
+    size a table from its chair count**: v0.10.40 grew tables as people sat and
+    Austin had it taken out. A crowded table narrows its names instead
+    (`layout.chipWidth`, from where the chairs actually are), down to
+    `MIN_CHIP_WIDTH`. The whole room turns landscape through the named page
     `plan-landscape` in `globals.css` (`.print-landscape`).
   - `dietCodes()` returns `['NOM']` and nothing else for a not-eating entry, so
     the exclusivity holds even for a row written by an older release or by hand

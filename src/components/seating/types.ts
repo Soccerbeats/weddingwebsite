@@ -1,3 +1,5 @@
+import type { TableSizes } from '@/lib/tableLayout';
+
 export type TableType = 'round' | 'rectangular' | 'head';
 
 export interface SeatTransferPayload {
@@ -38,6 +40,8 @@ export interface FloorPlan {
   name: string;
   room_width: number | null;
   room_height: number | null;
+  /** One size per shape for every table on the plan — always filled in by the API. */
+  table_sizes: TableSizes;
 }
 
 export interface GuestListEntry {

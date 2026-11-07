@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { cleanNameSql } from '@/lib/names';
+import { normaliseTableSizes } from '@/lib/tableLayout';
 
 export const dynamic = 'force-dynamic';
 
@@ -140,7 +141,11 @@ export async function GET() {
       number_of_guests: Number(r.number_of_guests) || 0,
     }));
 
-    return NextResponse.json({ floorPlan, tables, offListRsvps });
+    return NextResponse.json({
+      floorPlan: { ...floorPlan, table_sizes: normaliseTableSizes(floorPlan.table_sizes) },
+      tables,
+      offListRsvps,
+    });
   } catch (error) {
     console.error('Error fetching floor plan:', error);
     return NextResponse.json(
@@ -155,12 +160,28 @@ export async function GET() {
 export async function POST(request: Request) {
   const client = await pool.connect();
   try {
-    const { name, room_width, room_height } = await request.json();
+    const body = await request.json();
+    const { name, room_width, room_height } = body;
 
     // Get existing floor plan or create one
     const fpResult = await client.query(
       'SELECT id FROM floor_plans ORDER BY id ASC LIMIT 1'
     );
+
+    // The table sizes save on their own, so saving them cannot clear the room's
+    // dimensions (which this route sets wholesale) and the reverse.
+    if (body.table_sizes !== undefined) {
+      const sizes = normaliseTableSizes(body.table_sizes);
+      const saved = fpResult.rows.length === 0
+        ? await client.query(
+            `INSERT INTO floor_plans (name, table_sizes, updated_at) VALUES ('Main Floor Plan', $1, NOW()) RETURNING *`,
+            [JSON.stringify(sizes)])
+        : await client.query(
+            `UPDATE floor_plans SET table_sizes = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+            [JSON.stringify(sizes), fpResult.rows[0].id]);
+      const row = saved.rows[0];
+      return NextResponse.json({ success: true, floorPlan: { ...row, table_sizes: normaliseTableSizes(row.table_sizes) } });
+    }
 
     let floorPlan;
     if (fpResult.rows.length === 0) {

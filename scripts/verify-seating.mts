@@ -9,7 +9,7 @@
  * twice, drop someone silently, or hand two people the same chair — none of
  * which announces itself on screen.
  */
-import { CHIP_HEIGHT, CHIP_WIDTH, SEAT_SLOT, normaliseRotation, seatRunDirection, sideCounts, sideName, snapRotation, tableLayout } from '../src/lib/tableLayout';
+import { CHIP_HEIGHT, CHIP_WIDTH, DEFAULT_TABLE_SIZES, MIN_CHIP_WIDTH, normaliseRotation, normaliseTableSizes, seatRunDirection, sideCounts, sideName, snapRotation, tableLayout } from '../src/lib/tableLayout';
 import type { GuestListEntry, SeatData, SeatingTableData } from '../src/components/seating/types';
 import {
     allSeats, buildPartySeats, drinkingHeadcount, expectedSeats, headcount, occupancy, partyAttendees,
@@ -1037,7 +1037,7 @@ console.log('\nThe named guest answers for themself');
     check('saying yes seats them', partyAttendees({ ...household, primary_attending: true }).length === 3);
 }
 
-console.log('\nTable layout: chairs on both sides, tables that grow and turn');
+console.log('\nTable layout: chairs on both sides, uniform sizes, tables that turn');
 {
     const six = tableLayout('rectangular', 6);
     check('a long table seats both sides — three along the top, three along the bottom',
@@ -1049,21 +1049,53 @@ console.log('\nTable layout: chairs on both sides, tables that grow and turn');
     check('…starting at the end the top finished', Math.abs(six.seats[3].x - six.seats[2].x) < 1e-9);
     const five = tableLayout('rectangular', 5);
     check('an odd chair goes on the top', five.seats.filter(p => p.y < 0).length === 3);
-    check('a short table keeps its usual size', six.body.width === 200 || six.body.width === 3 * SEAT_SLOT + 16);
+    const D = DEFAULT_TABLE_SIZES;
+    check('a long table is its shape\'s size', six.body.width === D.rectangular.width && six.body.height === D.rectangular.height);
     const twelve = tableLayout('rectangular', 12);
-    check('a long table grows along its length as people sit', twelve.body.width === 6 * SEAT_SLOT + 16, String(twelve.body.width));
-    const gaps = twelve.seats.slice(0, 6).map((p, i, a) => (i ? p.x - a[i - 1].x : SEAT_SLOT));
-    check('no two names along a side overlap', gaps.every(g => g >= CHIP_WIDTH), JSON.stringify(gaps));
-    check('the table keeps its top-left corner as it grows', twelve.body.x === 0 && twelve.body.y === 0);
+    const sameSize = (a: ReturnType<typeof tableLayout>, b: ReturnType<typeof tableLayout>) =>
+        a.body.width === b.body.width && a.body.height === b.body.height && a.node.width === b.node.width && a.node.height === b.node.height;
+    check('a full long table is the same size as a half-empty one — tables never grow', sameSize(twelve, six), JSON.stringify(twelve.body));
+    check('…and neither is an empty one', sameSize(tableLayout('rectangular', 0), six) && sameSize(tableLayout('head', 14), tableLayout('head', 2)));
+    const gaps = twelve.seats.slice(0, 6).map((p, i, a) => (i ? p.x - a[i - 1].x : Infinity));
+    check('a crowded side narrows its names so no two overlap', gaps.every(g => g >= twelve.chipWidth), JSON.stringify({ gaps, chip: twelve.chipWidth }));
+    check('…and they are narrower than on a roomy table', twelve.chipWidth < CHIP_WIDTH && tableLayout('rectangular', 4).chipWidth === CHIP_WIDTH);
+    check('every chair along a crowded side stays on the table\'s length',
+        twelve.seats.every(p => p.x >= 0 && p.x <= twelve.body.width), JSON.stringify(twelve.seats.map(p => p.x)));
+    check('names never narrow past the floor', tableLayout('rectangular', 60).chipWidth === MIN_CHIP_WIDTH);
 
     const small = tableLayout('round', 4);
-    check('a small round table keeps its usual size', small.body.width === 160);
+    check('a round table is its shape\'s size', small.body.width === D.round.width && small.body.height === D.round.width);
     const big = tableLayout('round', 14);
-    check('a full round table grows', big.body.width > 160, String(big.body.width));
+    check('a full round table is the same size as an empty one', sameSize(big, small) && sameSize(tableLayout('round', 0), small), String(big.body.width));
     const r = (p: { x: number; y: number }) => Math.hypot(p.x - big.centre.x, p.y - big.centre.y);
     const dist = Math.min(...big.seats.map((p, i, a) => Math.hypot(p.x - a[(i + 1) % a.length].x, p.y - a[(i + 1) % a.length].y)));
-    check('…far enough that neighbours\' names do not sit on each other', dist >= CHIP_HEIGHT * 3, String(dist));
+    check('…its names narrow to the room each chair has', big.chipWidth < CHIP_WIDTH && small.chipWidth === CHIP_WIDTH, String(big.chipWidth));
+    check('…its neighbours stay apart', dist >= CHIP_HEIGHT, String(dist));
     check('…and its chairs stay on one circle', big.seats.every(p => Math.abs(r(p) - r(big.seats[0])) < 1e-9));
+
+    let clear = true;
+    const where: string[] = [];
+    for (const shape of ['round', 'rectangular', 'head'] as const) {
+        for (let k = 1; k <= 20; k++) {
+            const l = tableLayout(shape, k);
+            if (l.chipWidth === MIN_CHIP_WIDTH) continue; // at the floor, names may meet
+            for (let i = 0; i < k; i++) for (let j = i + 1; j < k; j++) {
+                const a = l.seats[i], c = l.seats[j];
+                if (Math.abs(a.x - c.x) < l.chipWidth && Math.abs(a.y - c.y) < CHIP_HEIGHT) { clear = false; where.push(`${shape} ${k}`); }
+            }
+        }
+    }
+    check('at every chair count up to 20, no two names on a table touch (above the floor width)', clear, [...new Set(where)].join(', '));
+
+    const custom = { width: 500, height: 120 };
+    check('a size set by hand is the size drawn', tableLayout('rectangular', 3, 0, custom).body.width === 500
+        && tableLayout('rectangular', 9, 0, custom).body.height === 120);
+    check('a round table\'s size is one number', tableLayout('round', 3, 0, { width: 240, height: 999 }).body.height === 240);
+    const n = normaliseTableSizes({ rectangular: { width: 99999, height: -4 }, round: { width: 'x' } });
+    check('stored sizes are held to the limits and filled from the defaults',
+        n.rectangular.width === 1200 && n.rectangular.height === D.rectangular.height && n.round.width === D.round.width
+        && n.head.width === D.head.width, JSON.stringify(n));
+    check('no stored sizes means the defaults', JSON.stringify(normaliseTableSizes(null)) === JSON.stringify(D));
     check('a round table never turns', tableLayout('round', 6, 45).rotation === 0);
 
     const turned = tableLayout('rectangular', 6, 90);
@@ -1088,7 +1120,7 @@ console.log('\nTable layout: chairs on both sides, tables that grow and turn');
     }
     check('at every 15° step, both long shapes keep every chair where it was relative to the table', allSteps);
     check('the drawn box takes in the turned table and its names',
-        turned.box.maxX >= Math.max(...turned.seats.map(p => p.x)) + CHIP_WIDTH / 2 - 1e-9);
+        turned.box.maxX >= Math.max(...turned.seats.map(p => p.x)) + turned.chipWidth / 2 - 1e-9);
 
     check('angles snap to 15° unless free', snapRotation(52) === 45 && snapRotation(52, true) === 52 && snapRotation(-90) === 270);
     check('a full turn is no turn', normaliseRotation(360) === 0 && normaliseRotation(-15) === 345);
@@ -1106,21 +1138,23 @@ console.log('\nThe floor plan drawing');
     const four = [1, 2, 3, 4];
     const round = tableGeometry({ table_type: 'round', x: 100, y: 50, people: four });
     check('a round table sits inside its orbit, where the canvas draws it',
-        round.body.x === 152 && round.body.y === 102 && round.body.width === 160,
+        round.body.x === 152 && round.body.y === 102 && round.body.width === DEFAULT_TABLE_SIZES.round.width,
         JSON.stringify(round.body));
     check('a round table has a chair per person', round.seats.length === 4);
     check('the first chair is at twelve o\'clock',
-        Math.abs(round.seats[0].x - 232) < 1e-9 && round.seats[0].y < round.body.y,
+        Math.abs(round.seats[0].x - (152 + DEFAULT_TABLE_SIZES.round.width / 2)) < 1e-9 && round.seats[0].y < round.body.y,
         JSON.stringify(round.seats[0]));
     check('the chairs go round clockwise, as on the canvas', round.seats[1].x > round.seats[0].x);
 
     const head = tableGeometry({ table_type: 'head', x: 0, y: 0, people: Array(8).fill(0) });
-    check('a head table widens with the people at it, as on the canvas',
-        head.body.width === 8 * SEAT_SLOT + 16 && head.body.height === 80, JSON.stringify(head.body));
+    check('a head table is the head table\'s size, however many sit at it',
+        head.body.width === DEFAULT_TABLE_SIZES.head.width && head.body.height === DEFAULT_TABLE_SIZES.head.height, JSON.stringify(head.body));
+    const sized = tableGeometry({ table_type: 'round', x: 0, y: 0, people: [1, 2], size: { width: 260, height: 260 } });
+    check('the printed plan draws the size the canvas does', sized.body.width === 260);
     check('everyone at a head table sits along one side, facing the room',
         head.seats.length === 8 && head.seats.every(p => p.y < 0));
     const empty = tableGeometry({ table_type: 'rectangular', x: 0, y: 0, people: [] });
-    check('an empty table draws no names', empty.seats.length === 0 && empty.box.maxY === 100 && empty.box.minY === 0);
+    check('an empty table draws no names', empty.seats.length === 0 && empty.box.maxY === DEFAULT_TABLE_SIZES.rectangular.height && empty.box.minY === 0);
     const moved = tableGeometry({ table_type: 'rectangular', x: 300, y: 40, people: [1, 2], rotation: 90 });
     check('the drawing carries the table\'s turn', moved.rotation === 90 && moved.body.x === 300);
 
