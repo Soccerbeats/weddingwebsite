@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { foldName, foldNameSql } from '@/lib/names';
 import { getSiteConfig } from '@/lib/config';
 import { createTransporter, escapeHtml, getCoupleName, getMailFrom, isMailConfigured } from '@/lib/mail';
 import { verifyRsvpLink } from '@/lib/rsvpLink';
@@ -16,6 +17,8 @@ interface RsvpInput {
     dietaryJson: string | null;
     message: string | null;
     resolvedMembers: { name: string | null; attending: boolean | null }[] | null;
+    /** The named guest's own answer; null from an older client that asked the household instead. */
+    primaryAttending: boolean | null;
 }
 
 /**
@@ -56,7 +59,14 @@ function parseInput(body: unknown): RsvpInput | string {
         })
         : null;
 
-    return { guestName, email, phone, attending: b.attending, guestCount, dietaryJson, message, resolvedMembers };
+    // Answered per person (v0.10.42): the household is coming when anyone is, so
+    // the flag can never disagree with the cards it came from.
+    const primaryAttending = typeof b.primaryAttending === 'boolean' ? b.primaryAttending : null;
+    const attending = primaryAttending === null
+        ? b.attending
+        : primaryAttending || !!resolvedMembers?.some((m) => m.attending === true);
+
+    return { guestName, email, phone, attending, guestCount, dietaryJson, message, resolvedMembers, primaryAttending };
 }
 
 /**
@@ -124,11 +134,14 @@ async function saveRsvp(input: RsvpInput): Promise<{ id: number; isUpdate: boole
             `UPDATE guest_list
                 SET email = $1, phone = $2, rsvp_status = $3,
                     party_members = COALESCE($4::jsonb, party_members),
+                    primary_attending = $6,
                     updated_at = NOW()
               WHERE id = $5`,
             [input.email, input.phone, input.attending ? 'attending' : 'declined',
              input.resolvedMembers ? JSON.stringify(input.resolvedMembers) : null,
-             guest.id],
+             guest.id,
+             // An older client only answered for the household: it meant them too.
+             input.primaryAttending ?? input.attending],
         );
 
         await client.query('COMMIT');
@@ -149,21 +162,21 @@ async function saveRsvp(input: RsvpInput): Promise<{ id: number; isUpdate: boole
  * lowest id, so the answer is deterministic either way.
  */
 async function matchHousehold(name: string): Promise<{ id: number; guest_name: string } | null> {
-    const normalized = name.trim().toLowerCase();
+    const normalized = foldName(name);
     const result = await pool.query(
         `SELECT id, guest_name FROM guest_list
           WHERE invited = true
             AND (
-              LOWER(TRIM(guest_name)) = $1
-              OR LOWER(TRIM(COALESCE(plus_one_name, ''))) = $1
+              ${foldNameSql('guest_name')} = $1
+              OR ${foldNameSql('plus_one_name')} = $1
               OR EXISTS (
                 SELECT 1 FROM jsonb_array_elements(
                   CASE WHEN jsonb_typeof(party_members) = 'array' THEN party_members ELSE '[]'::jsonb END
                 ) AS m
-                WHERE LOWER(TRIM(COALESCE(m->>'name', ''))) = $1
+                WHERE ${foldNameSql("m->>'name'")} = $1
               )
             )
-          ORDER BY (LOWER(TRIM(guest_name)) = $1) DESC, id ASC
+          ORDER BY (${foldNameSql('guest_name')} = $1) DESC, id ASC
           LIMIT 1`,
         [normalized]
     );

@@ -66,7 +66,7 @@ export interface PartyAttendee {
  * party it belonged to.
  *
  * Someone who answered "not attending" is skipped — a party of three where one
- * declined takes two chairs. Someone who has not answered is still seated;
+ * declined takes two chairs. That includes the guest themself. Someone who has not answered is still seated;
  * nothing is assumed on their behalf.
  *
  * Names are the guest list's, with their parenthetical notes taken off: a
@@ -83,9 +83,11 @@ export interface PartyAttendee {
  */
 export function partyAttendees(guest: GuestListEntry): PartyAttendee[] {
     const primary = cleanName(guest.guest_name) || guest.guest_name;
-    const people: PartyAttendee[] = [
-        { name: primary, guestListId: guest.id, under21: !!guest.under_21 },
-    ];
+    // The guest named on the invitation can decline while the rest of their
+    // household comes (v0.10.42); then they take no chair either.
+    const people: PartyAttendee[] = guest.primary_attending === false
+        ? []
+        : [{ name: primary, guestListId: guest.id, under21: !!guest.under_21 }];
 
     const plusOne = (guest.plus_one_name ?? '').trim();
     const members = guest.party_members ?? [];

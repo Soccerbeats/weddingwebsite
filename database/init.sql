@@ -919,3 +919,14 @@ UPDATE rsvps r
 DELETE FROM seat_assignments sa
  WHERE sa.party_group_id IS NOT NULL
    AND NOT EXISTS (SELECT 1 FROM guest_list g WHERE g.id = sa.party_group_id);
+
+-- ---------------------------------------------------------------------------
+-- v0.10.42: the named guest answers for themself.
+--
+-- `party_members[].attending` has carried each companion's own answer for a
+-- while; the guest named on the invitation had none, because the form's
+-- household question answered for them. NULL — every row before this, and any
+-- household that has not answered — means "not known", which seats them as
+-- before. FALSE: the rest of the household is coming without them.
+-- ---------------------------------------------------------------------------
+ALTER TABLE guest_list ADD COLUMN IF NOT EXISTS primary_attending BOOLEAN;

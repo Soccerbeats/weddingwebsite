@@ -11,7 +11,7 @@ export async function GET() {
         const client = await pool.connect();
         try {
             const result = await client.query(`
-                SELECT r.*, gl.plus_one_name
+                SELECT r.*, gl.plus_one_name, gl.primary_attending
                 FROM rsvps r
                 LEFT JOIN guest_list gl ON LOWER(gl.guest_name) = LOWER(r.guest_name)
                 ORDER BY r.created_at DESC

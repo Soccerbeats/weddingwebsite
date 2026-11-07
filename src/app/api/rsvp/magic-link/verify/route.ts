@@ -78,6 +78,7 @@ export async function POST(request: Request) {
                 email: guest.email,
                 phone: guest.phone,
                 party_members: guest.party_members || [],
+                primary_attending: guest.primary_attending ?? null,
             },
             // The form greets whoever the link was for, so a plus-one isn't
             // confused by seeing the primary guest's name.

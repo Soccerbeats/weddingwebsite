@@ -194,7 +194,7 @@ export async function GET() {
         // Expanded to people through the same `partyAttendees` the chart seats
         // with, so the count here and the count the chart would add agree.
         const unseatedResult = await client.query(
-            `SELECT g.id, g.guest_name, g.plus_one_name, g.party_size, g.party_members,
+            `SELECT g.id, g.guest_name, g.plus_one_name, g.party_size, g.party_members, g.primary_attending,
                     g.side, g.rsvp_status, r.dietary_restrictions
                FROM guest_list g
                LEFT JOIN LATERAL (
@@ -224,6 +224,7 @@ export async function GET() {
                 rsvp_status: row.rsvp_status,
                 invited: true,
                 party_members: Array.isArray(row.party_members) ? row.party_members : [],
+                primary_attending: row.primary_attending,
             }).map(person => personFrom(
                 person.name,
                 null,

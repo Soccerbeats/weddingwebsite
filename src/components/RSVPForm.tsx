@@ -28,6 +28,8 @@ interface VerifiedGuest {
     email?: string | null;
     phone?: string | null;
     party_members?: PartyMember[];
+    /** The named guest's own answer, once they have given one. */
+    primary_attending?: boolean | null;
 }
 
 interface ExistingRsvp {
@@ -68,7 +70,14 @@ interface MemberCard {
     other_text: string;
 }
 
-function buildCards(primaryName: string, partyMembers: PartyMember[], existingDietary: DietaryEntry[], hasExistingRsvp: boolean): MemberCard[] {
+function buildCards(
+    primaryName: string,
+    partyMembers: PartyMember[],
+    existingDietary: DietaryEntry[],
+    hasExistingRsvp: boolean,
+    /** The named guest's own answer, when one is on file. */
+    primaryAnswer: boolean | null,
+): MemberCard[] {
     const totalSlots = 1 + partyMembers.length;
     return Array.from({ length: totalSlots }, (_, i) => {
         const isFirst = i === 0;
@@ -89,9 +98,10 @@ function buildCards(primaryName: string, partyMembers: PartyMember[], existingDi
             // inference — a submitted RSVP lists exactly its attendees in
             // dietary_restrictions, and submitting requires answering everyone, so "absent
             // from that list" means they were marked not attending.
-            // (The primary guest is covered by the "Will you be attending?" answer above.)
+            // The named guest answers for themself too (v0.10.42) — they used to
+            // be locked to "attending" by a household question.
             attendance: isFirst
-                ? 'yes'
+                ? (hasExistingRsvp && primaryAnswer !== null ? (primaryAnswer ? 'yes' : 'no') : null)
                 : typeof slot?.attending === 'boolean'
                     ? (slot.attending ? 'yes' : 'no')
                     : (hasExistingRsvp ? (existing ? 'yes' : 'no') : null),
@@ -165,7 +175,6 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
         guestName: '',
         email: '',
         phone: '',
-        attending: 'yes',
         message: '',
     });
 
@@ -188,7 +197,7 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
     // 'simple' mode or on a fresh household in 'verify' mode, and the email
     // check in 'verify' mode on an existing one.
     const hydrateVerified = useCallback((data: {
-        guest: { name: string; party_size: number; email?: string | null; phone?: string | null; party_members?: PartyMember[] };
+        guest: VerifiedGuest;
         matched: { name: string; isPrimary: boolean } | null;
         existingRsvp: ExistingRsvp | null;
         locked?: boolean;
@@ -205,13 +214,16 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
         // Notes the couple typed in for a household that has not answered are
         // prefilled, but the form still starts as a first reply.
         const answered = data.existingRsvp?.attending === true || data.existingRsvp?.attending === false;
-        setCards(buildCards(data.guest.name, data.guest.party_members || [], existingDietary, answered));
+        // Before v0.10.42 the household's answer was the named guest's too.
+        const primaryAnswer = typeof data.guest.primary_attending === 'boolean'
+            ? data.guest.primary_attending
+            : answered ? !!data.existingRsvp!.attending : null;
+        setCards(buildCards(data.guest.name, data.guest.party_members || [], existingDietary, answered, primaryAnswer));
 
         setFormData({
             guestName: data.guest.name,
             email: data.existingRsvp?.email || data.guest.email || '',
             phone: data.existingRsvp?.phone || data.guest.phone || '',
-            attending: answered ? (data.existingRsvp!.attending ? 'yes' : 'no') : 'yes',
             message: data.existingRsvp?.message || '',
         });
 
@@ -377,14 +389,13 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        // Validate: unnamed attending guests must have a name filled in
-        // Also validate: "Other" dietary requires text
-        if (formData.attending === 'yes') {
-            // Every guest must be explicitly marked attending or not attending first.
+        // Every person answers for themself, so every card needs an answer; an
+        // unnamed guest who is coming needs a name, and "Other" needs words.
+        {
             const unanswered = cards.findIndex(c => c.attendance === null);
             if (unanswered !== -1) {
                 const who = cards[unanswered].name.trim() || `Guest ${unanswered + 1}`;
-                setErrorMessage(`Please mark ${who} as attending or not attending before submitting.`);
+                setErrorMessage(`Please let us know whether ${who} can make it.`);
                 setStatus('error');
                 return;
             }
@@ -405,14 +416,16 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
         setStatus('submitting');
         setErrorMessage('');
 
-        const attendingCards = formData.attending === 'yes' ? cards.filter(c => c.attendance === 'yes') : [];
+        const attendingCards = cards.filter(c => c.attendance === 'yes');
         const guestCount = attendingCards.length;
+        // The household is coming when anyone in it is.
+        const householdAttending = guestCount > 0;
         // Send resolved names *and* each person's answer back so guest_list.party_members
         // stays up to date. Attendance per member is what the seating chart reads: without
         // it a declined plus-one still got a chair, coloured as if they were coming.
         const resolvedMembers = cards.slice(1).map(c => ({
             name: c.name || null,
-            attending: formData.attending === 'yes' ? c.attendance === 'yes' : false,
+            attending: c.attendance === 'yes',
         }));
         const dietaryRestrictions = attendingCards.map(c => ({
             name: c.name,
@@ -436,7 +449,8 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
                     ...formData,
                     ...(isUpdate ? { id: existingRsvp.id } : {}),
                     ...(rsvpToken ? { token: rsvpToken } : {}),
-                    attending: formData.attending === 'yes',
+                    attending: householdAttending,
+                    primaryAttending: cards[0]?.attendance === 'yes',
                     guestCount,
                     dietaryRestrictions,
                     resolvedMembers,
@@ -453,7 +467,7 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
             setExistingRsvp((prev) => ({
                 ...(prev || {}),
                 id: data.id ?? prev?.id ?? null,
-                attending: formData.attending === 'yes',
+                attending: householdAttending,
                 email: formData.email,
                 phone: formData.phone,
                 message: formData.message,
@@ -478,7 +492,7 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
         const bookingUrl = config?.roomBlockUrl ?? roomBlockUrl;
         const roomMessage = (config?.roomBlockMessage?.trim()) || DEFAULT_ROOM_BLOCK_MESSAGE;
         // Receipt summary of who's attending
-        const isAttending = formData.attending === 'yes';
+        const isAttending = cards.some(c => c.attendance === 'yes');
         const attendees = isAttending ? cards.filter(c => c.attendance === 'yes' && c.name?.trim()) : [];
         const numberWords = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
         const partyWord = numberWords[attendees.length] ?? String(attendees.length);
@@ -781,255 +795,273 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
 
     const partyNames = verifiedGuest?.party_members?.map((m: PartyMember, i: number) => m.name || `Guest ${i + 2}`).join(', ');
 
-    // Guests still needing an explicit attending / not-attending choice. Only applies
-    // when the party is coming at all — declining covers everyone in one go.
-    const unansweredCount = formData.attending === 'yes'
-        ? cards.filter(c => c.attendance === null).length
-        : 0;
+    // Every person answers for themself (v0.10.42).
+    const unansweredCount = cards.filter(c => c.attendance === null).length;
+    const comingCount = cards.filter(c => c.attendance === 'yes').length;
+    const decliningCount = cards.filter(c => c.attendance === 'no').length;
+    const allDeclined = cards.length > 0 && decliningCount === cards.length;
+    const setEveryone = (attendance: Attendance) => setCards(prev => prev.map(c => ({ ...c, attendance })));
+    const matchedKey = foldKey(matched?.name);
+    const couple = [config?.brideName, config?.groomName].filter(Boolean).join(' & ');
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-6 bg-white p-8 rounded-3xl shadow-xl border-t-4 border-accent">
-            {/* Welcome banner */}
-            <div className={`border rounded-2xl p-4 ${existingRsvp ? 'bg-blue-50 border-blue-200' : 'bg-green-50 border-green-200'}`}>
-                <div className="flex gap-3">
-                    <svg className={`h-5 w-5 flex-shrink-0 mt-0.5 ${existingRsvp ? 'text-blue-400' : 'text-green-400'}`} viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                    <div>
-                        <p className={`text-sm font-medium ${existingRsvp ? 'text-blue-800' : 'text-green-800'}`}>
-                            Welcome{existingRsvp ? ' back' : ''}, {matched?.name || verifiedGuest?.name}{partyNames ? ` & party` : ''}!
-                        </p>
-                        {matched && !matched.isPrimary && (
-                            <p className={`text-sm mt-1 ${existingRsvp ? 'text-blue-700' : 'text-green-700'}`}>
-                                You&apos;re part of {verifiedGuest?.name}&apos;s party — this RSVP covers everyone below.
-                            </p>
-                        )}
-                        <p className={`text-sm mt-1 ${existingRsvp ? 'text-blue-700' : 'text-green-700'}`}>
-                            {existingRsvp ? 'You can update your RSVP below.' : 'Please complete your RSVP below.'}
-                        </p>
-                        {formData.attending === 'yes' && cards.length > 1 && (
-                            <p className={`text-sm mt-2 font-semibold ${existingRsvp ? 'text-blue-800' : 'text-green-800'}`}>
-                                Please mark all guests as attending or not attending — you&apos;ll need to
-                                choose one for every person before you can send your RSVP.
-                            </p>
-                        )}
-                    </div>
-                </div>
+        <form onSubmit={handleSubmit} className="space-y-8 bg-white p-6 sm:p-8 rounded-3xl shadow-xl border-t-4 border-accent">
+            {/* Greeting */}
+            <div className="text-center">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
+                    {existingRsvp && existingRsvp.attending != null ? 'Welcome back' : 'Welcome'}
+                </p>
+                <h2 className="mt-1 font-serif text-2xl text-gray-900 sm:text-3xl">
+                    {matched?.name || verifiedGuest?.name}{partyNames ? ' & party' : ''}
+                </h2>
+                <p className="mx-auto mt-2 max-w-md text-sm text-gray-500">
+                    {matched && !matched.isPrimary
+                        ? <>You&apos;re part of {verifiedGuest?.name}&apos;s party — answer for everyone below.</>
+                        : cards.length > 1
+                            ? 'Let us know who can make it — each person answers for themself.'
+                            : existingRsvp && existingRsvp.attending != null
+                                ? 'Change anything below and send it again.'
+                                : 'We hope you can make it.'}
+                </p>
             </div>
 
-            {/* Contact info */}
-            <div className="grid grid-cols-1 gap-y-4 gap-x-4 sm:grid-cols-2">
-                <div className="sm:col-span-2">
-                    <label htmlFor="email" className="block text-sm font-medium text-gray-700 ml-1">Email *</label>
-                    <input
-                        type="email" name="email" id="email" required
-                        value={formData.email} onChange={handleChange}
-                        className="mt-1 appearance-none block w-full px-4 py-3 border border-gray-300 rounded-2xl shadow-sm placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-accent focus:border-accent sm:text-sm transition-shadow"
-                    />
+            {/* Who's coming */}
+            <section aria-labelledby="rsvp-party-heading">
+                <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+                    <h3 id="rsvp-party-heading" className="text-sm font-semibold text-gray-900">
+                        {cards.length > 1 ? 'Who’s coming?' : 'Will you be joining us?'}
+                    </h3>
+                    {cards.length > 1 && (
+                        <div className="flex gap-1.5 text-xs">
+                            <button type="button" onClick={() => setEveryone('yes')}
+                                className="rounded-full border border-gray-200 px-3 py-1.5 font-medium text-gray-600 transition-colors hover:border-accent hover:text-accent-dark">
+                                Everyone’s coming
+                            </button>
+                            <button type="button" onClick={() => setEveryone('no')}
+                                className="rounded-full border border-gray-200 px-3 py-1.5 font-medium text-gray-500 transition-colors hover:border-gray-400 hover:text-gray-800">
+                                None of us can
+                            </button>
+                        </div>
+                    )}
                 </div>
-                <div>
-                    <label htmlFor="phone" className="block text-sm font-medium text-gray-700 ml-1">Phone *</label>
-                    <input
-                        type="tel" name="phone" id="phone" required
-                        value={formData.phone} onChange={handleChange}
-                        className="mt-1 appearance-none block w-full px-4 py-3 border border-gray-300 rounded-2xl shadow-sm placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-accent focus:border-accent sm:text-sm transition-shadow"
-                    />
-                </div>
-                <div>
-                    <label htmlFor="attending" className="block text-sm font-medium text-gray-700 ml-1">Will you be attending? *</label>
-                    <select
-                        id="attending" name="attending" required
-                        value={formData.attending} onChange={handleChange}
-                        className="mt-1 block w-full pl-4 pr-10 py-3 text-base border-gray-300 text-gray-900 focus:outline-none focus:ring-accent focus:border-accent sm:text-sm rounded-2xl transition-shadow"
-                    >
-                        <option value="yes">Joyfully Accepts</option>
-                        <option value="no">Regretfully Declines</option>
-                    </select>
-                </div>
-            </div>
 
-            {/* Per-member cards */}
-            {formData.attending === 'yes' && cards.length > 0 && (
-                <div>
-                    <h3 className="text-sm font-medium text-gray-700 mb-3">Your Party</h3>
-                    <div className="space-y-3">
-                        {cards.map((card, i) => {
-                            const isFirst = i === 0;
-                            return (
-                                <div
-                                    key={i}
-                                    className={`border rounded-2xl p-4 transition-colors ${
-                                        card.attendance === 'yes'
-                                            ? 'bg-white border-gray-200'
-                                            : card.attendance === 'no'
-                                                ? 'bg-gray-50 border-gray-100 opacity-60'
-                                                : 'bg-amber-50 border-amber-300'
-                                    }`}
-                                >
-                                    {/* Card header: name + attending toggle */}
-                                    <div className="flex items-start justify-between gap-4 mb-3">
-                                        <div className="flex-1">
-                                            {card.nameEditable ? (
-                                                <div>
-                                                    <label className="block text-xs text-gray-500 mb-1">
-                                                        Guest {i + 1} name <span className="text-red-500">*</span>
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        value={card.name}
-                                                        onChange={(e) => updateCard(i, { name: e.target.value })}
-                                                        placeholder="Enter guest name"
-                                                        className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-accent focus:border-accent"
-                                                    />
-                                                </div>
-                                            ) : (
-                                                <p className="text-sm font-semibold text-gray-800">{card.name}</p>
-                                            )}
-                                        </div>
-                                        {/* Attending / Not attending — mutually exclusive, and the
-                                            primary guest is locked on by the answer above. Clicking a
-                                            ticked box clears it back to unanswered. */}
-                                        {isFirst ? (
-                                            <span className="text-xs font-medium text-green-700 bg-green-100 px-2 py-1 rounded-full whitespace-nowrap">Attending</span>
-                                        ) : (
-                                            <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-4 whitespace-nowrap">
-                                                <label className="flex items-center gap-2 cursor-pointer">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={card.attendance === 'yes'}
-                                                        onChange={() => updateCard(i, { attendance: card.attendance === 'yes' ? null : 'yes' })}
-                                                        className="h-4 w-4 rounded border-gray-300 text-accent focus:ring-accent"
-                                                    />
-                                                    <span className="text-sm text-gray-600">Attending</span>
-                                                </label>
-                                                <label className="flex items-center gap-2 cursor-pointer">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={card.attendance === 'no'}
-                                                        onChange={() => updateCard(i, { attendance: card.attendance === 'no' ? null : 'no' })}
-                                                        className="h-4 w-4 rounded border-gray-300 text-accent focus:ring-accent"
-                                                    />
-                                                    <span className="text-sm text-gray-600">Not attending</span>
-                                                </label>
+                <div className="space-y-3">
+                    {cards.map((card, i) => {
+                        const isYou = matchedKey !== '' && foldKey(card.name) === matchedKey;
+                        const initials = (card.name || `Guest ${i + 1}`).split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]?.toUpperCase()).join('');
+                        return (
+                            <div
+                                key={i}
+                                className={`rounded-3xl border p-4 transition-all duration-300 sm:p-5 ${
+                                    card.attendance === 'yes'
+                                        ? 'border-accent/40 bg-accent/[0.03] shadow-sm'
+                                        : card.attendance === 'no'
+                                            ? 'border-gray-100 bg-gray-50/70'
+                                            : 'border-gray-200 bg-white'
+                                }`}
+                            >
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                                        <span aria-hidden className={`flex size-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold transition-colors ${
+                                            card.attendance === 'yes' ? 'bg-accent text-white' : 'bg-gray-100 text-gray-500'}`}>
+                                            {initials || '?'}
+                                        </span>
+                                        {card.nameEditable ? (
+                                            <div className="min-w-0 flex-1">
+                                                <label htmlFor={`rsvp-name-${i}`} className="sr-only">Guest {i + 1} name</label>
+                                                <input
+                                                    id={`rsvp-name-${i}`}
+                                                    type="text"
+                                                    value={card.name}
+                                                    onChange={(e) => updateCard(i, { name: e.target.value })}
+                                                    placeholder={`Guest ${i + 1}’s name`}
+                                                    className="block w-full rounded-2xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-accent focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/30"
+                                                />
                                             </div>
+                                        ) : (
+                                            <p className="min-w-0 truncate text-base font-medium text-gray-900">
+                                                {card.name}
+                                                {isYou && cards.length > 1 && (
+                                                    <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 align-middle text-[10px] font-semibold uppercase tracking-wider text-gray-500">You</span>
+                                                )}
+                                            </p>
                                         )}
                                     </div>
 
-                                    {/* Dietary checkboxes — only when attending */}
-                                    {card.attendance === 'yes' && (
-                                        <div>
-                                            <p className="text-xs text-gray-500 mb-2">Dietary restrictions</p>
-                                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                                                {([
-                                                    { field: 'vegetarian', label: 'Vegetarian' },
-                                                    { field: 'vegan', label: 'Vegan' },
-                                                    { field: 'gluten_free', label: 'Gluten Free' },
-                                                    { field: 'nut_allergy', label: 'Nut Allergy' },
-                                                    { field: 'other', label: 'Other' },
-                                                    { field: 'kids_meal', label: "Kids' Meal" },
-                                                    { field: 'no_meal', label: 'Not Eating' },
-                                                ] as { field: keyof Pick<MemberCard, 'vegetarian' | 'vegan' | 'gluten_free' | 'nut_allergy' | 'other' | 'kids_meal' | 'no_meal'>; label: string }[]).map(({ field, label }) => (
-                                                    <label key={field} className={`flex items-center gap-2 ${
-                                                        card.no_meal && field !== 'no_meal'
-                                                            ? 'cursor-not-allowed opacity-40'
-                                                            : 'cursor-pointer'
-                                                    }`}>
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={card[field]}
-                                                            disabled={card.no_meal && field !== 'no_meal'}
-                                                            onChange={(e) => updateCard(i, (
-                                                                // Not eating is the whole answer: ticking it
-                                                                // clears the rest rather than leaving "not
-                                                                // eating, vegetarian" for the kitchen to
-                                                                // puzzle over.
-                                                                field === 'no_meal' && e.target.checked
-                                                                    ? {
-                                                                        no_meal: true,
-                                                                        vegetarian: false,
-                                                                        vegan: false,
-                                                                        gluten_free: false,
-                                                                        nut_allergy: false,
-                                                                        other: false,
-                                                                        kids_meal: false,
-                                                                        other_text: '',
-                                                                    }
-                                                                    : { [field]: e.target.checked }
-                                                            ))}
-                                                            className="h-4 w-4 rounded border-gray-300 text-accent focus:ring-accent disabled:opacity-50"
-                                                        />
-                                                        <span className="text-sm text-gray-700">{label}</span>
-                                                    </label>
-                                                ))}
-                                            </div>
-                                            {card.no_meal && (
-                                                <p className="mt-2 text-xs text-gray-500">
-                                                    They will still have a seat — we just will not order them a
-                                                    meal. For a baby whose food comes with you.
-                                                </p>
-                                            )}
-                                            {card.other && (
-                                                <input
-                                                    type="text"
-                                                    value={card.other_text}
-                                                    onChange={(e) => updateCard(i, { other_text: e.target.value })}
-                                                    placeholder="Please describe your dietary restriction"
-                                                    className="mt-2 appearance-none block w-full px-3 py-2 border border-gray-300 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-accent focus:border-accent"
-                                                />
-                                            )}
-                                        </div>
-                                    )}
+                                    {/* One answer per person. Choosing the chosen one again clears it. */}
+                                    <div role="radiogroup" aria-label={`Is ${card.name || `guest ${i + 1}`} coming?`}
+                                        className="grid shrink-0 grid-cols-2 gap-1 rounded-full bg-gray-100 p-1 sm:w-64">
+                                        {([
+                                            ['yes', 'Joyfully accepts', 'M5 13l4 4L19 7'],
+                                            ['no', 'Regretfully declines', 'M6 18L18 6M6 6l12 12'],
+                                        ] as const).map(([value, label, path]) => {
+                                            const on = card.attendance === value;
+                                            return (
+                                                <button
+                                                    key={value}
+                                                    type="button"
+                                                    role="radio"
+                                                    aria-checked={on}
+                                                    onClick={() => updateCard(i, { attendance: on ? null : value })}
+                                                    className={`flex min-h-10 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-semibold transition-all duration-200 sm:text-[13px] ${
+                                                        on
+                                                            ? value === 'yes'
+                                                                ? 'bg-accent text-white shadow-sm'
+                                                                : 'bg-white text-gray-800 shadow-sm'
+                                                            : 'text-gray-500 hover:text-gray-800'
+                                                    }`}
+                                                >
+                                                    <svg className="size-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d={path} />
+                                                    </svg>
+                                                    <span className="whitespace-nowrap">{value === 'yes' ? 'Accepts' : 'Declines'}</span>
+                                                    <span className="sr-only">{label}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            )}
 
-            {/* Message */}
-            <div>
-                <label htmlFor="message" className="block text-sm font-medium text-gray-700 ml-1">
-                    Message for {config?.brideName || 'Bride'} & {config?.groomName || 'Groom'}♥
-                </label>
-                <textarea
-                    id="message" name="message" rows={3}
-                    value={formData.message} onChange={handleChange}
-                    className="mt-1 appearance-none block w-full px-4 py-3 border border-gray-300 rounded-2xl shadow-sm placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-accent focus:border-accent sm:text-sm transition-shadow"
-                />
-            </div>
+                                {/* What they eat — only for someone who is coming. */}
+                                {card.attendance === 'yes' && (
+                                    <div className="mt-4 border-t border-dashed border-gray-200 pt-4 [animation:rsvp-open_.3s_ease-out]">
+                                        <p className="mb-2 text-xs font-medium text-gray-500">Any dietary needs?</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {([
+                                                { field: 'vegetarian', label: 'Vegetarian' },
+                                                { field: 'vegan', label: 'Vegan' },
+                                                { field: 'gluten_free', label: 'Gluten free' },
+                                                { field: 'nut_allergy', label: 'Nut allergy' },
+                                                { field: 'kids_meal', label: 'Kids’ meal' },
+                                                { field: 'no_meal', label: 'Not eating' },
+                                                { field: 'other', label: 'Something else' },
+                                            ] as { field: keyof Pick<MemberCard, 'vegetarian' | 'vegan' | 'gluten_free' | 'nut_allergy' | 'other' | 'kids_meal' | 'no_meal'>; label: string }[]).map(({ field, label }) => {
+                                                const on = card[field];
+                                                const disabled = card.no_meal && field !== 'no_meal';
+                                                return (
+                                                    <button
+                                                        key={field}
+                                                        type="button"
+                                                        aria-pressed={on}
+                                                        disabled={disabled}
+                                                        onClick={() => updateCard(i, (
+                                                            // Not eating is the whole answer: choosing it clears
+                                                            // the rest rather than leaving "not eating,
+                                                            // vegetarian" for the kitchen to puzzle over.
+                                                            field === 'no_meal' && !on
+                                                                ? {
+                                                                    no_meal: true, vegetarian: false, vegan: false, gluten_free: false,
+                                                                    nut_allergy: false, other: false, kids_meal: false, other_text: '',
+                                                                }
+                                                                : { [field]: !on }
+                                                        ))}
+                                                        className={`rounded-full border px-3.5 py-1.5 text-xs font-medium transition-all duration-150 ${
+                                                            on
+                                                                ? 'border-accent bg-accent/10 text-accent-dark'
+                                                                : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:text-gray-900'
+                                                        } disabled:cursor-not-allowed disabled:opacity-40`}
+                                                    >
+                                                        {on && <span aria-hidden className="mr-1">✓</span>}{label}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                        {card.no_meal && (
+                                            <p className="mt-2 text-xs text-gray-500">
+                                                They’ll still have a seat — we just won’t order them a meal. For a baby whose food comes with you.
+                                            </p>
+                                        )}
+                                        {card.other && (
+                                            <input
+                                                type="text"
+                                                value={card.other_text}
+                                                onChange={(e) => updateCard(i, { other_text: e.target.value })}
+                                                placeholder="Tell us what to avoid"
+                                                aria-label={`Dietary needs for ${card.name || `guest ${i + 1}`}`}
+                                                className="mt-3 block w-full rounded-2xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-accent focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/30"
+                                            />
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            </section>
+
+            {/* How to reach you */}
+            <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                    <label htmlFor="email" className="ml-1 block text-sm font-medium text-gray-700">Email</label>
+                    <input
+                        type="email" name="email" id="email" required autoComplete="email"
+                        value={formData.email} onChange={handleChange}
+                        className="mt-1 block w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 placeholder-gray-400 focus:border-accent focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/30 sm:text-sm"
+                    />
+                </div>
+                <div>
+                    <label htmlFor="phone" className="ml-1 block text-sm font-medium text-gray-700">Phone</label>
+                    <input
+                        type="tel" name="phone" id="phone" required autoComplete="tel"
+                        value={formData.phone} onChange={handleChange}
+                        className="mt-1 block w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 placeholder-gray-400 focus:border-accent focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/30 sm:text-sm"
+                    />
+                </div>
+                <div className="sm:col-span-2">
+                    <label htmlFor="message" className="ml-1 block text-sm font-medium text-gray-700">
+                        A note for {couple || 'the couple'} <span className="font-normal text-gray-400">· optional</span>
+                    </label>
+                    <textarea
+                        id="message" name="message" rows={3}
+                        value={formData.message} onChange={handleChange}
+                        className="mt-1 block w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 placeholder-gray-400 focus:border-accent focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/30 sm:text-sm"
+                    />
+                </div>
+            </section>
 
             {status === 'error' && (
-                <div className="rounded-2xl bg-red-50 p-4">
+                <div role="alert" className="rounded-2xl bg-red-50 p-4">
                     <p className="text-sm font-medium text-red-800">{errorMessage}</p>
                 </div>
             )}
 
-            {unansweredCount > 0 && (
-                <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-2xl p-3">
-                    {unansweredCount === 1
-                        ? '1 guest still needs to be marked attending or not attending.'
-                        : `${unansweredCount} guests still need to be marked attending or not attending.`}
+            <div className="space-y-3">
+                {/* Where the answers stand, so nobody sends half an RSVP by accident. */}
+                <p aria-live="polite" className={`text-center text-sm ${unansweredCount > 0 ? 'text-amber-700' : 'text-gray-500'}`}>
+                    {unansweredCount > 0
+                        ? (cards.length === 1
+                            ? 'Choose accepts or declines to send your RSVP.'
+                            : `${unansweredCount} more ${unansweredCount === 1 ? 'person' : 'people'} to answer for.`)
+                        : allDeclined
+                            ? 'We’ll be sorry to miss you.'
+                            : `${comingCount} coming${decliningCount ? ` · ${decliningCount} can’t make it` : ''}`}
                 </p>
-            )}
-
-            <div className="flex gap-4">
-                <button
-                    type="button"
-                    onClick={() => { setStep('verification'); setGuestNameInput(''); setVerificationError(''); }}
-                    className="flex justify-center py-3 px-6 border border-gray-300 rounded-full shadow-sm text-base font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent transition-all"
-                >
-                    Back
-                </button>
-                <button
-                    type="submit"
-                    disabled={status === 'submitting' || unansweredCount > 0}
-                    className="flex-1 flex justify-center py-3 px-6 border border-transparent rounded-full shadow-md text-base font-medium text-white bg-accent hover:bg-accent-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 transition-all transform hover:-translate-y-0.5"
-                >
-                    {status === 'submitting'
-                        ? (existingRsvp ? 'Updating...' : 'Sending...')
-                        : (existingRsvp ? 'Update RSVP' : 'Send RSVP')}
-                </button>
+                <div className="flex gap-3">
+                    <button
+                        type="button"
+                        onClick={() => { setStep('verification'); setGuestNameInput(''); setVerificationError(''); }}
+                        className="flex justify-center rounded-full border border-gray-200 bg-white px-6 py-3 text-base font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
+                    >
+                        Back
+                    </button>
+                    <button
+                        type="submit"
+                        disabled={status === 'submitting' || unansweredCount > 0}
+                        className="flex flex-1 justify-center rounded-full bg-accent px-6 py-3 text-base font-medium text-white shadow-md transition-all hover:-translate-y-0.5 hover:bg-accent-dark focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 disabled:translate-y-0 disabled:opacity-50"
+                    >
+                        {status === 'submitting'
+                            ? (existingRsvp ? 'Updating…' : 'Sending…')
+                            : allDeclined
+                                ? 'Send our regrets'
+                                : (existingRsvp && existingRsvp.attending != null ? 'Update RSVP' : 'Send RSVP')}
+                    </button>
+                </div>
             </div>
         </form>
     );
+}
+
+/** Names compared the way the lookup compares them: case, spacing and accents ignored. */
+function foldKey(name: string | null | undefined): string {
+    return (name || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 }

@@ -11,6 +11,27 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.10.42 — [Released] RSVP: everyone answers for themself, and "Noren" finds "Norén" (`main`, 2026-11-07 01:03)
+
+The ideas come from the fnoren17 fork (2026-09). This is our own version.
+
+### Changed
+- **Every person in a party answers for themself, including the guest named on the invitation.** The household question "Will you be attending?" is gone.
+  - Before, once a household said yes, the named guest's card was locked to "Attending". So a mother whose husband and children were coming without her had no way to say so, and the seating chart kept a chair for her.
+  - Each person now has their own **Accepts / Declines** choice. The household counts as coming when anyone in it is.
+  - "Everyone's coming" and "None of us can" answer for the whole party in one tap.
+  - The form won't send until everyone has an answer, and a line above the button keeps count ("2 coming · 1 can't make it", or "1 more person to answer for").
+- **The RSVP form has a new look.** Each person has a card with their initials, and accepting opens their dietary questions as tappable chips. Whoever looked the party up is marked "You". Email and phone sit side by side, and the note to the couple says it's optional. If nobody in the party is coming, the button reads "Send our regrets".
+- **Name lookup ignores accents, as well as case and spacing.** "Noren" finds "Norén", "jose garcia" finds "José García", and "Lukasz" finds "Łukasz".
+  - This applies everywhere a name is looked up: the RSVP lookup, the email-link request and the RSVP save check.
+  - It needs no database extension: one table of letters, built from Unicode, drives both the app and the SQL (`foldName` / `foldNameSql` in `src/lib/names.ts`).
+
+### Added
+- `guest_list.primary_attending` (v0.10.42) holds the named guest's own answer. NULL means "not known", which is every row before this release, and seats them as before.
+  - **The seating chart and its export give no chair to a named guest who declined** while their party comes.
+  - The RSVPs tab notes "Not coming themself — their party is" under their name.
+- `check:seating`: 4 new checks (269 in total).
+
 ## v0.10.41 — [Released] The RSVP name lookup no longer hands out a household's email and phone (`main`, 2026-11-07 00:54)
 
 Closes the last gap in issue #13.

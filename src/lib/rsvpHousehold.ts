@@ -1,4 +1,5 @@
 import pool from '@/lib/db';
+import { foldName, foldNameSql } from '@/lib/names';
 import { getSiteConfig } from '@/lib/config';
 import { isPastWeddingDay } from '@/lib/weddingDate';
 
@@ -24,25 +25,27 @@ export interface MatchedHousehold {
     party_size: number;
     party_members: Array<{ name?: string | null }>;
     plus_one_name: string | null;
+    primary_attending: boolean | null;
 }
 
 export async function matchHouseholdByName(name: string): Promise<MatchedHousehold | null> {
-    const normalized = name.trim().toLowerCase();
+    // Case, spacing and accents ignored: "Noren" finds "Norén".
+    const normalized = foldName(name);
     const result = await pool.query(
-        `SELECT id, guest_name, email, phone, party_size, party_members, plus_one_name
+        `SELECT id, guest_name, email, phone, party_size, party_members, plus_one_name, primary_attending
            FROM guest_list
           WHERE invited = true
             AND (
-              LOWER(TRIM(guest_name)) = $1
-              OR LOWER(TRIM(COALESCE(plus_one_name, ''))) = $1
+              ${foldNameSql('guest_name')} = $1
+              OR ${foldNameSql('plus_one_name')} = $1
               OR EXISTS (
                 SELECT 1 FROM jsonb_array_elements(
                   CASE WHEN jsonb_typeof(party_members) = 'array' THEN party_members ELSE '[]'::jsonb END
                 ) AS m
-                WHERE LOWER(TRIM(COALESCE(m->>'name', ''))) = $1
+                WHERE ${foldNameSql("m->>'name'")} = $1
               )
             )
-          ORDER BY (LOWER(TRIM(guest_name)) = $1) DESC, id ASC
+          ORDER BY (${foldNameSql('guest_name')} = $1) DESC, id ASC
           LIMIT 1`,
         [normalized]
     );
@@ -54,10 +57,10 @@ export async function matchHouseholdByName(name: string): Promise<MatchedHouseho
 /** Which seat `typedName` matched, in the stored spelling — a plus-one's typed
  * name should not be what greets them back. */
 export function matchedSeat(guest: MatchedHousehold, typedName: string): { name: string; isPrimary: boolean } {
-    const normalized = typedName.trim().toLowerCase();
-    const isPrimary = (guest.guest_name || '').trim().toLowerCase() === normalized;
-    const matchedMember = guest.party_members.find((m) => (m?.name || '').trim().toLowerCase() === normalized);
-    const matchedPlusOne = (guest.plus_one_name || '').trim().toLowerCase() === normalized ? guest.plus_one_name : null;
+    const normalized = foldName(typedName);
+    const isPrimary = foldName(guest.guest_name) === normalized;
+    const matchedMember = guest.party_members.find((m) => foldName(m?.name) === normalized);
+    const matchedPlusOne = foldName(guest.plus_one_name) === normalized ? guest.plus_one_name : null;
     return { name: isPrimary ? guest.guest_name : (matchedMember?.name || matchedPlusOne || typedName), isPrimary };
 }
 
@@ -119,6 +122,7 @@ export function buildVerifiedPayload(
             email: withContact ? guest.email : null,
             phone: withContact ? guest.phone : null,
             party_members: guest.party_members,
+            primary_attending: guest.primary_attending,
         },
         matched,
         existingRsvp,

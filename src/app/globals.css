@@ -90,6 +90,12 @@ select {
   color: #171717;
 }
 
+/* An accepted guest's dietary questions opening under their card. */
+@keyframes rsvp-open {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
 /* Gifts: the "already given" box beside the amount slides in. */
 @keyframes gifts-in {
   from { opacity: 0; transform: translateX(8px); }
@@ -515,9 +521,9 @@ html {
   border-radius: 20px;
 }
 
-.cl-group.added   { background: color-mix(in oklab, var(--cl-released) 18%, transparent); color: var(--cl-released); }
-.cl-group.changed { background: color-mix(in oklab, var(--cl-info) 20%, transparent); color: var(--cl-info); }
-.cl-group.fixed   { background: color-mix(in oklab, var(--cl-unreleased) 20%, transparent); color: var(--cl-unreleased); }
+.cl-group-added   { background: color-mix(in oklab, var(--cl-released) 18%, transparent); color: var(--cl-released); }
+.cl-group-changed { background: color-mix(in oklab, var(--cl-info) 20%, transparent); color: var(--cl-info); }
+.cl-group-fixed   { background: color-mix(in oklab, var(--cl-unreleased) 20%, transparent); color: var(--cl-unreleased); }
 
 /* Below this the nav has nowhere to live and the pane needs the room. */
 @container (max-width: 640px) {

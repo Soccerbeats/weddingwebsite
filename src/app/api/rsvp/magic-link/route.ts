@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { foldName, foldNameSql } from '@/lib/names';
 import { isMailConfigured, sendRsvpLinkMail } from '@/lib/mail';
 import { signRsvpLink } from '@/lib/rsvpLink';
 
@@ -29,7 +30,7 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Please enter the name you would use to look up your RSVP.' }, { status: 400 });
         }
 
-        const normalized = typedName.toLowerCase();
+        const normalized = foldName(typedName);
 
         // The exact match semantics of `guest-verification`: anyone in the
         // party can ask by their own name — the primary guest, a plus-one or
@@ -40,16 +41,16 @@ export async function POST(request: Request) {
             `SELECT * FROM guest_list
               WHERE invited = true
                 AND (
-                  LOWER(TRIM(guest_name)) = $1
-                  OR LOWER(TRIM(COALESCE(plus_one_name, ''))) = $1
+                  ${foldNameSql('guest_name')} = $1
+                  OR ${foldNameSql('plus_one_name')} = $1
                   OR EXISTS (
                     SELECT 1 FROM jsonb_array_elements(
                       CASE WHEN jsonb_typeof(party_members) = 'array' THEN party_members ELSE '[]'::jsonb END
                     ) AS m
-                    WHERE LOWER(TRIM(COALESCE(m->>'name', ''))) = $1
+                    WHERE ${foldNameSql("m->>'name'")} = $1
                   )
                 )
-              ORDER BY (LOWER(TRIM(guest_name)) = $1) DESC, id ASC
+              ORDER BY (${foldNameSql('guest_name')} = $1) DESC, id ASC
               LIMIT 1`,
             [normalized]
         );

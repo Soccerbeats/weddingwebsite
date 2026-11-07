@@ -31,6 +31,8 @@ interface RSVP {
     phone: string;
     /** null: notes on file, no answer yet. */
     attending: boolean | null;
+    /** The named guest's own answer; false when their household comes without them. */
+    primary_attending?: boolean | null;
     number_of_guests: number;
     dietary_restrictions: DietaryEntry[] | string | null;
     message: string;
@@ -1187,6 +1189,9 @@ export default function RSVPDashboard() {
                                                 <tr className="group hover:bg-gray-50 relative">
                                                     <td className="px-6 py-4 whitespace-nowrap overflow-hidden">
                                                         <div className="text-sm font-medium text-gray-900 truncate">{rsvp.guest_name}</div>
+                                                        {rsvp.attending && rsvp.primary_attending === false && (
+                                                            <div className="text-xs font-medium text-amber-700">Not coming themself — their party is</div>
+                                                        )}
                                                         <div className="text-xs text-gray-400 truncate">{rsvp.email}</div>
                                                         {rsvp.phone && <div className="text-xs text-gray-400 truncate">{rsvp.phone}</div>}
                                                     </td>

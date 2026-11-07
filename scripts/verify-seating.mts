@@ -1022,6 +1022,21 @@ console.log('\nSeating the rest of a party');
     check('the guest themself keeps theirs', guestSeat.guest_list_id === 20);
 }
 
+console.log('\nThe named guest answers for themself');
+{
+    const household = {
+        id: 77, guest_name: 'Zoë Norén', plus_one_name: null, party_size: 3, side: null, rsvp_status: 'attending',
+        invited: true, party_members: [{ name: 'Anders Norén', attending: true }, { name: 'Lina Berg', attending: true }],
+    };
+    const all = partyAttendees({ ...household, primary_attending: null });
+    check('not knowing their answer seats them as before', all.length === 3 && all[0].guestListId === 77);
+    const without = partyAttendees({ ...household, primary_attending: false });
+    check('a guest who declined while their party comes takes no chair',
+        without.length === 2 && without.every(p => p.guestListId === null), JSON.stringify(without));
+    check('…and their companions keep their own names', without.map(p => p.name).join() === 'Anders Norén,Lina Berg');
+    check('saying yes seats them', partyAttendees({ ...household, primary_attending: true }).length === 3);
+}
+
 console.log('\nTable layout: chairs on both sides, tables that grow and turn');
 {
     const six = tableLayout('rectangular', 6);

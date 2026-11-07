@@ -55,6 +55,8 @@ export interface GuestListEntry {
   party_members?: { name: string | null; attending?: boolean | null; under21?: boolean | null }[];
   /** The household themself, under 21. Their companions carry their own. */
   under_21?: boolean | null;
+  /** The named guest's own answer; false when the rest of the household comes without them. */
+  primary_attending?: boolean | null;
   /**
    * How many people this household actually answered for, from the RSVP form —
    * null when they have not submitted one. `party_size` is what they were
