@@ -2,9 +2,10 @@
  * The whole site, offline.
  *
  * Registered from the app shell on every page, public and admin. It keeps a
- * copy of every page, the data those pages load, the photos they show and the
- * app's own code, so the installed app opens with no connection and shows what
- * it last saw.
+ * copy of every page, the data those pages load and the app's own code, so the
+ * installed app opens with no connection and shows what it last saw. Of the
+ * site's own photos it keeps **only the honeymoon portal's thumbnails**
+ * (`photoPlan`, v0.10.47) — never the gallery, the hero or the photo library.
  *
  * Admin edits made with no connection are kept in an outbox (IndexedDB) and
  * sent, in order, once the server can be reached again (v0.10.5). Anything the
@@ -23,7 +24,11 @@
 const PAGES = 'site-pages-v1';
 const STATIC = 'site-static-v1';
 const DATA = 'site-data-v1';
-const PHOTOS = 'site-photos-v1';
+/*
+ * v2 (v0.10.47): only the honeymoon portal's thumbnails. The bump drops every
+ * photo v1 saved — the gallery, the hero, full-size uploads — on activation.
+ */
+const PHOTOS = 'site-photos-v2';
 /** Travel documents: exactly the list the Files tab sends (v0.10.1). */
 const FILES = 'honeymoon-files-v1';
 /**
@@ -149,6 +154,36 @@ function routeFor(req, origin) {
     if (path.startsWith('/api/')) return 'data';
     if (req.mode === 'navigate' || (req.accept || '').includes('text/html')) return 'page';
     return 'asset';
+}
+
+/**
+ * Which photos are ever saved (v0.10.47): **only thumbnails, and only for the
+ * honeymoon portal** — its pages under `/admin/honeymoon` and the read-only
+ * share link `/honeymoon/<token>`. Nothing the public site, the photo library
+ * or any other admin page shows is kept; those always come from the server.
+ *
+ *   'save'        a honeymoon page asked for a thumbnail: keep it.
+ *   'save-thumb'  a honeymoon page asked for the full-size picture: show the
+ *                 full size from the network, but keep only its thumbnail —
+ *                 which is what answers the full-size address offline.
+ *   'none'        never saved.
+ */
+function photoPlan(photoUrl, clientUrl) {
+    if (!clientUrl) return 'none';
+    let page;
+    let photo;
+    try { page = new URL(clientUrl).pathname; photo = new URL(photoUrl).pathname; } catch { return 'none'; }
+    const honeymoon = page === '/admin/honeymoon' || page.startsWith('/admin/honeymoon/') || page.startsWith('/honeymoon/');
+    if (!honeymoon || !photo.startsWith('/api/photos/')) return 'none';
+    return photo.endsWith('/thumb') ? 'save' : 'save-thumb';
+}
+
+/** A photo's thumbnail address: `/api/photos/<file>/thumb`, without any size query. */
+function thumbOf(photoUrl) {
+    const url = new URL(photoUrl);
+    url.search = '';
+    if (!url.pathname.endsWith('/thumb')) url.pathname = `${url.pathname.replace(/\/$/, '')}/thumb`;
+    return url.toString();
 }
 
 /** A page may be saved only if it is the page that was asked for. */
@@ -371,7 +406,7 @@ if (typeof module === 'object' && module.exports) {
         routeFor, isCacheablePage, isCacheableData, isStale, redirectTarget, OFFLINE_WRITE_MESSAGE, fallbackWait,
         NETWORK_TIMEOUT_MS, FALLBACK_AFTER_MS, OFFLINE_HOLD_MS, REVALIDATE_AFTER_MS, RSC_TIMEOUT_MS, readPlan, rscBudget,
         isQueueable, tempIdCount, queuedResponseBody, remapIds, remapUrl, createdIds, outcomeFor, mergeSiteConfig,
-        launchTarget,
+        launchTarget, photoPlan, thumbOf,
     };
 }
 
@@ -866,17 +901,26 @@ if (typeof self !== 'undefined' && typeof self.addEventListener === 'function' &
     /* ───────────── photos: only the ones the site uses ───────────── */
 
     /**
-     * Photos seen during a save-everything pass. When the pass finishes, any
-     * saved photo nobody asked for is dropped — the library of every upload on
-     * `/admin/photos` is never saved in the first place, so what remains is
-     * exactly what the site's pages show.
+     * Thumbnails seen during a save-everything pass. When the pass finishes,
+     * any saved one no honeymoon page asked for is dropped. Which photos are
+     * saved at all is `photoPlan()`: honeymoon thumbnails only.
      */
     let pass = null;
 
-    async function fromPhotoLibrary(event) {
-        if (!event.clientId) return false;
+    async function clientUrlOf(event) {
+        if (!event.clientId) return null;
         const client = await self.clients.get(event.clientId);
-        return !!client && new URL(client.url).pathname.startsWith('/admin/photos');
+        return client ? client.url : null;
+    }
+
+    /** Fetch and keep a thumbnail behind a full-size picture, for offline. */
+    async function keepThumb(url) {
+        const cache = await caches.open(PHOTOS);
+        if (await cache.match(url, { ignoreVary: true })) return;
+        try {
+            const response = await withTimeout(fetch(url, { credentials: 'same-origin' }), NETWORK_TIMEOUT_MS);
+            if (isCacheableData(response)) { await cache.put(url, response); void trimPhotos(); }
+        } catch { /* offline or gone: nothing to keep */ }
     }
 
     async function prunePhotos() {
@@ -1023,12 +1067,16 @@ if (typeof self !== 'undefined' && typeof self.addEventListener === 'function' &
      */
     async function photo(request, event) {
         const cache = await caches.open(PHOTOS);
-        const keep = !(await fromPhotoLibrary(event));
-        if (pass && keep) pass.seen.add(request.url);
+        const plan = photoPlan(request.url, await clientUrlOf(event));
+        const thumb = thumbOf(request.url);
+        if (plan !== 'none') {
+            if (pass) pass.seen.add(plan === 'save' ? request.url : thumb);
+            if (plan === 'save-thumb') event.waitUntil(keepThumb(thumb));
+        }
         const saved = await cache.match(request, { ignoreVary: true });
         if (saved) return saved;
         const store = async (response) => {
-            if (!keep || !isCacheableData(response)) return;
+            if (plan !== 'save' || !isCacheableData(response)) return;
             await cache.put(request, response);
             void trimPhotos();
         };
@@ -1037,9 +1085,8 @@ if (typeof self !== 'undefined' && typeof self.addEventListener === 'function' &
             return response;
         } catch (error) {
             tell(event, true);
-            // The same photo at another size (the lightbox's full size when
-            // only the gallery's thumbnail was saved) beats a broken image.
-            const other = await cache.match(request, { ignoreVary: true, ignoreSearch: true });
+            // The full-size picture offline: its saved thumbnail beats a broken image.
+            const other = await cache.match(thumb, { ignoreVary: true });
             if (other) return other;
             const doc = await (await caches.open(FILES)).match(request.url, { ignoreVary: true });
             if (doc) return doc;

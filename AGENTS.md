@@ -151,8 +151,11 @@ idempotent — matches on place name, never reverts an edit) and
    to a normal, server-backed navigation.
    `npm run check:honeymoon:ui` covers the entry points and the phone layout.
 10. **Every new page goes in `src/lib/offline.ts`.** The whole site works offline
-   (v0.10.3): `public/sw.js` keeps a copy of every page, its data, its photos and
-   the build's code, and the installed app saves everything in the background by
+   (v0.10.3): `public/sw.js` keeps a copy of every page, its data and the
+   build's code — and of the site's photos, **only the honeymoon portal's
+   thumbnails** (`photoPlan()`, v0.10.47: a full-size picture there keeps just its
+   thumbnail, which answers for it offline; the gallery, the hero and the photo
+   library are never saved) — and the installed app saves everything in the background by
    opening each listed page once in a hidden frame (the worker refuses every
    write from that frame). A page missing from `PUBLIC_PAGES` / `ADMIN_PAGES` /
    `EXCLUDED_PAGES` fails `check:offline` in CI. The worker's decisions are pure

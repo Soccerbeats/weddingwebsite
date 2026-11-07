@@ -55,6 +55,8 @@ const sw = sandbox.module.exports as unknown as {
     RSC_TIMEOUT_MS: number;
     readPlan: (state: { hasSaved: boolean; savedAt: number; freshAfter: number | null; offlineAt: number | null; now: number }) => string;
     rscBudget: (offlineAt: number | null, now: number) => number;
+    photoPlan: (photoUrl: string, clientUrl: string | null) => string;
+    thumbOf: (photoUrl: string) => string;
 };
 
 const O = 'https://example.com';
@@ -64,6 +66,21 @@ check('the app code is static', sw.routeFor({ url: `${O}/_next/static/chunks/abc
 check('a client navigation (RSC) has its own rule', sw.routeFor({ url: `${O}/about?_rsc=1x2`, rsc: true }, O) === 'rsc');
 check('page data is data', sw.routeFor({ url: `${O}/api/admin/finances` }, O) === 'data');
 check('a photo is a photo', sw.routeFor({ url: `${O}/api/photos/a.jpg/thumb` }, O) === 'photo');
+
+// Which photos are saved: honeymoon thumbnails, and nothing else (v0.10.47).
+check('a honeymoon page\'s thumbnail is saved', sw.photoPlan(`${O}/api/photos/a.jpg/thumb`, `${O}/admin/honeymoon/places`) === 'save');
+check('…so is one on the share link', sw.photoPlan(`${O}/api/photos/a.jpg/thumb`, `${O}/honeymoon/tok123`) === 'save');
+check('a honeymoon page\'s full-size picture keeps only its thumbnail',
+    sw.photoPlan(`${O}/api/photos/a.jpg`, `${O}/admin/honeymoon`) === 'save-thumb'
+    && sw.thumbOf(`${O}/api/photos/a.jpg?w=1200`) === `${O}/api/photos/a.jpg/thumb`);
+check('a thumbnail\'s thumbnail is itself', sw.thumbOf(`${O}/api/photos/a.jpg/thumb`) === `${O}/api/photos/a.jpg/thumb`);
+check('the public gallery\'s photos are never saved',
+    sw.photoPlan(`${O}/api/photos/a.jpg`, `${O}/photos`) === 'none' && sw.photoPlan(`${O}/api/photos/a.jpg/thumb`, `${O}/photos`) === 'none');
+check('nor the home page\'s', sw.photoPlan(`${O}/api/photos/hero.jpg`, `${O}/`) === 'none');
+check('nor the photo library\'s', sw.photoPlan(`${O}/api/photos/a.jpg/thumb`, `${O}/admin/photos`) === 'none');
+check('nor any other admin page\'s', sw.photoPlan(`${O}/api/photos/a.jpg/thumb`, `${O}/admin/wedding-party`) === 'none');
+check('a page that only starts like the portal is not it', sw.photoPlan(`${O}/api/photos/a.jpg/thumb`, `${O}/admin/honeymoonish`) === 'none');
+check('with no page to ask on behalf of, nothing is saved', sw.photoPlan(`${O}/api/photos/a.jpg/thumb`, null) === 'none');
 check('signing in is never saved', sw.routeFor({ url: `${O}/api/auth/check` }, O) === 'network');
 check('the offline manifest is never saved', sw.routeFor({ url: `${O}/api/offline/manifest` }, O) === 'network');
 check('the connection probe always asks the server', sw.routeFor({ url: `${O}/api/offline/ping` }, O) === 'network');

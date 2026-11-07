@@ -11,6 +11,14 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.10.47 — [Released] Offline — only the honeymoon's thumbnails are saved, never the site's photos (`main`, 2026-11-07 02:19)
+
+### Changed
+- **Saving for offline no longer keeps the site's photos.** The photo library, the public gallery, the home page's hero and every other page's pictures always come from the server now, and are never stored on the device.
+- **The only photos it keeps are thumbnails for the honeymoon portal** — its own pages and the share link. Where the portal shows a picture at full size (a place's panel, the rating queue, the itinerary), the full size still loads online, but only its thumbnail is kept, and that thumbnail is what shows offline.
+- Every device drops the photos it saved before on its next visit, so the space they took comes back.
+- `check:offline`: 10 new checks on which photos are kept (191 in total); the browser test now checks that every saved photo is a thumbnail and none is from the library.
+
 ## v0.10.46 — [Released] Seating — every table of a shape is the same size (`main`, 2026-11-07 01:46)
 
 ### Changed

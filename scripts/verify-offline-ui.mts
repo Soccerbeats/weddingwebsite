@@ -111,16 +111,16 @@ check('the app code is saved', (counts['site-static-v1'] ?? 0) > 20, String(coun
 check('page data is saved', (counts['site-data-v1'] ?? 0) > 10, String(counts['site-data-v1']));
 
 {
-    // Only the photos the site shows: the gallery's hearted ones (every one, not
-    // just the first screenful) — never the rest of the library.
-    const library = await (await context.request.get(`${BASE}/api/admin/photos`)).json() as { photos: { filename: string; hearted?: boolean }[] };
-    const config = JSON.stringify(await (await context.request.get(`${BASE}/api/admin/site-config`)).json());
-    const savedPhotos = await p.evaluate(async () => (await (await caches.open('site-photos-v1')).keys()).map((k) => decodeURIComponent(new URL(k.url).pathname)));
-    const shown = library.photos.filter((photo) => photo.hearted).map((photo) => photo.filename);
-    const unused = library.photos.filter((photo) => !photo.hearted && !config.includes(photo.filename)).map((photo) => photo.filename);
-    const has = (name: string) => savedPhotos.some((path) => path.endsWith(`/${name}`));
-    if (shown.length) check(`every gallery photo is saved (${shown.length})`, shown.every(has), shown.filter((n) => !has(n)).join(', '));
-    if (unused.length) check(`no unused library photo is saved (${unused.length} unused)`, !unused.some(has), unused.filter(has).join(', '));
+    // Only honeymoon thumbnails (v0.10.47): never a photo-library upload, the
+    // gallery, the hero, or any full-size picture.
+    const library = await (await context.request.get(`${BASE}/api/admin/photos`)).json() as { photos: { filename: string }[] };
+    const savedPhotos = await p.evaluate(async () => (await (await caches.open('site-photos-v2')).keys()).map((k) => decodeURIComponent(new URL(k.url).pathname)));
+    check('every saved photo is a thumbnail', savedPhotos.every((path) => path.endsWith('/thumb')), savedPhotos.filter((path) => !path.endsWith('/thumb')).join(', '));
+    const libraryNames = new Set(library.photos.map((photo) => photo.filename));
+    const fromLibrary = savedPhotos.filter((path) => libraryNames.has(path.replace(/^\/api\/photos\//, '').replace(/\/thumb$/, '')));
+    check(`no photo-library photo is saved (${library.photos.length} in the library)`, fromLibrary.length === 0, fromLibrary.join(', '));
+    const v1 = await p.evaluate(async () => caches.has('site-photos-v1'));
+    check('the old photo cache, with everything it saved, is gone', !v1);
 }
 
 console.log('\nWith the network cut');
