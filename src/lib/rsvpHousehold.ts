@@ -73,6 +73,8 @@ export interface ExistingRsvp {
     phone: string;
     dietaryRestrictions: unknown;
     message: string | null;
+    /** The household's answers to the couple's own questions. */
+    answers: Record<string, unknown> | null;
 }
 
 /** The RSVP is always filed under the primary guest's stored name, so a
@@ -92,6 +94,7 @@ export async function existingRsvpFor(primaryGuestName: string): Promise<Existin
         phone: rsvp.phone,
         dietaryRestrictions: rsvp.dietary_restrictions,
         message: rsvp.message,
+        answers: rsvp.answers ?? null,
     };
 }
 

@@ -19,6 +19,7 @@
     "check:offline:ui": "npx --yes -p playwright -p tsx tsx scripts/verify-offline-ui.mts",
     "check:honeymoon:ui": "npx --yes -p playwright -p tsx tsx scripts/verify-honeymoon-ui.mts",
     "check:schedule": "npx --yes tsx scripts/verify-schedule.mts",
+    "check:rsvp": "npx --yes tsx scripts/verify-rsvp.mts",
     "seed:honeymoon": "npx --yes tsx scripts/seed-honeymoon.mts",
     "check:types": "tsc --noEmit && tsc --noEmit -p tsconfig.scripts.json",
     "audit:finance": "npx --yes tsx scripts/audit-finance-logic.mts",

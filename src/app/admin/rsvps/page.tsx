@@ -1,5 +1,7 @@
 'use client';
 
+import QuestionsTab from './QuestionsTab';
+import type { Answers } from '@/lib/rsvpQuestions';
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { SiteConfig } from '@/lib/config';
 import AddressReconcileModal from '@/components/admin/AddressReconcileModal';
@@ -36,6 +38,8 @@ interface RSVP {
     number_of_guests: number;
     dietary_restrictions: DietaryEntry[] | string | null;
     message: string;
+    /** The household's answers to the couple's own questions. */
+    answers?: Answers | null;
     created_at: string;
 }
 
@@ -100,7 +104,7 @@ interface Donation {
     co_donors?: { id: number | null; name: string }[];
 }
 
-type Tab = 'rsvps' | 'guestlist' | 'vendors';
+type Tab = 'rsvps' | 'guestlist' | 'vendors' | 'questions';
 type GuestFilter = 'all' | 'no_response' | 'attending' | 'declined' | 'likely_not_coming' | 'invited' | 'not_invited' | 'bride' | 'groom' | 'noted' | 'issue' | 'need' | 'kids_meal';
 
 export default function RSVPDashboard() {
@@ -189,7 +193,7 @@ export default function RSVPDashboard() {
             window.location.replace('/admin/finances?tab=gifts');
             return;
         }
-        if (tab === 'guestlist' || tab === 'rsvps' || tab === 'vendors') {
+        if (tab === 'guestlist' || tab === 'rsvps' || tab === 'vendors' || tab === 'questions') {
             setActiveTab(tab as Tab);
         }
     }, []);
@@ -1097,8 +1101,21 @@ export default function RSVPDashboard() {
                     >
                         Vendors
                     </button>
+                    <button
+                        onClick={() => setActiveTab('questions')}
+                        className={`flex-1 sm:flex-none min-w-0 px-3 sm:px-4 py-2 rounded-full text-sm sm:text-base font-medium text-center whitespace-nowrap transition-colors duration-300 shadow-md ${
+                            activeTab === 'questions'
+                                ? 'bg-accent text-white shadow-lg'
+                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300 hover:shadow-lg'
+                        }`}
+                    >
+                        Questions
+                    </button>
                 </div>
             </div>
+
+            {/* The couple's own RSVP questions, with how they have been answered. */}
+            {activeTab === 'questions' && <QuestionsTab rsvps={rsvps} />}
 
             {/* RSVP Management Tab */}
             {activeTab === 'rsvps' && (

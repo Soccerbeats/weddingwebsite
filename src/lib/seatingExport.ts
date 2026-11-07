@@ -8,7 +8,7 @@
  * the same people again, one per row. Covered by `npm run check:seating`.
  */
 
-import { tableLayout } from './tableLayout';
+import { tableLayout, type TableSize } from './tableLayout';
 import {
     ALL_DIET_CODES, DIET_CODES, DIET_LABELS, MEAL_CODES, dietCodes, dietNote,
     type DietCode, type DietaryEntry,
@@ -31,6 +31,8 @@ export interface ExportPerson {
     rsvp_status: string | null;
     diet: DietCode[];
     note: string;
+    /** Their entrée, when the couple asks for one (the RSVP question marked as the meal). */
+    meal?: string | null;
 }
 
 export interface ExportTable {
@@ -43,6 +45,8 @@ export interface ExportTable {
     y: number;
     /** Degrees clockwise; long tables only. */
     rotation?: number;
+    /** The size every table of this shape is drawn at (the plan's Table sizes). */
+    size?: TableSize;
     people: ExportPerson[];
 }
 
@@ -81,6 +85,8 @@ export interface SeatingExportData {
     vendors: ExportVendor[];
     /** The room outline drawn on the canvas, or null when none was drawn. */
     room: PlanPoint[] | null;
+    /** The entrée question and its dishes, in the couple's order; absent when there is none. */
+    meal?: { question: string; dishes: string[] } | null;
 }
 
 export interface ExportOptions {
@@ -101,6 +107,8 @@ export interface ExportOptions {
     vendors: boolean;
     /** Start each table on a fresh page. */
     pageBreak: boolean;
+    /** Count entrées, when the RSVP asks for one. */
+    meals: boolean;
     format: 'print' | 'csv';
 }
 
@@ -115,6 +123,7 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
     unseated: true,
     vendors: false,
     pageBreak: false,
+    meals: true,
     format: 'print',
 };
 
@@ -138,6 +147,41 @@ export type Tally = Record<DietCode, number> & {
  * parking lot — this is the constant that stops being a constant.)
  */
 export const NO_RESTRICTION_LABEL = 'Chicken';
+/** The same bucket once the RSVP asks for an entrée: a dish is no longer implied. */
+export const NO_RESTRICTION_WITH_MENU = 'No restriction';
+
+/* ── Entrées (v0.10.43) ─────────────────────────────────────────────────── */
+
+export interface MealTally {
+    /** One row per dish, in the menu's order, including dishes nobody chose. */
+    dishes: { label: string; count: number }[];
+    /** Plates still waiting on a choice. Kids' meals and not-eating are not waiting. */
+    unchosen: number;
+}
+
+/**
+ * Plates by entrée. A kids' meal and "not eating" decide the plate on their
+ * own — they are counted by the restriction tally, not here — so they are
+ * neither a dish nor waiting on one.
+ */
+export function mealTally(people: { diet: DietCode[]; meal?: string | null }[], dishes: string[]): MealTally {
+    const rows = dishes.map(label => ({ label, count: 0 }));
+    let unchosen = 0;
+    for (const person of people) {
+        if (person.diet.includes('KID') || person.diet.includes('NOM')) continue;
+        const row = person.meal ? rows.find(r => r.label === person.meal) : undefined;
+        if (row) row.count += 1;
+        else unchosen += 1;
+    }
+    return { dishes: rows, unchosen };
+}
+
+/** "4 fish", "3 chicken", "1 no choice yet" — zeroes left out, as everywhere on the sheet. */
+export function mealParts(m: MealTally): string[] {
+    const parts = m.dishes.filter(d => d.count > 0).map(d => `${d.count} ${d.label.toLowerCase()}`);
+    if (m.unchosen > 0) parts.push(`${m.unchosen} no choice yet`);
+    return parts;
+}
 
 /**
  * Count a group of people by restriction.
@@ -177,12 +221,19 @@ export function tally(people: { diet: DietCode[] }[]): Tally {
  * A restriction nobody has is left out rather than printed as a zero — a line of
  * zeroes is the thing a caterer skims past.
  */
-export function tallyParts(t: Tally, seatCount: number | null = null, lead = 'seated'): string[] {
+export function tallyParts(
+    t: Tally,
+    seatCount: number | null = null,
+    lead = 'seated',
+    /** With a menu, the dishes come straight after the headcount, and the last bucket is no longer "chicken". */
+    meal: MealTally | null = null,
+): string[] {
     const parts = [seatCount && seatCount > 0 ? `${t.total} ${lead} of ${seatCount}` : `${t.total} ${lead}`];
+    if (meal) parts.push(...mealParts(meal));
     for (const code of ALL_DIET_CODES) {
         if (t[code] > 0) parts.push(`${t[code]} ${DIET_LABELS[code].toLowerCase()}`);
     }
-    parts.push(`${t.none} ${NO_RESTRICTION_LABEL.toLowerCase()}`);
+    parts.push(`${t.none} ${(meal ? NO_RESTRICTION_WITH_MENU : NO_RESTRICTION_LABEL).toLowerCase()}`);
     return parts;
 }
 
@@ -345,6 +396,7 @@ export function csvHeaders(opts: ExportOptions): string[] {
         ...(opts.household ? ['Household'] : []),
         ...(opts.side ? ['Side'] : []),
         ...(opts.vendors ? ['Role', 'Meal'] : []),
+        ...(opts.meals ? ['Entrée'] : []),
         'RSVP',
         ...ALL_DIET_CODES.map(code => DIET_LABELS[code]),
         'Note',
@@ -368,6 +420,7 @@ export function csvRows(data: SeatingExportData, opts: ExportOptions): unknown[]
         ...(opts.side ? [person.side ?? ''] : []),
         // Not eating is the one guest row that is not a meal.
         ...(opts.vendors ? ['', person.diet.includes('NOM') ? 'no' : 'yes'] : []),
+        ...(opts.meals ? [person.diet.includes('NOM') ? '' : person.diet.includes('KID') ? 'Kids meal' : (person.meal ?? '')] : []),
         person.rsvp_status ?? 'no answer',
         ...ALL_DIET_CODES.map(code => (person.diet.includes(code) ? 'yes' : '')),
         person.note,
@@ -380,6 +433,7 @@ export function csvRows(data: SeatingExportData, opts: ExportOptions): unknown[]
         ...(opts.side ? [''] : []),
         vendor.role ?? '',
         vendor.needs_meal ? 'yes' : 'no',
+        ...(opts.meals ? [''] : []),
         'vendor',
         ...ALL_DIET_CODES.map(code => (vendor.diet.includes(code) ? 'yes' : '')),
         vendor.note,
@@ -427,13 +481,15 @@ export interface TableGeometry {
     seats: PlanPoint[];
     /** Everything the table draws, chairs and names included. */
     box: PlanBox;
+    /** How wide a name may be at this table, as on the canvas. */
+    chipWidth: number;
 }
 
 /** Where a table and its chairs land, in canvas coordinates — `tableLayout()`, moved to where the table sits. */
 export function tableGeometry(
-    table: Pick<ExportTable, 'table_type' | 'x' | 'y' | 'rotation'> & { people: unknown[] },
+    table: Pick<ExportTable, 'table_type' | 'x' | 'y' | 'rotation' | 'size'> & { people: unknown[] },
 ): TableGeometry {
-    const l = tableLayout(table.table_type, table.people.length, table.rotation ?? 0);
+    const l = tableLayout(table.table_type, table.people.length, table.rotation ?? 0, table.size);
     const at = (p: PlanPoint) => ({ x: p.x + table.x, y: p.y + table.y });
     return {
         shape: l.shape === 'round' ? 'round' : 'rect',
@@ -441,12 +497,13 @@ export function tableGeometry(
         rotation: l.rotation,
         seats: l.seats.map(at),
         box: { minX: l.box.minX + table.x, maxX: l.box.maxX + table.x, minY: l.box.minY + table.y, maxY: l.box.maxY + table.y },
+        chipWidth: l.chipWidth,
     };
 }
 
 /** The box around the room outline and every table on it, with a margin. */
 export function planBounds(
-    tables: (Pick<ExportTable, 'table_type' | 'x' | 'y' | 'rotation'> & { people: unknown[] })[],
+    tables: (Pick<ExportTable, 'table_type' | 'x' | 'y' | 'rotation' | 'size'> & { people: unknown[] })[],
     room: PlanPoint[] | null,
     margin = 24,
 ): PlanBox | null {

@@ -62,6 +62,7 @@ export async function POST(request: Request) {
                 phone: rsvp.phone,
                 dietaryRestrictions: rsvp.dietary_restrictions,
                 message: rsvp.message,
+                answers: rsvp.answers ?? null,
             };
         }
 

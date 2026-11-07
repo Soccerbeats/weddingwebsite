@@ -1,12 +1,22 @@
 'use client';
 
+import { createContext, useContext } from 'react';
 import {
-    ALL_DIET_CODES, DIET_LABELS, NO_RESTRICTION_LABEL, PLAN_LANDSCAPE, PLAN_PORTRAIT, PLAN_TABLE,
+    ALL_DIET_CODES, DIET_LABELS, NO_RESTRICTION_LABEL, NO_RESTRICTION_WITH_MENU, mealTally, PLAN_LANDSCAPE, PLAN_PORTRAIT, PLAN_TABLE,
     alphabetical, drawingScale, freeSeats, grandTotal, planBounds, planIsLandscape,
     seatedPeople, sortedVendors, tableGeometry, tally, tallyChips, tallyParts, vendorMeals,
     type DietCode, type ExportOptions, type ExportPerson, type ExportTable, type ExportVendor,
     type PlanBox, type PlanPoint, type SeatingExportData,
 } from '@/lib/seatingExport';
+import { MIN_CHIP_WIDTH } from '@/lib/tableLayout';
+
+/**
+ * The menu's dishes when the sheet counts entrées, else null. A context rather
+ * than a prop, because the tally line, the roster and the kitchen block all
+ * read it from different depths — and the vendor block opts out (a vendor
+ * never chose a dish).
+ */
+const Dishes = createContext<string[] | null>(null);
 
 /**
  * The seating chart as a sheet of paper.
@@ -62,6 +72,9 @@ function TallyLine({ people, seatCount, compact = false, lead }: {
     lead?: string;
 }) {
     const t = tally(people);
+    const dishes = useContext(Dishes);
+    const meals = dishes ? mealTally(people, dishes) : null;
+    const noneLabel = (meals ? NO_RESTRICTION_WITH_MENU : NO_RESTRICTION_LABEL).toLowerCase();
 
     // Counts only: the codes are drawn as the very chips the legend defines, so
     // the green box beside "3" and the green box in the legend are visibly the
@@ -69,19 +82,25 @@ function TallyLine({ people, seatCount, compact = false, lead }: {
     if (compact) {
         return (
             <p className="mt-1 px-2 py-1 bg-gray-50 rounded text-[11px] text-gray-700 flex flex-wrap items-center gap-x-2.5 gap-y-1 tabular-nums">
+                {meals?.dishes.filter(d => d.count > 0).map(d => (
+                    <span key={`dish-${d.label}`} className="inline-flex items-center gap-1">
+                        <span className="font-semibold text-gray-900">{d.count}</span>
+                        <span className="text-gray-700">{d.label.toLowerCase()}</span>
+                    </span>
+                ))}
                 {tallyChips(t).map(({ code, count }) => (
                     <span key={code ?? 'none'} className="inline-flex items-center gap-1">
                         <span className={code ? 'font-semibold text-gray-900' : 'text-gray-400'}>{count}</span>
                         {code
                             ? <Chip code={code} />
-                            : <span className="text-gray-400">{NO_RESTRICTION_LABEL.toLowerCase()}</span>}
+                            : <span className="text-gray-400">{noneLabel}</span>}
                     </span>
                 ))}
             </p>
         );
     }
 
-    const parts = tallyParts(t, seatCount ?? null, lead);
+    const parts = tallyParts(t, seatCount ?? null, lead, meals);
     return (
         <p className="mt-1.5 px-3 py-1.5 gap-x-4 bg-gray-50 rounded text-[11px] text-gray-700 flex flex-wrap gap-y-0.5 tabular-nums">
             {parts.map((part, i) => {
@@ -103,6 +122,7 @@ function Roster({ people, options, withSeat }: {
     options: ExportOptions;
     withSeat: boolean;
 }) {
+    const dishes = useContext(Dishes);
     return (
         <table className="w-full mt-2 text-[11.5px] border-collapse">
             <thead>
@@ -112,6 +132,7 @@ function Roster({ people, options, withSeat }: {
                     {!withSeat && <th className="text-left font-semibold pb-1 pr-2">Table</th>}
                     {options.household && <th className="text-left font-semibold pb-1 pr-2">Household</th>}
                     {options.side && <th className="text-left font-semibold pb-1 pr-2">Side</th>}
+                    {dishes && <th className="text-left font-semibold pb-1 pr-2">Entrée</th>}
                     <th className="text-right font-semibold pb-1">Dietary</th>
                 </tr>
             </thead>
@@ -134,6 +155,13 @@ function Roster({ people, options, withSeat }: {
                         )}
                         {options.household && <td className="py-1 pr-2 text-gray-500">{person.household}</td>}
                         {options.side && <td className="py-1 pr-2 text-gray-500">{person.side ?? '—'}</td>}
+                        {dishes && (
+                            <td className="py-1 pr-2 text-gray-800">
+                                {person.diet.includes('NOM') ? <span className="text-gray-300">—</span>
+                                    : person.diet.includes('KID') ? <span className="text-gray-500">Kids’ meal</span>
+                                        : person.meal ?? <span className="text-amber-700">no choice yet</span>}
+                            </td>
+                        )}
                         <td className="py-1 text-right whitespace-nowrap"><Diet diet={person.diet} /></td>
                     </tr>
                 ))}
@@ -207,12 +235,28 @@ function Kitchen({ people, vendors, showVendors }: {
     const vt = tally(fed);
     const withVendors = showVendors && vendors.length > 0;
     const unfed = vendors.length - fed.length;
+    const dishes = useContext(Dishes);
+    const meals = dishes ? mealTally(people, dishes) : null;
+    const noneTile = meals ? NO_RESTRICTION_WITH_MENU : NO_RESTRICTION_LABEL;
     const GRID = 'grid grid-cols-3 sm:grid-cols-9 gap-px bg-gray-200 border border-gray-200 rounded overflow-hidden';
     const ROW_LABEL = 'text-[9px] uppercase tracking-widest text-gray-400 mb-1.5';
     return (
         <section className="mb-6 break-inside-avoid">
             <h3 className="text-[9px] uppercase tracking-widest text-gray-400 mb-2">For the kitchen</h3>
-            {withVendors && <p className={ROW_LABEL}>Guests</p>}
+            {meals && (
+                <>
+                    {/* The entrées first: it is the order a caterer fires them in. */}
+                    <p className={ROW_LABEL}>Entrées</p>
+                    <div
+                        className="mb-3 grid gap-px bg-gray-200 border border-gray-200 rounded overflow-hidden"
+                        style={{ gridTemplateColumns: `repeat(${Math.min(6, meals.dishes.length + (meals.unchosen > 0 ? 1 : 0)) || 1}, minmax(0, 1fr))` }}
+                    >
+                        {meals.dishes.map(d => <Tile key={d.label} label={d.label} value={d.count} lead />)}
+                        {meals.unchosen > 0 && <Tile label="No choice yet" value={meals.unchosen} />}
+                    </div>
+                </>
+            )}
+            {(withVendors || meals) && <p className={ROW_LABEL}>{withVendors ? 'Guests' : 'Plates'}</p>}
             {/* Plates, not the headcount: it is the number a caterer is being
                 asked for, and once anybody is marked "not eating" the two stop
                 being the same. The chairs are not a kitchen number — each table
@@ -222,7 +266,7 @@ function Kitchen({ people, vendors, showVendors }: {
             <div className={GRID}>
                 <Tile label="Plates" value={t.plates} lead />
                 {ALL_DIET_CODES.map(code => <Tile key={code} label={DIET_LABELS[code]} value={t[code]} />)}
-                <Tile label={NO_RESTRICTION_LABEL} value={t.none} />
+                <Tile label={noneTile} value={t.none} />
             </div>
             {withVendors && (
                 <>
@@ -385,17 +429,21 @@ function SheetHeader({ data, subtitle }: { data: SeatingExportData; subtitle: st
     );
 }
 
-/** A name at a chair, the way the canvas draws one. */
-function PlanChip({ person, number }: { person: ExportPerson; number?: number }) {
+/**
+ * A name at a chair, the way the canvas draws one. `maxWidth` keeps a crowded
+ * table's names off each other — the table keeps its size, so they shorten.
+ */
+function PlanChip({ person, number, maxWidth }: { person: ExportPerson; number?: number; maxWidth?: number }) {
     const declined = person.rsvp_status === 'declined';
     return (
         <span
             className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border bg-white text-[11px] font-medium whitespace-nowrap leading-4 ${
                 declined ? 'border-gray-300 text-gray-400 line-through' : 'border-gray-400 text-gray-800'
             }`}
+            style={maxWidth ? { maxWidth } : undefined}
         >
             {number !== undefined && <span className="font-mono text-[9px] text-gray-400">{number}</span>}
-            {person.name}
+            <span className="min-w-0 truncate">{person.name}</span>
         </span>
     );
 }
@@ -468,7 +516,9 @@ function PlanDrawing({ tables, room, bounds, scale, numbered = false, textScale 
                                     className="absolute"
                                     style={{ left: pt.x + ox, top: pt.y + oy, transform: `translate(-50%, -50%) scale(${chipZoom})` }}
                                 >
-                                    <PlanChip person={table.people[i]} number={numbered ? i + 1 : undefined} />
+                                    {/* The chip is scaled by chipZoom, so its width is divided by it to fit the chair's share. */}
+                                    <PlanChip person={table.people[i]} number={numbered ? i + 1 : undefined}
+                                        maxWidth={Math.max(MIN_CHIP_WIDTH, g.chipWidth / chipZoom)} />
                                 </div>
                             ))}
                         </div>
@@ -596,7 +646,10 @@ export default function SeatingExportSheet({ data, options, preview = false }: {
     const columns = countsMode ? (data.tables.length > 8 ? 3 : 2) : 1;
     const twoColumn = countsMode;
 
+    const dishes = options.meals && data.meal ? data.meal.dishes : null;
+
     return (
+        <Dishes.Provider value={dishes}>
         <div className="bg-white text-gray-900 p-8 text-[12px] leading-relaxed">
             {options.plan === 'room' && <PlanRoomPage data={data} preview={preview} />}
             {options.plan === 'tables' && data.tables.map((table, i) => (
@@ -686,16 +739,19 @@ export default function SeatingExportSheet({ data, options, preview = false }: {
                 the block to sit and no reason to print it twice. */}
             {options.vendors && options.sections !== 'none' && (
                 <div className={(showTables || showList) ? (countsMode ? 'mt-4' : 'mt-8 pt-2') : ''}>
-                    <Vendors vendors={data.vendors} compact={countsMode} />
+                    <Dishes.Provider value={null}>
+                        <Vendors vendors={data.vendors} compact={countsMode} />
+                    </Dishes.Provider>
                 </div>
             )}
 
             {(options.sections !== 'none' || options.plan === 'tables') && (
             <p className="mt-6 pt-2 border-t border-gray-100 text-[10px] text-gray-400">
                 Dietary answers come from the RSVP form. A dash means nothing was reported —
-                that plate is the {NO_RESTRICTION_LABEL.toLowerCase()}.
+                {dishes ? ' the entrée column says what they chose.' : <> that plate is the {NO_RESTRICTION_LABEL.toLowerCase()}.</>}
             </p>
             )}
         </div>
+        </Dishes.Provider>
     );
 }

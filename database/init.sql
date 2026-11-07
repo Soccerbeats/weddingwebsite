@@ -297,6 +297,12 @@ CREATE TABLE IF NOT EXISTS seating_tables (
   created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- One size per table shape, for the whole plan: every round table is the same
+-- size, every long table the same length. Null means the defaults
+-- (DEFAULT_TABLE_SIZES in src/lib/tableLayout.ts). Tables never size themselves
+-- by how many sit at them.
+ALTER TABLE floor_plans ADD COLUMN IF NOT EXISTS table_sizes JSONB;
+
 CREATE TABLE IF NOT EXISTS seat_assignments (
   id SERIAL PRIMARY KEY,
   seating_table_id INTEGER REFERENCES seating_tables(id) ON DELETE CASCADE,
@@ -939,3 +945,13 @@ DELETE FROM seat_assignments sa
 -- before. FALSE: the rest of the household is coming without them.
 -- ---------------------------------------------------------------------------
 ALTER TABLE guest_list ADD COLUMN IF NOT EXISTS primary_attending BOOLEAN;
+
+-- ---------------------------------------------------------------------------
+-- v0.10.45: the couple's own RSVP questions.
+--
+-- The questions live in site.json (`rsvpQuestions`). A person's answers ride on
+-- their entry in `dietary_restrictions` (`answers`, keyed by question id); the
+-- household's answers — a song request, say — live here.
+-- ---------------------------------------------------------------------------
+ALTER TABLE rsvps ADD COLUMN IF NOT EXISTS answers JSONB;
+

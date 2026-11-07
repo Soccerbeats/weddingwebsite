@@ -4,6 +4,7 @@ import { ADMIN_COOKIE, verifyAdminToken } from '@/lib/auth';
 import { DEFAULT_SITE_CONFIG, getSiteConfig, updateSiteConfig, type SiteConfig } from '@/lib/config';
 import { isDemoMode } from '@/lib/demo';
 import { publicScheduleEvents } from '@/lib/schedule';
+import { cleanQuestions } from '@/lib/rsvpQuestions';
 
 const HEX = /^#[0-9a-fA-F]{3,8}$/;
 const COLOR_KEYS = ['accentColor', 'accentLightColor', 'accentDarkColor'] as const;
@@ -55,6 +56,10 @@ export async function POST(request: Request) {
                 return NextResponse.json({ error: `${key} must be a hex colour like #D4AF37` }, { status: 400 });
             }
         }
+
+        // The RSVP questions are read by the public form and validate guests'
+        // answers, so only well-formed ones are stored.
+        if ('rsvpQuestions' in updates) updates.rsvpQuestions = cleanQuestions(updates.rsvpQuestions);
 
         const newConfig = await updateSiteConfig((current) => {
             const { pageBgColors, ...rest } = updates;

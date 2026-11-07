@@ -1,8 +1,10 @@
+import { mealQuestion, type RsvpQuestion } from '@/lib/rsvpQuestions';
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { getSiteConfig } from '@/lib/config';
 import { partyAttendees } from '@/lib/seating';
 import { cleanName, cleanNameSql } from '@/lib/names';
+import { normaliseTableSizes, shapeOf } from '@/lib/tableLayout';
 import { dietCodes, dietNote, type DietaryEntry, type ExportPerson, type ExportTable, type ExportVendor, type PlanPoint, type SeatingExportData } from '@/lib/seatingExport';
 
 export const dynamic = 'force-dynamic';
@@ -27,8 +29,16 @@ function personFrom(
     side: string | null,
     rsvpStatus: string | null,
     entry: DietaryEntry | null,
+    mealQ: RsvpQuestion | null,
 ): ExportPerson {
+    // Their entrée by option id, so a dish renamed since still counts; a dish
+    // removed since is no choice at all.
+    const picked = mealQ ? entry?.answers?.[mealQ.id] : undefined;
+    const meal = mealQ && typeof picked === 'string'
+        ? (mealQ.options ?? []).find(o => o.id === picked)?.label ?? null
+        : null;
     return {
+        meal,
         name,
         seat,
         table_name: tableName,
@@ -84,6 +94,10 @@ export async function GET() {
         const floorPlan = fpResult.rows[0];
 
         const config = getSiteConfig();
+        const mealQ = mealQuestion(config.rsvpQuestions ?? []);
+        const meal = mealQ
+            ? { question: mealQ.label, dishes: (mealQ.options ?? []).map(o => o.label).filter(Boolean) }
+            : null;
         const header = {
             title: [config.brideName, config.groomName].filter(Boolean).join(' & ') || 'Seating chart',
             date: config.weddingDate || null,
@@ -93,7 +107,7 @@ export async function GET() {
         const vendors = await loadVendors(client);
 
         if (!floorPlan) {
-            return NextResponse.json({ ...header, tables: [], unseated: [], vendors, room: null } satisfies SeatingExportData);
+            return NextResponse.json({ ...header, tables: [], unseated: [], vendors, room: null, meal } satisfies SeatingExportData);
         }
 
         const tablesResult = await client.query(
@@ -170,10 +184,13 @@ export async function GET() {
                 row.side ?? null,
                 row.rsvp_status ?? null,
                 row.diet ?? null,
+                mealQ,
             ));
             byTable.set(row.seating_table_id, list);
         }
 
+        // One size per shape, as the canvas draws them.
+        const tableSizes = normaliseTableSizes(floorPlan.table_sizes);
         const tables: ExportTable[] = tablesResult.rows.map(table => {
             const people = (byTable.get(table.id) ?? []).map(p => ({ ...p, table_name: table.name }));
             return {
@@ -186,6 +203,7 @@ export async function GET() {
                 x: Number(table.x) || 0,
                 y: Number(table.y) || 0,
                 rotation: Number(table.rotation) || 0,
+                size: tableSizes[shapeOf(table.table_type)],
                 people,
             };
         });
@@ -233,6 +251,7 @@ export async function GET() {
                 row.side ?? null,
                 row.rsvp_status ?? null,
                 entryFor(row.dietary_restrictions, person.name),
+                mealQ,
             ))
         ));
 
@@ -245,7 +264,7 @@ export async function GET() {
             ? vertices.map((v: PlanPoint) => ({ x: Number(v.x) || 0, y: Number(v.y) || 0 }))
             : null;
 
-        return NextResponse.json({ ...header, tables, unseated, vendors, room } satisfies SeatingExportData);
+        return NextResponse.json({ ...header, tables, unseated, vendors, room, meal } satisfies SeatingExportData);
     } catch (error) {
         console.error('Error building seating export:', error);
         return NextResponse.json({ error: 'Failed to build seating export' }, { status: 500 });

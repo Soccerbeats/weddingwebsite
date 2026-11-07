@@ -7,6 +7,7 @@ import { verifyRsvpLink } from '@/lib/rsvpLink';
 import { effectiveRsvpMode } from '@/lib/rsvpMode';
 import { existingRsvpFor } from '@/lib/rsvpHousehold';
 import { isPastWeddingDay } from '@/lib/weddingDate';
+import { cleanAnswers, formatAnswer, type Answers } from '@/lib/rsvpQuestions';
 
 interface RsvpInput {
     guestName: string;
@@ -14,7 +15,12 @@ interface RsvpInput {
     phone: string;
     attending: boolean;
     guestCount: number;
-    dietaryJson: string | null;
+    /** One entry per attending person; answers are cleaned against the questions when saved. */
+    dietary: Record<string, unknown>[] | null;
+    /** The household's answers, as sent. */
+    householdAnswers: unknown;
+    /** What was actually stored, for the emails. Set by `saveRsvp`. */
+    savedAnswers?: { household: Answers; dietary: string | null };
     message: string | null;
     resolvedMembers: { name: string | null; attending: boolean | null }[] | null;
     /** The named guest's own answer; null from an older client that asked the household instead. */
@@ -41,8 +47,8 @@ function parseInput(body: unknown): RsvpInput | string {
     const rawCount = Number(b.guestCount);
     const guestCount = Number.isInteger(rawCount) && rawCount >= 0 ? rawCount : (b.attending ? 1 : 0);
 
-    const dietaryJson = Array.isArray(b.dietaryRestrictions)
-        ? JSON.stringify(b.dietaryRestrictions.slice(0, 50))
+    const dietary = Array.isArray(b.dietaryRestrictions)
+        ? b.dietaryRestrictions.slice(0, 50).filter((d): d is Record<string, unknown> => !!d && typeof d === 'object' && !Array.isArray(d))
         : null;
 
     const message = typeof b.message === 'string' ? b.message.slice(0, 5000) : null;
@@ -66,7 +72,7 @@ function parseInput(body: unknown): RsvpInput | string {
         ? b.attending
         : primaryAttending || !!resolvedMembers?.some((m) => m.attending === true);
 
-    return { guestName, email, phone, attending, guestCount, dietaryJson, message, resolvedMembers, primaryAttending };
+    return { guestName, email, phone, attending, guestCount, dietary, householdAnswers: b.answers, message, resolvedMembers, primaryAttending };
 }
 
 /**
@@ -106,9 +112,29 @@ async function saveRsvp(input: RsvpInput): Promise<{ id: number; isUpdate: boole
         const count = input.attending ? Math.max(1, input.guestCount) : 0;
 
         const existing = await client.query(
-            'SELECT id FROM rsvps WHERE LOWER(TRIM(guest_name)) = LOWER(TRIM($1)) ORDER BY created_at DESC LIMIT 1',
+            'SELECT id, dietary_restrictions, answers FROM rsvps WHERE LOWER(TRIM(guest_name)) = LOWER(TRIM($1)) ORDER BY created_at DESC LIMIT 1',
             [guest.guest_name],
         );
+
+        // Answers are checked against the couple's questions; a question the
+        // form did not show (hidden since, or added after it loaded) keeps the
+        // answer already on file.
+        const questions = getSiteConfig().rsvpQuestions ?? [];
+        const before = existing.rows[0];
+        const prevPeople = new Map<string, unknown>(
+            (Array.isArray(before?.dietary_restrictions) ? before.dietary_restrictions : [])
+                .map((d: { name?: string; answers?: unknown }) => [foldName(d?.name), d?.answers]),
+        );
+        const dietaryJson = input.dietary
+            ? JSON.stringify(input.dietary.map((d) => {
+                const answers = cleanAnswers(questions, 'person', d.answers, prevPeople.get(foldName(String(d.name ?? ''))));
+                const { answers: _sent, ...rest } = d;
+                void _sent;
+                return Object.keys(answers).length ? { ...rest, answers } : rest;
+            }))
+            : null;
+        const householdAnswers = cleanAnswers(questions, 'household', input.householdAnswers, before?.answers);
+        input.savedAnswers = { household: householdAnswers, dietary: dietaryJson };
 
         let id: number;
         const isUpdate = existing.rows.length > 0;
@@ -117,15 +143,15 @@ async function saveRsvp(input: RsvpInput): Promise<{ id: number; isUpdate: boole
             await client.query(
                 `UPDATE rsvps
                     SET email = $1, phone = $2, attending = $3, number_of_guests = $4,
-                        dietary_restrictions = $5, message = $6, updated_at = NOW()
+                        dietary_restrictions = $5, message = $6, answers = $8, updated_at = NOW()
                   WHERE id = $7`,
-                [input.email, input.phone, input.attending, count, input.dietaryJson, input.message, id],
+                [input.email, input.phone, input.attending, count, dietaryJson, input.message, id, JSON.stringify(householdAnswers)],
             );
         } else {
             const inserted = await client.query(
-                `INSERT INTO rsvps (guest_name, email, phone, attending, number_of_guests, dietary_restrictions, message)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-                [guest.guest_name, input.email, input.phone, input.attending, count, input.dietaryJson, input.message],
+                `INSERT INTO rsvps (guest_name, email, phone, attending, number_of_guests, dietary_restrictions, message, answers)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+                [guest.guest_name, input.email, input.phone, input.attending, count, dietaryJson, input.message, JSON.stringify(householdAnswers)],
             );
             id = inserted.rows[0].id;
         }
@@ -210,19 +236,43 @@ async function householdFor(
     return matchHousehold(row.rows[0].guest_name);
 }
 
+/** The answers to the couple's questions, as lines of text: "Anders — Entrée: Fish". */
+function answerLines(input: RsvpInput): string[] {
+    const questions = getSiteConfig().rsvpQuestions ?? [];
+    if (questions.length === 0 || !input.savedAnswers) return [];
+    const lines: string[] = [];
+    const people = input.savedAnswers.dietary ? JSON.parse(input.savedAnswers.dietary) as { name?: string; answers?: Answers }[] : [];
+    for (const person of people) {
+        const parts = questions
+            .filter((q) => q.scope === 'person' && person.answers?.[q.id] !== undefined)
+            .map((q) => `${q.label}: ${formatAnswer(q, person.answers![q.id])}`);
+        if (parts.length) lines.push(`${person.name || 'Guest'} — ${parts.join(' · ')}`);
+    }
+    for (const q of questions) {
+        const value = input.savedAnswers.household[q.id];
+        if (q.scope === 'household' && value !== undefined) lines.push(`${q.label}: ${formatAnswer(q, value)}`);
+    }
+    return lines;
+}
+
 async function sendEmails(input: RsvpInput) {
     if (!isMailConfigured()) return;
     const couple = getCoupleName();
     try {
         const transporter = createTransporter();
+        const answers = answerLines(input);
+        const answersText = answers.length ? `\n\nYour answers:\n${answers.map((l) => `- ${l}`).join('\n')}` : '';
+        const answersHtml = answers.length
+            ? `<p><strong>Your answers</strong></p><ul>${answers.map((l) => `<li>${escapeHtml(l)}</li>`).join('')}</ul>`
+            : '';
 
         const status = input.attending ? 'Attending' : 'Not Attending';
         await transporter.sendMail({
             from: `"${couple.replace(/"/g, '')}" <${getMailFrom()}>`,
             to: input.email,
             subject: 'We received your RSVP!',
-            text: `Hi ${input.guestName},\n\nThank you so much for RSVPing to our wedding. We have confirmed your response: ${status}.\n\nWe can't wait to celebrate with you!\n\nBest,\n${couple}`,
-            html: `<h1>RSVP Confirmation</h1><p>Hi ${escapeHtml(input.guestName)},</p><p>Thank you so much for RSVPing to our wedding. We have confirmed your response: <strong>${status}</strong>.</p><p>Best,<br>${escapeHtml(couple)}</p>`,
+            text: `Hi ${input.guestName},\n\nThank you so much for RSVPing to our wedding. We have confirmed your response: ${status}.${answersText}\n\nWe can't wait to celebrate with you!\n\nBest,\n${couple}`,
+            html: `<h1>RSVP Confirmation</h1><p>Hi ${escapeHtml(input.guestName)},</p><p>Thank you so much for RSVPing to our wedding. We have confirmed your response: <strong>${status}</strong>.</p>${answersHtml}<p>Best,<br>${escapeHtml(couple)}</p>`,
         });
 
         if (process.env.NOTIFICATION_EMAIL) {
@@ -230,7 +280,7 @@ async function sendEmails(input: RsvpInput) {
                 from: `"Wedding Bot" <${getMailFrom()}>`,
                 to: process.env.NOTIFICATION_EMAIL,
                 subject: `New RSVP from ${input.guestName}`,
-                text: `Name: ${input.guestName}\nAttending: ${input.attending ? 'Yes' : 'No'}\nGuests: ${input.attending ? input.guestCount : 0}\nEmail: ${input.email}\nPhone: ${input.phone}\nMessage: ${input.message ?? ''}`,
+                text: `Name: ${input.guestName}\nAttending: ${input.attending ? 'Yes' : 'No'}\nGuests: ${input.attending ? input.guestCount : 0}\nEmail: ${input.email}\nPhone: ${input.phone}\nMessage: ${input.message ?? ''}${answers.length ? `\n\nAnswers:\n${answers.join('\n')}` : ''}`,
             });
         }
     } catch (emailError) {

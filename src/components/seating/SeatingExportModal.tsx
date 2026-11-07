@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { toCsv } from '@/lib/mailing';
 import {
@@ -86,7 +86,10 @@ function Check({ checked, onChange, label, hint, disabled }: {
 export default function SeatingExportModal({ onClose }: { onClose: () => void }) {
     const [data, setData] = useState<SeatingExportData | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const [options, setOptions] = useState<ExportOptions>(DEFAULT_EXPORT_OPTIONS);
+    const [chosen, setOptions] = useState<ExportOptions>(DEFAULT_EXPORT_OPTIONS);
+    // Entrées are counted only when the RSVP actually asks for one.
+    const hasMenu = !!data?.meal;
+    const options: ExportOptions = useMemo(() => ({ ...chosen, meals: chosen.meals && hasMenu }), [chosen, hasMenu]);
 
     const paneRef = useRef<HTMLDivElement>(null);
     const sheetRef = useRef<HTMLDivElement>(null);
@@ -267,11 +270,13 @@ export default function SeatingExportModal({ onClose }: { onClose: () => void })
                                 />
                                 <Check checked={options.pageBreak} onChange={v => set('pageBreak', v)} label="New page per table" />
                                 <Check
-                                    checked={false}
-                                    onChange={() => {}}
-                                    disabled
+                                    checked={options.meals}
+                                    onChange={v => set('meals', v)}
+                                    disabled={!data?.meal}
                                     label="Entrée choice"
-                                    hint="Not collected — the RSVP form asks for restrictions only"
+                                    hint={data?.meal
+                                        ? `Each dish, per table — from “${data.meal.question}”`
+                                        : 'Add an entrée question in RSVPs → Questions to count dishes'}
                                 />
                             </div>
                             <Segment

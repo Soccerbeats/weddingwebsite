@@ -1,3 +1,4 @@
+import type { RsvpQuestion } from './rsvpQuestions';
 import fs from 'fs';
 import path from 'path';
 
@@ -60,6 +61,8 @@ export interface SiteConfig {
      * means 'auto'. See `src/lib/rsvpMode.ts` for how this resolves.
      */
     rsvpMode?: 'auto' | 'link' | 'verify' | 'simple';
+    /** The couple's own RSVP questions (Admin → RSVPs → Questions). See `src/lib/rsvpQuestions.ts`. */
+    rsvpQuestions?: RsvpQuestion[];
     // Accommodations / room block (shown on RSVP confirmation)
     roomBlockHotel?: string;
     roomBlockUrl?: string;

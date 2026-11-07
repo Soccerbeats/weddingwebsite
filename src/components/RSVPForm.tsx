@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { DEFAULT_ROOM_BLOCK_MESSAGE } from '@/lib/roomBlock';
+import { askedQuestions, formatAnswer, missingRequired, type AnswerValue, type Answers, type RsvpQuestion } from '@/lib/rsvpQuestions';
+import QuestionField from '@/components/rsvp/QuestionField';
 
 interface PartyMember {
     name: string | null;
@@ -20,6 +22,7 @@ interface DietaryEntry {
     kids_meal?: boolean;
     no_meal?: boolean;
     other_text?: string;
+    answers?: Answers;
 }
 
 interface VerifiedGuest {
@@ -41,6 +44,7 @@ interface ExistingRsvp {
     phone?: string | null;
     dietaryRestrictions?: DietaryEntry[] | null;
     message?: string | null;
+    answers?: Answers | null;
 }
 
 interface RsvpPageConfig {
@@ -49,6 +53,7 @@ interface RsvpPageConfig {
     roomBlockHotel?: string;
     roomBlockUrl?: string;
     roomBlockMessage?: string;
+    rsvpQuestions?: RsvpQuestion[];
 }
 
 // Attendance is a tri-state on purpose: null means "not answered yet", which is
@@ -68,6 +73,8 @@ interface MemberCard {
     kids_meal: boolean;
     no_meal: boolean;
     other_text: string;
+    /** Their answers to the couple's per-person questions. */
+    answers: Answers;
 }
 
 function buildCards(
@@ -113,6 +120,7 @@ function buildCards(
             no_meal: existing?.no_meal ?? false,
             other: existing?.other ?? false,
             other_text: existing?.other_text ?? '',
+            answers: existing?.answers ?? {},
         };
     });
 }
@@ -179,6 +187,10 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
     });
 
     const [cards, setCards] = useState<MemberCard[]>([]);
+    // The household's answers to the couple's household questions.
+    const [householdAnswers, setHouseholdAnswers] = useState<Answers>({});
+    // Set by a send with a required question left blank: those questions say so.
+    const [showMissing, setShowMissing] = useState(false);
     // Whether the last submission changed an RSVP that already existed.
     const [wasUpdate, setWasUpdate] = useState(false);
     const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
@@ -220,6 +232,8 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
             : answered ? !!data.existingRsvp!.attending : null;
         setCards(buildCards(data.guest.name, data.guest.party_members || [], existingDietary, answered, primaryAnswer));
 
+        setHouseholdAnswers((data.existingRsvp?.answers ?? {}) as Answers);
+        setShowMissing(false);
         setFormData({
             guestName: data.guest.name,
             email: data.existingRsvp?.email || data.guest.email || '',
@@ -386,6 +400,23 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
         setCards(prev => prev.map((c, i) => i === index ? { ...c, ...patch } : c));
     };
 
+    // The couple's own questions (Admin → RSVPs → Questions).
+    const allQuestions = config?.rsvpQuestions ?? [];
+    const personQuestions = askedQuestions(allQuestions, 'person');
+    const householdQuestions = (anyoneComing: boolean) => askedQuestions(allQuestions, 'household')
+        .filter(q => anyoneComing || q.onlyIfAttending === false);
+    const setPersonAnswer = (index: number, qid: string, value: AnswerValue | undefined) => setCards(prev => prev.map((c, i) => {
+        if (i !== index) return c;
+        const answers = { ...c.answers };
+        if (value === undefined) delete answers[qid]; else answers[qid] = value;
+        return { ...c, answers };
+    }));
+    const setHouseholdAnswer = (qid: string, value: AnswerValue | undefined) => setHouseholdAnswers(prev => {
+        const next = { ...prev };
+        if (value === undefined) delete next[qid]; else next[qid] = value;
+        return next;
+    });
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -413,6 +444,27 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
             }
         }
 
+        // The couple's required questions: each attending person's, then the household's.
+        {
+            const coming = cards.filter(c => c.attendance === 'yes');
+            for (const card of coming) {
+                const gap = missingRequired(personQuestions, card.answers)[0];
+                if (gap) {
+                    setShowMissing(true);
+                    setErrorMessage(`Please answer “${gap.label}” for ${card.name || 'everyone coming'}.`);
+                    setStatus('error');
+                    return;
+                }
+            }
+            const gap = missingRequired(householdQuestions(coming.length > 0), householdAnswers)[0];
+            if (gap) {
+                setShowMissing(true);
+                setErrorMessage(`Please answer “${gap.label}”.`);
+                setStatus('error');
+                return;
+            }
+        }
+
         setStatus('submitting');
         setErrorMessage('');
 
@@ -437,7 +489,12 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
             no_meal: c.no_meal,
             other: c.other,
             other_text: c.other ? c.other_text : '',
+            answers: c.answers,
         }));
+        // Only the household questions the form showed; the server keeps the rest.
+        const shownHousehold = Object.fromEntries(householdQuestions(householdAttending)
+            .filter(q => householdAnswers[q.id] !== undefined)
+            .map(q => [q.id, householdAnswers[q.id]]));
 
         try {
             const isUpdate = existingRsvp !== null;
@@ -454,6 +511,7 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
                     guestCount,
                     dietaryRestrictions,
                     resolvedMembers,
+                    answers: shownHousehold,
                 }),
             });
 
@@ -473,6 +531,7 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
                 message: formData.message,
                 guestCount,
                 dietaryRestrictions,
+                answers: { ...householdAnswers },
             }));
             setStatus('success');
         } catch (error) {
@@ -521,14 +580,23 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
                     {isAttending ? (
                         <>
                             <ul className="space-y-2">
-                                {attendees.map((c, i) => (
-                                    <li key={i} className="flex items-center gap-2 text-sm text-gray-800">
-                                        <svg className="h-4 w-4 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
-                                        </svg>
-                                        <span>{c.name}</span>
-                                    </li>
-                                ))}
+                                {attendees.map((c, i) => {
+                                    const picks = personQuestions
+                                        .filter(q => c.answers[q.id] !== undefined)
+                                        .map(q => formatAnswer(q, c.answers[q.id]))
+                                        .filter(Boolean);
+                                    return (
+                                        <li key={i} className="flex items-start gap-2 text-sm text-gray-800">
+                                            <svg className="mt-0.5 h-4 w-4 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+                                            </svg>
+                                            <span>
+                                                {c.name}
+                                                {picks.length > 0 && <span className="block text-xs text-gray-500">{picks.join(' · ')}</span>}
+                                            </span>
+                                        </li>
+                                    );
+                                })}
                             </ul>
                             <p className="mt-3 text-xs text-gray-400">
                                 {attendees.length} {attendees.length === 1 ? 'guest' : 'guests'} joyfully attending ♥
@@ -924,7 +992,18 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
 
                                 {/* What they eat — only for someone who is coming. */}
                                 {card.attendance === 'yes' && (
-                                    <div className="mt-4 border-t border-dashed border-gray-200 pt-4 [animation:rsvp-open_.3s_ease-out]">
+                                    <div className="mt-4 space-y-5 border-t border-dashed border-gray-200 pt-4 [animation:rsvp-open_.3s_ease-out]">
+                                        {personQuestions.map(q => (
+                                            <QuestionField
+                                                key={q.id}
+                                                question={q}
+                                                idPrefix={`p${i}`}
+                                                value={card.answers[q.id]}
+                                                onChange={v => setPersonAnswer(i, q.id, v)}
+                                                missing={showMissing && q.required && missingRequired([q], card.answers).length > 0}
+                                            />
+                                        ))}
+                                        <div>
                                         <p className="mb-2 text-xs font-medium text-gray-500">Any dietary needs?</p>
                                         <div className="flex flex-wrap gap-2">
                                             {([
@@ -981,6 +1060,7 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
                                                 className="mt-3 block w-full rounded-2xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-accent focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/30"
                                             />
                                         )}
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -988,6 +1068,27 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
                     })}
                 </div>
             </section>
+
+            {/* The couple's household questions — a song request, say. */}
+            {householdQuestions(comingCount > 0).length > 0 && (
+                <section aria-labelledby="rsvp-more-heading" className="rounded-3xl border border-gray-200 p-4 sm:p-5">
+                    <h3 id="rsvp-more-heading" className="mb-4 text-sm font-semibold text-gray-900">
+                        {cards.length > 1 ? 'A few things for your party' : 'A few more things'}
+                    </h3>
+                    <div className="space-y-5">
+                        {householdQuestions(comingCount > 0).map(q => (
+                            <QuestionField
+                                key={q.id}
+                                question={q}
+                                idPrefix="household"
+                                value={householdAnswers[q.id]}
+                                onChange={v => setHouseholdAnswer(q.id, v)}
+                                missing={showMissing && q.required && missingRequired([q], householdAnswers).length > 0}
+                            />
+                        ))}
+                    </div>
+                </section>
+            )}
 
             {/* How to reach you */}
             <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">

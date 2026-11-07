@@ -46,7 +46,7 @@ docker compose -f docker/docker-compose.dev.yml up -d
 None need a network except `check:finance:db` (live database) and
 `check:finance:ui` (a browser), so they are cheap to run before a commit — and
 CI runs `check:types`, `lint`, `check:photos`, `check:finance`,
-`check:honeymoon`, `check:seating`, `check:schedule` and `check:offline` on every push, so a red one blocks the
+`check:honeymoon`, `check:seating`, `check:schedule`, `check:rsvp` and `check:offline` on every push, so a red one blocks the
 image:
 
 | Command | What it covers |
@@ -64,6 +64,7 @@ image:
 | `npm run check:hero` | The home page's hero collapse in a real browser, at five viewport-and-input pairings — phone portrait, **phone landscape**, tablet portrait, tablet landscape, desktop — each driven by the input that device actually sends. Needs a browser and a server whose site config has a hero photo, or every case reports the placeholder instead of a pass |
 | `npm run audit:finance` | A deeper sweep over the finance logic |
 | `npm run check:seating` | 238 assertions with no database or browser: who takes a chair (a party member who declined takes none), seat-index allocation, moves, swaps, gathering a split party, auto-seating, the plan's own warnings, and the export — tallies, vendor plates, the grand total, the spreadsheet's columns, the one-page fit maths, and the floor plan drawing's geometry |
+| `npm run check:rsvp` | 55 assertions with no database or browser: the couple's own RSVP questions (what may be stored, which are asked, what counts as an answer, keeping answers the form did not show, required ones, the Questions tab's tallies, the templates), the entrée counts on the seating export, and the accent-insensitive name fold |
 | `npm run check:honeymoon` | 780 assertions with no database or network: where open drawers sit side by side, distances, date maths, URL parsing, the calendar grid, `.ics` output, search ranking, seed integrity, the trip-mode day resolution and the day as text to send, sunrise/sunset, OSM opening hours, the day timeline, time zones on legs, the budget, conflicts, imports/exports, markdown, the flight parser, and journeys (layovers, day placement, door-to-door time) |
 
 Seeds: `npm run seed:honeymoon` (bundles the Bali/Singapore travel guide,
@@ -488,6 +489,18 @@ order, before the commit:
   drift apart, and `check:seating` covers it. Every change goes through
   `POST /api/admin/seating/assign`, whose `{ deletes, seats }` shape applies a
   bulk move in one transaction.
+- **RSVP questions** (Admin → RSVPs → Questions, v0.10.45) — the couple's own
+  questions, all logic in `src/lib/rsvpQuestions.ts` (`check:rsvp`), drawn by
+  one `QuestionField` on the public form *and* in the builder's live preview.
+  The questions live in `site.json` → `rsvpQuestions` (public — the form reads
+  them; cleaned by `cleanQuestions()` on every write). A person's answers ride on
+  their entry in `rsvps.dietary_restrictions` as `answers` (so renames carry
+  them, and `entriesToStore()` must pass them through); the household's live in
+  `rsvps.answers`. Answers are keyed by question and option **ids**, never
+  wording, so rewording loses nothing. `/api/rsvp` keeps the answer on file for
+  any question the form did not show (hidden, or added after it loaded). Each
+  person answers for themself, the named guest included
+  (`guest_list.primary_attending`, v0.10.42; NULL means unknown and seats them).
 - **Who can be seated** — `guest_list` rows, and only those. `guest_list.kind`
   is `guest` for everyone invited and `couple` for the two getting married: the
   couple are one ordinary household of two (bride as `guest_name`, groom in
@@ -515,8 +528,12 @@ order, before the commit:
     the very place the scaling was meant to prevent.
   - `NO_RESTRICTION_LABEL` names the no-restriction bucket ("Chicken") in one
     place, so the table lines, the counts sheet and the kitchen tile cannot
-    drift. It is the constant to change when an entrée question lands (SEAT-1 in
-    `docs/parkinglot.md`).
+    drift. **When the couple has an entrée question** (an RSVP question marked
+    *meal*, v0.10.45) the export carries `meal` (the dishes), each person their
+    `meal`, and the bucket becomes `NO_RESTRICTION_WITH_MENU`: `mealTally()`
+    counts plates by dish, and a kids' meal or not eating is neither a dish nor
+    waiting for one. The sheet reads the dishes from the `Dishes` context, which
+    the vendor block sets to null.
   - **A chair is not a plate.** `DIET_CODES` are the five restrictions (they
     modify a plate); `MEAL_CODES` are `KID` and `NOM` (they decide it), and
     `ALL_DIET_CODES` is what every tally, chip, legend and CSV column iterates —

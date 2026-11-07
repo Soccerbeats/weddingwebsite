@@ -11,6 +11,56 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.10.45 — [Released] RSVP: ask your guests anything — and the kitchen gets the entrée counts (`main`, 2026-11-07 01:44)
+
+Prompted by the forks: wagnerbastian built an entrée choice, and fnoren17 hard-coded a welcome-drink question and a song request. This is a general version of both, and it closes SEAT-1 in the parking lot.
+
+### Added
+- **Your own RSVP questions: Admin → RSVPs → Questions.**
+  - Start from a template or from nothing:
+    - **Entrée choice**
+    - **Song request**
+    - **Shuttle**
+    - **Other events** (welcome drinks, rehearsal dinner, brunch)
+    - **Welcome drink**
+  - Each question is **Pick one**, **Pick any**, **Yes or no** or **Short answer**.
+  - It's asked of **each guest who's coming**, or **once per household**.
+  - Each one can be **required**. A household question can be asked **only if someone is coming**. You can **hide** a question without losing its answers.
+  - Options can have a description ("Pan-seared salmon, lemon butter") and can be reordered.
+  - Everything saves as you type.
+- **A live preview beside the builder** shows the question exactly as guests will see it. It's the same component the RSVP form uses.
+- **Results on every question**, as soon as anyone answers:
+  - a bar per option with its count (hover for the names)
+  - every short answer, with who gave it
+  - "N haven't answered", which opens the list of names for chasing people up
+- **Export answers (CSV)**: one row per guest who's coming, with their household's answers beside them.
+- **On the RSVP form**, each person's questions open in their card when they accept, above their dietary needs. Household questions get their own "A few things for your party" section.
+  - A required question left blank stops the send, marks the question, and says whose answer is missing.
+  - The confirmation lists each person's choices under their name.
+- **The emails include the answers.** The guest's confirmation lists them, and so does your notification.
+- **The kitchen gets the entrée counts.** Turn on "This is the meal" for a per-guest pick-one question, and the seating export changes in four places:
+  - The kitchen block starts with an **Entrées** row of tiles: one per dish, plus "No choice yet".
+  - Each table's line leads with its dishes ("2 fish · 1 chicken").
+  - The roster gets an **Entrée** column.
+  - The spreadsheet gets an **Entrée** column.
+  - A kids' meal and "not eating" decide the plate on their own, so they're never counted as waiting for a choice.
+  - Once there's a menu, the "Chicken" bucket for a plate with no restriction becomes "No restriction".
+  - Vendors are left out of the dish counts.
+- `npm run check:rsvp`: 55 checks, now run in CI. They cover:
+  - what a stored question may be, and which questions are asked
+  - what counts as an answer, and keeping answers the form didn't show
+  - required questions, the tallies and the templates
+  - the entrée counts and the spreadsheet column
+  - the name lookup that ignores accents
+
+### Changed
+- **Answers are stored under the question's and option's ids, never their wording**, so you can reword a question or rename a dish without losing an answer.
+  - A person's answers ride on their entry in `rsvps.dietary_restrictions`, so renaming a guest carries them along.
+  - The household's answers live in a new `rsvps.answers` column.
+  - Questions live in `site.json` under `rsvpQuestions`, and are cleaned on every save.
+- **Re-sending an RSVP never wipes an answer the form didn't show**: a question hidden since, or added after the guest opened the form, keeps what's on file.
+- **Editing a guest's dietary needs in the guest list keeps their answers.**
+
 ## v0.10.44 — [Released] Updates — the admin panel says when a new version is out, and installs it (`main`, 2026-11-07 01:32)
 
 ### Added

@@ -25,6 +25,8 @@ export interface DietaryEntry {
     /** The form's own field. `note` is the pre-JSONB migration's name for it. */
     other_text?: string | null;
     note?: string | null;
+    /** Their answers to the couple's own per-person questions, by question id (`src/lib/rsvpQuestions.ts`). */
+    answers?: Record<string, boolean | string | string[]>;
 }
 
 /**
@@ -171,6 +173,8 @@ export function entriesToStore(
             kids_meal: !!row.entry.kids_meal,
             no_meal: !!row.entry.no_meal,
             other_text: row.entry.other ? dietNote(row.entry) : '',
+            // Editing what someone eats must not wipe what they answered.
+            ...(row.entry.answers ? { answers: row.entry.answers } : {}),
         }));
 }
 
