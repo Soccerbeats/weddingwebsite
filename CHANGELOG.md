@@ -11,6 +11,30 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.10.50 — [Released] A weekend schedule, a phone hero photo, the time on the home page, and fonts built in (`main`, 2026-11-07 04:00)
+
+The last of the ideas taken from forks of this project: flokaiser's schedule over several days, fnoren17's separate photo for phones, the wedding time beside the date, and Grigorii777's fonts that need no network and offline mode turned off for development.
+
+### Added
+- **A schedule over more than one day.** Admin → Schedule has a new **Day** column. A row reads "♥ Wedding day" until you click it and pick another date (the welcome drinks the night before, the brunch after). The × puts it back on the wedding day.
+  - Rows are grouped under a heading for each day, each with **+ Add to this day**, and kept in order by day and then by time.
+  - Guests see the schedule day by day. A row of day buttons at the top (the wedding day in gold) jumps to each day, and each day has its own heading ("The wedding day · Saturday, May 1"), written in the site's language.
+  - A one-day schedule looks exactly as it did before, with no headings.
+  - A row with no date of its own follows the wedding date, so changing the date in Settings moves those rows with it.
+  - The CSV export has a **Date** column.
+- **A photo for phones** on the home page hero and the footer: Admin → Photos → *Current Hero Images*, **Choose…** under *Home Page · phones* or *Footer · phones*. A phone is tall and narrow, so a wide photo gets cropped. The picker marks which of your photos are portrait. Leave it unset and phones keep using the main photo; **Use the main one** sets it back.
+  - With the slideshow on, the phone photo leads it.
+  - The footer downloads only the photo the screen uses.
+- **The wedding time beside the date** under your names on the home page: "May 1, 2027 · 4:00 PM". It's on whenever a time is set, with a tick box under *Wedding Time* in Settings to hide it.
+
+### Changed
+- **Fonts are built into the app.** Playfair Display, Great Vibes and Geist ship with the site instead of being downloaded from Google Fonts at build time. A build no longer needs to reach Google, and guests' browsers never request a font from anywhere else.
+  - The headings now have Cyrillic letters, so the Russian site shows its headings in the site's own typeface.
+  - Italic headings now use real italic letters instead of slanted ones.
+  - Each script is a separate file, and a page downloads only the scripts its text uses.
+  - The licences are in `src/app/fonts/LICENSE.md`.
+- **No offline caching on a development server.** Under `npm run dev` the site no longer saves pages for offline use, so a change shows on the next reload. A worker left from an earlier run is removed, along with its saved pages. `NEXT_PUBLIC_OFFLINE_IN_DEV=true` turns it back on for working on offline mode. Production is unchanged.
+
 ## v0.10.49 — [Released] The guest site speaks Spanish, German, Swedish and Russian (`main`, 2026-11-07 02:36)
 
 Four of the seven forks of this project translated the whole site by hand (into German, Swedish and Russian), so the language is now a setting. English stays the default. The fnoren17 fork's choice that the couple picks the language, not each visitor, is kept.

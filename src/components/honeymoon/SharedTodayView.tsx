@@ -6,6 +6,7 @@ import { planForDay, planForToday } from '@/lib/honeymoonToday';
 import { nominalZone, sunTimesLocal } from '@/lib/honeymoonSun';
 import { hasCoords } from '@/lib/honeymoon';
 import type { HoneymoonPayload, ShareScope } from '@/lib/honeymoon';
+import { registerSiteWorker } from '@/lib/offlineWorker';
 
 const NIGHT_KEY = 'honeymoon-shared-night';
 
@@ -28,8 +29,7 @@ export default function SharedTodayView({ payload, scope, label }: {
     // Offline for the person carrying the link too: same worker, same narrow
     // scope. Nothing here can write, so a stale copy is only ever a stale read.
     useEffect(() => {
-        if (!('serviceWorker' in navigator)) return;
-        navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
+        registerSiteWorker().catch(() => {});
     }, []);
 
     const canBrowse = scope !== 'today';

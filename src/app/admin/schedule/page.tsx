@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { Fragment, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
-    blankEvent, isPublicEvent, normalizeEventTime, SCHEDULE_HEADERS, scheduleRows, sortByTime,
-    type ScheduleEvent,
+    blankEvent, cleanIsoDate, eventDay, isPublicEvent, normalizeEventTime, SCHEDULE_HEADERS, scheduleRows,
+    sortSchedule, storedDate, type ScheduleEvent,
 } from '@/lib/schedule';
+import { weddingIsoDate } from '@/lib/weddingDate';
 import { toCsv } from '@/lib/mailing';
 import { ColumnResizer, useColumnWidths } from '@/components/admin/useColumnWidths';
 import { SaveStatus, useAutosave } from '@/components/admin/useAutosave';
@@ -51,10 +52,11 @@ function buildPayload(events: ScheduleEvent[], subtitle: string, shuttle: string
  */
 const COLUMNS = [
     { id: 'public', label: 'Public', width: 84 },
-    { id: 'time', label: 'Time', width: 132 },
-    { id: 'title', label: 'Event', width: 224 },
-    { id: 'location', label: 'Location', width: 224 },
-    { id: 'description', label: 'Description', width: 340 },
+    { id: 'day', label: 'Day', width: 160 },
+    { id: 'time', label: 'Time', width: 124 },
+    { id: 'title', label: 'Event', width: 208 },
+    { id: 'location', label: 'Location', width: 208 },
+    { id: 'description', label: 'Description', width: 280 },
     { id: 'actions', label: '', width: 56 },
 ] as const;
 
@@ -64,6 +66,18 @@ const DEFAULT_WIDTHS: Record<string, number> = Object.fromEntries(
 
 /** The header cell style, shared so the two column sets line up. */
 const TH = 'relative text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500 px-3 py-2';
+/** `2027-04-30` as "Fri, Apr 30". */
+function shortDay(iso: string): string {
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+/** `2027-04-30` as "Friday, April 30". */
+function longDay(iso: string): string {
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+}
+
 const CELL_INPUT =
     'w-full rounded-xl bg-gray-50 border border-transparent px-3 py-2 text-sm text-gray-900 ' +
     'focus:bg-white focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/20 transition-colors';
@@ -74,13 +88,17 @@ export default function AdminSchedule() {
     const [shuttleText, setShuttleText] = useState('');
     const [dressCode, setDressCode] = useState('');
     const [loaded, setLoaded] = useState(false);
+    /** The wedding date from Settings, which is the day a row with no date of its own is on. */
+    const [weddingIso, setWeddingIso] = useState<string | null>(null);
 
     useEffect(() => {
         fetch('/api/admin/site-config')
             .then(res => res.json())
             .then(data => {
+                const wedding = weddingIsoDate(data.weddingDate);
+                setWeddingIso(wedding);
                 const day: ScheduleEvent[] = data.scheduleEvents
-                    ? sortByTime(data.scheduleEvents)
+                    ? sortSchedule(data.scheduleEvents, wedding)
                     // Default starter event if empty
                     : [{ time: '4:00 PM', title: 'Ceremony', description: '', location: '', public: true }];
                 const subtitle = data.scheduleSubtitle ?? '';
@@ -100,6 +118,17 @@ export default function AdminSchedule() {
     }, []);
 
     const publicCount = useMemo(() => events.filter(isPublicEvent).length, [events]);
+    /** The days the schedule covers, in order. More than one turns on the day headings. */
+    const dayKeys = useMemo(
+        () => [...new Set(events.map(ev => eventDay(ev, weddingIso)))],
+        [events, weddingIso],
+    );
+    const multiDay = dayKeys.length > 1;
+    const dayTitle = (key: string) =>
+        key === (weddingIso ?? '') ? (key ? `${longDay(key)} · the wedding day` : 'The wedding day') : longDay(key);
+    /** A day heading goes above the first row of each day, once there is more than one. */
+    const startsDay = (index: number) =>
+        multiDay && (index === 0 || eventDay(events[index], weddingIso) !== eventDay(events[index - 1], weddingIso));
 
     const payload = useMemo(
         () => buildPayload(events, scheduleSubtitle, shuttleText, dressCode),
@@ -115,11 +144,16 @@ export default function AdminSchedule() {
         setEvents(events.map((ev, i) => (i === index ? { ...ev, [field]: value } : ev)));
     };
 
-    /** A blank row at the bottom, with the cursor already in its first cell.
-     *  It has no time yet, so nothing sorts it away while it is being filled. */
-    const addEvent = () => {
-        const index = events.length;
-        setEvents([...events, blankEvent()]);
+    /** A blank row at the end of a day (the wedding day unless said otherwise),
+     *  with the cursor already in its time cell. It has no time yet, so nothing
+     *  sorts it away while it is being filled. */
+    const addEvent = (day: string = weddingIso ?? '') => {
+        let index = events.length;
+        for (let i = events.length - 1; i >= 0; i--) {
+            if (eventDay(events[i], weddingIso) === day) { index = i + 1; break; }
+        }
+        const row = { ...blankEvent(), ...(storedDate(day, weddingIso) ? { date: day } : {}) };
+        setEvents([...events.slice(0, index), row, ...events.slice(index)]);
         requestAnimationFrame(() => {
             document.querySelector<HTMLInputElement>(`[data-time-cell="${index}"]`)?.focus();
         });
@@ -147,10 +181,21 @@ export default function AdminSchedule() {
      * letting go is the honest answer to "done with this one".
      */
     const commitRow = (index: number, from: HTMLElement) => {
-        setEvents(current => sortByTime(current.map(
+        setEvents(current => sortSchedule(current.map(
             (ev, i) => (i === index ? { ...ev, time: normalizeEventTime(ev.time) } : ev),
-        )));
+        ), weddingIso));
         from.blur();
+    };
+
+    /** Move a row to another day. Picking a date is a finished act, so the row
+     *  is filed straight away — under its new day, by its time. */
+    const moveToDay = (index: number, date: string | undefined) => {
+        setEvents(current => sortSchedule(current.map((ev, i) => {
+            if (i !== index) return ev;
+            const next = { ...ev, time: normalizeEventTime(ev.time) };
+            if (date) next.date = date; else delete next.date;
+            return next;
+        }), weddingIso));
     };
 
     /** Enter anywhere in a row files it; every other key is left alone. */
@@ -176,7 +221,7 @@ export default function AdminSchedule() {
      * column so the file is not mistaken for the guest-facing schedule.
      */
     const exportCsv = () => {
-        const csv = toCsv([...SCHEDULE_HEADERS], scheduleRows(events));
+        const csv = toCsv([...SCHEDULE_HEADERS], scheduleRows(events, weddingIso));
         const stamp = new Date().toISOString().slice(0, 10);
         const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
         const a = document.createElement('a');
@@ -220,7 +265,9 @@ export default function AdminSchedule() {
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Schedule Management</h1>
             <p className="text-gray-600 mb-8">
                 The whole run of the day. Tick <span className="font-medium text-gray-800">Public</span> on the rows
-                guests should see on the schedule page — everything else stays here. Changes save themselves.
+                guests should see on the schedule page — everything else stays here. A weekend? Give a row its
+                own <span className="font-medium text-gray-800">Day</span> — the welcome drinks the night before, the
+                brunch after — and guests see the schedule day by day. Changes save themselves.
             </p>
 
             <div className="space-y-8">
@@ -232,7 +279,7 @@ export default function AdminSchedule() {
                             {events.length - publicCount > 0 && ` · ${events.length - publicCount} private`}
                         </p>
                         <p className="hidden sm:block text-xs text-gray-400">
-                            Ordered by time — press Enter to file a row.
+                            Ordered by day and time — press Enter to file a row.
                         </p>
                         <div className="ml-auto flex items-center gap-2">
                             {resized && (
@@ -300,14 +347,40 @@ export default function AdminSchedule() {
                             </thead>
                             <tbody>
                                 {events.map((event, index) => (
-                                    // A private row is tinted, so a glance down the
-                                    // table answers "what do guests actually see?"
+                                    <Fragment key={index}>
+                                    {startsDay(index) && (
+                                        <tr className="border-t border-gray-200 bg-accent/5">
+                                            <td colSpan={COLUMNS.length} className="px-4 py-2">
+                                                <div className="flex items-center gap-3">
+                                                    <span className="text-sm font-semibold text-gray-900">
+                                                        {dayTitle(eventDay(event, weddingIso))}
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => addEvent(eventDay(event, weddingIso))}
+                                                        className="ml-auto rounded-full px-3 py-1 text-xs font-medium text-accent-dark hover:bg-accent/10 transition-colors"
+                                                    >
+                                                        + Add to this day
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )}
+                                    {/* A private row is tinted, so a glance down the
+                                        table answers "what do guests actually see?" */}
                                     <tr
-                                        key={index}
                                         onKeyDown={rowKeyDown(index)}
                                         className={`border-t border-gray-100 ${isPublicEvent(event) ? '' : 'bg-gray-50/70'}`}
                                     >
                                         <td className="px-3 py-2 text-center">{publicToggle(index, event)}</td>
+                                        <td className="px-3 py-2">
+                                            <DayCell
+                                                date={event.date}
+                                                weddingIso={weddingIso}
+                                                onChange={date => moveToDay(index, date)}
+                                                label={`Day for row ${index + 1}`}
+                                            />
+                                        </td>
                                         <td className="px-3 py-2">
                                             <input
                                                 type="text"
@@ -352,6 +425,7 @@ export default function AdminSchedule() {
                                         </td>
                                         <td className="px-3 py-2">{rowActions(index)}</td>
                                     </tr>
+                                    </Fragment>
                                 ))}
                             </tbody>
                         </table>
@@ -360,8 +434,22 @@ export default function AdminSchedule() {
                     {/* Phone: the same row, stacked. */}
                     <div className="md:hidden divide-y divide-gray-100">
                         {events.map((event, index) => (
+                            <Fragment key={index}>
+                            {startsDay(index) && (
+                                <div className="flex items-center gap-3 bg-accent/5 px-4 py-2">
+                                    <span className="text-sm font-semibold text-gray-900">
+                                        {dayTitle(eventDay(event, weddingIso))}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={() => addEvent(eventDay(event, weddingIso))}
+                                        className="ml-auto min-h-[44px] rounded-full px-3 text-xs font-medium text-accent-dark"
+                                    >
+                                        + Add
+                                    </button>
+                                </div>
+                            )}
                             <div
-                                key={index}
                                 onKeyDown={rowKeyDown(index)}
                                 className={`p-4 space-y-2 ${isPublicEvent(event) ? '' : 'bg-gray-50/70'}`}
                             >
@@ -372,6 +460,12 @@ export default function AdminSchedule() {
                                     </label>
                                     <div className="ml-auto">{rowActions(index)}</div>
                                 </div>
+                                <DayCell
+                                    date={event.date}
+                                    weddingIso={weddingIso}
+                                    onChange={date => moveToDay(index, date)}
+                                    label={`Day for row ${index + 1}`}
+                                />
                                 <div className="grid grid-cols-2 gap-2">
                                     <input
                                         type="text"
@@ -408,19 +502,20 @@ export default function AdminSchedule() {
                                     aria-label={`Description for row ${index + 1}`}
                                 />
                             </div>
+                            </Fragment>
                         ))}
                     </div>
 
                     <div className="p-3 border-t border-gray-100">
                         <button
                             type="button"
-                            onClick={addEvent}
+                            onClick={() => addEvent()}
                             className="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 hover:border-accent hover:text-accent transition-all duration-300 font-medium flex items-center justify-center gap-2"
                         >
                             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
                             </svg>
-                            Add row
+                            {multiDay ? 'Add a row to the wedding day' : 'Add row'}
                         </button>
                     </div>
                 </div>
@@ -465,6 +560,63 @@ export default function AdminSchedule() {
                 </div>
 
             </div>
+        </div>
+    );
+}
+
+/**
+ * Which day a row happens on. Reads "♥ Wedding day" until it is moved — a row
+ * with no date belongs to the wedding, so changing the wedding date in Settings
+ * carries it along — and opens the browser's own calendar when clicked.
+ */
+function DayCell({ date, weddingIso, onChange, label }: {
+    date: string | undefined;
+    weddingIso: string | null;
+    onChange: (date: string | undefined) => void;
+    label: string;
+}) {
+    const picker = useRef<HTMLInputElement>(null);
+    const own = cleanIsoDate(date);
+    const onWeddingDay = !own || own === weddingIso;
+    const open = () => {
+        const input = picker.current;
+        if (!input) return;
+        try { input.showPicker(); } catch { input.focus(); }
+    };
+    return (
+        <div className="relative flex items-center">
+            <button
+                type="button"
+                onClick={open}
+                className={`${CELL_INPUT} flex items-center gap-1.5 whitespace-nowrap text-left ${onWeddingDay ? '' : 'pr-8'}`}
+                aria-label={`${label}: ${onWeddingDay ? 'the wedding day' : shortDay(own!)}`}
+            >
+                {onWeddingDay
+                    ? <><span className="text-accent" aria-hidden="true">♥</span><span className="text-gray-600">Wedding day</span></>
+                    : <span className="font-medium">{shortDay(own!)}</span>}
+            </button>
+            {/* The real input sits behind the button, invisible: it is only here
+                to draw the calendar. */}
+            <input
+                ref={picker}
+                type="date"
+                tabIndex={-1}
+                aria-hidden="true"
+                value={own ?? weddingIso ?? ''}
+                onChange={e => onChange(storedDate(e.target.value, weddingIso))}
+                className="pointer-events-none absolute inset-0 opacity-0"
+            />
+            {!onWeddingDay && (
+                <button
+                    type="button"
+                    onClick={() => onChange(undefined)}
+                    className="absolute right-1.5 flex h-6 w-6 items-center justify-center rounded-full text-gray-400 hover:bg-gray-200 hover:text-gray-700 transition-colors"
+                    title="Back to the wedding day"
+                    aria-label="Back to the wedding day"
+                >
+                    ×
+                </button>
+            )}
         </div>
     );
 }

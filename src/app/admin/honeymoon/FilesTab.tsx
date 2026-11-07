@@ -17,6 +17,7 @@ import { Segmented } from './kit/Segmented';
 import { Sheet } from './kit/Sheet';
 import { TabToolbar } from './kit/TabToolbar';
 import { Button, EmptyState, InlineText, MiniSelect, OverflowMenu } from './ui';
+import { registerSiteWorker } from '@/lib/offlineWorker';
 
 const fileUrl = (doc: TripDocument) => `/api/photos/${doc.path}`;
 const thumbUrl = (doc: TripDocument) => `/api/photos/${doc.path}/thumb`;
@@ -618,7 +619,7 @@ export function useOfflineFiles(documents: TripDocument[]) {
             if (event.data?.type === 'honeymoon-sw:files-done') setSaved(Number(event.data.saved) || 0);
         };
         navigator.serviceWorker.addEventListener('message', onMessage);
-        void navigator.serviceWorker.register('/sw.js', { scope: '/' })
+        void registerSiteWorker()
             .then(() => navigator.serviceWorker.ready)
             .then((registration) => {
                 registration.active?.postMessage({ type: 'honeymoon-sw:files', urls: key ? key.split('|') : [] });

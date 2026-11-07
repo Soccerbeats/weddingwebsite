@@ -76,6 +76,8 @@ export const de: Messages = {
         defaultTitle: 'Trauung',
         defaultDescription: 'Wir sagen „Ja“!',
         defaultLocation: 'Hauptlocation',
+        weddingDay: 'Der Hochzeitstag',
+        days: 'Die Tage',
     },
     rsvpPage: {
         title: 'Rückmeldung',

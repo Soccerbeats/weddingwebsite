@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { describeWrite } from './outbox';
 import { useI18n } from '@/components/I18nProvider';
 import { REFRESHED_EVENT, checkForUpdates, dismissFailed, getServerState, getState, hasLive, inFrame, subscribe } from './offlineStore';
+import { OFFLINE_WORKER_ENABLED, registerSiteWorker, retireSiteWorker } from '@/lib/offlineWorker';
 
 /** "today 14:02", "yesterday 09:15", "Mon 5 Oct". */
 export function savedLabel(at: number, now = Date.now()): string {
@@ -156,7 +157,9 @@ export default function OfflineManager() {
 
     useEffect(() => {
         if (inFrame() || !('serviceWorker' in navigator)) return;
-        navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => undefined);
+        // On a development server: no worker, and none left over from before.
+        if (!OFFLINE_WORKER_ENABLED) { void retireSiteWorker(); return; }
+        registerSiteWorker().catch(() => undefined);
         // After the page has settled, so the first paint never waits on it.
         const timer = setTimeout(() => { void checkForUpdates({ force: true }); }, 2500);
         const onOnline = () => { void checkForUpdates({ force: true }); };

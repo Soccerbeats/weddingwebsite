@@ -47,7 +47,8 @@
 ## What it does
 
 **For guests** — a home page with a hero slideshow and a countdown, your story as
-a timeline, the wedding party, the day's schedule, a photo gallery, a registry with
+a timeline, the wedding party, the schedule (one day, or the whole weekend day by
+day), a photo gallery, a registry with
 a honeymoon fund, and an RSVP form that recognises them by name (accents and all —
 "Noren" finds "Norén") where each person answers for themself and answers any
 questions you add. **In your guests' language: English, Spanish, German, Swedish
@@ -67,7 +68,8 @@ or Russian** — see [Languages](#languages).
   want them in, quantities, who is paying, who has contributed, what is still
   owed and when it is due — including a bar charged per **drinker**, so the
   under-21s on your guest list stay out of it
-- **Photos** — upload, drag to reorder, heart the ones that go public
+- **Photos** — upload, drag to reorder, heart the ones that go public, and give
+  the home page and footer a portrait photo of their own for phones
 - **Content** — every page's text, colours, and a work-in-progress toggle per page
 - **Honeymoon** — a private planner *and* a trip companion: a map of everywhere
   you are considering, a day-by-day itinerary with real driving times and honest
@@ -92,6 +94,12 @@ docker compose -f docker/docker-compose.prod.yml up -d
 Then open `http://localhost:3000`, and `/admin` with the password you set.
 (`docker/docker-compose.dev.yml` is the development stack — it builds from source
 instead of pulling the image.)
+
+It builds with no network beyond npm: the fonts ship with the app rather than
+being fetched from Google Fonts, and guests' browsers never ask a font service
+for anything. Under `npm run dev` the offline mode is off, so a change shows on
+the next reload rather than behind a saved copy
+(`NEXT_PUBLIC_OFFLINE_IN_DEV=true` turns it on).
 
 Everything works with those two variables. The rest of `docker/.env.example` is
 optional and each feature says so in the UI when its variable is missing:
@@ -415,5 +423,7 @@ a separate license. That conversation is welcome and the answer is not
 automatically no — [open an issue](https://github.com/Soccerbeats/weddingwebsite/issues)
 and let's talk.
 
-Dependencies keep their own licenses, and whatever a deployment holds — the
+Dependencies keep their own licenses — the bundled fonts (Playfair Display, Great
+Vibes, Geist) are under the SIL Open Font License, in
+[`src/app/fonts/LICENSE.md`](src/app/fonts/LICENSE.md) — and whatever a deployment holds — the
 photographs, the guest list, the names — belongs to whoever put it there.

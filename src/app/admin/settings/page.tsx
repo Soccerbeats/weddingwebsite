@@ -20,6 +20,7 @@ export default function AdminSettings() {
         groomName: '',
         weddingDate: '',
         weddingTime: '',
+        heroShowTime: true,
         weddingLocation: '',
         weddingVenue: '',
         rsvpDeadline: '',
@@ -156,6 +157,16 @@ export default function AdminSettings() {
                         className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-accent focus:ring-accent sm:text-sm p-2 border"
                         placeholder="e.g. 4:00 PM"
                     />
+                    <label className="mt-2 flex cursor-pointer items-center gap-2 text-sm text-gray-600">
+                        <input
+                            type="checkbox"
+                            checked={config.heroShowTime !== false}
+                            onChange={(e) => setConfig({ ...config, heroShowTime: e.target.checked })}
+                            className="h-4 w-4 rounded border-gray-300"
+                            style={{ accentColor: 'var(--accent)' }}
+                        />
+                        Show it beside the date under your names on the home page
+                    </label>
                 </div>
 
                 <div>

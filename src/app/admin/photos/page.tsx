@@ -36,7 +36,7 @@ interface Photo {
 
 interface SortablePhotoProps {
     photo: Photo;
-    onSetHero: (type: 'homeHero' | 'aboutHero' | 'footerHeroImage' | 'weddingLogo' | 'venuePhoto', filename: string) => void;
+    onSetHero: (type: HeroSlot, filename: string) => void;
     onDelete: (id: number) => void;
     onToggleHeart: (id: number, hearted: boolean) => void;
     onEdit: (photo: Photo) => void;
@@ -169,10 +169,83 @@ function SortablePhoto({ photo, onSetHero, onDelete, onToggleHeart, onEdit, onOp
     );
 }
 
+/** Every site.json key that holds one chosen photo. */
+type HeroSlot =
+    | 'homeHero' | 'homeHeroMobile' | 'aboutHero' | 'footerHeroImage' | 'footerHeroImageMobile'
+    | 'weddingLogo' | 'venuePhoto';
+
+const SLOT_NAMES: Record<HeroSlot, string> = {
+    homeHero: 'Home Hero Image',
+    homeHeroMobile: 'Home Hero Image for phones',
+    aboutHero: 'About Hero Image',
+    footerHeroImage: 'Footer Hero Image',
+    footerHeroImageMobile: 'Footer Image for phones',
+    weddingLogo: 'Wedding Logo',
+    venuePhoto: 'Venue Photo',
+};
+
+/**
+ * The phone version of a photo slot: a portrait thumbnail, the photo it falls
+ * back to when none is chosen, and the two things you can do about it.
+ */
+function PhoneSlot({ label, own, fallback, onChoose, onClear }: {
+    label: string;
+    own: string;
+    fallback: string;
+    onChoose: () => void;
+    onClear: () => void;
+}) {
+    const shown = own || fallback;
+    return (
+        <div>
+            <span className="text-xs font-bold text-gray-500 uppercase">{label}</span>
+            <div className="mt-1 flex items-end gap-3">
+                <button
+                    type="button"
+                    onClick={onChoose}
+                    className="group relative h-28 w-16 shrink-0 overflow-hidden rounded-xl border-[3px] border-gray-900 bg-gray-200 shadow-md transition-transform hover:-translate-y-0.5"
+                    title="Choose the photo phones show"
+                >
+                    {shown
+                        ? <img src={`/api/photos/${shown}?w=320`} alt="" className={`h-full w-full object-cover ${own ? '' : 'opacity-60 grayscale'}`} />
+                        : <span className="flex h-full items-center justify-center text-[10px] text-gray-500">None</span>}
+                    <span className="absolute left-1/2 top-1 h-1 w-5 -translate-x-1/2 rounded-full bg-gray-900/80" aria-hidden="true" />
+                </button>
+                <div className="flex min-w-0 flex-col gap-1.5">
+                    <p className="text-[11px] leading-snug text-gray-500">
+                        {own ? 'Its own photo' : 'Same as the main one, cropped'}
+                    </p>
+                    <button
+                        type="button"
+                        onClick={onChoose}
+                        className="self-start rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-700 shadow-sm ring-1 ring-gray-200 hover:ring-accent transition"
+                    >
+                        {own ? 'Change' : 'Choose…'}
+                    </button>
+                    {own && (
+                        <button
+                            type="button"
+                            onClick={onClear}
+                            className="self-start px-1 text-xs text-gray-400 hover:text-red-500 transition-colors"
+                        >
+                            Use the main one
+                        </button>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export default function AdminPhotos() {
     const [photos, setPhotos] = useState<Photo[]>([]);
     const [uploading, setUploading] = useState(false);
-    const [siteConfig, setSiteConfig] = useState({ homeHero: '', aboutHero: '', footerHeroImage: '', weddingLogo: '', venuePhoto: '' });
+    const [siteConfig, setSiteConfig] = useState<Record<HeroSlot, string>>({
+        homeHero: '', homeHeroMobile: '', aboutHero: '', footerHeroImage: '', footerHeroImageMobile: '',
+        weddingLogo: '', venuePhoto: '',
+    });
+    /** Which phone slot the photo picker is choosing for, when it is open. */
+    const [phonePicker, setPhonePicker] = useState<'homeHeroMobile' | 'footerHeroImageMobile' | null>(null);
     const [editingPhoto, setEditingPhoto] = useState<Photo | null>(null);
     const [editForm, setEditForm] = useState({ title: '', description: '' });
     const [photosSubtitle, setPhotosSubtitle] = useState('Moments from our journey together.');
@@ -210,7 +283,7 @@ export default function AdminPhotos() {
     const fetchConfig = async () => {
         const res = await fetch('/api/admin/site-config');
         const data = await res.json();
-        setSiteConfig(data);
+        setSiteConfig(prev => ({ ...prev, ...data }));
         if (data.photosSubtitle) setPhotosSubtitle(data.photosSubtitle);
         setSubtitleLoaded(true);
     };
@@ -388,7 +461,7 @@ export default function AdminPhotos() {
         }
     };
 
-    const setHero = async (type: 'homeHero' | 'aboutHero' | 'footerHeroImage' | 'weddingLogo' | 'venuePhoto', filename: string) => {
+    const setHero = async (type: HeroSlot, filename: string, quiet = false) => {
         try {
             const res = await fetch('/api/admin/site-config', {
                 method: 'POST',
@@ -397,8 +470,7 @@ export default function AdminPhotos() {
             });
             if (res.ok) {
                 setSiteConfig(prev => ({ ...prev, [type]: filename }));
-                const heroName = type === 'homeHero' ? 'Home' : type === 'aboutHero' ? 'About' : type === 'footerHeroImage' ? 'Footer' : type === 'weddingLogo' ? 'Wedding Logo' : 'Venue Photo';
-                alert(`Updated ${heroName}${type === 'homeHero' || type === 'aboutHero' || type === 'footerHeroImage' ? ' Hero Image' : ''}`);
+                if (!quiet) alert(`Updated ${SLOT_NAMES[type]}`);
             }
         } catch (err) {
             console.error(err);
@@ -437,10 +509,12 @@ export default function AdminPhotos() {
         }
     };
 
-    const heroButtons: { type: 'homeHero' | 'aboutHero' | 'footerHeroImage' | 'weddingLogo' | 'venuePhoto'; label: string }[] = [
+    const heroButtons: { type: HeroSlot; label: string }[] = [
         { type: 'homeHero', label: 'Home Hero' },
         { type: 'aboutHero', label: 'About Hero' },
+        { type: 'homeHeroMobile', label: 'Phone Hero' },
         { type: 'footerHeroImage', label: 'Footer Hero' },
+        { type: 'footerHeroImageMobile', label: 'Phone Footer' },
         { type: 'weddingLogo', label: 'Wedding Logo' },
         { type: 'venuePhoto', label: 'Venue Photo' },
     ];
@@ -532,7 +606,11 @@ export default function AdminPhotos() {
             </div>
 
             <div className="mb-8 p-6 bg-gradient-to-br from-accent/10 to-accent-light/20 rounded-2xl border border-accent/20 shadow-lg">
-                <h2 className="text-lg font-bold text-gray-900 mb-4">Current Hero Images</h2>
+                <h2 className="text-lg font-bold text-gray-900 mb-1">Current Hero Images</h2>
+                <p className="text-sm text-gray-500 mb-4">
+                    A phone is tall and narrow, so a wide photo is cropped to fit it. Give the home page and the footer a
+                    portrait photo of their own for phones, or leave them on the main one.
+                </p>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div>
                         <span className="text-xs font-bold text-gray-500 uppercase">Home Page</span>
@@ -542,6 +620,13 @@ export default function AdminPhotos() {
                             </div>
                         ) : <div className="h-20 w-32 bg-gray-200 mt-1 flex items-center justify-center text-xs rounded-lg">None</div>}
                     </div>
+                    <PhoneSlot
+                        label="Home Page · phones"
+                        own={siteConfig.homeHeroMobile}
+                        fallback={siteConfig.homeHero}
+                        onChoose={() => setPhonePicker('homeHeroMobile')}
+                        onClear={() => setHero('homeHeroMobile', '', true)}
+                    />
                     <div>
                         <span className="text-xs font-bold text-gray-500 uppercase">About Page</span>
                         {siteConfig.aboutHero ? (
@@ -558,6 +643,13 @@ export default function AdminPhotos() {
                             </div>
                         ) : <div className="h-20 w-32 bg-gray-200 mt-1 flex items-center justify-center text-xs rounded-lg">None</div>}
                     </div>
+                    <PhoneSlot
+                        label="Footer · phones"
+                        own={siteConfig.footerHeroImageMobile}
+                        fallback={siteConfig.footerHeroImage}
+                        onChoose={() => setPhonePicker('footerHeroImageMobile')}
+                        onClear={() => setHero('footerHeroImageMobile', '', true)}
+                    />
                     <div>
                         <span className="text-xs font-bold text-gray-500 uppercase">Wedding Logo</span>
                         {siteConfig.weddingLogo ? (
@@ -576,6 +668,62 @@ export default function AdminPhotos() {
                     </div>
                 </div>
             </div>
+
+            <Drawer
+                open={phonePicker !== null}
+                onClose={() => setPhonePicker(null)}
+                width="lg"
+                title={
+                    <h2 className="pt-1.5 text-lg font-bold text-gray-900">
+                        {phonePicker ? SLOT_NAMES[phonePicker] : ''}
+                    </h2>
+                }
+            >
+                {phonePicker && (
+                    <div>
+                        <p className="mb-4 text-sm text-gray-500">
+                            Portrait photos are marked — they fill a phone screen without losing anything.
+                        </p>
+                        {photos.length === 0 && (
+                            <p className="rounded-2xl bg-gray-50 px-4 py-8 text-center text-sm text-gray-500">
+                                No photos yet — upload some on this page, then choose one here.
+                            </p>
+                        )}
+                        <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+                            {photos.map(photo => {
+                                const chosen = siteConfig[phonePicker] === photo.filename;
+                                return (
+                                    <button
+                                        key={photo.id}
+                                        type="button"
+                                        onClick={async () => {
+                                            await setHero(phonePicker, photo.filename, true);
+                                            setPhonePicker(null);
+                                        }}
+                                        className={`group relative aspect-[9/16] overflow-hidden rounded-xl bg-gray-100 ring-2 transition ${chosen ? 'ring-accent' : 'ring-transparent hover:ring-accent/50'}`}
+                                    >
+                                        <img
+                                            src={`/api/photos/${photo.filename}?w=320`}
+                                            alt={photo.title || ''}
+                                            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                            onLoad={e => {
+                                                const img = e.currentTarget;
+                                                img.parentElement?.toggleAttribute('data-portrait', img.naturalHeight > img.naturalWidth);
+                                            }}
+                                        />
+                                        <span className="pointer-events-none absolute left-1.5 top-1.5 hidden rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white group-data-[portrait]:inline-block">
+                                            Portrait
+                                        </span>
+                                        {chosen && (
+                                            <span className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-accent text-xs text-white shadow">✓</span>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+            </Drawer>
 
             <DndContext
                 sensors={sensors}

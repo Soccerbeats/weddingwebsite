@@ -8,6 +8,7 @@ import { useTripIntel } from './useTripIntel';
 import { useOfflineFiles } from './FilesTab';
 import type { HoneymoonApi } from './useHoneymoon';
 import { useSwipePager } from './kit/useSwipePager';
+import { registerSiteWorker } from '@/lib/offlineWorker';
 
 const NIGHT_KEY = 'honeymoon-today-night';
 
@@ -40,8 +41,7 @@ export default function TodayTab({ api }: { api: HoneymoonApi }) {
      * worker that caches pages nobody asked it to is how stale sites happen.
      */
     useEffect(() => {
-        if (!('serviceWorker' in navigator)) return;
-        navigator.serviceWorker.register('/sw.js', { scope: '/' })
+        registerSiteWorker()
             .then(() => setOffline('ready'))
             .catch(() => setOffline('failed'));
     }, []);

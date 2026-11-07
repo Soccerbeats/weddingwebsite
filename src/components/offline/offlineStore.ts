@@ -2,6 +2,7 @@
 
 import { PASS_RESUME_MS, passOrder, updateNeeded, type WarmRecord } from '@/lib/offline';
 import { LAST_ADMIN_PAGE_KEY } from '@/lib/loginReturn';
+import { OFFLINE_WORKER_ENABLED } from '@/lib/offlineWorker';
 
 /**
  * The offline warm-up, as a tiny store any component can read.
@@ -168,7 +169,8 @@ export function isStandalone(): boolean {
 interface Manifest { buildId: string; data: string; admin: boolean; pages: string[]; assets: string[] }
 
 async function controller(): Promise<ServiceWorker | null> {
-    if (!('serviceWorker' in navigator)) return null;
+    // With no worker registered, `ready` never settles — answer now instead.
+    if (!OFFLINE_WORKER_ENABLED || !('serviceWorker' in navigator)) return null;
     const registration = await navigator.serviceWorker.ready;
     return registration.active;
 }

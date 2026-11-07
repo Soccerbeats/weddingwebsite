@@ -81,6 +81,8 @@ export const en = {
         defaultTitle: 'Ceremony',
         defaultDescription: 'We say “I do”!',
         defaultLocation: 'Main venue',
+        weddingDay: 'The wedding day',
+        days: 'The days',
     },
     rsvpPage: {
         title: 'RSVP',

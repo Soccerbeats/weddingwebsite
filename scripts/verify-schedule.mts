@@ -12,6 +12,7 @@
 import {
     blankEvent, formatEventTime, isPublicEvent, normalizeEventTime, parseEventTime,
     publicScheduleEvents, SCHEDULE_HEADERS, scheduleRows, sortByTime, type ScheduleEvent,
+    cleanIsoDate, eventDay, scheduleDays, sortSchedule, storedDate,
 } from '../src/lib/schedule';
 import { toCsv } from '../src/lib/mailing';
 import {
@@ -214,22 +215,79 @@ function ev(title: string, time = '', isPublic?: boolean): ScheduleEvent {
     check('a column for every header', rows.every(r => r.length === SCHEDULE_HEADERS.length));
     check('every row is exported, private ones included', rows.length === 3);
     check('the order shown is the order exported',
-        rows.map(r => r[1]).join(',') === 'Hair and makeup,Ceremony,Reception');
+        rows.map(r => r[2]).join(',') === 'Hair and makeup,Ceremony,Reception');
     check('the columns are in header order',
-        rows[0].slice(0, 4).join('|') === '8:00 AM|Hair and makeup|Suite 12|Both trailers', rows[0].join('|'));
-    check('a private row says No', rows[0][4] === 'No');
-    check('a public row says Yes', rows[1][4] === 'Yes');
-    check('a row with no flag says Yes', rows[2][4] === 'Yes');
+        rows[0].slice(1, 5).join('|') === '8:00 AM|Hair and makeup|Suite 12|Both trailers', rows[0].join('|'));
+    check('a private row says No', rows[0][5] === 'No');
+    check('a public row says Yes', rows[1][5] === 'Yes');
+    check('a row with no flag says Yes', rows[2][5] === 'Yes');
     check('a missing field is an empty cell, not "undefined"',
-        scheduleRows([{ time: '', title: 'x' } as ScheduleEvent])[0].join('|') === '|x|||Yes');
+        scheduleRows([{ time: '', title: 'x' } as ScheduleEvent])[0].join('|') === '||x|||Yes');
+    check('a row on the day exports the wedding date',
+        scheduleRows(day, '2027-05-01')[0][0] === '2027-05-01');
+    check('a row with its own date exports that date',
+        scheduleRows([{ ...day[0], date: '2027-04-30' }], '2027-05-01')[0][0] === '2027-04-30');
     check('an empty day exports no rows', scheduleRows([]).length === 0);
 
     // The header row has to survive the trip into a spreadsheet.
     const csv = toCsv([...SCHEDULE_HEADERS], rows);
     check('the file starts with the headers',
-        csv.includes('"Time","Event","Location","Description","Public"'), csv.slice(0, 80));
+        csv.includes('"Date","Time","Event","Location","Description","Public"'), csv.slice(0, 80));
     check('a private row is in the file', csv.includes('"Hair and makeup"'));
     check('rows are CRLF separated for Excel', csv.includes('\r\n'));
+}
+
+/* ---- more than one day ---- */
+{
+    console.log('\nmore than one day');
+
+    const W = '2027-05-01';
+    const at = (title: string, time: string, date?: string): ScheduleEvent =>
+        ({ ...ev(title, time), ...(date ? { date } : {}) });
+
+    check('a real date is kept', cleanIsoDate('2027-05-01') === '2027-05-01');
+    check('the 30th of February is not a date', cleanIsoDate('2027-02-30') === null);
+    check('a leap day in a leap year is', cleanIsoDate('2028-02-29') === '2028-02-29');
+    check('free text is not a date', cleanIsoDate('Friday') === null);
+    check('a number is not a date', cleanIsoDate(20270501) === null);
+
+    // Every event written before days existed has no date, and must stay on the
+    // wedding day rather than drifting to "no day".
+    check('no date is the wedding day', eventDay(ev('Ceremony', '4pm'), W) === W);
+    check('a bad date is the wedding day too', eventDay(at('x', '', 'soon'), W) === W);
+    check('its own date wins', eventDay(at('Brunch', '10am', '2027-05-02'), W) === '2027-05-02');
+    check('no wedding date known: the day is ""', eventDay(ev('Ceremony'), null) === '');
+
+    const weekend = [
+        at('Brunch', '10:00 AM', '2027-05-02'),
+        ev('Reception', '6:00 PM'),
+        at('Welcome drinks', '7:00 PM', '2027-04-30'),
+        ev('Ceremony', '4:00 PM'),
+        at('Rehearsal', '3:00 PM', '2027-04-30'),
+    ];
+    const sorted = sortSchedule(weekend, W);
+    check('sorted by day, then by the clock',
+        sorted.map(e => e.title).join(',') === 'Rehearsal,Welcome drinks,Ceremony,Reception,Brunch',
+        sorted.map(e => e.title).join(','));
+    check('a one-day schedule sorts as sortByTime does',
+        sortSchedule([ev('b', '5pm'), ev('a', '4pm')], W).map(e => e.title).join(',') === 'a,b');
+
+    const days = scheduleDays(weekend, W);
+    check('three days', days.length === 3, String(days.length));
+    check('in order', days.map(d => d.date).join(',') === '2027-04-30,2027-05-01,2027-05-02');
+    check('only the wedding day is marked as it', days.map(d => d.wedding).join(',') === 'false,true,false');
+    check('an event dated on the wedding day joins it',
+        scheduleDays([ev('Ceremony', '4pm'), at('Toast', '5pm', W)], W).length === 1);
+    check('one day is one group', scheduleDays([ev('a', '1pm'), ev('b', '2pm')], W).length === 1);
+    check('with no wedding date, undated rows are still one day, first',
+        scheduleDays([at('Brunch', '10am', '2027-05-02'), ev('Ceremony', '4pm')], null)
+            .map(d => `${d.date}:${d.wedding}`).join(',') === ':true,2027-05-02:false');
+    check('no events, no days', scheduleDays([], W).length === 0);
+
+    check('the wedding date is stored as nothing', storedDate(W, W) === undefined);
+    check('another day is stored', storedDate('2027-04-30', W) === '2027-04-30');
+    check('a cleared date is stored as nothing', storedDate('', W) === undefined);
+    check('with no wedding date, any real date is stored', storedDate(W, null) === W);
 }
 
 /* ---- remembered column widths ---- */

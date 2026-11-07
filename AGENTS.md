@@ -151,7 +151,11 @@ idempotent — matches on place name, never reverts an edit) and
    `TAB_PATHS` and `TabView` as well as its `page.tsx`**, or links to it fall back
    to a normal, server-backed navigation.
    `npm run check:honeymoon:ui` covers the entry points and the phone layout.
-10. **Every new page goes in `src/lib/offline.ts`.** The whole site works offline
+10. **Every new page goes in `src/lib/offline.ts`.** (The worker is only
+   registered in a production build — `src/lib/offlineWorker.ts`, v0.10.50; on
+   `next dev` it is unregistered and its caches emptied, unless
+   `NEXT_PUBLIC_OFFLINE_IN_DEV=true`. Register through `registerSiteWorker()`,
+   never `navigator.serviceWorker.register` directly.) The whole site works offline
    (v0.10.3): `public/sw.js` keeps a copy of every page, its data and the
    build's code — and of the site's photos, **only the honeymoon portal's
    thumbnails** (`photoPlan()`, v0.10.47: a full-size picture there keeps just its
@@ -493,6 +497,25 @@ order, before the commit:
   drift apart, and `check:seating` covers it. Every change goes through
   `POST /api/admin/seating/assign`, whose `{ deletes, seats }` shape applies a
   bulk move in one transaction.
+- **The schedule's days** (v0.10.50) — an event's optional `date`
+  (`YYYY-MM-DD`); **absent means the wedding day** (the date parsed from
+  `site.json` → `weddingDate` by `weddingIsoDate()`), so every older row stays
+  where it was and moving the wedding moves them. The editor stores the wedding
+  date as nothing (`storedDate()`). Order is `sortSchedule()` (day, then
+  `sortByTime`), groups are `scheduleDays()` — both in `src/lib/schedule.ts`,
+  covered by `check:schedule`. One day draws exactly the old page; more than one
+  adds the day strip and headings.
+- **Fonts** (v0.10.50) — every face is a file in `src/app/fonts/`: Playfair
+  Display and Great Vibes as `@font-face` rules in `fonts/fonts.css`, split by
+  script with `unicode-range` (Latin, Latin Extended, Cyrillic — the Russian site
+  needs the last), Geist via `next/font/local` in the root layout. **Never bring
+  back `next/font/google`** — it fetches at build time, and a build with no route
+  to Google fails. (The admin changelog's lazy DM Mono/Inter link is the one
+  remaining outside font request, admin-only and allowed to fail.)
+- **Phone photos** (v0.10.50) — `homeHeroMobile` and `footerHeroImageMobile` in
+  `site.json`, each empty for "use the main one". The hero swaps its sources on
+  the same `max-width: 768px` it already lays out on; the footer picks between two
+  custom properties with `max-md:`, so only one photo downloads.
 - **Languages** (v0.10.49) — the guest-facing site speaks English (default),
   Spanish, German, Swedish and Russian; the couple picks one in Settings
   (`site.json` → `siteLanguage`, checked by `resolveLocale()` on write). **Never

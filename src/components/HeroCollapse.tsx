@@ -7,6 +7,8 @@ import { fill as i18nFill } from '@/lib/i18n';
 
 interface HeroCollapseProps {
   images: string[];
+  /** What a phone shows instead, when the couple chose a portrait photo for it. */
+  phoneImages?: string[];
   fallbackImage?: string;
   interval?: number;
   bgColor?: string;
@@ -87,17 +89,19 @@ function smoothScrollTo(top: number, onArrive: () => void): () => void {
 
 export default function HeroCollapse({
   images,
+  phoneImages,
   fallbackImage,
   bgColor = '#ffffff',
   children,
   interval = 5000,
 }: HeroCollapseProps) {
   const hero = useI18n().m.hero;
-  const srcs = images.length > 0 ? images : (fallbackImage ? [fallbackImage] : []);
-
   const [currentSlide, setCurrentSlide] = useState(0);
   const [firstReady,   setFirstReady]   = useState(false);
   const [isMobile,     setIsMobile]     = useState(false);
+  const srcs = isMobile && phoneImages && phoneImages.length > 0
+    ? phoneImages
+    : images.length > 0 ? images : (fallbackImage ? [fallbackImage] : []);
 
   // Mobile strip image indices — each strip holds its assigned image and only
   // swaps when the slideshow would land on the same image (takes the vacated slide).

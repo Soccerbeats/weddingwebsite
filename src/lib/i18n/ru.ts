@@ -76,6 +76,8 @@ export const ru: Messages = {
         defaultTitle: 'Церемония',
         defaultDescription: 'Мы говорим «да»!',
         defaultLocation: 'Основное место',
+        weddingDay: 'День свадьбы',
+        days: 'Дни',
     },
     rsvpPage: {
         title: 'Подтверждение участия',

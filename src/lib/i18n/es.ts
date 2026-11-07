@@ -76,6 +76,8 @@ export const es: Messages = {
         defaultTitle: 'Ceremonia',
         defaultDescription: '¡Nos damos el «sí, quiero»!',
         defaultLocation: 'Lugar principal',
+        weddingDay: 'El día de la boda',
+        days: 'Los días',
     },
     rsvpPage: {
         title: 'Confirmar asistencia',

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
-import { Playfair_Display, Geist, Geist_Mono, Great_Vibes } from 'next/font/google';
+import localFont from 'next/font/local';
+import './fonts/fonts.css';
 import './globals.css';
 import AppShell from '@/components/AppShell';
 import DemoBanner from '@/components/DemoBanner';
@@ -13,25 +14,20 @@ import { getI18n } from '@/lib/i18n/server';
 // Force this layout to be dynamic so it re-reads config on every request
 export const dynamic = 'force-dynamic';
 
-const playfair = Playfair_Display({
-  variable: '--font-serif',
-  subsets: ['latin'],
-});
-
-const greatVibes = Great_Vibes({
-  variable: '--font-script',
-  subsets: ['latin'],
-  weight: '400',
-});
-
-const geistSans = Geist({
+// Every font is a file in `src/app/fonts/` — nothing is fetched from Google
+// at build time (a build with no route there used to fail) or by a guest's
+// browser. Playfair Display and Great Vibes are declared in `fonts/fonts.css`,
+// split by script; Geist is one variable file each, loaded here.
+const geistSans = localFont({
+  src: './fonts/Geist-Variable.woff2',
   variable: '--font-geist-sans',
-  subsets: ['latin'],
+  weight: '100 900',
 });
 
-const geistMono = Geist_Mono({
+const geistMono = localFont({
+  src: './fonts/GeistMono-Variable.woff2',
   variable: '--font-geist-mono',
-  subsets: ['latin'],
+  weight: '100 900',
 });
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -118,7 +114,7 @@ export default async function RootLayout({
           }}
         />
       </head>
-      <body className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} ${greatVibes.variable} antialiased`}>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <style dangerouslySetInnerHTML={{
           __html: `
             :root {
@@ -148,6 +144,7 @@ export default async function RootLayout({
           weddingDate={config.weddingDate}
           weddingLocation={config.weddingLocation}
           footerHeroImage={config.footerHeroImage}
+          footerHeroImageMobile={config.footerHeroImageMobile}
         >
           {children}
         </AppShell>

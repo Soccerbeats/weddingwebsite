@@ -21,6 +21,15 @@ export interface ScheduleEvent {
      * "private" would blank a live schedule the moment this shipped.
      */
     public?: boolean;
+    /**
+     * The day it happens, as `YYYY-MM-DD`.
+     *
+     * Optional, and absent means **the wedding day** — every event written
+     * before weekends existed belongs to it, and so does a new row until it is
+     * moved. A welcome dinner the night before or a brunch the morning after is
+     * a row with a date.
+     */
+    date?: string;
 }
 
 /** Whether a guest may see this event. */
@@ -137,6 +146,81 @@ export function sortByTime(events: ScheduleEvent[]): ScheduleEvent[] {
     return [...timed.map(t => t.event), ...untimed.map(u => u.event)];
 }
 
+/* ---------------------------------------------------------------------------
+   Days
+   --------------------------------------------------------------------------- */
+
+/** A real calendar date as `YYYY-MM-DD`, or null. `2026-02-30` is not one. */
+export function cleanIsoDate(raw: unknown): string | null {
+    if (typeof raw !== 'string') return null;
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw.trim());
+    if (!m) return null;
+    const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+    const date = new Date(Date.UTC(y, mo - 1, d));
+    return date.getUTCFullYear() === y && date.getUTCMonth() === mo - 1 && date.getUTCDate() === d
+        ? raw.trim()
+        : null;
+}
+
+/**
+ * Which day an event belongs to: its own date, or `weddingIso` when it has none
+ * (or one that is not a date). `''` when neither is known — the wedding day,
+ * date unset.
+ */
+export function eventDay(event: Pick<ScheduleEvent, 'date'>, weddingIso: string | null): string {
+    return cleanIsoDate(event.date) ?? weddingIso ?? '';
+}
+
+/**
+ * The whole schedule in order: by day, then by the clock within each day.
+ *
+ * `''` (the wedding day when its date is not known) sorts first: with no date to
+ * place it by, the day the site is about leads. Within a day it is `sortByTime`,
+ * so a schedule of one day sorts exactly as it always did.
+ */
+export function sortSchedule(events: ScheduleEvent[], weddingIso: string | null): ScheduleEvent[] {
+    const byDay = new Map<string, ScheduleEvent[]>();
+    for (const event of events) {
+        const day = eventDay(event, weddingIso);
+        if (!byDay.has(day)) byDay.set(day, []);
+        byDay.get(day)!.push(event);
+    }
+    return [...byDay.keys()].sort().flatMap(day => sortByTime(byDay.get(day)!));
+}
+
+export interface ScheduleDay {
+    /** `YYYY-MM-DD`, or `''` for the wedding day when its date is not known. */
+    date: string;
+    /** This is the wedding day itself. */
+    wedding: boolean;
+    events: ScheduleEvent[];
+}
+
+/**
+ * The schedule as days, in order, each in clock order. One day — the case for
+ * nearly every wedding — comes back as one group, and the page draws it with no
+ * day headings at all, exactly as before.
+ */
+export function scheduleDays(events: ScheduleEvent[], weddingIso: string | null): ScheduleDay[] {
+    const days: ScheduleDay[] = [];
+    for (const event of sortSchedule(events, weddingIso)) {
+        const date = eventDay(event, weddingIso);
+        const last = days[days.length - 1];
+        if (last && last.date === date) last.events.push(event);
+        else days.push({ date, wedding: date === (weddingIso ?? ''), events: [event] });
+    }
+    return days;
+}
+
+/**
+ * The date as the event should store it: nothing for the wedding day, so moving
+ * the wedding moves every row that was simply "on the day" with it.
+ */
+export function storedDate(date: string, weddingIso: string | null): string | undefined {
+    const clean = cleanIsoDate(date);
+    return clean && clean !== weddingIso ? clean : undefined;
+}
+
 /**
  * A blank row, with every field the editor writes.
  *
@@ -163,11 +247,15 @@ export function blankEvent(): ScheduleEvent {
  * rows filters the column. Leaving it out would produce a file nobody could tell
  * apart from a guest-facing one.
  */
-export const SCHEDULE_HEADERS = ['Time', 'Event', 'Location', 'Description', 'Public'] as const;
+export const SCHEDULE_HEADERS = ['Date', 'Time', 'Event', 'Location', 'Description', 'Public'] as const;
 
-/** The day as rows, in the order it is shown — which is clock order. */
-export function scheduleRows(events: ScheduleEvent[]): string[][] {
+/**
+ * The schedule as rows, in the order it is shown. A row with no date of its own
+ * is exported with the wedding's, so the file reads the same on its own.
+ */
+export function scheduleRows(events: ScheduleEvent[], weddingIso: string | null = null): string[][] {
     return events.map(event => [
+        eventDay(event, weddingIso),
         event.time ?? '',
         event.title ?? '',
         event.location ?? '',

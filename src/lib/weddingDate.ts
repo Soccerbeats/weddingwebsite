@@ -53,6 +53,13 @@ export function parseDateParts(raw: string | undefined | null): DateParts | null
     return null;
 }
 
+/** The wedding date as `YYYY-MM-DD`, or null when it cannot be read. */
+export function weddingIsoDate(raw: string | undefined | null): string | null {
+    const d = parseDateParts(raw);
+    if (!d) return null;
+    return `${d.year}-${String(d.month + 1).padStart(2, '0')}-${String(d.day).padStart(2, '0')}`;
+}
+
 export function parseTimeParts(raw: string | undefined | null): TimeParts | null {
     const text = (raw ?? '').trim().toLowerCase();
     if (!text) return null;

@@ -76,6 +76,8 @@ export const sv: Messages = {
         defaultTitle: 'Vigsel',
         defaultDescription: 'Vi säger ”ja”!',
         defaultLocation: 'Huvudplatsen',
+        weddingDay: 'Bröllopsdagen',
+        days: 'Dagarna',
     },
     rsvpPage: {
         title: 'OSA',

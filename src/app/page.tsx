@@ -31,12 +31,22 @@ export default function Home() {
   const isBasicMode = config.basicMode || false;
   const showVenue = config.basicModeShowVenue || false;
   const bgColor = config.pageBgColors?.home || '#ffffff';
+  // The date line under the names: "June 15, 2027 · 4:00 PM" unless the couple
+  // turned the time off (or never typed one).
+  const time = config.heroShowTime !== false ? (config.weddingTime || '').trim() : '';
+  const when = time ? <>{config.weddingDate}<span aria-hidden="true"> · </span>{time}</> : config.weddingDate;
   const aboutBgColor = config.pageBgColors?.about || '#ffffff';
   const slideshowEnabled = config.heroSlideshowEnabled || false;
   const slideshowImages = config.heroSlideshowImages || [];
   const slideshowInterval = config.heroSlideshowInterval || 5000;
 
   const heroImages = slideshowEnabled ? slideshowImages : (config.homeHero ? [config.homeHero] : []);
+  // A phone is portrait and the hero is cropped to fill it, so a wide photo can
+  // lose the very faces it was chosen for. A phone photo, when there is one,
+  // leads: on its own instead of the hero, or ahead of the slideshow.
+  const phoneImages = config.homeHeroMobile
+    ? (slideshowEnabled && slideshowImages.length > 0 ? [config.homeHeroMobile, ...slideshowImages] : [config.homeHeroMobile])
+    : undefined;
   // A question with no text yet is a draft, not content.
   const faqs = (config.faqs || []).filter((f) => f.question?.trim() || f.answer?.trim());
 
@@ -45,6 +55,7 @@ export default function Home() {
       {/* ── Hero Section ── */}
       <HeroCollapse
         images={heroImages}
+        phoneImages={phoneImages}
         fallbackImage={config.homeHero}
         interval={slideshowInterval}
         bgColor={bgColor}
@@ -69,8 +80,8 @@ export default function Home() {
           style={{ animation: 'page-enter 700ms cubic-bezier(0.25, 0.46, 0.45, 0.94) 600ms both' }}
         >
           {isBasicMode && !showVenue
-            ? config.weddingDate
-            : <>{config.weddingDate}<br className="md:hidden" /><span className="hidden md:inline"> • </span>{config.weddingLocation}</>
+            ? when
+            : <>{when}<br className="md:hidden" /><span className="hidden md:inline"> • </span>{config.weddingLocation}</>
           }
         </p>
         {!isBasicMode && (

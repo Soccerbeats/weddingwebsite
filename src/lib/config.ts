@@ -40,6 +40,8 @@ export interface WeddingParty {
 
 export interface SiteConfig {
     homeHero?: string;
+    /** A portrait photo for phones; the home hero (or the slideshow's first slide) when unset. */
+    homeHeroMobile?: string;
     heroSlideshowEnabled?: boolean;
     heroSlideshowImages?: string[];  // filenames from public/photos
     heroSlideshowInterval?: number;  // milliseconds, default 5000
@@ -53,6 +55,8 @@ export interface SiteConfig {
     weddingLocation: string;
     weddingVenue?: string;
     weddingTime: string;
+    /** Show the time beside the date under the names on the home page. Absent means yes. */
+    heroShowTime?: boolean;
     rsvpDeadline?: string;
     /** Shown on the RSVP page for guests having trouble. */
     contactEmail?: string;
@@ -101,6 +105,8 @@ export interface SiteConfig {
     basicModeShowVenue?: boolean;
     // Footer/Hero Images
     footerHeroImage?: string;
+    /** The footer's photo on phones; `footerHeroImage` when unset. */
+    footerHeroImageMobile?: string;
     // Logo Mode
     logoMode?: boolean;
     weddingLogo?: string;

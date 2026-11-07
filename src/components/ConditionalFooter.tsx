@@ -9,6 +9,7 @@ interface ConditionalFooterProps {
     weddingDate?: string;
     weddingLocation?: string;
     footerHeroImage?: string;
+    footerHeroImageMobile?: string;
 }
 
 export default function ConditionalFooter(props: ConditionalFooterProps) {
