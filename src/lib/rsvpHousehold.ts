@@ -97,6 +97,13 @@ export function buildVerifiedPayload(
     guest: MatchedHousehold,
     matched: { name: string; isPrimary: boolean },
     existingRsvp: ExistingRsvp | null,
+    // false strips the household's stored email and phone — for a lookup that
+    // proved nothing but a name ('verify' mode, nothing on file yet). Handing
+    // them out there disclosed them to anyone who knew the name, and the form
+    // prefilled that email, so the guest's RSVP was then filed under an
+    // address the earlier visitor already had: the very answer the update
+    // check asks for.
+    withContact = true,
 ) {
     return {
         verified: true,
@@ -109,8 +116,8 @@ export function buildVerifiedPayload(
         guest: {
             name: guest.guest_name,
             party_size: guest.party_size,
-            email: guest.email,
-            phone: guest.phone,
+            email: withContact ? guest.email : null,
+            phone: withContact ? guest.phone : null,
             party_members: guest.party_members,
         },
         matched,

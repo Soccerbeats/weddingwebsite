@@ -19,8 +19,8 @@ import { isPastWeddingDay } from '@/lib/weddingDate';
  *   behind the email link (exchanged at `/api/rsvp/magic-link/verify`).
  * - **simple** — the full details immediately, exactly as before the link
  *   existed. An admin's explicit choice to reopen the gap above.
- * - **verify** — full details immediately *if there is nothing on file yet*
- *   (nothing to protect); otherwise just the seat plus `hasExistingRsvp:
+ * - **verify** — the party immediately *if there is nothing on file yet*
+ *   (nothing to protect), but never the stored email or phone; otherwise just the seat plus `hasExistingRsvp:
  *   true`, so the page asks for the email on file before handing out details
  *   (`/api/rsvp/verify-email`).
  *
@@ -65,7 +65,9 @@ export async function POST(request: Request) {
     // mode === 'verify'
     const existingRsvp = await existingRsvpFor(guest.guest_name);
     if (!existingRsvp) {
-      return NextResponse.json({ ...buildVerifiedPayload(guest, matched, null), mode });
+      // Nothing on file to protect, so the form opens — but without the
+      // household's stored email and phone: the guest types their own.
+      return NextResponse.json({ ...buildVerifiedPayload(guest, matched, null, false), mode });
     }
     return NextResponse.json({ verified: true, mode, matched, hasExistingRsvp: true, locked });
   } catch (error) {

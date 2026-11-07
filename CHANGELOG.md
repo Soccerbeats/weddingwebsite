@@ -11,6 +11,13 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.10.41 — [Released] The RSVP name lookup no longer hands out a household's email and phone (`main`, 2026-11-07 00:54)
+
+Closes the last gap in issue #13.
+
+### Fixed
+- **Typing a guest's name no longer shows their stored email and phone.** In the *Verify by email* mode (what *Automatic* uses when email isn't set up), a household that hadn't RSVP'd yet opened with the email and phone from the guest list already filled in. Anyone who knew the name could read them. And because the form prefilled that email, the guest's RSVP was then saved under an address the earlier visitor already had, which is exactly what the update check asks for. The form still opens straight away with the party listed; the guest now types their own email and phone. The email link and an existing RSVP behave as before.
+
 ## v0.10.40 — [Released] Seating: chairs on both sides, tables that grow, and tables you can turn (`main`, 2026-11-07 00:51)
 
 The idea comes from the wagnerbastian fork (2026-10). This is our own version, with one layout shared by the canvas and the print-out.
