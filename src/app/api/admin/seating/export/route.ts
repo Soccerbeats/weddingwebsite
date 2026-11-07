@@ -97,7 +97,7 @@ export async function GET() {
         }
 
         const tablesResult = await client.query(
-            `SELECT id, name, table_type, seat_count, x, y FROM seating_tables
+            `SELECT id, name, table_type, seat_count, x, y, rotation FROM seating_tables
               WHERE floor_plan_id = $1 ORDER BY id ASC`,
             [floorPlan.id],
         );
@@ -185,6 +185,7 @@ export async function GET() {
                 seat_count: Math.max(Number(table.seat_count) || 0, people.length),
                 x: Number(table.x) || 0,
                 y: Number(table.y) || 0,
+                rotation: Number(table.rotation) || 0,
                 people,
             };
         });

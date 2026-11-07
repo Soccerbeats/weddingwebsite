@@ -252,6 +252,16 @@ function SeatingCanvas({
     onRefresh();
   }, [onRefresh]);
 
+  // The table draws the new angle itself while it turns; this only saves it.
+  const handleRotateTable = useCallback(async (tableId: number, rotation: number) => {
+    await fetch(`/api/admin/seating/tables/${tableId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rotation }),
+    });
+    onRefresh();
+  }, [onRefresh]);
+
   const handleNodeDragStop: OnNodeDrag = useCallback(async (_event: React.MouseEvent, node: Node) => {
     await fetch(`/api/admin/seating/tables/${node.id}`, {
       method: 'PATCH',
@@ -298,6 +308,7 @@ function SeatingCanvas({
         onUnassignSeat: handleUnassignSeat,
         onDeleteTable: handleDeleteTable,
         onRenameTable: handleRenameTable,
+        onRotateTable: handleRotateTable,
         splitPartyGroupIds: split,
       },
       draggable: true,

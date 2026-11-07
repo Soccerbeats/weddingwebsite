@@ -517,9 +517,13 @@ order, before the commit:
     is the only child of its wrapper, so `last:` matched all of them and cancelled
     every break until v0.10.4.
   - **The floor plan drawing** (`plan: 'room' | 'tables'`) is drawn from
-    `tableGeometry()`, which copies `TableNode`'s sizes and chair positions —
-    change one, change the other. The whole room turns landscape through the
-    named page `plan-landscape` in `globals.css` (`.print-landscape`).
+    `tableGeometry()`, and `TableNode` draws the canvas. **Both read
+    `tableLayout()` in `src/lib/tableLayout.ts`** (v0.10.40): a table's size,
+    every chair's position (long tables seat both sides, clockwise; round ones
+    grow so names don't touch), and its turn (`seating_tables.rotation`, long
+    tables only, about their centre). Never put a size or a chair position in
+    either view. The whole room turns landscape through the named page
+    `plan-landscape` in `globals.css` (`.print-landscape`).
   - `dietCodes()` returns `['NOM']` and nothing else for a not-eating entry, so
     the exclusivity holds even for a row written by an older release or by hand
     — the editors enforce it too, but they are not the last line.

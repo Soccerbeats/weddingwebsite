@@ -11,6 +11,35 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.10.40 — [Released] Seating: chairs on both sides, tables that grow, and tables you can turn (`main`, 2026-11-07 00:51)
+
+The idea comes from the wagnerbastian fork (2026-10). This is our own version, with one layout shared by the canvas and the print-out.
+
+### Fixed
+- **Rectangular tables seat people on both long sides.** Before, every chair sat in a single row under the table, whatever its shape.
+  - The first half go along the top from left to right, and the rest come back along the bottom from right to left. That's clockwise, like a round table, so a party stays side by side round the end.
+  - An odd chair goes on the top.
+- **The head table seats everyone along one side, facing the room**, as the "Add table" panel always said. Before, they sat in a row underneath it.
+- **Full round tables no longer pile names on top of each other.** A round table now grows until no two names touch.
+
+### Added
+- **Turning rectangular tables and the head table.**
+  - Hover over a table and drag the round handle at its end. It turns about its centre in 15° steps, or to any angle while you hold Shift, and shows the angle while you drag.
+  - "Turn 90°" in the table's hover toolbar switches between horizontal and vertical in one click.
+  - The names stay level so they can still be read.
+  - Round tables have no handle.
+- **Reorder seats says who sits where**, using the directions you see on screen: for example "Right side · top to bottom", then "Left side · bottom to top" for an upright table. The order in the list decides the side.
+
+### Changed
+- **Long tables grow along their length as people sit**, keeping their top-left corner where it is. Names have more room before they're cut off; hover over one for the full name.
+- **The printed floor plan draws tables turned and chairs on both sides**, exactly as on screen. The canvas and the printed plan (whole room and each table) now read one layout, `tableLayout()` in `src/lib/tableLayout.ts`, instead of keeping copies of the same numbers.
+- `check:seating`: 27 new checks (265 in total), covering:
+  - both sides, the clockwise order, and odd numbers
+  - growing tables, and names never overlapping on full round tables
+  - turning about the centre at every 15° step, for both long shapes
+  - the side names and directions after a turn
+  - snapping
+
 ## v0.10.39 — [Released] A stuck query can't take the site down; the guest list and RSVPs agree; photos lose their GPS (`main`, 2026-11-07 00:41)
 
 The first batch of fixes from the review of the site's forks (2026-11-06). The ideas for the database timeouts and the RSVP sync come from the wagnerbastian fork, and the photo cleaning from the flokaiser fork. The code is our own.

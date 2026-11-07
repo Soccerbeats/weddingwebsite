@@ -449,14 +449,20 @@ function PlanDrawing({ tables, room, bounds, scale, numbered = false, textScale 
                                 className={`absolute flex flex-col items-center justify-center border-2 border-gray-500 bg-white text-center ${
                                     g.shape === 'round' ? 'rounded-full' : 'rounded-xl'
                                 }`}
-                                style={{ left: g.body.x + ox, top: g.body.y + oy, width: g.body.width, height: g.body.height }}
+                                style={{
+                                    left: g.body.x + ox, top: g.body.y + oy, width: g.body.width, height: g.body.height,
+                                    transform: g.rotation ? `rotate(${g.rotation}deg)` : undefined,
+                                }}
                             >
-                                <span className="px-3 font-serif text-sm font-semibold leading-tight text-gray-900">{table.name}</span>
-                                <span className="font-mono text-[10px] text-gray-500 tabular-nums">
-                                    {table.people.length}/{table.seat_count}
-                                </span>
+                                {/* The name stays level on a turned table. */}
+                                <div className="flex flex-col items-center" style={g.rotation ? { transform: `rotate(${-g.rotation}deg)` } : undefined}>
+                                    <span className="px-3 font-serif text-sm font-semibold leading-tight text-gray-900">{table.name}</span>
+                                    <span className="font-mono text-[10px] text-gray-500 tabular-nums">
+                                        {table.people.length}/{table.seat_count}
+                                    </span>
+                                </div>
                             </div>
-                            {g.shape === 'round' && g.seats.map((pt, i) => (
+                            {g.seats.map((pt, i) => (
                                 <div
                                     key={i}
                                     className="absolute"
@@ -465,22 +471,6 @@ function PlanDrawing({ tables, room, bounds, scale, numbered = false, textScale 
                                     <PlanChip person={table.people[i]} number={numbered ? i + 1 : undefined} />
                                 </div>
                             ))}
-                            {g.shape === 'rect' && g.chipsTop !== null && (
-                                <div
-                                    className="absolute flex flex-wrap justify-center gap-1"
-                                    style={{
-                                        left: g.body.x + ox - 30,
-                                        top: g.chipsTop + oy,
-                                        width: (g.body.width + 60) / chipZoom,
-                                        transform: `scale(${chipZoom})`,
-                                        transformOrigin: 'top left',
-                                    }}
-                                >
-                                    {table.people.map((person, i) => (
-                                        <PlanChip key={i} person={person} number={numbered ? i + 1 : undefined} />
-                                    ))}
-                                </div>
-                            )}
                         </div>
                     );
                 })}

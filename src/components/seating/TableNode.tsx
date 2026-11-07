@@ -19,6 +19,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { SeatingTableData, SeatData, SeatTransferPayload, ColorMode } from './types';
+import { normaliseRotation, seatRunDirection, sideCounts, sideName, snapRotation, tableLayout, type TableLayout } from '@/lib/tableLayout';
 
 interface TableNodeProps {
   data: {
@@ -32,6 +33,7 @@ interface TableNodeProps {
     onReorderSeats: (tableId: number, orderedSeatIndices: { seat_index: number; display_name: string; guest_list_id: number | null; party_group_id: number | null }[]) => void;
     onDeleteTable: (tableId: number) => void;
     onRenameTable: (tableId: number, name: string) => void;
+    onRotateTable: (tableId: number, rotation: number) => void;
     splitPartyGroupIds: Set<number>;
   };
 }
@@ -103,7 +105,7 @@ function SeatChip({
           : (isSplit ? 'Party is split — drag to move' : `Drag ${name} to another table`)}
     >
       {colorMode === 'party' && isSplit && <span className="text-yellow-500 mr-0.5">⚠</span>}
-      <span className="truncate max-w-[80px]">{name}</span>
+      <span className="truncate max-w-[84px]">{name}</span>
       {hover && (
         <button
           className="nodrag ml-1 text-gray-400 hover:text-red-500 transition-colors leading-none"
@@ -191,6 +193,23 @@ function ReorderModal({
     }
   };
 
+  // On a long table the order decides the side: the first half sits along one
+  // side, the rest along the other. Say which, in the directions on screen.
+  const shape = table.table_type === 'round' || table.table_type === 'head' ? table.table_type : 'rectangular';
+  const rotation = normaliseRotation(table.rotation ?? 0);
+  const { first } = sideCounts(shape, seats.length);
+  const sideLabel = (side: 'first' | 'second') => (
+    <p className="flex items-baseline gap-2 px-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+      <span>{sideName(side, rotation)} side</span>
+      <span className="font-normal normal-case tracking-normal">· {seatRunDirection(side, rotation)}</span>
+    </p>
+  );
+  const subtitle = shape === 'round'
+    ? 'Drag to set the order, clockwise from the top'
+    : shape === 'head'
+      ? `Drag to set the order — everyone sits on one side, ${seatRunDirection('first', rotation)}`
+      : 'Drag to set the order — it decides who sits on which side';
+
   const modal = (
     <Drawer
       open
@@ -198,7 +217,7 @@ function ReorderModal({
       title={
         <div className="pt-1">
           <h3 className="text-base font-semibold text-gray-800">{table.name}</h3>
-          <p className="text-xs text-gray-400 mt-0.5">Drag to set seating order</p>
+          <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>
         </div>
       }
     >
@@ -210,8 +229,12 @@ function ReorderModal({
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
               <SortableContext items={seats.map(s => s.seat_index)} strategy={verticalListSortingStrategy}>
                 <div className="space-y-2">
-                  {seats.map(seat => (
-                    <SortableSeatRow key={seat.seat_index} seat={seat} />
+                  {seats.map((seat, i) => (
+                    <div key={seat.seat_index}>
+                      {shape === 'rectangular' && i === 0 && sideLabel('first')}
+                      {shape === 'rectangular' && i === first && sideLabel('second')}
+                      <SortableSeatRow seat={seat} />
+                    </div>
                   ))}
                 </div>
               </SortableContext>
@@ -246,14 +269,18 @@ function ReorderModal({
 
 function TableControls({
   table,
+  canTurn,
   onDelete,
   onRename,
   onReorder,
+  onTurn90,
 }: {
   table: SeatingTableData;
+  canTurn: boolean;
   onDelete: () => void;
   onRename: (name: string) => void;
   onReorder: () => void;
+  onTurn90: () => void;
 }) {
   const [renaming, setRenaming] = useState(false);
   const [value, setValue] = useState(table.name);
@@ -292,6 +319,20 @@ function TableControls({
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+          </svg>
+        </button>
+      )}
+
+      {canTurn && (
+        <button
+          className="nodrag p-1 rounded text-gray-400 hover:text-gray-700 hover:bg-white/50 transition-colors"
+          title="Turn 90°"
+          aria-label="Turn 90 degrees"
+          onClick={e => { e.stopPropagation(); onTurn90(); }}
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 12a9 9 0 1 1-3-6.7" />
+            <polyline points="21 3 21 9 15 9" />
           </svg>
         </button>
       )}
@@ -345,23 +386,33 @@ function TableControls({
 
 // ── Table shapes ───────────────────────────────────────────────────────────
 
+/**
+ * The table top, plus the handle that turns it. The layout — its size, where
+ * every chair goes, how it turns — is `tableLayout()`, which the printed floor
+ * plan reads too.
+ */
 function TableBody({
   table,
-  splitPartyGroupIds,
+  layout,
+  rotation,
+  onTurning,
+  onTurned,
   onDropGuest,
   onDropPerson,
   onMoveSeat,
-  onUnassignParty,
   onDeleteTable,
   onRenameTable,
   onReorderSeats,
 }: {
   table: SeatingTableData;
-  splitPartyGroupIds: Set<number>;
+  layout: TableLayout;
+  /** The angle on screen right now — mid-turn, ahead of what is saved. */
+  rotation: number;
+  onTurning: (degrees: number | null) => void;
+  onTurned: (degrees: number) => void;
   onDropGuest: (tableId: number, guestId: string) => void;
   onDropPerson: (tableId: number, payload: string) => void;
   onMoveSeat: (payload: SeatTransferPayload, toTableId: number) => void;
-  onUnassignParty: (tableId: number, partyGroupId: number) => void;
   onDeleteTable: (tableId: number) => void;
   onRenameTable: (tableId: number, name: string) => void;
   onReorderSeats: (tableId: number, ordered: SeatData[]) => void;
@@ -369,8 +420,11 @@ function TableBody({
   const [hovered, setHovered] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [reorderOpen, setReorderOpen] = useState(false);
+  const [turning, setTurning] = useState(false);
+  const bodyRef = useRef<HTMLDivElement>(null);
   const seatCount = table.seats.filter(s => s.rsvp_status !== 'likely_not_coming').length;
   const totalSeatCount = table.seats.length;
+  const canTurn = layout.shape !== 'round';
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -394,49 +448,120 @@ function TableBody({
     if (guestId) onDropGuest(table.id, guestId);
   };
 
-  const isRound = table.table_type === 'round';
-  const isHead = table.table_type === 'head';
+  // Turning: the handle sits off the table's right-hand end, so its angle from
+  // the centre *is* the table's angle. Measured on screen, which already has
+  // the canvas zoom in it — an angle does not care about scale.
+  const angleAt = (e: React.PointerEvent) => {
+    const r = bodyRef.current!.getBoundingClientRect();
+    const cx = r.left + r.width / 2;
+    const cy = r.top + r.height / 2;
+    return (Math.atan2(e.clientY - cy, e.clientX - cx) * 180) / Math.PI;
+  };
+  const startTurn = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setTurning(true);
+  };
+  const moveTurn = (e: React.PointerEvent) => {
+    if (!turning) return;
+    e.stopPropagation();
+    onTurning(snapRotation(angleAt(e), e.shiftKey));
+  };
+  const endTurn = (e: React.PointerEvent) => {
+    if (!turning) return;
+    e.stopPropagation();
+    setTurning(false);
+    const final = snapRotation(angleAt(e), e.shiftKey);
+    onTurning(null);
+    if (final !== normaliseRotation(table.rotation ?? 0)) onTurned(final);
+  };
 
-  const tableW = isRound ? 160 : isHead ? Math.max(240, totalSeatCount * 48) : 200;
-  const tableH = isRound ? 160 : isHead ? 80 : 100;
+  const { width: tableW, height: tableH } = layout.body;
+  const isRound = layout.shape === 'round';
 
   const baseClasses = `relative flex flex-col items-center justify-center
     border-2 transition-colors cursor-grab select-none
-    ${dragOver ? 'border-blue-400 bg-blue-50' : hovered ? 'border-gray-400 bg-gray-50' : 'border-gray-300 bg-white'}
+    ${dragOver ? 'border-blue-400 bg-blue-50' : hovered || turning ? 'border-gray-400 bg-gray-50' : 'border-gray-300 bg-white'}
     ${isRound ? 'rounded-full' : 'rounded-xl'}`;
 
   return (
     <>
       <div
+        ref={bodyRef}
         className={baseClasses}
-        style={{ width: tableW, height: tableH }}
+        style={{
+          width: tableW,
+          height: tableH,
+          transform: rotation ? `rotate(${rotation}deg)` : undefined,
+          // A turn eases in when it comes from the button; dragging follows the pointer.
+          transition: turning ? 'none' : 'transform 220ms cubic-bezier(0.22, 1, 0.36, 1), border-color 150ms, background-color 150ms',
+        }}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         onDragOver={e => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
         onDrop={handleDrop}
       >
-        <span className="text-xs font-semibold text-gray-600 px-3 text-center leading-tight">
-          {table.name}
-        </span>
-        {totalSeatCount === 0 ? (
-          <span className="text-xs text-gray-400 mt-0.5">Drop guests here</span>
-        ) : seatCount < totalSeatCount ? (
-          <span className="text-center mt-0.5 leading-tight flex flex-col items-center">
-            <span className="text-xs text-gray-400">{seatCount} {seatCount === 1 ? 'person' : 'people'}</span>
-            <span className="text-[9px] text-orange-400 font-medium">+{totalSeatCount - seatCount} likely not coming</span>
-          </span>
-        ) : (
-          <span className="text-xs text-gray-400 mt-0.5">{seatCount} {seatCount === 1 ? 'person' : 'people'}</span>
-        )}
+        {/* The words stay level, however the table is turned. */}
+        <div
+          className="flex flex-col items-center"
+          style={{ transform: rotation ? `rotate(${-rotation}deg)` : undefined }}
+        >
+          {turning ? (
+            <span className="rounded-full bg-gray-900 px-2.5 py-1 text-xs font-semibold tabular-nums text-white">
+              {Math.round(rotation)}°
+            </span>
+          ) : (
+            <>
+              <span className="text-xs font-semibold text-gray-600 px-3 text-center leading-tight">
+                {table.name}
+              </span>
+              {totalSeatCount === 0 ? (
+                <span className="text-xs text-gray-400 mt-0.5">Drop guests here</span>
+              ) : seatCount < totalSeatCount ? (
+                <span className="text-center mt-0.5 leading-tight flex flex-col items-center">
+                  <span className="text-xs text-gray-400">{seatCount} {seatCount === 1 ? 'person' : 'people'}</span>
+                  <span className="text-[9px] text-orange-400 font-medium">+{totalSeatCount - seatCount} likely not coming</span>
+                </span>
+              ) : (
+                <span className="text-xs text-gray-400 mt-0.5">{seatCount} {seatCount === 1 ? 'person' : 'people'}</span>
+              )}
 
-        {hovered && (
-          <TableControls
-            table={table}
-            onDelete={() => onDeleteTable(table.id)}
-            onRename={name => onRenameTable(table.id, name)}
-            onReorder={() => setReorderOpen(true)}
-          />
+              {hovered && (
+                <TableControls
+                  table={table}
+                  canTurn={canTurn}
+                  onDelete={() => onDeleteTable(table.id)}
+                  onRename={name => onRenameTable(table.id, name)}
+                  onReorder={() => setReorderOpen(true)}
+                  onTurn90={() => onTurned(snapRotation(rotation + 90))}
+                />
+              )}
+            </>
+          )}
+        </div>
+
+        {/* The turning handle, off the right-hand end; it turns with the table. */}
+        {canTurn && (hovered || turning) && (
+          <button
+            type="button"
+            aria-label={`Turn ${table.name} (hold Shift for any angle)`}
+            title="Drag to turn · Shift for any angle"
+            className="nodrag absolute top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-full
+              border border-gray-300 bg-white text-gray-500 shadow-sm hover:border-gray-500 hover:text-gray-800
+              cursor-grab active:cursor-grabbing touch-none"
+            style={{ left: tableW + 6 }}
+            onPointerDown={startTurn}
+            onPointerMove={moveTurn}
+            onPointerUp={endTurn}
+            onPointerCancel={endTurn}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 12a9 9 0 1 1-3-6.7" />
+              <polyline points="21 3 21 9 15 9" />
+            </svg>
+          </button>
         )}
       </div>
 
@@ -454,101 +579,74 @@ function TableBody({
   );
 }
 
-// ── Seat chips rendered around/below the table ─────────────────────────────
+// ── Seat chips, each at its own chair ─────────────────────────────────────
 
 function SeatsDisplay({
   table,
+  layout,
   splitPartyGroupIds,
   colorMode,
   onUnassignParty,
   onUnassignSeat,
 }: {
   table: SeatingTableData;
+  layout: TableLayout;
   splitPartyGroupIds: Set<number>;
   colorMode: ColorMode;
   onUnassignParty: (tableId: number, partyGroupId: number) => void;
   onUnassignSeat: (tableId: number, seatIndex: number) => void;
 }) {
   if (table.seats.length === 0) return null;
-
-  const isRound = table.table_type === 'round';
-  const tableW = isRound ? 160 : table.table_type === 'head' ? Math.max(240, table.seats.length * 48) : 200;
-  const tableH = isRound ? 160 : table.table_type === 'head' ? 80 : 100;
-  const orbitPad = isRound ? 52 : 0;
-
-  const cx = orbitPad + tableW / 2;
-  const cy = orbitPad + tableH / 2;
-
-  if (isRound) {
-    const n = table.seats.length;
-    const r = tableW / 2 + 28;
-    return (
-      <>
-        {table.seats.map((seat, i) => {
-          const angle = (2 * Math.PI * i) / n - Math.PI / 2;
-          const x = cx + r * Math.cos(angle);
-          const y = cy + r * Math.sin(angle);
-          const isSplit = seat.party_group_id !== null && splitPartyGroupIds.has(seat.party_group_id);
-          return (
-            <div
-              key={seat.seat_index}
-              className="absolute"
-              style={{ left: x, top: y, transform: 'translate(-50%, -50%)' }}
-            >
-              <SeatChip
-                seat={seat}
-                tableId={table.id}
-                isSplit={isSplit}
-                colorMode={colorMode}
-                onRemoveSeat={() => onUnassignSeat(table.id, seat.seat_index)}
-                onRemoveParty={() => seat.party_group_id !== null && onUnassignParty(table.id, seat.party_group_id)}
-              />
-            </div>
-          );
-        })}
-      </>
-    );
-  }
-
   return (
-    <div
-      className="absolute flex flex-wrap gap-1 justify-center"
-      style={{ top: tableH + 8, left: 0, right: 0 }}
-    >
-      {table.seats.map(seat => {
+    <>
+      {table.seats.map((seat, i) => {
+        const spot = layout.seats[i];
+        if (!spot) return null;
         const isSplit = seat.party_group_id !== null && splitPartyGroupIds.has(seat.party_group_id);
         return (
-          <SeatChip
+          <div
             key={seat.seat_index}
-            seat={seat}
-            tableId={table.id}
-            isSplit={isSplit}
-            colorMode={colorMode}
-            onRemoveSeat={() => onUnassignSeat(table.id, seat.seat_index)}
-            onRemoveParty={() => seat.party_group_id !== null && onUnassignParty(table.id, seat.party_group_id)}
-          />
+            className="absolute"
+            style={{
+              left: spot.x,
+              top: spot.y,
+              transform: 'translate(-50%, -50%)',
+              transition: 'left 220ms cubic-bezier(0.22, 1, 0.36, 1), top 220ms cubic-bezier(0.22, 1, 0.36, 1)',
+            }}
+          >
+            <SeatChip
+              seat={seat}
+              tableId={table.id}
+              isSplit={isSplit}
+              colorMode={colorMode}
+              onRemoveSeat={() => onUnassignSeat(table.id, seat.seat_index)}
+              onRemoveParty={() => seat.party_group_id !== null && onUnassignParty(table.id, seat.party_group_id)}
+            />
+          </div>
         );
       })}
-    </div>
+    </>
   );
 }
 
 // ── Main node export ───────────────────────────────────────────────────────
 
 export default function TableNode({ data }: TableNodeProps) {
-  const { table, colorMode, onDropGuest, onDropPerson, onMoveSeat, onUnassignParty, onUnassignSeat, onReorderSeats, onDeleteTable, onRenameTable, splitPartyGroupIds } = data;
+  const { table, colorMode, onDropGuest, onDropPerson, onMoveSeat, onUnassignParty, onUnassignSeat, onReorderSeats, onDeleteTable, onRenameTable, onRotateTable, splitPartyGroupIds } = data;
 
-  const isRound = table.table_type === 'round';
-  const tableW = isRound ? 160 : table.table_type === 'head' ? Math.max(240, table.seats.length * 48) : 200;
-  const tableH = isRound ? 160 : table.table_type === 'head' ? 80 : 100;
-  const orbitPad = isRound ? 52 : 0;
-  const belowPad = !isRound && table.seats.length > 0 ? 40 : 0;
+  // Mid-turn, the table follows the pointer before anything is saved; after a
+  // save it shows the new angle until the refreshed table arrives with it.
+  const [live, setLive] = useState<number | null>(null);
+  const [pending, setPending] = useState<number | null>(null);
+  const saved = normaliseRotation(table.rotation ?? 0);
+  const rotation = live ?? (pending !== null && pending !== saved ? pending : saved);
+  const layout = tableLayout(table.table_type, table.seats.length, rotation);
 
   return (
     <div
       style={{
-        width: tableW + orbitPad * 2,
-        height: tableH + orbitPad * 2 + belowPad,
+        width: layout.node.width,
+        height: layout.node.height,
         position: 'relative',
       }}
     >
@@ -558,19 +656,21 @@ export default function TableNode({ data }: TableNodeProps) {
       <div
         style={{
           position: 'absolute',
-          left: orbitPad,
-          top: orbitPad,
-          width: tableW,
-          height: tableH,
+          left: layout.body.x,
+          top: layout.body.y,
+          width: layout.body.width,
+          height: layout.body.height,
         }}
       >
         <TableBody
           table={table}
-          splitPartyGroupIds={splitPartyGroupIds}
+          layout={layout}
+          rotation={rotation}
+          onTurning={setLive}
+          onTurned={degrees => { setPending(degrees); onRotateTable(table.id, degrees); }}
           onDropGuest={onDropGuest}
           onDropPerson={onDropPerson}
           onMoveSeat={onMoveSeat}
-          onUnassignParty={onUnassignParty}
           onDeleteTable={onDeleteTable}
           onRenameTable={onRenameTable}
           onReorderSeats={onReorderSeats}
@@ -579,6 +679,7 @@ export default function TableNode({ data }: TableNodeProps) {
 
       <SeatsDisplay
         table={table}
+        layout={layout}
         splitPartyGroupIds={splitPartyGroupIds}
         colorMode={colorMode}
         onUnassignParty={onUnassignParty}

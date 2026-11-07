@@ -8,6 +8,7 @@
  * the same people again, one per row. Covered by `npm run check:seating`.
  */
 
+import { tableLayout } from './tableLayout';
 import {
     ALL_DIET_CODES, DIET_CODES, DIET_LABELS, MEAL_CODES, dietCodes, dietNote,
     type DietCode, type DietaryEntry,
@@ -40,6 +41,8 @@ export interface ExportTable {
     /** Where the table sits on the canvas — React Flow's top-left of the node. */
     x: number;
     y: number;
+    /** Degrees clockwise; long tables only. */
+    rotation?: number;
     people: ExportPerson[];
 }
 
@@ -402,22 +405,11 @@ export function exportFilename(ext: string, now: Date = new Date()): string {
 
 /*
  * The printed drawing is the canvas again, at the canvas's own coordinates: a
- * table is where it was dropped, the size `TableNode` draws it, with its chairs
- * where `TableNode` puts them. These numbers are TableNode's — change one and
- * change the other, or the paper stops looking like the screen.
+ * table is where it was dropped, the size `TableNode` draws it, turned the way
+ * it is turned, with its chairs where `TableNode` puts them. Both read
+ * `tableLayout()` (src/lib/tableLayout.ts), so the paper cannot drift from the
+ * screen.
  */
-const ROUND_SIZE = 160;
-const ROUND_ORBIT_PAD = 52;
-const ROUND_SEAT_RADIUS = ROUND_SIZE / 2 + 28;
-const RECT_WIDTH = 200;
-const RECT_HEIGHT = 100;
-const HEAD_HEIGHT = 80;
-/** Room for a name chip, which the canvas draws centred on its point. */
-const CHIP_HALF_WIDTH = 60;
-const CHIP_HEIGHT = 22;
-/** How many chips fit across a rectangular table's width, for the rows below it. */
-const CHIP_SLOT = 100;
-
 export interface PlanBox {
     minX: number;
     minY: number;
@@ -427,66 +419,34 @@ export interface PlanBox {
 
 export interface TableGeometry {
     shape: 'round' | 'rect';
-    /** The table itself. */
+    /** The table itself, unturned. */
     body: { x: number; y: number; width: number; height: number };
-    /** Round tables: each chair's centre, in seat order. */
+    /** Degrees clockwise the table is turned about its centre. */
+    rotation: number;
+    /** Each chair's centre, in seat order. */
     seats: PlanPoint[];
-    /** Rectangular tables: where the wrapped row of name chips starts. */
-    chipsTop: number | null;
     /** Everything the table draws, chairs and names included. */
     box: PlanBox;
 }
 
-/** Where a table and its chairs land, in canvas coordinates. */
-export function tableGeometry(table: Pick<ExportTable, 'table_type' | 'x' | 'y'> & { people: unknown[] }): TableGeometry {
-    const n = table.people.length;
-    if (table.table_type === 'round') {
-        const body = { x: table.x + ROUND_ORBIT_PAD, y: table.y + ROUND_ORBIT_PAD, width: ROUND_SIZE, height: ROUND_SIZE };
-        const cx = body.x + ROUND_SIZE / 2;
-        const cy = body.y + ROUND_SIZE / 2;
-        const seats = Array.from({ length: n }, (_, i) => {
-            const angle = (2 * Math.PI * i) / n - Math.PI / 2;
-            return { x: cx + ROUND_SEAT_RADIUS * Math.cos(angle), y: cy + ROUND_SEAT_RADIUS * Math.sin(angle) };
-        });
-        const reach = ROUND_SEAT_RADIUS + CHIP_HEIGHT / 2;
-        return {
-            shape: 'round',
-            body,
-            seats,
-            chipsTop: null,
-            box: {
-                minX: cx - ROUND_SEAT_RADIUS - CHIP_HALF_WIDTH,
-                maxX: cx + ROUND_SEAT_RADIUS + CHIP_HALF_WIDTH,
-                minY: cy - reach,
-                maxY: cy + reach,
-            },
-        };
-    }
-    const isHead = table.table_type === 'head';
-    const width = isHead ? Math.max(240, n * 48) : RECT_WIDTH;
-    const height = isHead ? HEAD_HEIGHT : RECT_HEIGHT;
-    const body = { x: table.x, y: table.y, width, height };
-    const perRow = Math.max(1, Math.floor(width / CHIP_SLOT));
-    const rows = Math.ceil(n / perRow);
-    const chipsTop = n > 0 ? table.y + height + 8 : null;
+/** Where a table and its chairs land, in canvas coordinates — `tableLayout()`, moved to where the table sits. */
+export function tableGeometry(
+    table: Pick<ExportTable, 'table_type' | 'x' | 'y' | 'rotation'> & { people: unknown[] },
+): TableGeometry {
+    const l = tableLayout(table.table_type, table.people.length, table.rotation ?? 0);
+    const at = (p: PlanPoint) => ({ x: p.x + table.x, y: p.y + table.y });
     return {
-        shape: 'rect',
-        body,
-        seats: [],
-        chipsTop,
-        box: {
-            // A row of chips can be a little wider than the table it sits under.
-            minX: table.x - CHIP_HALF_WIDTH / 2,
-            maxX: table.x + width + CHIP_HALF_WIDTH / 2,
-            minY: table.y,
-            maxY: table.y + height + (rows > 0 ? 8 + rows * (CHIP_HEIGHT + 4) : 0),
-        },
+        shape: l.shape === 'round' ? 'round' : 'rect',
+        body: { ...at(l.body), width: l.body.width, height: l.body.height },
+        rotation: l.rotation,
+        seats: l.seats.map(at),
+        box: { minX: l.box.minX + table.x, maxX: l.box.maxX + table.x, minY: l.box.minY + table.y, maxY: l.box.maxY + table.y },
     };
 }
 
 /** The box around the room outline and every table on it, with a margin. */
 export function planBounds(
-    tables: (Pick<ExportTable, 'table_type' | 'x' | 'y'> & { people: unknown[] })[],
+    tables: (Pick<ExportTable, 'table_type' | 'x' | 'y' | 'rotation'> & { people: unknown[] })[],
     room: PlanPoint[] | null,
     margin = 24,
 ): PlanBox | null {
