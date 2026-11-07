@@ -11,6 +11,16 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.10.48 — [Released] Names — a person's full name is always shown, never cut off (`main`, 2026-11-07 02:23)
+
+### Changed
+- **A name is never cut off with "…" or clipped**, anywhere a person's name appears: the seating chart and its printed plan, the seating guest list and list view, the RSVPs page (guests and party members), the dashboard's recent RSVPs, each person's card on the RSVP form, and Gifts (givers, co-givers and the guest picker). A long name wraps onto another line instead.
+- **On the seating chart, names grow away from their table.** Each name touches the table at its chair and runs outward, so a long one can't run into its neighbours: along the top of a table names grow upward, along the bottom downward, and on the left and right of a turned table they run sideways on one line. Where neighbours sit side by side, a name keeps to its chair's share of the table and wraps onto more lines.
+- **The printed floor plan** draws names the same way, and its drawing is sized to take in every whole name, so the page edge never clips one.
+- The remove (×) button on a seat now sits on the name's corner instead of inside it, so hovering no longer re-wraps the name.
+- On a crowded table at the default sizes, a very long name can still break mid-word to stay off its neighbours; making that table shape bigger under **Room Settings → Table sizes** gives it room.
+- `check:seating`: whole names — long ones included — never touch at any default-size table of up to 12, flat or turned; names grow outward; a long name wraps rather than being cut (283 checks).
+
 ## v0.10.47 — [Released] Offline — only the honeymoon's thumbnails are saved, never the site's photos (`main`, 2026-11-07 02:19)
 
 ### Changed

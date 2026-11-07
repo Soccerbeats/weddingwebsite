@@ -1205,7 +1205,7 @@ export default function RSVPDashboard() {
                                                 {/* Primary guest row */}
                                                 <tr className="group hover:bg-gray-50 relative">
                                                     <td className="px-6 py-4 whitespace-nowrap overflow-hidden">
-                                                        <div className="text-sm font-medium text-gray-900 truncate">{rsvp.guest_name}</div>
+                                                        <div className="text-sm font-medium text-gray-900 break-words">{rsvp.guest_name}</div>
                                                         {rsvp.attending && rsvp.primary_attending === false && (
                                                             <div className="text-xs font-medium text-amber-700">Not coming themself — their party is</div>
                                                         )}
@@ -1590,7 +1590,7 @@ export default function RSVPDashboard() {
                                                 />
                                             </td>
                                             <td data-col="name" className="w-full max-w-0 px-2 sm:px-4 lg:px-6 py-4 overflow-hidden">
-                                                <div className={`text-sm font-semibold truncate ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-900'}`} title={guest.guest_name}>{guest.guest_name}</div>
+                                                <div className={`text-sm font-semibold break-words ${isLikelyNotComing ? 'text-gray-400' : 'text-gray-900'}`}>{guest.guest_name}</div>
                                                 {!isGuestRow(guest) && (
                                                     <div className="flex flex-nowrap items-center gap-1 mt-1 overflow-hidden">
                                                         <span
@@ -1693,7 +1693,7 @@ export default function RSVPDashboard() {
                                                     <td data-col="name" className="w-full max-w-0 px-2 sm:px-4 lg:px-6 py-1.5 border-l-2 border-gray-200 overflow-hidden">
                                                         <div className="flex items-center gap-1 min-w-0">
                                                             <span className="text-gray-300 text-xs shrink-0">└</span>
-                                                            <span className="text-sm text-gray-500 italic truncate" title={member.name || `Unknown Guest ${mi + 2}`}>
+                                                            <span className="min-w-0 break-words text-sm text-gray-500 italic">
                                                                 {member.name || `Unknown Guest ${mi + 2}`}
                                                             </span>
                                                         </div>

@@ -304,7 +304,7 @@ function PersonPicker({ people, value, onPick, onClear, inputRef, placeholder, g
                     <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-white">
                         {value.name.trim().charAt(0).toUpperCase()}
                     </span>
-                    <span className="truncate text-sm font-medium text-gray-900">{value.name}</span>
+                    <span className="min-w-0 break-words text-sm font-medium text-gray-900">{value.name}</span>
                 </span>
                 <button type="button" onClick={onClear} aria-label="Change who gave it"
                     className="flex size-8 shrink-0 items-center justify-center rounded-full text-gray-400 hover:bg-white hover:text-gray-700">
@@ -354,7 +354,7 @@ function PersonPicker({ people, value, onPick, onClear, inputRef, placeholder, g
                                 className={`flex w-full items-center justify-between gap-3 px-3.5 py-2.5 text-left text-sm
                                     ${i === active ? 'bg-gray-50' : ''}`}
                             >
-                                <span className="truncate">
+                                <span className="min-w-0 break-words">
                                     {p.free ? <>Use “<span className="font-medium">{p.name}</span>”</> : p.name}
                                 </span>
                                 <span className="shrink-0 text-[11px] text-gray-400">
@@ -1063,9 +1063,9 @@ export default function GiftsTab() {
                                                     className="size-4 rounded border-gray-300 text-accent focus:ring-accent" />
                                             </td>
                                             <td className="max-w-[16rem] px-3 py-3">
-                                                <div className="truncate font-medium text-gray-900">{g.guest_name}</div>
+                                                <div className="break-words font-medium text-gray-900">{g.guest_name}</div>
                                                 {(g.co_donors || []).length > 0 && (
-                                                    <div className="truncate text-xs text-gray-400">with {(g.co_donors || []).map((c) => c.name).join(', ')}</div>
+                                                    <div className="break-words text-xs text-gray-400">with {(g.co_donors || []).map((c) => c.name).join(', ')}</div>
                                                 )}
                                             </td>
                                             <td className="whitespace-nowrap px-3 py-3 text-right font-semibold tabular-nums text-gray-900">
@@ -1109,7 +1109,7 @@ export default function GiftsTab() {
                                             className="mt-1 size-5 shrink-0 rounded border-gray-300 text-accent focus:ring-accent" />
                                         <button type="button" onClick={() => openEdit(g)} className="min-w-0 flex-1 text-left">
                                             <div className="flex items-baseline justify-between gap-3">
-                                                <span className="truncate font-medium text-gray-900">{givers(g)}</span>
+                                                <span className="min-w-0 break-words font-medium text-gray-900">{givers(g)}</span>
                                                 <span className="shrink-0 font-semibold tabular-nums text-gray-900">{g.amount ? money(g.amount) : ''}</span>
                                             </div>
                                             {g.gift && <div className="mt-0.5 truncate text-sm text-gray-600">🎁 {g.gift}</div>}

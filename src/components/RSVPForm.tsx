@@ -947,7 +947,7 @@ export default function RSVPForm({ coupleNames = '', roomBlockHotel = '', roomBl
                                                 />
                                             </div>
                                         ) : (
-                                            <p className="min-w-0 truncate text-base font-medium text-gray-900">
+                                            <p className="min-w-0 break-words text-base font-medium text-gray-900">
                                                 {card.name}
                                                 {isYou && cards.length > 1 && (
                                                     <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 align-middle text-[10px] font-semibold uppercase tracking-wider text-gray-500">You</span>

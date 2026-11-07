@@ -15,10 +15,15 @@
  *
  * **Every table of a shape is the same size** — the shape's size for the floor
  * plan (`floor_plans.table_sizes`, set by hand in Room settings), never derived
- * from how many sit at it. A crowded table keeps its size and narrows its names
- * instead (`chipWidth`); the full name is on hover. Tables used to grow with
- * their chairs (v0.10.40), which made a room of identical tables look like a
- * room of different furniture.
+ * from how many sit at it. Tables used to grow with their chairs (v0.10.40),
+ * which made a room of identical tables look like a room of different furniture.
+ *
+ * **A name is never cut off** — no ellipsis, no clipping. Each chair has an
+ * `anchor`: the point of its name that touches the table, so a name grows away
+ * from the table rather than into its neighbours. Where neighbours sit side by
+ * side (a long side facing up or down, the top and bottom of a circle) the name
+ * is held to the room its chair has (`maxWidth`) and wraps onto more lines,
+ * outward; elsewhere it stays on one line and runs outward.
  *
  * A turned table spins about its own centre; the chairs move with it but their
  * names stay level, so they can be read.
@@ -26,20 +31,20 @@
 
 export type TableShape = 'round' | 'rectangular' | 'head';
 
-/** A name chip, as the canvas draws it (names are cut off past this width). */
+/** A one-line name chip's height, and the width a chair gets when there is room. */
 export const CHIP_WIDTH = 112;
 export const CHIP_HEIGHT = 22;
 /** One chair's share of a long table's edge. */
 export const SEAT_SLOT = CHIP_WIDTH + 8;
-/** The gap between a table's edge and the middle of the names along it. */
-const EDGE_GAP = CHIP_HEIGHT / 2 + 6;
+/** The gap between a table's edge and the names along it. */
+const NAME_GAP = 5;
 
 export const ORBIT_PAD = 52;
-/** How far the names sit outside a round table's edge. */
-const ROUND_SEAT_OFFSET = 28;
-/** Names never narrow past this; below it they would be a letter and a dot. */
+/** Names never get narrower than this; a long word wraps inside it. */
 export const MIN_CHIP_WIDTH = 44;
 const END_MARGIN = 8;
+/** Two chairs this close vertically have their names side by side. */
+const SAME_ROW = CHIP_HEIGHT * 1.5;
 
 /** A table's size in canvas units, unturned: `width` is a long table's length, a round table's diameter. */
 export interface TableSize { width: number; height: number }
@@ -100,6 +105,14 @@ export type Facing = 'up' | 'right' | 'down' | 'left';
 export interface SeatSpot extends Point {
     /** Round tables: undefined. Long tables: the side this chair is on. */
     side?: 'first' | 'second';
+    /**
+     * Where the name sits against (x, y), as a CSS translate in percent of the
+     * name's own size: (-50, -100) puts its bottom-middle on the point, so it
+     * grows upward, away from a table below it.
+     */
+    anchor: Point;
+    /** The widest the name may be — it wraps beyond that; null means one line, any length. */
+    maxWidth: number | null;
 }
 
 export interface TableLayout {
@@ -114,8 +127,8 @@ export interface TableLayout {
     node: { width: number; height: number };
     /** Everything the table draws — names included — in node coordinates. */
     box: Box;
-    /** How wide each name may be at this table, so neighbours never sit on each other. */
-    chipWidth: number;
+    /** Each name's box, estimated from its text when names were given. */
+    labelBoxes: Box[];
 }
 
 export function normaliseRotation(degrees: number): number {
@@ -147,37 +160,50 @@ export function sideCounts(shape: TableShape, n: number): { first: number; secon
     return { first, second: n - first };
 }
 
-const clampChip = (w: number) => Math.max(MIN_CHIP_WIDTH, Math.min(CHIP_WIDTH, Math.floor(w)));
+const atLeastMin = (w: number) => Math.max(MIN_CHIP_WIDTH, Math.floor(w));
+
+/** The anchor for a name growing in direction (dx, dy) — a unit vector away from the table. */
+function anchorFor(dx: number, dy: number): Point {
+    return { x: -50 + 50 * dx, y: -50 + 50 * dy };
+}
 
 /**
- * The widest a name can be without touching another, from where the chairs
- * actually are: two names on the same line (closer than a name's height apart
- * vertically) can be no wider than the gap between their centres. Round a
- * circle that is decided at the top and bottom, where neighbours sit side by
- * side — an arc length would overstate it.
+ * A name's on-screen size, estimated from its text (the canvas's 12px chip:
+ * about 6.6px a character plus padding). Only the printed drawing's bounds and
+ * the checks use it — the canvas measures for real.
  */
-function widestClearChip(points: Point[]): number {
-    let widest = CHIP_WIDTH;
-    for (let i = 0; i < points.length; i++) {
-        for (let j = i + 1; j < points.length; j++) {
-            if (Math.abs(points[i].y - points[j].y) >= CHIP_HEIGHT + 2) continue;
-            widest = Math.min(widest, Math.abs(points[i].x - points[j].x) - 4);
-        }
-    }
-    return clampChip(widest);
+export function estimateLabel(name: string, maxWidth: number | null): { width: number; height: number } {
+    const natural = name.length * 6.6 + 18;
+    if (maxWidth == null || natural <= maxWidth) return { width: natural, height: CHIP_HEIGHT };
+    const lines = Math.ceil((natural - 18) / Math.max(1, maxWidth - 18));
+    return { width: maxWidth, height: lines * 16 + 6 };
+}
+
+function labelBox(seat: SeatSpot, size: { width: number; height: number }): Box {
+    const minX = seat.x + (seat.anchor.x / 100) * size.width;
+    const minY = seat.y + (seat.anchor.y / 100) * size.height;
+    return { minX, minY, maxX: minX + size.width, maxY: minY + size.height };
+}
+
+function boxAround(boxes: Box[], points: Point[]): Box {
+    const xs = [...points.map(p => p.x), ...boxes.flatMap(b => [b.minX, b.maxX])];
+    const ys = [...points.map(p => p.y), ...boxes.flatMap(b => [b.minY, b.maxY])];
+    return { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) };
 }
 
 /**
  * The layout of one table. `size` is the shape's size for the floor plan —
  * the same for every table of that shape — and defaults to DEFAULT_TABLE_SIZES.
- * The number of chairs moves the chairs and narrows the names; it never changes
- * the table.
+ * The number of chairs moves the chairs and decides how wide a name may be
+ * before it wraps; it never changes the table. `names`, when given, make `box`
+ * take in each name's estimated size (the printed drawing needs that).
  */
 export function tableLayout(
     shape: TableShape | string,
     seatCount: number,
     rotationDegrees = 0,
     size?: TableSize,
+    names?: (string | null | undefined)[],
 ): TableLayout {
     const n = Math.max(0, Math.floor(seatCount));
     const kind = shapeOf(shape);
@@ -185,13 +211,38 @@ export function tableLayout(
 
     if (kind === 'round') {
         const diameter = dims.width;
-        const seatRadius = diameter / 2 + ROUND_SEAT_OFFSET;
+        const seatRadius = diameter / 2 + NAME_GAP;
         const centre = { x: ORBIT_PAD + diameter / 2, y: ORBIT_PAD + diameter / 2 };
-        const seats = Array.from({ length: n }, (_, i) => {
+        const points = Array.from({ length: n }, (_, i) => {
             const angle = (2 * Math.PI * i) / n - Math.PI / 2;
-            return { x: centre.x + seatRadius * Math.cos(angle), y: centre.y + seatRadius * Math.sin(angle) };
+            const dx = Math.cos(angle);
+            const dy = Math.sin(angle);
+            return { x: centre.x + seatRadius * dx, y: centre.y + seatRadius * dy, dx, dy };
         });
-        const chipWidth = widestClearChip(seats);
+        // Two names on the same row limit each other only by the gap they grow
+        // into: a name growing outward reaches (1 - f) of its width to the right
+        // and f to the left, where f is how far its anchor sits from its left
+        // edge. Names growing apart (the two sides of a circle) never meet, and
+        // a chair nobody can reach runs outward on one line.
+        const share = (dx: number) => (1 - dx) / 2; // the fraction of a name left of its point
+        const seats: SeatSpot[] = points.map((p, i) => {
+            let room = Infinity;
+            points.forEach((q, j) => {
+                if (j === i || Math.abs(q.y - p.y) >= SAME_ROW) return;
+                const [left, right] = p.x <= q.x ? [p, q] : [q, p];
+                const reach = (1 - share(left.dx)) + share(right.dx);
+                if (reach > 1e-6) room = Math.min(room, (right.x - left.x) / reach - 6);
+            });
+            return {
+                x: p.x, y: p.y,
+                anchor: anchorFor(p.dx, p.dy),
+                // Room wider than any name needs is no limit at all: one line.
+                maxWidth: room > CHIP_WIDTH * 3 ? null : atLeastMin(room),
+            };
+        });
+        const labelBoxes = seats.map((st, i) => labelBox(st, names?.[i] != null
+            ? estimateLabel(names[i]!, st.maxWidth)
+            : { width: st.maxWidth ?? CHIP_WIDTH, height: CHIP_HEIGHT }));
         return {
             shape: kind,
             body: { x: ORBIT_PAD, y: ORBIT_PAD, width: diameter, height: diameter },
@@ -200,13 +251,10 @@ export function tableLayout(
             rotation: 0,
             seats,
             node: { width: diameter + ORBIT_PAD * 2, height: diameter + ORBIT_PAD * 2 },
-            box: {
-                minX: centre.x - seatRadius - chipWidth / 2,
-                maxX: centre.x + seatRadius + chipWidth / 2,
-                minY: centre.y - seatRadius - CHIP_HEIGHT / 2,
-                maxY: centre.y + seatRadius + CHIP_HEIGHT / 2,
-            },
-            chipWidth,
+            box: boxAround(labelBoxes, [
+                { x: ORBIT_PAD, y: ORBIT_PAD }, { x: ORBIT_PAD + diameter, y: ORBIT_PAD + diameter },
+            ]),
+            labelBoxes,
         };
     }
 
@@ -215,27 +263,43 @@ export function tableLayout(
     const { width, height } = dims;
     const centre = { x: width / 2, y: height / 2 };
     // A chair's share of the side: a full slot when there is room, otherwise
-    // the side split evenly — the table stays its size and the names narrow.
+    // the side split evenly — the table stays its size.
     const busiest = Math.max(first, second);
     const slot = busiest === 0 ? SEAT_SLOT : Math.min(SEAT_SLOT, (width - END_MARGIN * 2) / busiest);
-    const chipWidth = clampChip(slot - 8);
-    // Each side's chairs are centred along it.
+    // Each side's chairs are centred along it, on the table's edge.
     const startOf = (count: number) => (width - count * slot) / 2;
-    const flat: SeatSpot[] = [];
+    const flat: { x: number; y: number; side: 'first' | 'second' }[] = [];
     for (let i = 0; i < first; i++) {
-        flat.push({ x: startOf(first) + slot * (i + 0.5), y: -EDGE_GAP, side: 'first' });
+        flat.push({ x: startOf(first) + slot * (i + 0.5), y: -NAME_GAP, side: 'first' });
     }
     // The second side runs back from the right, so the order goes round the table.
     for (let j = 0; j < second; j++) {
-        flat.push({ x: startOf(second) + slot * (second - j - 0.5), y: height + EDGE_GAP, side: 'second' });
+        flat.push({ x: startOf(second) + slot * (second - j - 0.5), y: height + NAME_GAP, side: 'second' });
     }
-    const seats = flat.map(s => ({ ...turn(s, centre, rotation), side: s.side }));
+    const a = (rotation * Math.PI) / 180;
+    const seats: SeatSpot[] = flat.map(f => {
+        // Outward from the side, turned with the table: up for the first, down for the second.
+        const out = f.side === 'first' ? -1 : 1;
+        const dx = -Math.sin(a) * out;
+        const dy = Math.cos(a) * out;
+        // Facing up or down, neighbours are side by side: a name gets its chair's
+        // width across the screen and wraps outward. Facing left or right they are
+        // stacked, so a name runs outward on one line.
+        const across = slot * Math.abs(Math.cos(a));
+        return {
+            ...turn(f, centre, rotation),
+            side: f.side,
+            anchor: anchorFor(dx, dy),
+            maxWidth: Math.abs(dy) > Math.abs(dx) ? atLeastMin(across - 6) : null,
+        };
+    });
 
     const corners = [
         { x: 0, y: 0 }, { x: width, y: 0 }, { x: width, y: height }, { x: 0, y: height },
     ].map(p => turn(p, centre, rotation));
-    const xs = [...corners.map(p => p.x), ...seats.flatMap(s => [s.x - chipWidth / 2, s.x + chipWidth / 2])];
-    const ys = [...corners.map(p => p.y), ...seats.flatMap(s => [s.y - CHIP_HEIGHT / 2, s.y + CHIP_HEIGHT / 2])];
+    const labelBoxes = seats.map((st, i) => labelBox(st, names?.[i] != null
+        ? estimateLabel(names[i]!, st.maxWidth)
+        : { width: st.maxWidth ?? CHIP_WIDTH, height: CHIP_HEIGHT }));
     return {
         shape: kind,
         body: { x: 0, y: 0, width, height },
@@ -243,8 +307,8 @@ export function tableLayout(
         rotation,
         seats,
         node: { width, height },
-        box: { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) },
-        chipWidth,
+        box: boxAround(labelBoxes, corners),
+        labelBoxes,
     };
 }
 

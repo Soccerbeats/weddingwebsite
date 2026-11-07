@@ -9,7 +9,7 @@
  * twice, drop someone silently, or hand two people the same chair — none of
  * which announces itself on screen.
  */
-import { CHIP_HEIGHT, CHIP_WIDTH, DEFAULT_TABLE_SIZES, MIN_CHIP_WIDTH, normaliseRotation, normaliseTableSizes, seatRunDirection, sideCounts, sideName, snapRotation, tableLayout } from '../src/lib/tableLayout';
+import { CHIP_HEIGHT, CHIP_WIDTH, DEFAULT_TABLE_SIZES, estimateLabel, MIN_CHIP_WIDTH, normaliseRotation, normaliseTableSizes, seatRunDirection, sideCounts, sideName, snapRotation, tableLayout } from '../src/lib/tableLayout';
 import type { GuestListEntry, SeatData, SeatingTableData } from '../src/components/seating/types';
 import {
     allSeats, buildPartySeats, drinkingHeadcount, expectedSeats, headcount, occupancy, partyAttendees,
@@ -1057,11 +1057,26 @@ console.log('\nTable layout: chairs on both sides, uniform sizes, tables that tu
     check('a full long table is the same size as a half-empty one — tables never grow', sameSize(twelve, six), JSON.stringify(twelve.body));
     check('…and neither is an empty one', sameSize(tableLayout('rectangular', 0), six) && sameSize(tableLayout('head', 14), tableLayout('head', 2)));
     const gaps = twelve.seats.slice(0, 6).map((p, i, a) => (i ? p.x - a[i - 1].x : Infinity));
-    check('a crowded side narrows its names so no two overlap', gaps.every(g => g >= twelve.chipWidth), JSON.stringify({ gaps, chip: twelve.chipWidth }));
-    check('…and they are narrower than on a roomy table', twelve.chipWidth < CHIP_WIDTH && tableLayout('rectangular', 4).chipWidth === CHIP_WIDTH);
+    check('a crowded side holds each name to its chair\'s width, so neighbours never meet',
+        twelve.seats.slice(0, 6).every((p, i) => p.maxWidth !== null && p.maxWidth <= Math.min(gaps[i], gaps[i + 1] ?? Infinity)),
+        JSON.stringify({ gaps, widths: twelve.seats.map(p => p.maxWidth) }));
+    check('names along the top grow upward, away from the table; along the bottom, downward',
+        twelve.seats.filter(p => p.side === 'first').every(p => p.anchor.y === -100)
+        && twelve.seats.filter(p => p.side === 'second').every(p => p.anchor.y === 0));
     check('every chair along a crowded side stays on the table\'s length',
         twelve.seats.every(p => p.x >= 0 && p.x <= twelve.body.width), JSON.stringify(twelve.seats.map(p => p.x)));
-    check('names never narrow past the floor', tableLayout('rectangular', 60).chipWidth === MIN_CHIP_WIDTH);
+    check('a name\'s width never drops below the floor', tableLayout('rectangular', 60).seats.every(p => p.maxWidth === MIN_CHIP_WIDTH));
+    const upright = tableLayout('rectangular', 6, 90);
+    check('turned upright, names sit on one line and run outward, left and right',
+        upright.seats.every(p => p.maxWidth === null)
+        && upright.seats.filter(p => p.side === 'first').every(p => Math.abs(p.anchor.x - 0) < 1e-9)
+        && upright.seats.filter(p => p.side === 'second').every(p => Math.abs(p.anchor.x + 100) < 1e-9),
+        JSON.stringify(upright.seats.map(p => p.anchor)));
+    const est = estimateLabel('Bartholomew Featherstonehaugh-Smythe', 60);
+    check('a long name held to a narrow chair wraps onto more lines rather than being cut',
+        est.width === 60 && est.height > CHIP_HEIGHT, JSON.stringify(est));
+    check('a name with room stays on one line at its own width',
+        estimateLabel('Ann Lee', null).height === CHIP_HEIGHT && estimateLabel('Ann Lee', 200).width < 200);
 
     const small = tableLayout('round', 4);
     check('a round table is its shape\'s size', small.body.width === D.round.width && small.body.height === D.round.width);
@@ -1069,23 +1084,37 @@ console.log('\nTable layout: chairs on both sides, uniform sizes, tables that tu
     check('a full round table is the same size as an empty one', sameSize(big, small) && sameSize(tableLayout('round', 0), small), String(big.body.width));
     const r = (p: { x: number; y: number }) => Math.hypot(p.x - big.centre.x, p.y - big.centre.y);
     const dist = Math.min(...big.seats.map((p, i, a) => Math.hypot(p.x - a[(i + 1) % a.length].x, p.y - a[(i + 1) % a.length].y)));
-    check('…its names narrow to the room each chair has', big.chipWidth < CHIP_WIDTH && small.chipWidth === CHIP_WIDTH, String(big.chipWidth));
+    check('…the top name grows up, the side names outward on one line',
+        big.seats[0].anchor.y === -100 && Math.abs(big.seats[0].anchor.x + 50) < 1e-9
+        && small.seats[1].maxWidth === null && Math.abs(small.seats[1].anchor.x) < 1e-9,
+        JSON.stringify([big.seats[0], small.seats[1]]));
     check('…its neighbours stay apart', dist >= CHIP_HEIGHT, String(dist));
     check('…and its chairs stay on one circle', big.seats.every(p => Math.abs(r(p) - r(big.seats[0])) < 1e-9));
 
+    // Real-length names, wrapped to their estimated height: the whole name is
+    // drawn, so this is the test that whole names still clear each other.
+    const NAMES = ['Bartholomew Featherstonehaugh-Smythe', 'Ann Lee', 'Maximiliana Rodriguez-Oyelaran', 'Jo Wu',
+        'Christopher Alexander Montgomery', 'Siobhan O\'Sullivan'];
     let clear = true;
     const where: string[] = [];
+    const meet = (a: { minX: number; maxX: number; minY: number; maxY: number }, c: typeof a) =>
+        a.minX < c.maxX - 0.5 && c.minX < a.maxX - 0.5 && a.minY < c.maxY - 0.5 && c.minY < a.maxY - 0.5;
     for (const shape of ['round', 'rectangular', 'head'] as const) {
-        for (let k = 1; k <= 20; k++) {
-            const l = tableLayout(shape, k);
-            if (l.chipWidth === MIN_CHIP_WIDTH) continue; // at the floor, names may meet
-            for (let i = 0; i < k; i++) for (let j = i + 1; j < k; j++) {
-                const a = l.seats[i], c = l.seats[j];
-                if (Math.abs(a.x - c.x) < l.chipWidth && Math.abs(a.y - c.y) < CHIP_HEIGHT) { clear = false; where.push(`${shape} ${k}`); }
+        for (let k = 1; k <= 12; k++) {
+            for (const turnBy of shape === 'round' ? [0] : [0, 90]) {
+                const names = Array.from({ length: k }, (_, i) => NAMES[i % NAMES.length]);
+                const l = tableLayout(shape, k, turnBy, undefined, names);
+                if (l.seats.some(p => p.maxWidth === MIN_CHIP_WIDTH)) continue; // at the floor, names may meet
+                for (let i = 0; i < k; i++) for (let j = i + 1; j < k; j++) {
+                    if (meet(l.labelBoxes[i], l.labelBoxes[j])) { clear = false; where.push(`${shape} ${k} @${turnBy}°`); }
+                }
             }
         }
     }
-    check('at every chair count up to 20, no two names on a table touch (above the floor width)', clear, [...new Set(where)].join(', '));
+    check('whole names, long ones included, never touch at a default-size table of up to 12, flat or turned', clear, [...new Set(where)].join(', '));
+    const boxed = tableLayout('rectangular', 4, 0, undefined, ['Bartholomew Featherstonehaugh-Smythe', 'a', 'b', 'c']);
+    check('the drawn box takes in every whole name', boxed.labelBoxes.every(b =>
+        b.minX >= boxed.box.minX && b.maxX <= boxed.box.maxX && b.minY >= boxed.box.minY && b.maxY <= boxed.box.maxY));
 
     const custom = { width: 500, height: 120 };
     check('a size set by hand is the size drawn', tableLayout('rectangular', 3, 0, custom).body.width === 500
@@ -1120,7 +1149,7 @@ console.log('\nTable layout: chairs on both sides, uniform sizes, tables that tu
     }
     check('at every 15° step, both long shapes keep every chair where it was relative to the table', allSteps);
     check('the drawn box takes in the turned table and its names',
-        turned.box.maxX >= Math.max(...turned.seats.map(p => p.x)) + turned.chipWidth / 2 - 1e-9);
+        turned.labelBoxes.every(b => b.maxX <= turned.box.maxX && b.minX >= turned.box.minX));
 
     check('angles snap to 15° unless free', snapRotation(52) === 45 && snapRotation(52, true) === 52 && snapRotation(-90) === 270);
     check('a full turn is no turn', normaliseRotation(360) === 0 && normaliseRotation(-15) === 345);

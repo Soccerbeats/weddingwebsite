@@ -560,8 +560,14 @@ order, before the commit:
     canvas from the floor plan, the export as each `ExportTable.size`). **Never
     size a table from its chair count**: v0.10.40 grew tables as people sat and
     Austin had it taken out. A crowded table narrows its names instead
-    (`layout.chipWidth`, from where the chairs actually are), down to
-    `MIN_CHIP_WIDTH`. The whole room turns landscape through the named page
+    (each chair's `maxWidth`, from where the chairs actually are), down to
+    `MIN_CHIP_WIDTH`.
+  - **A person's name is never cut off — anywhere in the app** (v0.10.48): no
+    `truncate`, no ellipsis, no clipping on a guest's, a party member's or a
+    giver's name; it wraps (`break-words`) instead. On the seating chart each
+    chair has an `anchor` so its name grows *away* from the table, and a name held
+    to its chair's width wraps onto more lines outward; the printed plan's bounds
+    take in every whole name (`tableLayout(…, names)`). The whole room turns landscape through the named page
     `plan-landscape` in `globals.css` (`.print-landscape`).
   - `dietCodes()` returns `['NOM']` and nothing else for a not-eating entry, so
     the exclusivity holds even for a row written by an older release or by hand

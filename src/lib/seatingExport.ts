@@ -477,27 +477,31 @@ export interface TableGeometry {
     body: { x: number; y: number; width: number; height: number };
     /** Degrees clockwise the table is turned about its centre. */
     rotation: number;
-    /** Each chair's centre, in seat order. */
-    seats: PlanPoint[];
+    /**
+     * Each chair, in seat order: where its name touches the table, the name's
+     * anchor there (a translate in percent), and the widest it may be before it
+     * wraps (null: one line). See `tableLayout()`.
+     */
+    seats: (PlanPoint & { anchor: PlanPoint; maxWidth: number | null })[];
     /** Everything the table draws, chairs and names included. */
     box: PlanBox;
-    /** How wide a name may be at this table, as on the canvas. */
-    chipWidth: number;
 }
 
 /** Where a table and its chairs land, in canvas coordinates — `tableLayout()`, moved to where the table sits. */
 export function tableGeometry(
     table: Pick<ExportTable, 'table_type' | 'x' | 'y' | 'rotation' | 'size'> & { people: unknown[] },
 ): TableGeometry {
-    const l = tableLayout(table.table_type, table.people.length, table.rotation ?? 0, table.size);
+    // The names make the drawn box take in every name in full, so the page
+    // never clips one at its edge.
+    const names = table.people.map(p => (p && typeof p === 'object' && 'name' in p ? String((p as { name: unknown }).name) : null));
+    const l = tableLayout(table.table_type, table.people.length, table.rotation ?? 0, table.size, names);
     const at = (p: PlanPoint) => ({ x: p.x + table.x, y: p.y + table.y });
     return {
         shape: l.shape === 'round' ? 'round' : 'rect',
         body: { ...at(l.body), width: l.body.width, height: l.body.height },
         rotation: l.rotation,
-        seats: l.seats.map(at),
+        seats: l.seats.map(s => ({ ...at(s), anchor: s.anchor, maxWidth: s.maxWidth })),
         box: { minX: l.box.minX + table.x, maxX: l.box.maxX + table.x, minY: l.box.minY + table.y, maxY: l.box.maxY + table.y },
-        chipWidth: l.chipWidth,
     };
 }
 

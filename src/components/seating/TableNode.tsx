@@ -47,6 +47,7 @@ function SeatChip({
   tableId,
   isSplit,
   colorMode,
+  wrap,
   onRemoveSeat,
   onRemoveParty,
 }: {
@@ -54,6 +55,8 @@ function SeatChip({
   tableId: number;
   isSplit: boolean;
   colorMode: ColorMode;
+  /** The name is held to its chair's width and wraps; otherwise it is one line. */
+  wrap: boolean;
   onRemoveSeat: () => void;
   onRemoveParty: () => void;
 }) {
@@ -97,7 +100,7 @@ function SeatChip({
         e.dataTransfer.setData('seatTransfer', JSON.stringify(transfer));
         e.stopPropagation();
       }}
-      className={`nodrag relative flex max-w-full items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border select-none cursor-grab active:cursor-grabbing ${chipClass}`}
+      className={`nodrag relative flex max-w-full items-center gap-1 px-2 py-0.5 rounded-[11px] text-xs font-medium border select-none cursor-grab active:cursor-grabbing ${chipClass}`}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       title={hasDeclined
@@ -107,10 +110,12 @@ function SeatChip({
           : (isSplit ? 'Party is split — drag to move' : `Drag ${name} to another table`)}
     >
       {colorMode === 'party' && isSplit && <span className="text-yellow-500 mr-0.5">⚠</span>}
-      <span className="truncate min-w-0 max-w-[84px]">{name}</span>
+      {/* The whole name, always: it wraps (outward, see tableLayout) rather than being cut. */}
+      <span className={`min-w-0 break-words ${wrap ? 'whitespace-normal text-center leading-tight' : 'whitespace-nowrap'}`}>{name}</span>
       {hover && (
         <button
-          className="nodrag ml-1 text-gray-400 hover:text-red-500 transition-colors leading-none"
+          // On the corner, not in the line: inline it re-wrapped the name on every hover.
+          className="nodrag absolute -right-1.5 -top-1.5 flex size-4 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-400 shadow-sm hover:text-red-500 transition-colors leading-none"
           // Removes this one person. It used to clear the whole party, so freeing
           // the one chair a declined plus-one was sitting in took the other two
           // with it. Hold Alt (or Shift) to remove the party, as before.
@@ -158,7 +163,7 @@ function SortableSeatRow({ seat }: { seat: SeatData }) {
           <circle cx="8.5" cy="3" r="1.5" /><circle cx="8.5" cy="8" r="1.5" /><circle cx="8.5" cy="13" r="1.5" />
         </svg>
       </div>
-      <span className="text-sm text-gray-800 font-medium truncate">{name}</span>
+      <span className="min-w-0 break-words text-sm text-gray-800 font-medium">{name}</span>
     </div>
   );
 }
@@ -612,9 +617,11 @@ function SeatsDisplay({
             style={{
               left: spot.x,
               top: spot.y,
-              // A crowded table keeps its size; its names narrow instead.
-              maxWidth: layout.chipWidth,
-              transform: 'translate(-50%, -50%)',
+              // The name's edge touches the table and it grows away from it;
+              // held to its chair's width where neighbours sit side by side.
+              width: 'max-content',
+              maxWidth: spot.maxWidth ?? undefined,
+              transform: `translate(${spot.anchor.x}%, ${spot.anchor.y}%)`,
               transition: 'left 220ms cubic-bezier(0.22, 1, 0.36, 1), top 220ms cubic-bezier(0.22, 1, 0.36, 1)',
             }}
           >
@@ -623,6 +630,7 @@ function SeatsDisplay({
               tableId={table.id}
               isSplit={isSplit}
               colorMode={colorMode}
+              wrap={spot.maxWidth != null}
               onRemoveSeat={() => onUnassignSeat(table.id, seat.seat_index)}
               onRemoveParty={() => seat.party_group_id !== null && onUnassignParty(table.id, seat.party_group_id)}
             />

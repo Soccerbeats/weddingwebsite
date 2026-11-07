@@ -693,7 +693,7 @@ export default function SeatingListView({
                                     return next;
                                 })} className="flex items-baseline gap-2 text-left min-w-0 flex-1">
                                     <span className="text-gray-400 text-xs shrink-0">{folded ? '▸' : '▾'}</span>
-                                    <span className="text-sm font-semibold text-gray-800 truncate">{group.title}</span>
+                                    <span className="min-w-0 break-words text-sm font-semibold text-gray-800">{group.title}</span>
                                     <span className="text-xs text-gray-400 whitespace-nowrap shrink-0">{group.subtitle}</span>
                                 </button>
                                 {/* Hidden on touch-sized screens: there is no HTML5 drag there, and
@@ -752,7 +752,7 @@ export default function SeatingListView({
                                                         className="px-2 py-1 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-accent/40"
                                                     />
                                                 ) : (
-                                                    <span className={`truncate ${declined ? 'text-red-700 line-through decoration-red-400/70' : 'text-gray-800'}`}>
+                                                    <span className={`min-w-0 break-words ${declined ? 'text-red-700 line-through decoration-red-400/70' : 'text-gray-800'}`}>
                                                         {row.name}
                                                     </span>
                                                 )}

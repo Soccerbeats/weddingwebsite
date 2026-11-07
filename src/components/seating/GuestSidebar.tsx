@@ -296,7 +296,7 @@ export default function GuestSidebar({
                     <circle cx="3" cy="2" r="1.5" /><circle cx="3" cy="7" r="1.5" /><circle cx="3" cy="12" r="1.5" />
                     <circle cx="7" cy="2" r="1.5" /><circle cx="7" cy="7" r="1.5" /><circle cx="7" cy="12" r="1.5" />
                   </svg>
-                  <span className={`text-sm font-medium truncate ${isDeclined ? 'text-red-700' : isLikely ? 'text-orange-700' : 'text-gray-800'}`}>{guest.guest_name}</span>
+                  <span className={`min-w-0 break-words text-sm font-medium ${isDeclined ? 'text-red-700' : isLikely ? 'text-orange-700' : 'text-gray-800'}`}>{guest.guest_name}</span>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   {guest.side && (
@@ -325,7 +325,7 @@ export default function GuestSidebar({
                   Once some of them are sitting down the summary gives way to the
                   list below, which you can actually act on. */}
               {!partlySeated && stillWaiting.length > 1 && (
-                <div className={`text-xs pl-4 truncate ${isDeclined ? 'text-red-400' : isLikely ? 'text-orange-400' : 'text-gray-500'}`}>
+                <div className={`text-xs pl-4 break-words ${isDeclined ? 'text-red-400' : isLikely ? 'text-orange-400' : 'text-gray-500'}`}>
                   +{stillWaiting.slice(1).map(p => p.name).join(', ')}
                 </div>
               )}
@@ -353,7 +353,7 @@ export default function GuestSidebar({
                         <circle cx="3" cy="2" r="1.5" /><circle cx="3" cy="7" r="1.5" /><circle cx="3" cy="12" r="1.5" />
                         <circle cx="7" cy="2" r="1.5" /><circle cx="7" cy="7" r="1.5" /><circle cx="7" cy="12" r="1.5" />
                       </svg>
-                      <span className="truncate">{person.name}</span>
+                      <span className="min-w-0 break-words">{person.name}</span>
                     </div>
                   ))}
                 </div>

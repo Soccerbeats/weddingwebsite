@@ -654,7 +654,7 @@ export default function DashboardPage() {
               <div className="space-y-2">
                 {recentRsvps.map((r, i) => (
                   <div key={i} className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-medium text-gray-800 truncate" style={{ fontFamily: gs }}>{r.guest_name}</span>
+                    <span className="min-w-0 break-words text-sm font-medium text-gray-800" style={{ fontFamily: gs }}>{r.guest_name}</span>
                     <span className={`shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full ${r.attending ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`} style={{ fontFamily: gs }}>
                       {r.attending ? '✓ Going' : '✗ No'}
                     </span>
