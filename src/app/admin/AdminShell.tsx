@@ -1,6 +1,6 @@
 'use client';
 
-import Changelog from '@/components/admin/Changelog';
+import Changelog, { UpdatePill } from '@/components/admin/Changelog';
 import AdminSidebar from './AdminSidebar';
 import { DrawerProvider } from '@/components/admin/Drawer';
 import PullToRefresh from '@/components/offline/PullToRefresh';
@@ -141,6 +141,7 @@ export default function AdminShell({
                         {/* Also here: on a phone the sidebar's own header sits
                             behind the site's floating nav and can't be tapped. */}
                         <Changelog />
+                        <UpdatePill variant="inline" />
                     </span>
                     <button
                         onClick={() => setSidebarOpen(o => !o)}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import UpdatesSection from '@/components/admin/UpdatesSection';
 import { AutosaveHeader, useAutosave } from '@/components/admin/useAutosave';
 import { DEFAULT_ROOM_BLOCK_MESSAGE } from '@/lib/roomBlock';
 import { effectiveRsvpMode, type RsvpModeSetting } from '@/lib/rsvpMode';
@@ -344,6 +345,8 @@ export default function AdminSettings() {
                         </div>
                     )}
                 </div>
+
+                <UpdatesSection />
 
                 <div className="pt-6 border-t border-gray-100">
                     <h2 className="text-xl font-semibold text-gray-900 mb-4">RSVP Verification</h2>

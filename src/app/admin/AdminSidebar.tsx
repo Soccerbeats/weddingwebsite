@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import Changelog from '@/components/admin/Changelog';
+import Changelog, { UpdatePill } from '@/components/admin/Changelog';
 import OfflineStatus from '@/components/offline/OfflineStatus';
 
 /*
@@ -272,6 +272,8 @@ export default function AdminSidebar({ pathname, open, onClose, onLogout }: {
                     <div className={collapsed ? 'md:hidden' : ''}>
                         <OfflineStatus />
                     </div>
+                    {/* Shown on the rail too, unlike the version: see UpdatePill. */}
+                    <UpdatePill variant="row" compact={collapsed} />
                     <div className="flex items-center gap-2">
                         <button
                             type="button"

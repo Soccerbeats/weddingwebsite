@@ -14,6 +14,17 @@ const SEEN_KEY = 'admin.changelog.seen';
  */
 let latestProbe: Promise<string | null> | null = null;
 
+/** Same idea for the update check: one request per page for both copies. */
+let updateProbe: Promise<string | null> | null = null;
+
+function probeUpdate(): Promise<string | null> {
+    updateProbe ??= fetch('/api/admin/update', { cache: 'no-store' })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((body) => (body?.available ? body.latest ?? null : null))
+        .catch(() => null);
+    return updateProbe;
+}
+
 function probeLatest(): Promise<string | null> {
     latestProbe ??= fetch('/api/admin/changelog?latest=1', { cache: 'no-store' })
         .then((res) => res.json())
@@ -72,6 +83,56 @@ export default function Changelog() {
                 <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-accent
                     ring-2 ring-white" />
             )}
+        </Link>
+    );
+}
+
+/**
+ * "A newer version is published" — links to Settings → Updates, where the
+ * install button and its webhook live. Renders nothing while up to date.
+ *
+ * Its own element rather than part of the version button: the sidebar starts as
+ * an icon rail, which hides the version, and an update nobody can see is no
+ * notice at all. `row` is the sidebar's full-width form (`compact` on the rail);
+ * `inline` sits beside the version in the phone's top bar.
+ */
+export function UpdatePill({ variant, compact = false }: { variant: 'row' | 'inline'; compact?: boolean }) {
+    const [update, setUpdate] = useState<string | null>(null);
+
+    useEffect(() => {
+        let alive = true;
+        probeUpdate().then((version) => { if (alive && version) setUpdate(version); });
+        return () => { alive = false; };
+    }, []);
+
+    if (!update) return null;
+    const label = `Version ${update} is available`;
+
+    if (variant === 'inline') {
+        return (
+            <Link
+                href="/admin/settings#updates"
+                title={label}
+                aria-label={label}
+                className="shrink-0 rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold
+                    text-white hover:bg-accent-dark transition tabular-nums"
+                style={{ fontFamily: "'DM Mono', ui-monospace, SFMono-Regular, monospace" }}
+            >
+                ↑ {update}
+            </Link>
+        );
+    }
+
+    return (
+        <Link
+            href="/admin/settings#updates"
+            title={label}
+            aria-label={label}
+            className={`flex h-11 items-center gap-2 rounded-2xl bg-accent/10 text-sm font-medium
+                text-accent-dark transition-colors hover:bg-accent/20 ${compact ? 'justify-center px-0' : 'px-[14px]'}`}
+        >
+            <span aria-hidden className="text-base leading-none">↑</span>
+            {!compact && <span className="whitespace-nowrap">Update available · {update}</span>}
         </Link>
     );
 }

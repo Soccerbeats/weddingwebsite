@@ -424,6 +424,18 @@ order, before the commit:
   waits for Postgres, then applies `database/init.sql`. Volumes hold
   `public/photos`, `public/config` and the postgres data — runtime uploads
   live in volumes, never in the image.
+- **Updates** (`src/lib/updates.ts`, Settings → Updates, the `↑ vX.Y.Z` pill
+  beside the version) — for anyone running a copy. The running version is the
+  image's own `CHANGELOG.md`; the newest is `CHANGELOG.md` on `main` of
+  `UPDATE_REPO` (default `Soccerbeats/weddingwebsite`), offered **only once GHCR
+  holds that version's tag**, since CI pushes the changelog minutes before the
+  image. Installing POSTs a **Portainer webhook** the admin pastes in, kept in
+  `app_settings` (Postgres) and never returned to the browser — **never in
+  `site.json`**, whose GET is public. Only Portainer's webhook paths are accepted
+  (the URL is usually a LAN address, so it cannot go through `safeFetch`).
+  `/api/admin/update` is network-only in the offline worker and in `NOT_QUEUED`.
+  Never give the container the Docker socket instead: that hands the host to
+  anyone who gets into the admin panel.
 - **The demo instance** — runs the same image as production with
   `DEMO_MODE=true`, so nothing is built for it. That flag makes the instance
   **read-only and login-free**: `src/middleware.ts` answers every write under

@@ -28,6 +28,9 @@ services:
       - NODE_ENV=${NODE_ENV}
       # Same optional set as the production stack — see docker-compose.prod.yml.
       - JWT_SECRET=${JWT_SECRET:-}
+      # The GitHub repo the admin panel checks for updates (owner/name). Only a
+      # fork that publishes its own image needs it; blank means the original.
+      - UPDATE_REPO=${UPDATE_REPO:-}
       - FLIGHT_API_KEY=${FLIGHT_API_KEY:-}
       - FLIGHT_API_HOST=${FLIGHT_API_HOST:-}
       - OSRM_URL=${OSRM_URL:-}

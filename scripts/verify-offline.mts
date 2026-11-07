@@ -67,6 +67,7 @@ check('a photo is a photo', sw.routeFor({ url: `${O}/api/photos/a.jpg/thumb` }, 
 check('signing in is never saved', sw.routeFor({ url: `${O}/api/auth/check` }, O) === 'network');
 check('the offline manifest is never saved', sw.routeFor({ url: `${O}/api/offline/manifest` }, O) === 'network');
 check('the connection probe always asks the server', sw.routeFor({ url: `${O}/api/offline/ping` }, O) === 'network');
+check('the update check always asks the server', sw.routeFor({ url: `${O}/api/admin/update` }, O) === 'network');
 check('the worker itself is never saved', sw.routeFor({ url: `${O}/sw.js` }, O) === 'network');
 check('another site is left alone', sw.routeFor({ url: 'https://example.org/api/data' }, O) === 'passthrough');
 check('another site\'s picture (a map tile, a hotel photo) is kept as seen',
@@ -139,6 +140,8 @@ check('an admin edit (JSON) is queued',
     sw.isQueueable({ url: `${O}/api/admin/honeymoon/stops`, method: 'PATCH', contentType: json }, O));
 check('a delete with no body is queued',
     sw.isQueueable({ url: `${O}/api/admin/honeymoon/places?id=4`, method: 'DELETE' }, O));
+check('installing an update is never queued', !sw.isQueueable({ url: `${O}/api/admin/update`, method: 'POST' }, O));
+check('the update webhook is never queued', !sw.isQueueable({ url: `${O}/api/admin/update/webhook`, method: 'POST', contentType: json }, O));
 check('a site setting is queued', sw.isQueueable({ url: `${O}/api/admin/site-config`, method: 'POST', contentType: json }, O));
 check('a guest-list edit is queued', sw.isQueueable({ url: `${O}/api/admin/guest-list`, method: 'PUT', contentType: json }, O));
 check('a read is never queued', !sw.isQueueable({ url: `${O}/api/admin/honeymoon`, method: 'GET' }, O));

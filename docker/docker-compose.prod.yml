@@ -31,6 +31,9 @@ services:
       # compose warning. Each feature checks its own var and says so in the UI
       # when it is missing, so leaving any of these blank is a supported state.
       - JWT_SECRET=${JWT_SECRET:-}
+      # The GitHub repo the admin panel checks for updates (owner/name). Only a
+      # fork that publishes its own image needs it; blank means the original.
+      - UPDATE_REPO=${UPDATE_REPO:-}
       # RapidAPI key for AeroDataBox — turns on "Fill in from schedule" on a
       # honeymoon travel leg. Without it the button explains itself.
       - FLIGHT_API_KEY=${FLIGHT_API_KEY:-}

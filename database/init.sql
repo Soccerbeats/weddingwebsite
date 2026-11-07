@@ -20,6 +20,15 @@ CREATE TABLE IF NOT EXISTS wip_toggles (
   updated_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Small site-wide settings that must not be public. site.json is served to
+-- anyone (its GET is allowlisted for the nav), so a secret cannot live there.
+-- Holds the Portainer webhook the Updates section uses (src/lib/updates.ts).
+CREATE TABLE IF NOT EXISTS app_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Create guest list table
 CREATE TABLE IF NOT EXISTS guest_list (
   id SERIAL PRIMARY KEY,

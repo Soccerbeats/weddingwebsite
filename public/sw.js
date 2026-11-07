@@ -113,6 +113,7 @@ const NOT_QUEUED = [
     '/api/admin/registry-items/import',
     '/api/admin/seating/export',
     '/api/admin/settings/test-email',
+    '/api/admin/update',
     '/api/rsvp/magic-link',
     '/api/rsvp/verify-email',
 ];
@@ -142,6 +143,8 @@ function routeFor(req, origin) {
     if (path.startsWith('/_next/static/')) return 'static';
     if (req.rsc || url.searchParams.has('_rsc')) return 'rsc';
     if (path.startsWith('/api/auth/') || path.startsWith('/api/offline/')) return 'network';
+    // "Is there a newer version" answered from a saved copy would be a lie.
+    if (path === '/api/admin/update' || path.startsWith('/api/admin/update/')) return 'network';
     if (path.startsWith('/api/photos/')) return 'photo';
     if (path.startsWith('/api/')) return 'data';
     if (req.mode === 'navigate' || (req.accept || '').includes('text/html')) return 'page';

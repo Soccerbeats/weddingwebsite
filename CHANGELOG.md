@@ -11,6 +11,15 @@ All notable changes to this project are documented here, newest at the top.
 > renders those three as coloured badges. Bump the patch on every deploy, the minor when
 > asked. Entries predating this convention carry a date but no time.
 
+## v0.10.44 — [Released] Updates — the admin panel says when a new version is out, and installs it (`main`, 2026-11-07 01:32)
+
+### Added
+- **"Update available" in the admin panel**, for anyone running their own copy of the site. It checks GitHub a few times a day; when a newer version is out *and its image is published*, a `↑ v…` pill appears beside the version (on the collapsed sidebar too) and links to **Settings → Updates**.
+- **Settings → Updates**: this version, the newest one, *Check now*, a link to what's new, and **Update to v…**, which asks Portainer to pull the new image and restart the site, then reloads the page once the new version answers.
+  - The button needs a **Portainer webhook**, pasted once into the same section. It is kept on the server and never shown again; only Portainer's own webhook links are accepted.
+  - Without one, the section says to use *Pull and redeploy* in Portainer instead.
+- `UPDATE_REPO` (optional): which GitHub repository to check, for a fork that publishes its own image.
+
 ## v0.10.43 — [Released] Changelog — the Fixed pills stay on the page (`main`, 2026-11-07 01:04)
 
 ### Fixed
